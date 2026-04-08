@@ -258,6 +258,41 @@ function App() {
             <Route path="/profile/addresses" element={<AddressSettings />} />
             <Route path="/profile/notifications" element={<NotificationSettings />} />
             <Route path="/profile/security" element={<SecuritySettings />} />
+
+            {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
+            <Route path="/taxi/user/login" element={<Login />} />
+            <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
+            <Route path="/taxi/user/signup" element={<Signup />} />
+            <Route path="/taxi/user" element={<UserHome />} />
+
+            <Route path="/taxi/user/ride/select-location" element={<SelectLocation />} />
+            <Route path="/taxi/user/ride/select-vehicle" element={<SelectVehicle />} />
+            <Route path="/taxi/user/ride/searching" element={<SearchingDriver />} />
+            <Route path="/taxi/user/ride/tracking" element={<RideTracking />} />
+            <Route path="/taxi/user/ride/complete" element={<RideComplete />} />
+            <Route path="/taxi/user/ride/chat" element={<Chat />} />
+            <Route path="/taxi/user/support" element={<Support />} />
+            <Route path="/taxi/user/ride/detail/:id" element={<RideDetail />} />
+
+            <Route path="/taxi/user/parcel/type" element={<ParcelType />} />
+            <Route path="/taxi/user/parcel/details" element={<ParcelDetails />} />
+            <Route path="/taxi/user/parcel/contacts" element={<SenderReceiverDetails />} />
+            <Route path="/taxi/user/parcel/detail/:id" element={<RideDetail />} />
+
+            <Route path="/taxi/user/rental" element={<BikeRentalHome />} />
+            <Route path="/taxi/user/intercity" element={<IntercityHome />} />
+            <Route path="/taxi/user/cab-sharing" element={<CabSharing />} />
+            <Route path="/taxi/user/tours" element={<ComingSoon />} />
+
+            <Route path="/taxi/user/activity" element={<Activity />} />
+            <Route path="/taxi/user/profile" element={<Profile />} />
+            <Route path="/taxi/user/wallet" element={<Wallet />} />
+
+            <Route path="/taxi/user/profile/settings" element={<ProfileSettings />} />
+            <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
+            <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
+            <Route path="/taxi/user/profile/notifications" element={<NotificationSettings />} />
+            <Route path="/taxi/user/profile/security" element={<SecuritySettings />} />
             
             {/* Driver Module Routes - Centralized under DriverLayout for Theme & Styling */}
             <Route path="/taxi/driver" element={<DriverLayout />}>

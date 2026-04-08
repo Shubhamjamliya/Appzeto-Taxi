@@ -4,10 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Home, Clock, Map, User } from 'lucide-react';
 
 const navItems = [
-  { icon: Home,  label: 'Ride',    path: '/'         },
-  { icon: Clock, label: 'History', path: '/activity' },
-  { icon: Map,   label: 'Travel',  path: '/support'  },
-  { icon: User,  label: 'Profile', path: '/profile'  },
+  { icon: Home,  label: 'Ride',    path: '/taxi/user'         },
+  { icon: Clock, label: 'History', path: '/taxi/user/activity' },
+  { icon: Map,   label: 'Travel',  path: '/taxi/user/support'  },
+  { icon: User,  label: 'Profile', path: '/taxi/user/profile'  },
 ];
 
 const BottomNavbar = () => {

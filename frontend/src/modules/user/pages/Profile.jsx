@@ -5,15 +5,15 @@ import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, S
 import BottomNavbar from '../components/BottomNavbar';
 
 const menuItems = [
-  { icon: User,        title: 'Profile Settings',  sub: 'Manage your personal info',        path: '/profile/settings',      bg: 'bg-orange-50',  color: 'text-orange-500' },
-  { icon: Wallet,      title: 'Wallet',             sub: 'Balance, transactions & top-up',   path: '/wallet',                bg: 'bg-blue-50',    color: 'text-blue-500'   },
-  { icon: MapPin,      title: 'Saved Addresses',    sub: 'Home, office & others',            path: '/profile/addresses',     bg: 'bg-emerald-50', color: 'text-emerald-500'},
-  { icon: Package,     title: 'My Rides',           sub: 'History & receipts',               path: '/activity',              bg: 'bg-violet-50',  color: 'text-violet-500' },
-  { icon: Bell,        title: 'Notifications',      sub: 'Offers, news & safety alerts',     path: '/notifications',         bg: 'bg-purple-50',  color: 'text-purple-500' },
-  { icon: Shield,      title: 'Security',           sub: 'Manage your privacy',              path: '/profile/security',      bg: 'bg-red-50',     color: 'text-red-500'    },
-  { icon: Gift,        title: 'Referral',           sub: 'Invite friends & earn ₹50',        path: '/referral',              bg: 'bg-yellow-50',  color: 'text-yellow-500' },
-  { icon: HelpCircle,  title: 'Support',            sub: 'Get help with your experience',    path: '/support/tickets',       bg: 'bg-slate-100',  color: 'text-slate-500'  },
-  { icon: Wrench,      title: 'Workshop & RSA',     sub: 'Roadside assistance on demand',    path: '/services/workshop-rsa', bg: 'bg-amber-50',   color: 'text-amber-500'  },
+  { icon: User,        title: 'Profile Settings',  sub: 'Manage your personal info',        path: '/taxi/user/profile/settings',      bg: 'bg-orange-50',  color: 'text-orange-500' },
+  { icon: Wallet,      title: 'Wallet',             sub: 'Balance, transactions & top-up',   path: '/taxi/user/wallet',                bg: 'bg-blue-50',    color: 'text-blue-500'   },
+  { icon: MapPin,      title: 'Saved Addresses',    sub: 'Home, office & others',            path: '/taxi/user/profile/addresses',     bg: 'bg-emerald-50', color: 'text-emerald-500'},
+  { icon: Package,     title: 'My Rides',           sub: 'History & receipts',               path: '/taxi/user/activity',              bg: 'bg-violet-50',  color: 'text-violet-500' },
+  { icon: Bell,        title: 'Notifications',      sub: 'Offers, news & safety alerts',     path: '/taxi/user/profile/notifications', bg: 'bg-purple-50',  color: 'text-purple-500' },
+  { icon: Shield,      title: 'Security',           sub: 'Manage your privacy',              path: '/taxi/user/profile/security',      bg: 'bg-red-50',     color: 'text-red-500'    },
+  { icon: Gift,        title: 'Referral',           sub: 'Invite friends & earn ₹50',        path: '/taxi/user/referral',              bg: 'bg-yellow-50',  color: 'text-yellow-500' },
+  { icon: HelpCircle,  title: 'Support',            sub: 'Get help with your experience',    path: '/taxi/user/support/tickets',       bg: 'bg-slate-100',  color: 'text-slate-500'  },
+  { icon: Wrench,      title: 'Workshop & RSA',     sub: 'Roadside assistance on demand',    path: '/taxi/user/services/workshop-rsa', bg: 'bg-amber-50',   color: 'text-amber-500'  },
 ];
 
 const Profile = () => {
@@ -36,7 +36,7 @@ const Profile = () => {
             <h1 className="text-[19px] font-black tracking-tight text-slate-900 leading-tight">My Profile</h1>
           </div>
           <motion.button whileTap={{ scale: 0.9 }}
-            onClick={() => navigate('/profile/settings')}
+            onClick={() => navigate('/taxi/user/profile/settings')}
             className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)]">
             <User size={16} className="text-slate-700" strokeWidth={2.5} />
           </motion.button>
@@ -92,7 +92,7 @@ const Profile = () => {
         {/* Sign out */}
         <motion.button type="button" whileTap={{ scale: 0.98 }}
           initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}
-          onClick={() => navigate('/login')}
+          onClick={() => navigate('/taxi/user/login')}
           className="w-full flex items-center justify-center gap-2 py-3.5 rounded-[16px] border border-red-100 bg-red-50/80 text-[12px] font-black text-red-500 uppercase tracking-widest shadow-[0_2px_8px_rgba(239,68,68,0.08)] mt-1">
           <LogOut size={14} strokeWidth={2.5} />
           Sign Out

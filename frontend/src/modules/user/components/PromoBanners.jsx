@@ -10,7 +10,7 @@ const rotatingCards = [
     title: 'In a hurry?',
     description: 'Auto for shorter wait times.',
     actionClass: 'bg-orange-50 text-orange-500',
-    path: '/ride/select-location',
+    path: '/taxi/user/ride/select-location',
     images: [
       { src: '/2_AutoRickshaw.png', alt: 'Auto' },
       { src: '/1_Bike.png', alt: 'Bike' },
@@ -22,7 +22,7 @@ const rotatingCards = [
     title: 'Need more space?',
     description: 'Cab for luggage or comfort.',
     actionClass: 'bg-blue-50 text-blue-500',
-    path: '/ride/select-location',
+    path: '/taxi/user/ride/select-location',
     images: [
       { src: '/4_Taxi.png', alt: 'Taxi' },
       { src: '/white_sedan_banner_car.png', alt: 'Sedan' },
@@ -99,7 +99,7 @@ const PromoBanners = () => {
             <motion.button
               type="button"
               whileTap={{ scale: 0.98 }}
-              onClick={() => navigate('/ride/select-location')}
+              onClick={() => navigate('/taxi/user/ride/select-location')}
               className="mt-4 inline-flex items-center gap-2 rounded-full bg-white px-4 py-2 text-[12px] font-black text-slate-900 shadow-lg shadow-black/15"
             >
               Ride Now

@@ -2,7 +2,6 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { Check, Globe, ChevronRight } from 'lucide-react';
-import RedigoLogo from '@/assets/redigologo.png';
 
 const LanguageSelect = () => {
     const navigate = useNavigate();
@@ -25,7 +24,7 @@ const LanguageSelect = () => {
         <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-x-hidden flex flex-col p-6 pt-12 pb-10">
             {/* Branding */}
             <div className="mb-12 flex flex-col items-center text-center space-y-4">
-                <img src={RedigoLogo} alt="Redigo" className="h-10 object-contain drop-shadow-sm" />
+                <img src="/Rydon24.png" alt="RYDON24" className="h-10 object-contain drop-shadow-sm" />
                 <div className="space-y-1">
                     <h1 className="text-3xl font-display font-bold text-slate-900 tracking-tight">Choose Language</h1>
                     <p className="text-[15px] font-medium text-slate-400">Select your preferred communication language</p>

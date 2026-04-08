@@ -52,7 +52,7 @@ const ServiceGrid = () => {
       icon: '/4_Taxi.png',
       label: 'Auto & Cab',
       description: 'Comfort rides for every trip.',
-      path: '/taxi/user/cab-sharing',
+      path: '/taxi/user/cab',
       accentClass: 'bg-[linear-gradient(135deg,#F5F3FF_0%,#E9D5FF_100%)]',
     },
   ];

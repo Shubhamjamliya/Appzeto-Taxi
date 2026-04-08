@@ -34,8 +34,53 @@ const Wallet = lazy(() => import('./modules/user/pages/Wallet'));
 // Coming Soon placeholder (for /tours and any unbuilt routes)
 const ComingSoon = lazy(() => import('./modules/shared/pages/ComingSoon'));
 
+// Phase 1 — Parcel flow completions + WorkshopRSA
+const ParcelSearchingDriver = lazy(() => import('./modules/user/pages/parcel/ParcelSearchingDriver'));
+const ParcelTracking = lazy(() => import('./modules/user/pages/parcel/ParcelTracking'));
+const WorkshopRSA = lazy(() => import('./modules/user/pages/services/WorkshopRSA'));
+
+// Phase 2 — Core utility pages
+const UserNotifications = lazy(() => import('./modules/user/pages/Notifications'));
+const PromoCodes = lazy(() => import('./modules/user/pages/PromoCodes'));
+const UserReferral = lazy(() => import('./modules/user/pages/Referral'));
+
+// Phase 3 — Safety & Support
+const SOSContacts = lazy(() => import('./modules/user/pages/safety/SOSContacts'));
+const SupportTickets = lazy(() => import('./modules/user/pages/support/SupportTickets'));
+const SupportTicketDetail = lazy(() => import('./modules/user/pages/support/SupportTicketDetail'));
+const DeleteAccount = lazy(() => import('./modules/user/pages/profile/DeleteAccount'));
+
+// Phase 4 — Cab/Intercity/Bus flows
+const CabHome = lazy(() => import('./modules/user/pages/cab/CabHome'));
+const SharedTaxi = lazy(() => import('./modules/user/pages/cab/SharedTaxi'));
+const SharedTaxiSeats = lazy(() => import('./modules/user/pages/cab/SharedTaxiSeats'));
+const SharedTaxiConfirm = lazy(() => import('./modules/user/pages/cab/SharedTaxiConfirm'));
+const AirportCab = lazy(() => import('./modules/user/pages/cab/AirportCab'));
+const AirportCabConfirm = lazy(() => import('./modules/user/pages/cab/AirportCabConfirm'));
+const SpiritualTrip = lazy(() => import('./modules/user/pages/cab/SpiritualTrip'));
+const SpiritualTripVehicle = lazy(() => import('./modules/user/pages/cab/SpiritualTripVehicle'));
+const SpiritualTripConfirm = lazy(() => import('./modules/user/pages/cab/SpiritualTripConfirm'));
+
+const IntercityVehicle = lazy(() => import('./modules/user/pages/intercity/IntercityVehicle'));
+const IntercityDetails = lazy(() => import('./modules/user/pages/intercity/IntercityDetails'));
+const IntercityConfirm = lazy(() => import('./modules/user/pages/intercity/IntercityConfirm'));
+
+const BusHome = lazy(() => import('./modules/user/pages/bus/BusHome'));
+const BusList = lazy(() => import('./modules/user/pages/bus/BusList'));
+const BusSeats = lazy(() => import('./modules/user/pages/bus/BusSeats'));
+const BusDetails = lazy(() => import('./modules/user/pages/bus/BusDetails'));
+const BusConfirm = lazy(() => import('./modules/user/pages/bus/BusConfirm'));
+
+// Phase 5 — Onboarding
+const Onboarding = lazy(() => import('./modules/user/pages/auth/Onboarding'));
+
 // New Feature Pages
 const BikeRentalHome = lazy(() => import('./modules/user/pages/rental/BikeRentalHome'));
+const RentalVehicleDetail = lazy(() => import('./modules/user/pages/rental/RentalVehicleDetail'));
+const RentalSchedule = lazy(() => import('./modules/user/pages/rental/RentalSchedule'));
+const RentalKYC = lazy(() => import('./modules/user/pages/rental/RentalKYC'));
+const RentalDeposit = lazy(() => import('./modules/user/pages/rental/RentalDeposit'));
+const RentalConfirmed = lazy(() => import('./modules/user/pages/rental/RentalConfirmed'));
 const IntercityHome = lazy(() => import('./modules/user/pages/intercity/IntercityHome'));
 const CabSharing = lazy(() => import('./modules/user/pages/cabsharing/CabSharing'));
 
@@ -224,6 +269,7 @@ function App() {
           <Routes>
 
             {/* User Module Routes */}
+            <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />
             <Route path="/verify-otp" element={<VerifyOTP />} />
             <Route path="/signup" element={<Signup />} />
@@ -241,25 +287,58 @@ function App() {
             <Route path="/parcel/type" element={<ParcelType />} />
             <Route path="/parcel/details" element={<ParcelDetails />} />
             <Route path="/parcel/contacts" element={<SenderReceiverDetails />} />
+            <Route path="/parcel/searching" element={<ParcelSearchingDriver />} />
+            <Route path="/parcel/tracking" element={<ParcelTracking />} />
             <Route path="/parcel/detail/:id" element={<RideDetail />} />
+            <Route path="/services/workshop-rsa" element={<WorkshopRSA />} />
 
             {/* New Service Routes — Real pages replacing ComingSoon */}
             <Route path="/rental" element={<BikeRentalHome />} />
+            <Route path="/rental/vehicle" element={<RentalVehicleDetail />} />
+            <Route path="/rental/schedule" element={<RentalSchedule />} />
+            <Route path="/rental/kyc" element={<RentalKYC />} />
+            <Route path="/rental/deposit" element={<RentalDeposit />} />
+            <Route path="/rental/confirmed" element={<RentalConfirmed />} />
             <Route path="/intercity" element={<IntercityHome />} />
+            <Route path="/intercity/vehicle" element={<IntercityVehicle />} />
+            <Route path="/intercity/details" element={<IntercityDetails />} />
+            <Route path="/intercity/confirm" element={<IntercityConfirm />} />
             <Route path="/cab-sharing" element={<CabSharing />} />
+            <Route path="/cab" element={<CabHome />} />
+            <Route path="/cab/shared" element={<SharedTaxi />} />
+            <Route path="/cab/shared/seats" element={<SharedTaxiSeats />} />
+            <Route path="/cab/shared/confirm" element={<SharedTaxiConfirm />} />
+            <Route path="/cab/airport" element={<AirportCab />} />
+            <Route path="/cab/airport-confirm" element={<AirportCabConfirm />} />
+            <Route path="/cab/spiritual" element={<SpiritualTrip />} />
+            <Route path="/cab/spiritual-vehicle" element={<SpiritualTripVehicle />} />
+            <Route path="/cab/spiritual-confirm" element={<SpiritualTripConfirm />} />
+            <Route path="/bus" element={<BusHome />} />
+            <Route path="/bus/list" element={<BusList />} />
+            <Route path="/bus/seats" element={<BusSeats />} />
+            <Route path="/bus/details" element={<BusDetails />} />
+            <Route path="/bus/confirm" element={<BusConfirm />} />
             <Route path="/tours" element={<ComingSoon />} />
 
             <Route path="/activity" element={<Activity />} />
             <Route path="/profile" element={<Profile />} />
             <Route path="/wallet" element={<Wallet />} />
+            <Route path="/notifications" element={<UserNotifications />} />
+            <Route path="/promo" element={<PromoCodes />} />
+            <Route path="/referral" element={<UserReferral />} />
 
             <Route path="/profile/settings" element={<ProfileSettings />} />
             <Route path="/profile/payments" element={<PaymentSettings />} />
             <Route path="/profile/addresses" element={<AddressSettings />} />
             <Route path="/profile/notifications" element={<NotificationSettings />} />
             <Route path="/profile/security" element={<SecuritySettings />} />
+            <Route path="/profile/delete-account" element={<DeleteAccount />} />
+            <Route path="/safety/sos" element={<SOSContacts />} />
+            <Route path="/support/tickets" element={<SupportTickets />} />
+            <Route path="/support/ticket/:id" element={<SupportTicketDetail />} />
 
             {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
+            <Route path="/taxi/user/onboarding" element={<Onboarding />} />
             <Route path="/taxi/user/login" element={<Login />} />
             <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
             <Route path="/taxi/user/signup" element={<Signup />} />
@@ -277,22 +356,54 @@ function App() {
             <Route path="/taxi/user/parcel/type" element={<ParcelType />} />
             <Route path="/taxi/user/parcel/details" element={<ParcelDetails />} />
             <Route path="/taxi/user/parcel/contacts" element={<SenderReceiverDetails />} />
+            <Route path="/taxi/user/parcel/searching" element={<ParcelSearchingDriver />} />
+            <Route path="/taxi/user/parcel/tracking" element={<ParcelTracking />} />
             <Route path="/taxi/user/parcel/detail/:id" element={<RideDetail />} />
+            <Route path="/taxi/user/services/workshop-rsa" element={<WorkshopRSA />} />
 
             <Route path="/taxi/user/rental" element={<BikeRentalHome />} />
+            <Route path="/taxi/user/rental/vehicle" element={<RentalVehicleDetail />} />
+            <Route path="/taxi/user/rental/schedule" element={<RentalSchedule />} />
+            <Route path="/taxi/user/rental/kyc" element={<RentalKYC />} />
+            <Route path="/taxi/user/rental/deposit" element={<RentalDeposit />} />
+            <Route path="/taxi/user/rental/confirmed" element={<RentalConfirmed />} />
             <Route path="/taxi/user/intercity" element={<IntercityHome />} />
+            <Route path="/taxi/user/intercity/vehicle" element={<IntercityVehicle />} />
+            <Route path="/taxi/user/intercity/details" element={<IntercityDetails />} />
+            <Route path="/taxi/user/intercity/confirm" element={<IntercityConfirm />} />
             <Route path="/taxi/user/cab-sharing" element={<CabSharing />} />
+            <Route path="/taxi/user/cab" element={<CabHome />} />
+            <Route path="/taxi/user/cab/shared" element={<SharedTaxi />} />
+            <Route path="/taxi/user/cab/shared/seats" element={<SharedTaxiSeats />} />
+            <Route path="/taxi/user/cab/shared/confirm" element={<SharedTaxiConfirm />} />
+            <Route path="/taxi/user/cab/airport" element={<AirportCab />} />
+            <Route path="/taxi/user/cab/airport-confirm" element={<AirportCabConfirm />} />
+            <Route path="/taxi/user/cab/spiritual" element={<SpiritualTrip />} />
+            <Route path="/taxi/user/cab/spiritual-vehicle" element={<SpiritualTripVehicle />} />
+            <Route path="/taxi/user/cab/spiritual-confirm" element={<SpiritualTripConfirm />} />
+            <Route path="/taxi/user/bus" element={<BusHome />} />
+            <Route path="/taxi/user/bus/list" element={<BusList />} />
+            <Route path="/taxi/user/bus/seats" element={<BusSeats />} />
+            <Route path="/taxi/user/bus/details" element={<BusDetails />} />
+            <Route path="/taxi/user/bus/confirm" element={<BusConfirm />} />
             <Route path="/taxi/user/tours" element={<ComingSoon />} />
 
             <Route path="/taxi/user/activity" element={<Activity />} />
             <Route path="/taxi/user/profile" element={<Profile />} />
             <Route path="/taxi/user/wallet" element={<Wallet />} />
+            <Route path="/taxi/user/notifications" element={<UserNotifications />} />
+            <Route path="/taxi/user/promo" element={<PromoCodes />} />
+            <Route path="/taxi/user/referral" element={<UserReferral />} />
 
             <Route path="/taxi/user/profile/settings" element={<ProfileSettings />} />
             <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
             <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
             <Route path="/taxi/user/profile/notifications" element={<NotificationSettings />} />
             <Route path="/taxi/user/profile/security" element={<SecuritySettings />} />
+            <Route path="/taxi/user/profile/delete-account" element={<DeleteAccount />} />
+            <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
+            <Route path="/taxi/user/support/tickets" element={<SupportTickets />} />
+            <Route path="/taxi/user/support/ticket/:id" element={<SupportTicketDetail />} />
             
             {/* Driver Module Routes - Centralized under DriverLayout for Theme & Styling */}
             <Route path="/taxi/driver" element={<DriverLayout />}>

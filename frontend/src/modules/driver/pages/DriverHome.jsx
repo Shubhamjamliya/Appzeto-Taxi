@@ -20,8 +20,6 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api';
 
-import RedigoLogo from '@/assets/redigologo.png';
-import { IndianRupee, TrendingUp, Star, ChevronRight } from 'lucide-react';
 import MapGrid from '@/assets/premium_grid_map.png';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
@@ -190,15 +188,6 @@ const DriverHome = () => {
                 onDecline={() => setShowRequest(false)} 
             />
 
-            <header className="fixed top-0 left-0 right-0 px-5 pt-5 pb-4 flex items-center justify-between z-50 bg-white/80 backdrop-blur-xl border-b border-slate-100 shadow-soft">
-                <div className="flex items-center gap-3">
-                    <img src={RedigoLogo} alt="Redigo" className="h-4 object-contain" />
-                    <div className="h-3 w-[1px] bg-slate-200" />
-                    <div className="flex items-center gap-1.5 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100">
-                        <div className={`w-1.5 h-1.5 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                        <span className={`text-[8px] font-black uppercase tracking-wider ${isOnline ? 'text-emerald-600' : 'text-slate-400'}`}>
-                            {isOnline ? 'Active' : 'Offline'}
-            {/* Header: Compact Version */}
             <header className="fixed top-0 left-0 right-0 px-6 pt-6 pb-2.5 flex items-center justify-between z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-md">
                 <div className="flex items-center gap-3 pt-2">
                     <img src={Rydon24Logo} alt="Rydon24" className="h-7 drop-shadow-sm" />
@@ -212,7 +201,8 @@ const DriverHome = () => {
                 </div>
                 <div className="flex items-center gap-2">
                     <button onClick={() => navigate('/taxi/driver/notifications')} className="w-9 h-9 bg-white rounded-xl shadow-sm border border-slate-50 flex items-center justify-center text-slate-600 relative active:scale-95 transition-all">
-                        <Bell size={16} strokeWidth={2.5} /><span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full" />
+                        <Bell size={16} strokeWidth={2.5} />
+                        <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full" />
                     </button>
                     <div onClick={() => navigate('/taxi/driver/profile')} className="w-9 h-9 rounded-full border border-slate-100 bg-slate-50 flex items-center justify-center shadow-inner cursor-pointer active:scale-95 transition-all overflow-hidden">
                          <User size={20} className="text-slate-300" />

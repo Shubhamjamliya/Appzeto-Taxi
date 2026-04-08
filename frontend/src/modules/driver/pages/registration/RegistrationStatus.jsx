@@ -113,7 +113,11 @@ const RegistrationStatus = () => {
 
             <div className="mt-8 p-5 bg-amber-50/50 rounded-2xl border border-amber-100/50 max-w-sm">
                 <p className="text-[10px] font-bold text-slate-600 leading-relaxed italic">
-                    "Registration on Redigo usually takes <span className="text-amber-600 font-extrabold underline decoration-amber-500/20 underline-offset-4">2 - 4 hours</span>. We will notify you once your account is active."
+                    Registration on RYDON24 usually takes{' '}
+                    <span className="text-amber-600 font-extrabold underline decoration-amber-500/20 underline-offset-4">
+                      2 - 4 hours
+                    </span>
+                    . We will notify you once your account is active.
                 </p>
             </div>
 

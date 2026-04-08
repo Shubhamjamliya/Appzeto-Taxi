@@ -22,16 +22,12 @@ const DriverWelcome = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
                 <img 
                     src={DriverHero} 
-                    alt="Drive with Redigo" 
-                    className="w-full h-full object-cover opacity-70"
                     alt="Drive with RYDON24" 
-                    className="w-full h-full object-cover"
+                    className="w-full h-full object-cover opacity-70"
                 />
                 
                 {/* Branding Top Overlay */}
                 <div className="absolute top-8 left-6 z-20">
-                     <img src={RedigoLogo} alt="RedigoLogo" className="h-8 brightness-0 invert opacity-90" />
-                <div className="absolute top-10 left-8 z-20">
                      <img src={Rydon24Logo} alt="RYDON24" className="h-10 drop-shadow-xl" />
                 </div>
 
@@ -109,8 +105,6 @@ const DriverWelcome = () => {
                         </div>
                     </div>
                     <p className="text-[13px] font-medium text-slate-500 italic leading-relaxed">
-                        "Joining Redigo transformed how I manage my time and earnings. The regular payouts and support are top-notch."
-                    <p className="text-[13px] font-bold text-slate-500 italic leading-relaxed">
                         "Joining RYDON24 was the best decision for my family. The payouts are always on time and the support team is incredible."
                     </p>
                 </div>

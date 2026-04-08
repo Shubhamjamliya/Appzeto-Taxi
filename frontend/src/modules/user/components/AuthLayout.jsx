@@ -1,6 +1,5 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import RedigoLogo from '@/assets/redigologo.png';
 
 const AuthLayout = ({ children, title, subtitle }) => {
   return (
@@ -8,7 +7,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
       {/* Left side (Desktop Only) */}
       <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#E85D04] via-[#F48C06] to-[#FFB700] relative items-center justify-center p-12">
         <div className="absolute top-10 left-10">
-          <img src={RedigoLogo} alt="Rydon24" className="h-16 object-contain drop-shadow-xl" />
+          <img src="/Rydon24.png" alt="Rydon24" className="h-16 object-contain drop-shadow-xl" />
         </div>
         
         <div className="relative z-10 text-center max-w-md">
@@ -41,7 +40,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
       <div className="flex-1 flex items-center justify-center p-6 md:p-12 relative">
         {/* Mobile Header (Visible only on small screens) */}
         <div className="lg:hidden absolute top-8 left-0 right-0 flex flex-col items-center">
-            <img src={RedigoLogo} alt="Rydon24" className="h-12 object-contain drop-shadow-sm" />
+            <img src="/Rydon24.png" alt="Rydon24" className="h-12 object-contain drop-shadow-sm" />
             <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Smart Mobility & Local Logistics — Rydon24</p>
         </div>
 

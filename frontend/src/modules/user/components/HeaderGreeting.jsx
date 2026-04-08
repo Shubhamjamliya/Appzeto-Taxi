@@ -2,7 +2,6 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Search, Wallet } from 'lucide-react';
-import RedigoLogo from '@/assets/redigologo.png';
 
 const fallingCoins = [
   { id: 1, left: '24%', delay: 0 },
@@ -30,7 +29,7 @@ const HeaderGreeting = () => {
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
             />
             <motion.img
-              src={RedigoLogo}
+              src="/Rydon24.png"
               alt="Rydon24"
               className="relative z-10 h-10 object-contain drop-shadow-sm"
               animate={{ y: [0, -2, 0], scale: [1, 1.02, 1] }}

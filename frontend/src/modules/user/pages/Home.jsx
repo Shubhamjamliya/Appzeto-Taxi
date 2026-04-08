@@ -100,8 +100,12 @@ const Home = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-24 left-0 right-0 h-24 opacity-[0.08] pointer-events-none">
-        <img src="/city_skyline_footer.png" alt="City" className="w-full h-full object-bottom" />
+      <div className="absolute bottom-24 left-0 right-0 h-24 opacity-70 pointer-events-none">
+        <img
+          src="/city_skyline_footer.png"
+          alt="City"
+          className="w-full h-full object-cover object-bottom mix-blend-multiply contrast-125"
+        />
       </div>
 
       <BottomNavbar />

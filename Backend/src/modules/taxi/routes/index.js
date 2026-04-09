@@ -1,10 +1,10 @@
 import { Router } from 'express';
-import { driverRouter } from './driverRoutes.js';
-import { rideRouter } from './rideRoutes.js';
-import { userRouter } from './userRoutes.js';
+import { adminModuleRouter } from '../admin/routes/index.js';
+import { driverModuleRouter } from '../driver/routes/index.js';
+import { userModuleRouter } from '../user/routes/index.js';
 
 export const taxiRouter = Router();
 
-taxiRouter.use('/users', userRouter);
-taxiRouter.use('/drivers', driverRouter);
-taxiRouter.use('/rides', rideRouter);
+taxiRouter.use(adminModuleRouter);
+taxiRouter.use(userModuleRouter);
+taxiRouter.use(driverModuleRouter);

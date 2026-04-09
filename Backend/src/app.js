@@ -31,6 +31,7 @@ export const createApp = () => {
       success: true,
       message: 'Taxi API is mounted',
       routes: {
+        admins: ['/api/admin', '/api/v1/admin'],
         users: ['/api/users', '/api/v1/users'],
         drivers: ['/api/drivers', '/api/v1/drivers'],
         rides: ['/api/rides', '/api/v1/rides'],

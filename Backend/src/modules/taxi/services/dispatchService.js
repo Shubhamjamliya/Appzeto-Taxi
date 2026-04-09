@@ -1,5 +1,5 @@
-import { Ride } from '../models/Ride.js';
-import { User } from '../models/User.js';
+import { Ride } from '../user/models/Ride.js';
+import { User } from '../user/models/User.js';
 import { matchDrivers } from './matchingService.js';
 import {
   DISPATCH_RADII,

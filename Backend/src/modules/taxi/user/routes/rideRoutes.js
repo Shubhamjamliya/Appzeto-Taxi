@@ -1,7 +1,7 @@
 import { Router } from 'express';
-import { asyncHandler } from '../../../utils/asyncHandler.js';
+import { asyncHandler } from '../../../../utils/asyncHandler.js';
+import { authenticate } from '../../middlewares/authMiddleware.js';
 import { createRide, getRideById } from '../controllers/rideController.js';
-import { authenticate } from '../middlewares/authMiddleware.js';
 
 export const rideRouter = Router();
 

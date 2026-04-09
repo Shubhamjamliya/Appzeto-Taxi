@@ -1,9 +1,8 @@
-import { ApiError } from '../../../utils/ApiError.js';
-import { normalizePoint, toPoint } from '../../../utils/geo.js';
+import { ApiError } from '../../../../utils/ApiError.js';
+import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
-import { findZoneByPickup } from '../services/matchingService.js';
-import { comparePassword, hashPassword } from '../services/passwordService.js';
-import { signAccessToken } from '../services/tokenService.js';
+import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
+import { findZoneByPickup } from '../services/locationService.js';
 
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;

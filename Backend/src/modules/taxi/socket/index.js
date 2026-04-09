@@ -1,7 +1,7 @@
 import { Server } from 'socket.io';
 import { env } from '../../../config/env.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
-import { Driver } from '../models/Driver.js';
+import { Driver } from '../driver/models/Driver.js';
 import {
   addSocketSubscriptions,
   joinRideRoom,

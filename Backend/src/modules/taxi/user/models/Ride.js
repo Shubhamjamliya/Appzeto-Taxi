@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { RIDE_STATUS } from '../constants/index.js';
+import { RIDE_STATUS } from '../../constants/index.js';
 
 const rideSchema = new mongoose.Schema(
   {

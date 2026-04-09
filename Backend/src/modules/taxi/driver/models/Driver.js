@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { VEHICLE_TYPES } from '../constants/index.js';
+import { VEHICLE_TYPES } from '../../constants/index.js';
 
 const driverSchema = new mongoose.Schema(
   {

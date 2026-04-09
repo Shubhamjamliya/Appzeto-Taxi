@@ -1,12 +1,12 @@
 import { Router } from 'express';
-import { asyncHandler } from '../../../utils/asyncHandler.js';
+import { asyncHandler } from '../../../../utils/asyncHandler.js';
+import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   goOffline,
   goOnline,
   loginDriver,
   registerDriver,
 } from '../controllers/driverController.js';
-import { authenticate } from '../middlewares/authMiddleware.js';
 
 export const driverRouter = Router();
 

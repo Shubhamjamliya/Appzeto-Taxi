@@ -133,12 +133,14 @@ const MainDashboard = () => {
     pending_drivers: 0,
     isLoading: true
   });
+  const [dashboardError, setDashboardError] = useState('');
 
   useEffect(() => {
     const fetchDashboardData = async () => {
       try {
         const dashboardData = await adminService.getDashboardData();
         const data = dashboardData?.data || dashboardData;
+        setDashboardError('');
 
         setStats({
           total_users: data?.totalUsers || 0,
@@ -149,6 +151,7 @@ const MainDashboard = () => {
         });
       } catch (err) {
         console.error('Dashboard Fetch Error:', err);
+        setDashboardError('Dashboard data is unavailable right now. Start the backend on http://localhost:4000 to load live metrics.');
         setStats(prev => ({ ...prev, isLoading: false }));
       }
     };
@@ -170,6 +173,17 @@ const MainDashboard = () => {
             Dashboard <ChevronRight size={12} className="mt-0.5" /> Dashboard
          </div>
       </div>
+      {dashboardError ? (
+        <div className="bg-amber-50 border border-amber-200 rounded-[24px] p-5 flex items-start gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+            <CircleAlert size={18} />
+          </div>
+          <div>
+            <p className="text-[11px] font-black text-amber-800 uppercase tracking-[0.2em]">Backend Offline</p>
+            <p className="text-sm font-semibold text-amber-900 mt-1">{dashboardError}</p>
+          </div>
+        </div>
+      ) : null}
 
       {/* ── TOP STATS ROW ── */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">

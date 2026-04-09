@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertTriangle,
+  Crosshair,
   Layers,
   LocateFixed,
   Map as MapIcon,
@@ -9,7 +10,8 @@ import {
   RefreshCw,
   Search,
   ShieldAlert,
-  TrendingUp
+  TrendingUp,
+  Users
 } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { Autocomplete, GoogleMap, MarkerF, Polygon } from '@react-google-maps/api';

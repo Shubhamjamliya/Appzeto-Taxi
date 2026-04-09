@@ -41,6 +41,8 @@ export const saveDriverDocuments = (payload) => api.patch('/drivers/onboarding/d
 
 export const completeDriverOnboarding = (payload) => api.post('/drivers/onboarding/complete', payload);
 
+export const getCurrentDriver = () => api.get('/drivers/me');
+
 export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {
     params: { phone },

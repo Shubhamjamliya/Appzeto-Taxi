@@ -6,6 +6,7 @@ export const connectDatabase = async () => {
 
   const connection = await mongoose.connect(env.mongoUri, {
     autoIndex: env.nodeEnv !== 'production',
+    dbName: env.mongoDbName,
   });
 
   const { host, name } = connection.connection;

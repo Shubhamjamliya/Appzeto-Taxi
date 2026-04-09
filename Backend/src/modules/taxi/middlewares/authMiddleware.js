@@ -37,6 +37,13 @@ export const authenticate = (allowedRoles = []) => async (req, _res, next) => {
       throw new ApiError(401, 'Authenticated account no longer exists');
     }
 
+    if (
+      payload.role === 'driver' &&
+      (entity.approve === false || String(entity.status || '').toLowerCase() === 'pending')
+    ) {
+      throw new ApiError(403, 'Driver account is pending approval');
+    }
+
     req.auth = {
       sub: payload.sub,
       role: payload.role,

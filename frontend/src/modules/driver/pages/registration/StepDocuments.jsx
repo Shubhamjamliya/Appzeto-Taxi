@@ -2,7 +2,6 @@ import React, { useRef, useState } from 'react';
 import { ArrowLeft, Camera, FileText, CheckCircle2, ShieldCheck, Smartphone, AlertCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
-    clearDriverRegistrationSession,
     completeDriverOnboarding,
     getStoredDriverRegistrationSession,
     saveDriverDocuments,
@@ -161,15 +160,24 @@ const StepDocuments = () => {
                 phone: session.phone,
             });
 
-            const nextState = saveDriverRegistrationSession({
+            const token = completeResponse?.data?.token;
+            if (token) {
+                localStorage.setItem('token', token);
+                localStorage.setItem('role', 'driver');
+            }
+
+            saveDriverRegistrationSession({
                 ...session,
                 documents: docs,
                 completedRegistration: completeResponse?.data || null,
             });
 
-            clearDriverRegistrationSession();
             navigate('/taxi/driver/registration-status', {
-                state: nextState,
+                state: {
+                    ...session,
+                    documents: docs,
+                    completedRegistration: completeResponse?.data || null,
+                },
             });
         } catch (submitError) {
             setError(submitError?.message || 'Unable to complete registration');

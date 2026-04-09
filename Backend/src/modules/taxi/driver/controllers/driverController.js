@@ -122,6 +122,35 @@ export const goOnline = async (req, res) => {
   });
 };
 
+export const getCurrentDriver = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      email: driver.email,
+      gender: driver.gender,
+      vehicleType: driver.vehicleType,
+      registerFor: driver.registerFor,
+      vehicleNumber: driver.vehicleNumber,
+      vehicleColor: driver.vehicleColor,
+      city: driver.city,
+      approve: driver.approve,
+      status: driver.status,
+      rating: driver.rating,
+      isOnline: driver.isOnline,
+      isOnRide: driver.isOnRide,
+    },
+  });
+};
+
 export const getServiceLocations = async (_req, res) => {
   const results = await listDriverServiceLocations();
 

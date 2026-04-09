@@ -5,7 +5,7 @@ import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js
 import { Driver } from '../models/Driver.js';
 import { DriverRegistrationSession } from '../models/DriverRegistrationSession.js';
 import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
-import { hashPassword } from './authService.js';
+import { hashPassword, signAccessToken } from './authService.js';
 import { findZoneByPickup } from './locationService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
@@ -114,7 +114,7 @@ const getSession = async (registrationId, phone = '') => {
     ? { registrationId: String(registrationId) }
     : { phone: normalizePhone(phone) };
 
-  const session = await DriverRegistrationSession.findOne(query).select('+otpHash');
+  const session = await DriverRegistrationSession.findOne(query).select('+otpHash +personal.passwordHash');
 
   if (!session) {
     throw new ApiError(404, 'Registration session not found');
@@ -468,6 +468,7 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
     message: 'Driver registration completed successfully',
     driver: publicDriverPayload(driver),
     documents: session.documents,
+    token: signAccessToken({ sub: String(driver._id), role: 'driver' }),
     session: publicSessionPayload(session),
   };
 };

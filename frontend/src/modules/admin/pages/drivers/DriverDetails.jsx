@@ -49,7 +49,7 @@ const DriverDetails = () => {
       const headers = { 'Authorization': `Bearer ${token}` };
 
       // Driver Profile
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}`, { headers });
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, { headers });
       const data = await res.json();
 
       if (data.success) {
@@ -71,21 +71,21 @@ const DriverDetails = () => {
       }
 
       // Driver Requests
-      const reqRes = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}/requests`, { headers });
+      const reqRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/requests`, { headers });
       const reqData = await reqRes.json();
       if (reqData.success) {
         setRequests(reqData.data?.results || []);
       }
 
       // Driver Wallet History
-      const walletRes = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}/wallet-history`, { headers });
+      const walletRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/wallet-history`, { headers });
       const walletData = await walletRes.json();
       if (walletData.success) {
         setWalletHistory(walletData.data?.results || []);
       }
 
       // Driver Review History
-      const reviewRes = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}/review-history`, { headers });
+      const reviewRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/review-history`, { headers });
       const reviewData = await reviewRes.json();
       if (reviewData.success) {
         setReviews(reviewData.data?.results || []);
@@ -110,7 +110,7 @@ const DriverDetails = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/wallet/drivers/${id}/adjust`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/wallet/drivers/${id}/adjust`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -621,3 +621,4 @@ const DriverDetails = () => {
 };
 
 export default DriverDetails;
+

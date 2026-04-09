@@ -10,7 +10,7 @@ const DriverDeleteRequests = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch('https://taxi-a276.onrender.com/api/v1/admin/drivers/deleted', {
+      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/drivers/deleted', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -33,7 +33,7 @@ const DriverDeleteRequests = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/deleted/${id}/restore`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/deleted/${id}/restore`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -50,7 +50,7 @@ const DriverDeleteRequests = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/deleted/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/deleted/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -211,3 +211,4 @@ const DriverDeleteRequests = () => {
 };
 
 export default DriverDeleteRequests;
+

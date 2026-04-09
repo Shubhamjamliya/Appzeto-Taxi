@@ -35,8 +35,8 @@ const SendNotification = () => {
   const [imagePreview, setImagePreview] = useState(null);
 
   const token = localStorage.getItem('adminToken') || '';
-  const baseUrl = 'https://taxi-a276.onrender.com/api/v1/admin';
-  const dashboardUrl = 'https://taxi-a276.onrender.com/api/v1/admin/dashboard';
+  const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
+  const dashboardUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/dashboard';
 
   const fetchData = async () => {
     setLoading(true);
@@ -475,3 +475,4 @@ const SendNotification = () => {
 };
 
 export default SendNotification;
+

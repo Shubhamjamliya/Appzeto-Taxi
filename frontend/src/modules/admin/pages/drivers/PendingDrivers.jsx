@@ -63,10 +63,10 @@ const PendingDrivers = () => {
       }
 
       const url = action === 'delete' 
-        ? `https://taxi-a276.onrender.com/api/v1/admin/drivers/${driverId}`
+        ? `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${driverId}`
         : action === 'password'
-          ? `https://taxi-a276.onrender.com/api/v1/admin/drivers/update-password/${driverId}`
-          : `https://taxi-a276.onrender.com/api/v1/admin/drivers/${driverId}`;
+          ? `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/update-password/${driverId}`
+          : `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${driverId}`;
       
       const method = action === 'delete' ? 'DELETE' : 'PATCH';
       let bodyData = null;
@@ -109,7 +109,7 @@ const PendingDrivers = () => {
   const fetchPendingDrivers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('https://taxi-a276.onrender.com/api/v1/admin/drivers?page=1&limit=50', {
+      const response = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/drivers?page=1&limit=50', {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -396,3 +396,4 @@ const PendingDrivers = () => {
 };
 
 export default PendingDrivers;
+

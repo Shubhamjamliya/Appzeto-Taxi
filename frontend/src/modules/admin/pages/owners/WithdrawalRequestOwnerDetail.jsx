@@ -45,7 +45,7 @@ const WithdrawalRequestOwnerDetail = () => {
         setIsLoading(true);
         const token = localStorage.getItem('adminToken');
         // following driver pattern: /api/v1/admin/wallet/drivers/${id}/withdrawals
-        const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/wallet/owners/${id}/withdrawals?limit=${itemsPerPage}`, {
+        const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/wallet/owners/${id}/withdrawals?limit=${itemsPerPage}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await res.json();
@@ -242,3 +242,4 @@ const WithdrawalRequestOwnerDetail = () => {
 };
 
 export default WithdrawalRequestOwnerDetail;
+

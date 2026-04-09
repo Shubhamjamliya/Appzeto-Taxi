@@ -34,7 +34,7 @@ const DriverRatings = () => {
         const storedToken = localStorage.getItem('adminToken');
         const token = (storedToken && storedToken !== 'undefined' && storedToken !== 'null') ? storedToken : providedToken;
 
-        const response = await fetch('https://taxi-a276.onrender.com/api/v1/admin/drivers', {
+        const response = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/drivers', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -253,4 +253,5 @@ const DriverRatings = () => {
 };
 
 export default DriverRatings;
+
 

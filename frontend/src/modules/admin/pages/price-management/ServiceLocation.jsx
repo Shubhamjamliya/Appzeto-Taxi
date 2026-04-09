@@ -48,7 +48,7 @@ const ServiceLocation = () => {
   });
 
   const token = localStorage.getItem('adminToken') || '';
-  const baseUrl = 'https://taxi-a276.onrender.com/api/v1/admin';
+  const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
 
   const fetchData = async () => {
     setLoading(true);
@@ -66,7 +66,7 @@ const ServiceLocation = () => {
 
       // Fetch Countries
       setFetchingCountries(true);
-      const countRes = await fetch('https://taxi-a276.onrender.com/api/v1/countries');
+      const countRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/countries');
       const countData = await countRes.json();
       if (countData.success) {
         const counts = Array.isArray(countData.data) ? countData.data : (countData.data?.results || []);
@@ -522,3 +522,4 @@ const ServiceLocation = () => {
 };
 
 export default ServiceLocation;
+

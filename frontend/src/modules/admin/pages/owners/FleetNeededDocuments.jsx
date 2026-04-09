@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BASE = 'https://taxi-a276.onrender.com/api/v1/admin/owner-management';
+const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/owner-management';
 
 const FleetNeededDocuments = () => {
   const [view, setView] = useState('list');
@@ -467,3 +467,4 @@ const FleetNeededDocuments = () => {
 };
 
 export default FleetNeededDocuments;
+

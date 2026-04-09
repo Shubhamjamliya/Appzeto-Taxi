@@ -18,7 +18,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BASE = 'https://taxi-a276.onrender.com/api/v1/admin';
+const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
 
 const BlockedFleetDrivers = () => {
   const navigate = useNavigate();
@@ -205,3 +205,4 @@ const BlockedFleetDrivers = () => {
 };
 
 export default BlockedFleetDrivers;
+

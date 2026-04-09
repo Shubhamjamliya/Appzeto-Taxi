@@ -16,7 +16,7 @@ const DeleteRequestUsers = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch('https://taxi-a276.onrender.com/api/v1/admin/users/deleted', {
+      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users/deleted', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -39,7 +39,7 @@ const DeleteRequestUsers = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/users/deleted/${id}/restore`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/users/deleted/${id}/restore`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -57,7 +57,7 @@ const DeleteRequestUsers = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/users/deleted/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/users/deleted/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -294,3 +294,4 @@ const DeleteRequestUsers = () => {
 };
 
 export default DeleteRequestUsers;
+

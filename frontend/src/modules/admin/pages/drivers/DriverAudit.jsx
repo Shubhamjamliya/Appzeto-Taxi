@@ -34,7 +34,7 @@ const DriverAudit = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -58,7 +58,7 @@ const DriverAudit = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -339,3 +339,4 @@ const DriverAudit = () => {
 };
 
 export default DriverAudit;
+

@@ -26,7 +26,7 @@ const GlobalDocuments = () => {
   const [documents, setDocuments] = useState([]);
 
   const token = localStorage.getItem('adminToken') || '';
-  const BASE = 'https://taxi-a276.onrender.com/api/v1/admin/owner-management/driver-needed-document';
+  const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/owner-management/driver-needed-document';
 
   const fetchDocuments = async () => {
     setIsLoading(true);
@@ -455,3 +455,4 @@ const GlobalDocuments = () => {
 };
 
 export default GlobalDocuments;
+

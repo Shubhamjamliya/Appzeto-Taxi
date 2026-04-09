@@ -3,11 +3,20 @@ import Rydon24Logo from '../../../../assets/rydon24_logo.png';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Mail, Lock, ArrowRight, Car, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { adminService } from '../../services/adminService';
+
+const STATIC_ADMIN_EMAIL = 'admin@gmail.com';
+const STATIC_ADMIN_PASSWORD = 'admin';
+const STATIC_ADMIN_TOKEN = 'static-admin-session-token';
+const STATIC_ADMIN_INFO = {
+  id: 'static-admin',
+  name: 'Admin',
+  email: STATIC_ADMIN_EMAIL,
+  role: 'super-admin',
+};
 
 const AdminLogin = () => {
-  const [email, setEmail] = useState(''); 
-  const [password, setPassword] = useState(''); 
+  const [email, setEmail] = useState(STATIC_ADMIN_EMAIL); 
+  const [password, setPassword] = useState(STATIC_ADMIN_PASSWORD); 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -18,31 +27,23 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      // PRO-LEVEL: Call standardized service instead of fetch
-      const data = await adminService.login({ email, password });
-      console.log("Login Full Response:", data);
+      const normalizedEmail = email.trim().toLowerCase();
 
-      if (data.success || data.access_token || data.token) {
-        const token = data.access_token || data.token || data.data?.token;
-        const admin = data.user || data.admin || data.data?.admin || data.data?.user;
+      if (
+        normalizedEmail === STATIC_ADMIN_EMAIL &&
+        password === STATIC_ADMIN_PASSWORD
+      ) {
+        localStorage.setItem('adminToken', STATIC_ADMIN_TOKEN);
+        localStorage.setItem('adminInfo', JSON.stringify(STATIC_ADMIN_INFO));
 
-        if (token) {
-          // Store the token and admin info
-          localStorage.setItem('adminToken', token);
-          if (admin) localStorage.setItem('adminInfo', JSON.stringify(admin));
-          
-          // Navigation with a slight delay for better UX feel
-          setTimeout(() => {
-            navigate('/admin/dashboard');
-          }, 500);
-        } else {
-          setError('Authentication succeeded but no security token was received from server.');
-        }
+        setTimeout(() => {
+          navigate('/admin/dashboard');
+        }, 300);
       } else {
-        setError(data.message || 'Authentication failed. Please check your credentials.');
+        setError('Use admin@gmail.com and admin to sign in.');
       }
     } catch (err) {
-      setError(err.message || 'Network error. Please try again later.');
+      setError(err.message || 'Unable to complete static admin login.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
@@ -98,6 +99,13 @@ const AdminLogin = () => {
         </AnimatePresence>
 
         <form onSubmit={handleLogin} className="space-y-6">
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-left">
+            <p className="text-[11px] font-black uppercase tracking-[1.5px] text-blue-700">Static Admin Login</p>
+            <p className="mt-1 text-[13px] font-semibold text-blue-900">
+              Email: {STATIC_ADMIN_EMAIL} | Password: {STATIC_ADMIN_PASSWORD}
+            </p>
+          </div>
+
           <div className="space-y-4">
             <div className="relative group">
                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-all">

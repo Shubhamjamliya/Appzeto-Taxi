@@ -6,6 +6,7 @@ import {
   goOffline,
   goOnline,
   getOnboardingSession,
+  getServiceLocations,
   loginDriver,
   saveOnboardingDocuments,
   saveOnboardingPersonal,
@@ -20,6 +21,7 @@ export const driverRouter = Router();
 
 driverRouter.post('/register', asyncHandler(registerDriver));
 driverRouter.post('/login', asyncHandler(loginDriver));
+driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));
 driverRouter.post('/onboarding/verify-otp', asyncHandler(verifyOnboardingOtp));
 driverRouter.patch('/onboarding/personal', asyncHandler(saveOnboardingPersonal));

@@ -4,19 +4,12 @@ import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js';
 import { Driver } from '../models/Driver.js';
 import { DriverRegistrationSession } from '../models/DriverRegistrationSession.js';
+import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
 import { hashPassword } from './authService.js';
 import { findZoneByPickup } from './locationService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
-
-const CITY_COORDINATES = {
-  indore: [75.8577, 22.7196],
-  bhopal: [77.4126, 23.2599],
-  dewas: [76.0595, 22.9659],
-  ujjain: [75.7849, 23.1765],
-  'new delhi': [77.1025, 28.7041],
-};
 
 const VEHICLE_TYPE_MAP = {
   v1: 'bike',
@@ -37,14 +30,31 @@ const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
 
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
 
-const getCoordinatesForCity = (city) => {
-  const key = String(city || '').trim().toLowerCase();
-  return CITY_COORDINATES[key] || null;
-};
-
 const getVehicleType = (vehicleTypeId, registerFor = '') => {
   const type = VEHICLE_TYPE_MAP[String(vehicleTypeId || registerFor || '').trim().toLowerCase()];
   return type || 'car';
+};
+
+const getServiceLocationName = (serviceLocation = {}) =>
+  String(serviceLocation.service_location_name || serviceLocation.name || '').trim();
+
+const getServiceLocationCoordinates = (serviceLocation = {}) => {
+  if (Array.isArray(serviceLocation?.location?.coordinates) && serviceLocation.location.coordinates.length === 2) {
+    return serviceLocation.location.coordinates;
+  }
+
+  if (
+    typeof serviceLocation?.longitude === 'number' &&
+    typeof serviceLocation?.latitude === 'number'
+  ) {
+    return [serviceLocation.longitude, serviceLocation.latitude];
+  }
+
+  if (Array.isArray(serviceLocation?.coordinates) && serviceLocation.coordinates.length === 2) {
+    return serviceLocation.coordinates;
+  }
+
+  return null;
 };
 
 const normalizeStoredDocument = (value) => {
@@ -280,6 +290,7 @@ export const saveDriverVehicle = async ({
   registerFor,
   locationId,
   locationName,
+  serviceLocation,
   vehicleTypeId,
   make,
   model,
@@ -298,15 +309,36 @@ export const saveDriverVehicle = async ({
     throw new ApiError(400, 'Save personal details before vehicle details');
   }
 
-  const selectedLocation = String(locationName || city || '').trim();
+  const selectedServiceLocation = serviceLocation || (locationId ? await ServiceLocation.findById(locationId).lean() : null);
+  const selectedLocation = getServiceLocationName(selectedServiceLocation) || String(locationName || city || '').trim();
+
   if (!selectedLocation) {
-    throw new ApiError(400, 'locationName is required');
+    throw new ApiError(400, 'A valid service location is required');
   }
 
   session.vehicle = {
     registerFor: String(registerFor || session.role || 'taxi').trim().toLowerCase(),
     locationId: String(locationId || '').trim(),
     locationName: selectedLocation,
+    serviceLocation: selectedServiceLocation
+      ? {
+          _id: selectedServiceLocation._id || locationId || '',
+          name: selectedServiceLocation.name || selectedServiceLocation.service_location_name || selectedLocation,
+          service_location_name:
+            selectedServiceLocation.service_location_name || selectedServiceLocation.name || selectedLocation,
+          address: selectedServiceLocation.address || '',
+          country: selectedServiceLocation.country || '',
+          currency_name: selectedServiceLocation.currency_name || '',
+          currency_symbol: selectedServiceLocation.currency_symbol || '',
+          currency_code: selectedServiceLocation.currency_code || '',
+          timezone: selectedServiceLocation.timezone || '',
+          unit: selectedServiceLocation.unit || 'km',
+          latitude: selectedServiceLocation.latitude ?? null,
+          longitude: selectedServiceLocation.longitude ?? null,
+          location: selectedServiceLocation.location || null,
+          coordinates: getServiceLocationCoordinates(selectedServiceLocation),
+        }
+      : null,
     vehicleTypeId: String(vehicleTypeId || '').trim(),
     make: String(make || '').trim(),
     model: String(model || '').trim(),
@@ -388,13 +420,19 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
     throw new ApiError(400, `Missing required documents: ${missingDocuments.join(', ')}`);
   }
 
-  const coordinates = getCoordinatesForCity(session.vehicle.locationName);
+  let resolvedServiceLocation = session.vehicle.serviceLocation || null;
 
-  if (!coordinates) {
+  if (!resolvedServiceLocation && session.vehicle.locationId) {
+    resolvedServiceLocation = await ServiceLocation.findById(session.vehicle.locationId).lean();
+  }
+
+  const serviceLocationCoordinates = getServiceLocationCoordinates(resolvedServiceLocation || {});
+
+  if (!serviceLocationCoordinates) {
     throw new ApiError(400, `Unsupported service location: ${session.vehicle.locationName}`);
   }
 
-  const zone = await findZoneByPickup(coordinates);
+  const zone = await findZoneByPickup(serviceLocationCoordinates);
   const vehicleType = getVehicleType(session.vehicle.vehicleTypeId, session.vehicle.registerFor);
   const driver = await Driver.create({
     name: session.personal.fullName,
@@ -411,7 +449,7 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
     approve: false,
     status: 'pending',
     zoneId: zone?._id || null,
-    location: toPoint(coordinates, 'location'),
+    location: toPoint(serviceLocationCoordinates, 'location'),
     documents: session.documents,
     onboarding: {
       registrationId: session.registrationId,

@@ -45,3 +45,5 @@ export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {
     params: { phone },
   });
+
+export const getDriverServiceLocations = () => api.get('/drivers/service-locations');

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { 
     ArrowLeft, 
     Car, 
@@ -11,6 +11,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { getLucideIcon } from '../../utils/iconMapping';
 import {
     getStoredDriverRegistrationSession,
+    getDriverServiceLocations,
     saveDriverRegistrationSession,
     saveDriverVehicle,
 } from '../../services/registrationService';
@@ -24,13 +25,9 @@ const StepVehicle = () => {
     };
     const role = session.role || 'driver';
     const isOwner = role === 'owner';
-    
-    const locations = [
-        { id: '1', name: 'Indore' },
-        { id: '2', name: 'Bhopal' },
-        { id: '3', name: 'Dewas' },
-        { id: '4', name: 'Ujjain' }
-    ];
+    const [locations, setLocations] = useState([]);
+    const [locationsLoading, setLocationsLoading] = useState(true);
+    const [locationsError, setLocationsError] = useState('');
 
     const vehicleTypes = [
         { id: 'v1', label: 'Bike', icon: 'bike_icon' },
@@ -57,6 +54,39 @@ const StepVehicle = () => {
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
+    useEffect(() => {
+        let active = true;
+
+        const loadLocations = async () => {
+            try {
+                setLocationsLoading(true);
+                setLocationsError('');
+
+                const response = await getDriverServiceLocations();
+                const results = response?.data?.results || response?.data || [];
+
+                if (active) {
+                    setLocations(Array.isArray(results) ? results : []);
+                }
+            } catch (err) {
+                if (active) {
+                    setLocationsError(err?.message || 'Unable to load service locations');
+                    setLocations([]);
+                }
+            } finally {
+                if (active) {
+                    setLocationsLoading(false);
+                }
+            }
+        };
+
+        loadLocations();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
     const handleContinue = async () => {
         let required = [];
         if (isOwner) {
@@ -70,14 +100,17 @@ const StepVehicle = () => {
             setError('');
 
             try {
-                const selectedLocation = locations.find((item) => item.id === formData.locationId);
+                const selectedServiceLocation = locations.find(
+                    (item) => String(item._id || item.id) === String(formData.locationId)
+                );
 
                 const response = await saveDriverVehicle({
                     registrationId: session.registrationId,
                     phone: session.phone,
                     registerFor: formData.registerFor,
                     locationId: formData.locationId,
-                    locationName: selectedLocation?.name || '',
+                    locationName: selectedServiceLocation?.name || selectedServiceLocation?.service_location_name || '',
+                    serviceLocation: selectedServiceLocation || null,
                     vehicleTypeId: formData.vehicleTypeId,
                     make: formData.make,
                     model: formData.model,
@@ -86,7 +119,7 @@ const StepVehicle = () => {
                     color: formData.color,
                     companyName: formData.companyName,
                     companyAddress: formData.companyAddress,
-                    city: isOwner ? formData.city : selectedLocation?.name || formData.city,
+                    city: isOwner ? formData.city : selectedServiceLocation?.name || selectedServiceLocation?.service_location_name || formData.city,
                     postalCode: formData.postalCode,
                     taxNumber: formData.taxNumber,
                 });
@@ -125,6 +158,10 @@ const StepVehicle = () => {
                         {isOwner ? 'Your business details' : 'Complete your registration'}
                     </p>
                 </div>
+
+                {locationsError && (
+                    <p className="text-[11px] font-bold text-rose-500">{locationsError}</p>
+                )}
 
                 {error && (
                     <p className="text-[11px] font-bold text-rose-500">{error}</p>
@@ -168,10 +205,15 @@ const StepVehicle = () => {
                         <select 
                             value={formData.locationId}
                             onChange={(e) => setFormData(p => ({ ...p, locationId: e.target.value, vehicleTypeId: '' }))}
-                            className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 appearance-none cursor-pointer"
+                            disabled={locationsLoading || locations.length === 0}
+                            className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 appearance-none cursor-pointer disabled:opacity-50"
                         >
-                            <option value="">Select city</option>
-                            {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                            <option value="">{locationsLoading ? 'Loading service locations...' : 'Select city'}</option>
+                            {locations.map(loc => (
+                                <option key={loc._id || loc.id} value={loc._id || loc.id}>
+                                    {loc.service_location_name || loc.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
 

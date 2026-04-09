@@ -3,6 +3,7 @@ import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { findZoneByPickup } from '../services/locationService.js';
+import { listDriverServiceLocations } from '../services/serviceLocationService.js';
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -118,6 +119,15 @@ export const goOnline = async (req, res) => {
   res.json({
     success: true,
     data: driver,
+  });
+};
+
+export const getServiceLocations = async (_req, res) => {
+  const results = await listDriverServiceLocations();
+
+  res.json({
+    success: true,
+    data: { results },
   });
 };
 

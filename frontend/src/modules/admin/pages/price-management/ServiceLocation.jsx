@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { Autocomplete, GoogleMap, MarkerF } from '@react-google-maps/api';
 import { 
   Plus, 
   Search, 
@@ -22,6 +23,8 @@ import {
   Settings
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { HAS_VALID_GOOGLE_MAPS_KEY, INDIA_CENTER, useAppGoogleMapsLoader } from '../../utils/googleMaps';
+const mapContainerStyle = { width: '100%', height: '100%' };
 
 const ServiceLocation = () => {
   const [view, setView] = useState('list'); // 'list' or 'create'
@@ -31,6 +34,8 @@ const ServiceLocation = () => {
   const [fetchingCountries, setFetchingCountries] = useState(false);
   const [saving, setSaving] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
+  const [mapRef, setMapRef] = useState(null);
+  const [autocomplete, setAutocomplete] = useState(null);
   
   // Form State
   const [formData, setFormData] = useState({
@@ -49,6 +54,7 @@ const ServiceLocation = () => {
 
   const token = localStorage.getItem('adminToken') || '';
   const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   const fetchData = async () => {
     setLoading(true);
@@ -92,6 +98,40 @@ const ServiceLocation = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  const mapCenter = {
+    lat: Number(formData.latitude) || INDIA_CENTER.lat,
+    lng: Number(formData.longitude) || INDIA_CENTER.lng
+  };
+
+  const updateCoordinates = (lat, lng) => {
+    setFormData((prev) => ({
+      ...prev,
+      latitude: Number(lat.toFixed(6)),
+      longitude: Number(lng.toFixed(6))
+    }));
+  };
+
+  const handleMapClick = (event) => {
+    const latLng = event.latLng;
+    if (!latLng) return;
+    updateCoordinates(latLng.lat(), latLng.lng());
+  };
+
+  const handlePlaceChanged = () => {
+    if (!autocomplete) return;
+    const place = autocomplete.getPlace();
+    if (!place?.geometry?.location) return;
+
+    const lat = place.geometry.location.lat();
+    const lng = place.geometry.location.lng();
+    updateCoordinates(lat, lng);
+
+    if (mapRef) {
+      mapRef.panTo({ lat, lng });
+      mapRef.setZoom(13);
+    }
+  };
 
   const handleSave = async () => {
     if (!formData.name || !formData.address || !formData.country) {
@@ -379,25 +419,73 @@ const ServiceLocation = () => {
                          ></textarea>
                       </div>
 
-                      {/* Map Simulation */}
+                      {/* Google Map */}
                       <div className="space-y-2">
                          <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Spatial Geometry (Boundary)</label>
-                         <div className="w-full h-48 bg-slate-100 rounded-[24px] overflow-hidden relative border-2 border-gray-50 group flex items-center justify-center">
-                            <div className="absolute inset-0 bg-[url('https://api.mapbox.com/styles/v1/mapbox/light-v10/static/75.8577,22.7196,12/800x450?access_token=pk.placeholder')] bg-cover bg-center mix-blend-overlay opacity-30"></div>
-                            <div className="z-10 flex flex-col items-center">
-                               <div className="w-10 h-10 bg-white rounded-full shadow-2xl flex items-center justify-center text-indigo-600 mb-3 animate-bounce">
-                                  <MapPin size={20} />
-                               </div>
-                               <button className="bg-white border border-gray-100 text-[#0F172A] px-4 py-2 rounded-lg text-[11px] font-black uppercase tracking-widest hover:bg-[#0F172A] hover:text-white transition-all shadow-xl shadow-black/5">
-                                  Mark Boundary Area
-                               </button>
-                            </div>
-                            <div className="absolute top-4 left-4 flex gap-2">
-                               <div className="bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-white font-black text-[9px] uppercase tracking-widest border border-white/10 flex items-center gap-1.5">
-                                  <Navigation size={10} className="text-primary" /> Lat: {formData.latitude}
-                               </div>
-                               <div className="bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-white font-black text-[9px] uppercase tracking-widest border border-white/10 flex items-center gap-1.5">
-                                  Lng: {formData.longitude}
+                         <div className="space-y-3">
+                            {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                              <Autocomplete onLoad={setAutocomplete} onPlaceChanged={handlePlaceChanged}>
+                                <div className="relative">
+                                   <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+                                   <input
+                                     type="text"
+                                     placeholder="Search city, terminal or landmark"
+                                     className="w-full bg-gray-50 border-none rounded-2xl py-3.5 pl-10 pr-4 text-[13px] font-bold text-gray-900 focus:ring-2 focus:ring-indigo-500/10"
+                                   />
+                                </div>
+                              </Autocomplete>
+                            ) : null}
+
+                            <div className="w-full h-64 bg-slate-100 rounded-[24px] overflow-hidden relative border-2 border-gray-50 group">
+                               {loadError ? (
+                                 <div className="h-full flex items-center justify-center p-6 text-center">
+                                    <div>
+                                       <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Google Maps failed to load</p>
+                                       <p className="text-sm text-gray-500 mt-2">Check your browser key and Maps JavaScript API settings.</p>
+                                    </div>
+                                 </div>
+                               ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                                 <GoogleMap
+                                   mapContainerStyle={mapContainerStyle}
+                                   center={mapCenter}
+                                   zoom={12}
+                                   onLoad={setMapRef}
+                                   onClick={handleMapClick}
+                                   options={{
+                                     streetViewControl: false,
+                                     mapTypeControl: false,
+                                     fullscreenControl: true
+                                   }}
+                                 >
+                                   <MarkerF
+                                     position={mapCenter}
+                                     draggable
+                                     onDragEnd={(event) => {
+                                       const latLng = event.latLng;
+                                       if (!latLng) return;
+                                       updateCoordinates(latLng.lat(), latLng.lng());
+                                     }}
+                                   />
+                                 </GoogleMap>
+                               ) : (
+                                 <div className="h-full flex items-center justify-center p-6 text-center bg-[linear-gradient(135deg,#eef2ff_0%,#f8fafc_100%)]">
+                                    <div>
+                                       <div className="w-10 h-10 bg-white rounded-full shadow-2xl flex items-center justify-center text-indigo-600 mb-3 mx-auto">
+                                          <MapPin size={20} />
+                                       </div>
+                                       <p className="text-[11px] font-black text-gray-900 uppercase tracking-widest">Add your Google Maps key</p>
+                                       <p className="text-sm text-gray-500 mt-2">Use `VITE_GOOGLE_MAPS_API_KEY` to enable click-to-place location mapping here.</p>
+                                    </div>
+                                 </div>
+                               )}
+
+                               <div className="absolute top-4 left-4 flex gap-2 pointer-events-none">
+                                  <div className="bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-white font-black text-[9px] uppercase tracking-widest border border-white/10 flex items-center gap-1.5">
+                                     <Navigation size={10} className="text-primary" /> Lat: {formData.latitude}
+                                  </div>
+                                  <div className="bg-black/80 backdrop-blur-md px-3 py-1.5 rounded-lg text-white font-black text-[9px] uppercase tracking-widest border border-white/10 flex items-center gap-1.5">
+                                     Lng: {formData.longitude}
+                                  </div>
                                </div>
                             </div>
                          </div>

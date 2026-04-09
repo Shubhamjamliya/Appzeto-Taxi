@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { 
   User, 
   MapPin, 
@@ -29,6 +30,9 @@ import {
   ArrowDownRight
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { DELHI_CENTER, getLatLng, HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
+
+const mapContainerStyle = { width: '100%', height: '100%' };
 
 const DriverDetails = () => {
   const navigate = useNavigate();
@@ -41,6 +45,7 @@ const DriverDetails = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   const fetchData = async () => {
     setIsLoading(true);
@@ -66,7 +71,9 @@ const DriverDetails = () => {
           rides: d.total_rides || 0,
           wallet: d.wallet_balance || 0,
           joined: d.createdAt ? new Date(d.createdAt).toLocaleDateString() : 'N/A',
-          image: d.user_id?.profile_picture || 'https://via.placeholder.com/200x200'
+          image: d.user_id?.profile_picture || 'https://via.placeholder.com/200x200',
+          coordinates: getLatLng(d, DELHI_CENTER),
+          locationLabel: d.current_address || d.address || d.city || d.service_location?.name || 'Live location'
         });
       }
 
@@ -138,6 +145,7 @@ const DriverDetails = () => {
   };
 
   const tripsByStatus = (status) => requests.filter(r => r.status === status).length;
+  const driverCoordinates = driver?.coordinates || DELHI_CENTER;
   
   const stats = [
     { label: 'Total Trips', value: requests.length, icon: Car, color: 'text-blue-500' },
@@ -555,14 +563,54 @@ const DriverDetails = () => {
                        </button>
                     </div>
                     <div className="flex-1 bg-gray-100 relative group overflow-hidden">
-                       <div className="absolute inset-0 bg-[#E5E7EB] flex items-center justify-center bg-[url('https://api.mapbox.com/styles/v1/mapbox/light-v10/static/77.2090,28.6139,12,0/800x400?access_token=pk.xxx')] bg-cover">
+                       {loadError ? (
+                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-slate-50">
+                            <div>
+                               <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Map unavailable</p>
+                               <p className="text-sm text-gray-500 mt-2">Google Maps could not be loaded for this driver profile.</p>
+                            </div>
+                         </div>
+                       ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                         <GoogleMap
+                           mapContainerStyle={mapContainerStyle}
+                           center={driverCoordinates}
+                           zoom={13}
+                           options={{
+                             streetViewControl: false,
+                             mapTypeControl: false,
+                             fullscreenControl: true
+                           }}
+                         >
+                           <MarkerF
+                             position={driverCoordinates}
+                             title={driver.name}
+                             icon={{
+                               path: window.google.maps.SymbolPath.CIRCLE,
+                               scale: 10,
+                               fillColor: '#E11D48',
+                               fillOpacity: 1,
+                               strokeColor: '#ffffff',
+                               strokeWeight: 3
+                             }}
+                           />
+                         </GoogleMap>
+                       ) : (
+                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_100%)]">
+                            <div>
+                               <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Add Google Maps key</p>
+                               <p className="text-sm text-gray-500 mt-2">Driver live location will render here after `VITE_GOOGLE_MAPS_API_KEY` is configured.</p>
+                            </div>
+                         </div>
+                       )}
+
+                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                           <div className="relative">
                              <div className="absolute inset-x-0 inset-y-0 w-12 h-12 bg-rose-500/20 rounded-full animate-ping"></div>
                              <div className="relative w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-rose-500 scale-125">
                                 <Car size={24} className="text-rose-500" />
                              </div>
                              <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 whitespace-nowrap bg-gray-900 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-xl uppercase tracking-widest italic">
-                                Near South Delhi
+                                {driver.locationLabel}
                              </div>
                           </div>
                        </div>

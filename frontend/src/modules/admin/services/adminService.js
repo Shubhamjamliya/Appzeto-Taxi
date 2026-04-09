@@ -92,6 +92,7 @@ export const adminService = {
   getUserWallets: () => api.get('/admin/wallet/users'),
   getDriverWallets: () => api.get('/admin/wallet/drivers'),
   getWithdrawalRequests: () => api.get('/admin/wallet/withdrawals'),
+  getWithdrawals: () => api.get('/admin/wallet/withdrawals'),
   updateWithdrawalStatus: (id, status) => api.patch(`/admin/wallet/withdrawals/${id}`, { status }),
 
   /**
@@ -124,9 +125,7 @@ export const adminService = {
    * Preferences Management (Master)
    */
   getPreferences: (params) => api.get('/admin/preferences', { params: params }),
-  createPreference: (formData) => api.post('/admin/preferences', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
+  createPreference: (data) => api.post('/admin/preferences', data),
   getPreference: (id) => api.get(`/admin/preferences/${id}`),
   updatePreference: (id, formData) => api.patch(`/admin/preferences/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
@@ -155,12 +154,8 @@ export const adminService = {
    * App Modules Management
    */
   getAppModules: (params) => api.get('/admin/common/app-modules', { params }),
-  createAppModule: (formData) => api.post('/admin/common/app-modules', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
-  updateAppModule: (id, formData) => api.patch(`/admin/common/app-modules/${id}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
+  createAppModule: (data) => api.post('/admin/common/app-modules', data),
+  updateAppModule: (id, data) => api.patch(`/admin/common/app-modules/${id}`, data),
   deleteAppModule: (id) => api.delete(`/admin/common/app-modules/${id}`),
 
   /**

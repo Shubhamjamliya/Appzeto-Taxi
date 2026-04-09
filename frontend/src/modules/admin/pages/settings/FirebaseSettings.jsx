@@ -35,15 +35,10 @@ const FirebaseSettings = () => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      
-      // Use FormData if a file was selected, otherwise standard JSON
-      let data = settings;
-      if (selectedFile) {
-        const formData = new FormData();
-        Object.entries(settings).forEach(([key, val]) => formData.append(key, val));
-        formData.append('firebase_json', selectedFile);
-        data = formData;
-      }
+      const data = {
+        ...settings,
+        firebase_json_name: selectedFile?.name || settings.firebase_json_name,
+      };
 
       await adminService.updateFirebaseSettings(data);
       toast.success('Firebase configuration updated successfully');

@@ -120,18 +120,10 @@ const AppModules = () => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      const payload = new FormData();
-      payload.append('name', formData.name);
-      payload.append('transport_type', formData.transport_type);
-      payload.append('service_type', formData.service_type);
-      payload.append('order_by', formData.order_by);
-      payload.append('short_description', formData.short_description);
-      payload.append('description', formData.description);
-      payload.append('active', formData.active ? '1' : '0');
-      
-      if (iconFile) {
-        payload.append('mobile_menu_icon', iconFile);
-      }
+      const payload = {
+        ...formData,
+        active: formData.active,
+      };
 
       if (editId) {
         await adminService.updateAppModule(editId, payload);
@@ -164,7 +156,7 @@ const AppModules = () => {
 
   const getFullImageUrl = (icon) => {
     if (!icon) return null;
-    if (icon.startsWith('http')) return icon;
+    if (icon.startsWith('http') || icon.startsWith('data:')) return icon;
     return `${BASE_ASSET_URL}${icon}`;
   };
 

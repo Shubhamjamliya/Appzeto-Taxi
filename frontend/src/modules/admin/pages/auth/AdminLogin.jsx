@@ -3,16 +3,10 @@ import Rydon24Logo from '../../../../assets/rydon24_logo.png';
 import { useNavigate } from 'react-router-dom';
 import { ShieldCheck, Mail, Lock, ArrowRight, Car, Loader2, AlertCircle } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { adminService } from '../../services/adminService';
 
 const STATIC_ADMIN_EMAIL = 'admin@gmail.com';
 const STATIC_ADMIN_PASSWORD = 'admin';
-const STATIC_ADMIN_TOKEN = 'static-admin-session-token';
-const STATIC_ADMIN_INFO = {
-  id: 'static-admin',
-  name: 'Admin',
-  email: STATIC_ADMIN_EMAIL,
-  role: 'super-admin',
-};
 
 const AdminLogin = () => {
   const [email, setEmail] = useState(STATIC_ADMIN_EMAIL); 
@@ -27,23 +21,12 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      const normalizedEmail = email.trim().toLowerCase();
-
-      if (
-        normalizedEmail === STATIC_ADMIN_EMAIL &&
-        password === STATIC_ADMIN_PASSWORD
-      ) {
-        localStorage.setItem('adminToken', STATIC_ADMIN_TOKEN);
-        localStorage.setItem('adminInfo', JSON.stringify(STATIC_ADMIN_INFO));
-
-        setTimeout(() => {
-          navigate('/admin/dashboard');
-        }, 300);
-      } else {
-        setError('Use admin@gmail.com and admin to sign in.');
-      }
+      const response = await adminService.login({ email, password });
+      localStorage.setItem('adminToken', response.data?.token || '');
+      localStorage.setItem('adminInfo', JSON.stringify(response.data?.admin || {}));
+      setTimeout(() => navigate('/admin/dashboard'), 300);
     } catch (err) {
-      setError(err.message || 'Unable to complete static admin login.');
+      setError(err.message || 'Unable to complete admin login.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);

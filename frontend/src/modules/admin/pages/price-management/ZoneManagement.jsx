@@ -6,12 +6,12 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  GoogleMap, useJsApiLoader, DrawingManager, Polygon, Autocomplete 
+  GoogleMap, DrawingManager, Polygon, Autocomplete 
 } from '@react-google-maps/api';
 
 import { adminService } from '../../services/adminService';
+import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
 
-const libraries = ['drawing', 'places'];
 const mapContainerStyle = {
   width: '100%',
   height: '600px',
@@ -23,6 +23,7 @@ const ZoneManagement = () => {
   const [zones, setZones] = useState([]);
   const [serviceLocations, setServiceLocations] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState('');
   const [saving, setSaving] = useState(false);
   const [enablePeakZoneGlobal, setEnablePeakZoneGlobal] = useState(true);
   const [editingId, setEditingId] = useState(null);
@@ -32,11 +33,7 @@ const ZoneManagement = () => {
 
   // Map & Drawing States
   const [polygonCoords, setPolygonCoords] = useState([]);
-  const { isLoaded } = useJsApiLoader({
-    id: 'google-map-script',
-    googleMapsApiKey: import.meta.env.VITE_GOOGLE_MAPS_API_KEY,
-    libraries
-  });
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   // Form State
   const [formData, setFormData] = useState({
@@ -55,6 +52,7 @@ const ZoneManagement = () => {
 
   const fetchData = async () => {
     setLoading(true);
+    setFetchError('');
     try {
       const [zoneRes, slRes] = await Promise.all([
         adminService.getZones(),
@@ -74,6 +72,7 @@ const ZoneManagement = () => {
       }
     } catch (err) {
       console.error("Fetch error:", err);
+      setFetchError('Zone data could not be loaded. Make sure the backend API is running on http://localhost:4000.');
     } finally {
       setLoading(false);
     }
@@ -328,6 +327,14 @@ const ZoneManagement = () => {
                  <div className="flex flex-col items-center justify-center h-[500px] gap-6">
                     <Loader2 className="animate-spin text-indigo-600" size={48} />
                     <p className="text-gray-400 font-bold uppercase tracking-widest text-[12px]">Acquiring Spatial Data...</p>
+                 </div>
+               ) : fetchError ? (
+                 <div className="flex flex-col items-center justify-center h-[500px] text-center px-8">
+                    <div className="w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center text-rose-300 mb-8">
+                       <Navigation size={48} strokeWidth={1} />
+                    </div>
+                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Backend Unavailable</h3>
+                    <p className="text-slate-400 text-[14px] max-w-md mt-3 font-medium leading-relaxed">{fetchError}</p>
                  </div>
                ) : zones.length > 0 ? (
                  <div className="overflow-x-auto">
@@ -586,23 +593,36 @@ const ZoneManagement = () => {
                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
                   {/* Search Bar inside map container area */}
                   <div className="mb-4 relative z-10">
-                    <Autocomplete
-                      onLoad={setAutocomplete}
-                      onPlaceChanged={onPlaceChanged}
-                    >
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                        <input 
-                          type="text" 
-                          placeholder="Search for a city"
-                          className="w-full border border-gray-200 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none"
-                        />
+                    {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                      <Autocomplete
+                        onLoad={setAutocomplete}
+                        onPlaceChanged={onPlaceChanged}
+                      >
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                          <input 
+                            type="text" 
+                            placeholder="Search for a city"
+                            className="w-full border border-gray-200 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none"
+                          />
+                        </div>
+                      </Autocomplete>
+                    ) : (
+                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+                        Add a valid Google Maps browser key in `frontend/.env` to draw zones on the map.
                       </div>
-                    </Autocomplete>
+                    )}
                   </div>
 
                   <div className="h-[550px] w-full bg-slate-100 rounded-lg overflow-hidden border border-gray-100 relative shadow-inner">
-                    {isLoaded ? (
+                    {loadError ? (
+                      <div className="w-full h-full flex items-center justify-center bg-slate-50 p-6 text-center">
+                        <div>
+                          <p className="text-sm font-bold text-rose-600 uppercase tracking-widest">Google Maps failed to load</p>
+                          <p className="text-sm text-slate-500 mt-2">Check your browser API key and Maps JavaScript API setup.</p>
+                        </div>
+                      </div>
+                    ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
                       <GoogleMap
                         mapContainerStyle={{ width: '100%', height: '100%' }}
                         center={mapCenter}
@@ -648,8 +668,11 @@ const ZoneManagement = () => {
                         )}
                       </GoogleMap>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-50">
-                        <Loader2 className="animate-spin text-slate-300" size={40} />
+                      <div className="w-full h-full flex items-center justify-center bg-slate-50 p-6 text-center">
+                        <div>
+                          <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">Map unavailable</p>
+                          <p className="text-sm text-slate-500 mt-2">Set `VITE_GOOGLE_MAPS_API_KEY` to enable polygon drawing.</p>
+                        </div>
                       </div>
                     )}
 

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { 
   ShieldAlert, 
   MapPin, 
@@ -15,6 +16,9 @@ import {
   Radio,
   ArrowRight
 } from 'lucide-react';
+import { HAS_VALID_GOOGLE_MAPS_KEY, INDIA_CENTER, useAppGoogleMapsLoader } from '../../utils/googleMaps';
+
+const mapContainerStyle = { width: '100%', height: '100%' };
 
 const SOSCard = ({ alert, isActive, onClick }) => (
   <div 
@@ -59,9 +63,10 @@ const SafetyCenter = () => {
   });
 
   const alerts = [
-    { id: 1, passenger: 'Sneha Reddy', driver: 'Vikram Singh', vehicle: 'White Dzire (MP-09-XY-1234)', tripId: 'TRP-102942', time: '2m ago', location: 'Vijay Nagar Sq.' },
-    { id: 2, passenger: 'Amit Khanna', driver: 'Rohan Patil', vehicle: 'Bike (MP-04-QR-5542)', tripId: 'TRP-102943', time: '5m ago', location: 'Rajwada Market' },
+    { id: 1, passenger: 'Sneha Reddy', driver: 'Vikram Singh', vehicle: 'White Dzire (MP-09-XY-1234)', tripId: 'TRP-102942', time: '2m ago', location: 'Vijay Nagar Sq.', lat: 22.7533, lng: 75.8937 },
+    { id: 2, passenger: 'Amit Khanna', driver: 'Rohan Patil', vehicle: 'Bike (MP-04-QR-5542)', tripId: 'TRP-102943', time: '5m ago', location: 'Rajwada Market', lat: 22.7177, lng: 75.8545 },
   ];
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   useEffect(() => {
     if (!selectedAlert && alerts.length > 0) {
@@ -211,8 +216,49 @@ const SafetyCenter = () => {
                  {/* GPS Map View & Logs */}
                  <div className="space-y-6">
                     <div className="bg-white h-[320px] rounded-[32px] border border-gray-100 shadow-sm overflow-hidden relative">
-                       <div className="absolute inset-0 bg-[#F0F2F5] bg-[url('https://maps.googleapis.com/maps/api/staticmap?center=22.7533,75.8937&zoom=15&size=600x400&maptype=roadmap&style=feature:all|element:labels|visibility:off')] bg-cover"></div>
-                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+                       {loadError ? (
+                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-slate-50">
+                            <div>
+                               <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Map unavailable</p>
+                               <p className="text-sm text-gray-500 mt-2">Google Maps could not be loaded for Safety Center.</p>
+                            </div>
+                         </div>
+                       ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                         <GoogleMap
+                           mapContainerStyle={mapContainerStyle}
+                           center={selectedAlert ? { lat: selectedAlert.lat, lng: selectedAlert.lng } : INDIA_CENTER}
+                           zoom={15}
+                           options={{
+                             streetViewControl: false,
+                             mapTypeControl: false,
+                             fullscreenControl: true
+                           }}
+                         >
+                           {selectedAlert ? (
+                             <MarkerF
+                               position={{ lat: selectedAlert.lat, lng: selectedAlert.lng }}
+                               title={`${selectedAlert.passenger} distress location`}
+                               icon={{
+                                 path: window.google.maps.SymbolPath.CIRCLE,
+                                 scale: 10,
+                                 fillColor: '#DC2626',
+                                 fillOpacity: 1,
+                                 strokeColor: '#ffffff',
+                                 strokeWeight: 3
+                               }}
+                             />
+                           ) : null}
+                         </GoogleMap>
+                       ) : (
+                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-[linear-gradient(135deg,#fee2e2_0%,#fff1f2_100%)]">
+                            <div>
+                               <p className="text-[12px] font-black text-red-600 uppercase tracking-widest">Add Google Maps key</p>
+                               <p className="text-sm text-gray-500 mt-2">Safety Center will show the live incident map after `VITE_GOOGLE_MAPS_API_KEY` is set.</p>
+                            </div>
+                         </div>
+                       )}
+
+                       <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none">
                           <div className="relative">
                              <div className="w-12 h-12 bg-red-600/20 rounded-full animate-ping absolute inset-0"></div>
                              <div className="w-12 h-12 bg-red-600 rounded-full border-4 border-white shadow-2xl flex items-center justify-center text-white relative z-10">
@@ -223,7 +269,7 @@ const SafetyCenter = () => {
                              </div>
                           </div>
                        </div>
-                       
+
                        <div className="absolute top-4 right-4 flex flex-col gap-2">
                           <button className="bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-lg border border-white text-gray-500 hover:text-black transition-all"><MoreHorizontal size={18} /></button>
                           <button className="bg-white/90 backdrop-blur-md p-2 rounded-xl shadow-lg border border-white text-primary hover:scale-105 transition-all"><MapPin size={18} /></button>

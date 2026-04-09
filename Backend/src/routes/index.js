@@ -7,5 +7,5 @@ function registerRoutes(app) {
   registerTaxiRoutes(app);
 }
 
-module.exports = { registerRoutes }
+module.exports = { registerRoutes };
 

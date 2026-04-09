@@ -1,7 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+    getStoredDriverRegistrationSession,
+    saveDriverRegistrationSession,
+    verifyDriverOtp,
+} from '../../services/registrationService';
 
 const OTPVerification = () => {
     const navigate = useNavigate();
@@ -9,16 +13,29 @@ const OTPVerification = () => {
     const [otp, setOtp] = useState(['', '', '', '', '', '']);
     const inputs = useRef([]);
     const [timer, setTimer] = useState(30);
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const phone = location.state?.phone || '95898 14119';
-    const role = location.state?.role || 'driver';
+    const session = {
+        ...getStoredDriverRegistrationSession(),
+        ...(location.state || {}),
+    };
+
+    const phone = session.phone || '95898 14119';
+    const role = session.role || 'driver';
+    const registrationId = session.registrationId || '';
+    const debugOtp = session.debugOtp || '';
 
     useEffect(() => {
+        if (debugOtp && /^\d{6}$/.test(String(debugOtp))) {
+            setOtp(String(debugOtp).split(''));
+        }
+
         const interval = setInterval(() => {
             setTimer(prev => (prev > 0 ? prev - 1 : 0));
         }, 1000);
         return () => clearInterval(interval);
-    }, []);
+    }, [debugOtp]);
 
     const handleChange = (index, value) => {
         if (!/^\d*$/.test(value)) return;
@@ -37,11 +54,36 @@ const OTPVerification = () => {
         }
     };
 
-    const handleVerify = () => {
-        if (otp.join('').length === 6) {
-            navigate('/taxi/driver/step-personal', { state: { ...location.state, phone, role } });
-        } else {
-            alert('Please enter a valid 6-digit OTP');
+    const handleVerify = async () => {
+        if (otp.join('').length !== 6) {
+            setError('Please enter a valid 6-digit OTP');
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await verifyDriverOtp({
+                registrationId,
+                phone,
+                otp: otp.join(''),
+            });
+
+            const nextState = saveDriverRegistrationSession({
+                ...session,
+                registrationId,
+                phone,
+                role,
+                otpVerified: true,
+                otpSession: response?.data?.session || null,
+            });
+
+            navigate('/taxi/driver/step-personal', { state: nextState });
+        } catch (err) {
+            setError(err?.message || 'OTP verification failed');
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -64,7 +106,7 @@ const OTPVerification = () => {
                     <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">Identity Check for +91 {phone}</p>
                 </div>
 
-                <div className="flex justify-between gap-1.5 py-4">
+                    <div className="flex justify-between gap-1.5 py-4">
                     {otp.map((digit, index) => (
                         <input
                             key={index}
@@ -77,23 +119,28 @@ const OTPVerification = () => {
                             className="w-11 h-14 bg-slate-50 rounded-xl text-center text-xl font-black text-slate-900 transition-all caret-taxi-primary focus:outline-none focus:ring-0"
                         />
                     ))}
-                </div>
+                    </div>
+
+                    {error && (
+                        <p className="text-center text-[11px] font-bold text-rose-500">
+                            {error}
+                        </p>
+                    )}
 
                 <div className="text-center space-y-4 mt-2">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
                         {timer > 0 ? `Resend Code in ${timer}s` : <span className="text-slate-900 underline underline-offset-4 decoration-slate-200 cursor-pointer" onClick={() => setTimer(30)}>Resend Now</span>}
                     </p>
 
-                    <motion.button 
-                        whileTap={{ scale: 0.98 }}
+                    <button 
                         onClick={handleVerify}
-                        disabled={otp.join('').length !== 6}
+                        disabled={loading || otp.join('').length !== 6}
                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                             otp.join('').length === 6 ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
                         }`}
                     >
-                        Verify & Join <CheckCircle2 size={16} strokeWidth={3} />
-                    </motion.button>
+                        {loading ? 'Verifying...' : 'Verify & Join'} <CheckCircle2 size={16} strokeWidth={3} />
+                    </button>
                 </div>
 
                 <div className="pt-10 flex flex-col items-center gap-3 opacity-20 grayscale pointer-events-none">

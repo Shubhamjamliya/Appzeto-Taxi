@@ -14,6 +14,16 @@ const driverSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    email: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    gender: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     password: {
       type: String,
       required: true,
@@ -37,6 +47,40 @@ const driverSchema = new mongoose.Schema(
       enum: VEHICLE_TYPES,
       required: true,
     },
+    registerFor: {
+      type: String,
+      default: 'taxi',
+      trim: true,
+    },
+    vehicleNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    vehicleColor: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    city: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    referralCode: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    approve: {
+      type: Boolean,
+      default: true,
+    },
+    status: {
+      type: String,
+      default: 'approved',
+      trim: true,
+    },
     rating: {
       type: Number,
       default: 5,
@@ -59,6 +103,14 @@ const driverSchema = new mongoose.Schema(
         required: true,
         default: [0, 0],
       },
+    },
+    documents: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    onboarding: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
   },
   { timestamps: true },

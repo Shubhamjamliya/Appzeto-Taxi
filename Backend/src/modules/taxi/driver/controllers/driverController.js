@@ -3,6 +3,16 @@ import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { findZoneByPickup } from '../services/locationService.js';
+import {
+  completeDriverOnboarding,
+  getDriverOnboardingSession,
+  saveDriverDocuments,
+  saveDriverPersonalDetails,
+  saveDriverReferral,
+  saveDriverVehicle,
+  startDriverOnboarding,
+  verifyDriverOtp,
+} from '../services/onboardingService.js';
 
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;
@@ -25,6 +35,8 @@ export const registerDriver = async (req, res) => {
     phone,
     password: await hashPassword(password),
     vehicleType,
+    approve: true,
+    status: 'approved',
     zoneId: zone?._id || null,
     location: toPoint(coordinates, 'location'),
   });
@@ -41,6 +53,7 @@ export const registerDriver = async (req, res) => {
         phone: driver.phone,
         vehicleType: driver.vehicleType,
         rating: driver.rating,
+        status: driver.status,
       },
     },
   });
@@ -59,6 +72,10 @@ export const loginDriver = async (req, res) => {
     throw new ApiError(401, 'Invalid phone or password');
   }
 
+  if (driver.approve === false || String(driver.status || '').toLowerCase() === 'pending') {
+    throw new ApiError(403, 'Driver account is pending approval');
+  }
+
   const token = signAccessToken({ sub: String(driver._id), role: 'driver' });
 
   res.json({
@@ -72,6 +89,7 @@ export const loginDriver = async (req, res) => {
         vehicleType: driver.vehicleType,
         isOnline: driver.isOnline,
         isOnRide: driver.isOnRide,
+        status: driver.status,
       },
     },
   });
@@ -101,6 +119,46 @@ export const goOnline = async (req, res) => {
     success: true,
     data: driver,
   });
+};
+
+export const startOnboarding = async (req, res) => {
+  const result = await startDriverOnboarding(req.body);
+  res.status(201).json({ success: true, data: result });
+};
+
+export const verifyOnboardingOtp = async (req, res) => {
+  const result = await verifyDriverOtp(req.body);
+  res.json({ success: true, data: result });
+};
+
+export const saveOnboardingPersonal = async (req, res) => {
+  const result = await saveDriverPersonalDetails(req.body);
+  res.json({ success: true, data: result });
+};
+
+export const saveOnboardingReferral = async (req, res) => {
+  const result = await saveDriverReferral(req.body);
+  res.json({ success: true, data: result });
+};
+
+export const saveOnboardingVehicle = async (req, res) => {
+  const result = await saveDriverVehicle(req.body);
+  res.json({ success: true, data: result });
+};
+
+export const saveOnboardingDocuments = async (req, res) => {
+  const result = await saveDriverDocuments(req.body);
+  res.json({ success: true, data: result });
+};
+
+export const completeOnboarding = async (req, res) => {
+  const result = await completeDriverOnboarding(req.body);
+  res.status(201).json({ success: true, data: result });
+};
+
+export const getOnboardingSession = async (req, res) => {
+  const result = await getDriverOnboardingSession({ registrationId: req.params.registrationId, phone: req.query.phone });
+  res.json({ success: true, data: result });
 };
 
 export const goOffline = async (req, res) => {

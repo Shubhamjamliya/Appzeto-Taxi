@@ -40,19 +40,16 @@ const EmptyState = ({ title, message }) => (
 const ServiceLocation = () => {
   const [view, setView] = useState('list');
   const [locations, setLocations] = useState([]);
-  const [countries, setCountries] = useState(DEFAULT_COUNTRIES);
+  const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [errorMessage, setErrorMessage] = useState('');
   const [selectedLanguage] = useState('English');
   const [selectedLocation, setSelectedLocation] = useState(null);
-  const [formData, setFormData] = useState({
-    ...defaultFormData,
-    country: DEFAULT_COUNTRIES[0]._id
-  });
+  const [formData, setFormData] = useState(defaultFormData);
 
-  const resetForm = (countryId = DEFAULT_COUNTRIES[0]._id) => {
+  const resetForm = (countryId = '') => {
     setSelectedLocation(null);
     setFormData({ ...defaultFormData, country: countryId });
   };
@@ -82,12 +79,16 @@ const ServiceLocation = () => {
           : DEFAULT_COUNTRIES;
 
       const normalizedCountries = nextCountries.length ? nextCountries : DEFAULT_COUNTRIES;
+      const defaultCountryId =
+        normalizedCountries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
+        normalizedCountries[0]?._id ||
+        '';
 
       setLocations(nextLocations);
       setCountries(normalizedCountries);
       setFormData((prev) => ({
         ...prev,
-        country: prev.country || normalizedCountries[0]?._id || DEFAULT_COUNTRIES[0]._id
+        country: prev.country || defaultCountryId
       }));
 
       if (locationsRes.status === 'rejected') {
@@ -96,6 +97,10 @@ const ServiceLocation = () => {
     } catch (error) {
       console.error('Service location fetch error:', error);
       setCountries(DEFAULT_COUNTRIES);
+      setFormData((prev) => ({
+        ...prev,
+        country: prev.country || DEFAULT_COUNTRIES[0]._id
+      }));
       setErrorMessage(`Service locations could not be loaded. Make sure the backend is running on ${BACKEND_LABEL}.`);
     } finally {
       setLoading(false);
@@ -144,7 +149,11 @@ const ServiceLocation = () => {
         : await adminService.createServiceLocation(payload);
 
       if (response?.success) {
-        resetForm(countries[0]?._id || DEFAULT_COUNTRIES[0]._id);
+        const defaultCountryId =
+          countries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
+          countries[0]?._id ||
+          '';
+        resetForm(defaultCountryId);
         setView('list');
         fetchData();
       } else {
@@ -163,6 +172,7 @@ const ServiceLocation = () => {
       countries.find((country) => country._id === location.country) ||
       countries.find((country) => country.name === location.country) ||
       countries.find((country) => country.name === location.country?.name) ||
+      DEFAULT_COUNTRIES.find((country) => country.name === location.country) ||
       DEFAULT_COUNTRIES[0];
 
     setSelectedLocation(location);
@@ -211,7 +221,11 @@ const ServiceLocation = () => {
               <button
                 type="button"
                 onClick={() => {
-                  resetForm(countries[0]?._id || DEFAULT_COUNTRIES[0]._id);
+                  const defaultCountryId =
+                    countries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
+                    countries[0]?._id ||
+                    '';
+                  resetForm(defaultCountryId);
                   setView('create');
                 }}
                 className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"

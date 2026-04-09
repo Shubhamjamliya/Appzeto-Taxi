@@ -35,6 +35,10 @@ export const adminService = {
    * Common / Configuration Data
    */
   getServiceLocations: () => api.get('/admin/service-locations'),
+  createServiceLocation: (data) => api.post('/admin/service-locations', data),
+  updateServiceLocation: (id, data) => api.patch(`/admin/service-locations/${id}`, data),
+  deleteServiceLocation: (id) => api.delete(`/admin/service-locations/${id}`),
+  getCountries: () => api.get('/countries'),
   getRideModules: () => api.get('/common/ride_modules'),
   getVehicleTypes: (locationId, transportType) => api.get(`/types/${locationId}?transport_type=${transportType}`),
 

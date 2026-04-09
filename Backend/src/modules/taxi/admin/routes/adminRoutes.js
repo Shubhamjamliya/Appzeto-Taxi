@@ -5,6 +5,7 @@ import {
   createOwner,
   createPreference,
   createRole,
+  createServiceLocation,
   createSubscriptionPlan,
   createUser,
   createZone,
@@ -14,6 +15,7 @@ import {
   deleteOwner,
   deletePreference,
   deleteRole,
+  deleteServiceLocation,
   deleteUser,
   deleteZone,
   downloadDriverDutyReport,
@@ -25,6 +27,7 @@ import {
   getAdminStatus,
   getAppModules,
   getCancelChart,
+  getCountries,
   getDashboardData,
   getDriverOnboarding,
   getDrivers,
@@ -64,6 +67,7 @@ import {
   updateOwner,
   updatePaymentSettings,
   updatePreferenceStatus,
+  updateServiceLocation,
   updateSmsSettings,
   updateUser,
   updateZone,
@@ -88,7 +92,11 @@ adminRouter.delete('/admin/drivers/:id', deleteDriver);
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
 
+adminRouter.get('/countries', getCountries);
 adminRouter.get('/admin/service-locations', getServiceLocations);
+adminRouter.post('/admin/service-locations', createServiceLocation);
+adminRouter.patch('/admin/service-locations/:id', updateServiceLocation);
+adminRouter.delete('/admin/service-locations/:id', deleteServiceLocation);
 adminRouter.get('/common/ride_modules', getRideModules);
 adminRouter.get('/types/:locationId', getVehicleTypes);
 

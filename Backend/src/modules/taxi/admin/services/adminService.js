@@ -178,6 +178,93 @@ export const createSubscriptionPlan = async (payload) => {
 
 export const listServiceLocations = async () => (await ensureAdminState()).serviceLocations;
 
+export const listCountries = async () => {
+  const state = await ensureAdminState();
+  const countriesFromLocations = state.serviceLocations
+    .map((item) => item.country)
+    .filter(Boolean)
+    .map((country) =>
+      typeof country === 'object'
+        ? country
+        : {
+            _id: nextId(),
+            name: String(country),
+            code: String(country).slice(0, 2).toUpperCase(),
+          },
+    );
+
+  const merged = [
+    { _id: nextId(), name: 'India', code: 'IN' },
+    { _id: nextId(), name: 'United Arab Emirates', code: 'AE' },
+    { _id: nextId(), name: 'United Kingdom', code: 'GB' },
+    { _id: nextId(), name: 'United States', code: 'US' },
+    ...countriesFromLocations,
+  ];
+
+  return merged.filter(
+    (country, index, list) =>
+      list.findIndex((item) => item.name?.toLowerCase() === country.name?.toLowerCase()) === index,
+  );
+};
+
+export const createServiceLocation = async (payload) => {
+  const state = await ensureAdminState();
+
+  if (!payload.name?.trim()) {
+    throw new ApiError(400, 'Service location name is required');
+  }
+
+  const location = {
+    _id: nextId(),
+    name: payload.name.trim(),
+    service_location_name: payload.name.trim(),
+    address: payload.address || '',
+    country: payload.country || 'India',
+    currency_name: payload.currency_name || 'Indian Rupee',
+    currency_symbol: payload.currency_symbol || '₹',
+    currency_code: payload.currency_code || 'INR',
+    timezone: payload.timezone || 'Asia/Kolkata',
+    unit: payload.unit || 'km',
+    latitude: Number(payload.latitude || 22.7196),
+    longitude: Number(payload.longitude || 75.8577),
+    status: payload.status || 'active',
+    active: payload.status ? payload.status === 'active' : true,
+    createdAt: new Date(),
+  };
+
+  state.serviceLocations.unshift(location);
+  await state.save();
+  return location;
+};
+
+export const updateServiceLocation = async (id, payload) => {
+  const state = await ensureAdminState();
+  const location = findById(state.serviceLocations, id);
+
+  if (!location) {
+    throw new ApiError(404, 'Service location not found');
+  }
+
+  Object.assign(location, payload, {
+    name: payload.name?.trim() || location.name,
+    service_location_name: payload.name?.trim() || location.service_location_name,
+    latitude: payload.latitude !== undefined ? Number(payload.latitude) : location.latitude,
+    longitude: payload.longitude !== undefined ? Number(payload.longitude) : location.longitude,
+    active: payload.status !== undefined ? payload.status === 'active' : location.active,
+    status: payload.status || location.status,
+  });
+
+  await state.save();
+  return location;
+};
+
+export const deleteServiceLocation = async (id) => {
+  const state = await ensureAdminState();
+  state.serviceLocations = removeById(state.serviceLocations, id);
+  await state.save();
+  return true;
+};
+
 export const listRideModules = async () => (await ensureAdminState()).rideModules;
 
 export const listVehicleTypes = async (locationId, transportType) => {

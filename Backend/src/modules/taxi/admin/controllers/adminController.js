@@ -38,6 +38,17 @@ export const createSubscriptionPlan = asyncHandler(async (req, res) =>
 );
 
 export const getServiceLocations = asyncHandler(async (_req, res) => ok(res, await adminService.listServiceLocations()));
+export const getCountries = asyncHandler(async (_req, res) => ok(res, { results: await adminService.listCountries() }));
+export const createServiceLocation = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createServiceLocation(req.body)),
+);
+export const updateServiceLocation = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateServiceLocation(req.params.id, req.body)),
+);
+export const deleteServiceLocation = asyncHandler(async (req, res) => {
+  await adminService.deleteServiceLocation(req.params.id);
+  ok(res, { deleted: true });
+});
 export const getRideModules = asyncHandler(async (_req, res) => ok(res, await adminService.listRideModules()));
 export const getVehicleTypes = asyncHandler(async (req, res) =>
   ok(res, await adminService.listVehicleTypes(req.params.locationId, req.query.transport_type)),

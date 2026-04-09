@@ -3,4 +3,4 @@ import { adminRouter } from './adminRoutes.js';
 
 export const adminModuleRouter = Router();
 
-adminModuleRouter.use('/admin', adminRouter);
+adminModuleRouter.use('/', adminRouter);

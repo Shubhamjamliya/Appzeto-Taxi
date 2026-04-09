@@ -1,11 +1,10 @@
-const { registerTaxiRoutes } = require('../modules/taxi/taxi.routes');
+import { Router } from 'express';
+import { driverRouter } from './driverRoutes.js';
+import { rideRouter } from './rideRoutes.js';
+import { userRouter } from './userRoutes.js';
 
-function registerRoutes(app) {
-  // Keep the base path aligned with the master project style (/api/v1/...)
-  app.get('/api/v1', (req, res) => res.json({ ok: true, service: 'taxi' }));
+export const apiRouter = Router();
 
-  registerTaxiRoutes(app);
-}
-
-module.exports = { registerRoutes };
-
+apiRouter.use('/users', userRouter);
+apiRouter.use('/drivers', driverRouter);
+apiRouter.use('/rides', rideRouter);

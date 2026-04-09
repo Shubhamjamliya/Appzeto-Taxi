@@ -11,6 +11,7 @@ import {
 
 import { adminService } from '../../services/adminService';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
+import { BACKEND_LABEL } from '../../../../shared/api/runtimeConfig';
 
 const mapContainerStyle = {
   width: '100%',
@@ -72,7 +73,7 @@ const ZoneManagement = () => {
       }
     } catch (err) {
       console.error("Fetch error:", err);
-      setFetchError('Zone data could not be loaded. Make sure the backend API is running on http://localhost:4000.');
+      setFetchError(`Zone data could not be loaded. Make sure the backend API is running on ${BACKEND_LABEL}.`);
     } finally {
       setLoading(false);
     }

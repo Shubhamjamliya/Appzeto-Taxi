@@ -35,6 +35,7 @@ import {
   getLanguages,
   getMailSettings,
   getMapSettings,
+  getNearbyServiceLocations,
   getNotificationChannels,
   getOverallEarnings,
   getOwners,
@@ -94,6 +95,7 @@ adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionP
 
 adminRouter.get('/countries', getCountries);
 adminRouter.get('/admin/service-locations', getServiceLocations);
+adminRouter.get('/admin/service-locations/nearby', getNearbyServiceLocations);
 adminRouter.post('/admin/service-locations', createServiceLocation);
 adminRouter.patch('/admin/service-locations/:id', updateServiceLocation);
 adminRouter.delete('/admin/service-locations/:id', deleteServiceLocation);

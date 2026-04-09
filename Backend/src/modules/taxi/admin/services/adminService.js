@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
+import { ServiceLocation } from '../models/ServiceLocation.js';
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -32,6 +33,37 @@ const findById = (items, id) => items.find((item) => String(item._id) === String
 
 const removeById = (items, id) => items.filter((item) => String(item._id) !== String(id));
 
+const DEFAULT_SERVICE_LOCATION_CENTER = { lat: 22.7196, lng: 75.8577 };
+
+const normalizeServiceLocationPayload = (payload = {}, fallback = {}) => {
+  const latitude = Number(payload.latitude ?? fallback.latitude ?? DEFAULT_SERVICE_LOCATION_CENTER.lat);
+  const longitude = Number(payload.longitude ?? fallback.longitude ?? DEFAULT_SERVICE_LOCATION_CENTER.lng);
+  const name = payload.name?.trim() || fallback.name || fallback.service_location_name;
+  const currencyCode = String(payload.currency_code ?? fallback.currency_code ?? 'INR').toUpperCase();
+  const status = payload.status ?? fallback.status ?? 'active';
+
+  return {
+    name,
+    service_location_name: name,
+    address: payload.address ?? fallback.address ?? '',
+    country: payload.country ?? fallback.country ?? 'India',
+    currency_name: payload.currency_name ?? fallback.currency_name ?? currencyCode,
+    currency_symbol: payload.currency_symbol ?? fallback.currency_symbol ?? '₹',
+    currency_code: currencyCode,
+    currency_symbol: payload.currency_symbol ?? fallback.currency_symbol ?? '₹',
+    timezone: payload.timezone ?? fallback.timezone ?? 'Asia/Kolkata',
+    unit: payload.unit ?? fallback.unit ?? 'km',
+    latitude,
+    longitude,
+    location: {
+      type: 'Point',
+      coordinates: [longitude, latitude],
+    },
+    status,
+    active: status === 'active',
+  };
+};
+
 const csvFromRows = (headers, rows) => {
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   return [headers.join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n');
@@ -56,6 +88,25 @@ export const ensureAdminState = async () => {
   }
 
   return state;
+};
+
+const ensureServiceLocationsSeeded = async () => {
+  const existingCount = await ServiceLocation.countDocuments();
+  if (existingCount > 0) {
+    return;
+  }
+
+  const state = await ensureAdminState();
+  const seedLocations = (state.serviceLocations || []).map((location) => ({
+    _id: location._id ? new mongoose.Types.ObjectId(String(location._id)) : new mongoose.Types.ObjectId(),
+    ...normalizeServiceLocationPayload(location, location),
+    createdAt: location.createdAt || new Date(),
+    updatedAt: location.updatedAt || new Date(),
+  }));
+
+  if (seedLocations.length > 0) {
+    await ServiceLocation.insertMany(seedLocations, { ordered: false });
+  }
 };
 
 export const getAdminModuleInfo = async () => {
@@ -176,11 +227,14 @@ export const createSubscriptionPlan = async (payload) => {
   return plan;
 };
 
-export const listServiceLocations = async () => (await ensureAdminState()).serviceLocations;
+export const listServiceLocations = async () => {
+  await ensureServiceLocationsSeeded();
+  return ServiceLocation.find().sort({ createdAt: -1 }).lean();
+};
 
 export const listCountries = async () => {
-  const state = await ensureAdminState();
-  const countriesFromLocations = state.serviceLocations
+  const locations = await listServiceLocations();
+  const countriesFromLocations = locations
     .map((item) => item.country)
     .filter(Boolean)
     .map((country) =>
@@ -208,11 +262,14 @@ export const listCountries = async () => {
 };
 
 export const createServiceLocation = async (payload) => {
-  const state = await ensureAdminState();
 
   if (!payload.name?.trim()) {
     throw new ApiError(400, 'Service location name is required');
   }
+
+  await ensureServiceLocationsSeeded();
+  const persistedLocation = await ServiceLocation.create(normalizeServiceLocationPayload(payload));
+  return persistedLocation.toObject();
 
   const location = {
     _id: nextId(),
@@ -238,6 +295,15 @@ export const createServiceLocation = async (payload) => {
 };
 
 export const updateServiceLocation = async (id, payload) => {
+  await ensureServiceLocationsSeeded();
+  const persistedLocation = await ServiceLocation.findById(id);
+  if (!persistedLocation) {
+    throw new ApiError(404, 'Service location not found');
+  }
+  Object.assign(persistedLocation, normalizeServiceLocationPayload(payload, persistedLocation.toObject()));
+  await persistedLocation.save();
+  return persistedLocation.toObject();
+
   const state = await ensureAdminState();
   const location = findById(state.serviceLocations, id);
 
@@ -259,10 +325,42 @@ export const updateServiceLocation = async (id, payload) => {
 };
 
 export const deleteServiceLocation = async (id) => {
+  await ensureServiceLocationsSeeded();
+  const deleted = await ServiceLocation.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Service location not found');
+  }
+  return true;
+
   const state = await ensureAdminState();
   state.serviceLocations = removeById(state.serviceLocations, id);
   await state.save();
   return true;
+};
+
+export const listNearbyServiceLocations = async ({ latitude, longitude, maxDistance = 50000, limit = 20 }) => {
+  await ensureServiceLocationsSeeded();
+
+  const lat = Number(latitude);
+  const lng = Number(longitude);
+
+  if (!Number.isFinite(lat) || !Number.isFinite(lng)) {
+    throw new ApiError(400, 'Valid latitude and longitude are required');
+  }
+
+  return ServiceLocation.find({
+    location: {
+      $near: {
+        $geometry: {
+          type: 'Point',
+          coordinates: [lng, lat],
+        },
+        $maxDistance: Number(maxDistance),
+      },
+    },
+  })
+    .limit(Number(limit) || 20)
+    .lean();
 };
 
 export const listRideModules = async () => (await ensureAdminState()).rideModules;

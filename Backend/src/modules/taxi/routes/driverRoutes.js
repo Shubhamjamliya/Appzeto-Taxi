@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { asyncHandler } from '../../../utils/asyncHandler.js';
 import {
   goOffline,
   goOnline,
@@ -6,7 +7,6 @@ import {
   registerDriver,
 } from '../controllers/driverController.js';
 import { authenticate } from '../middlewares/authMiddleware.js';
-import { asyncHandler } from '../utils/asyncHandler.js';
 
 export const driverRouter = Router();
 

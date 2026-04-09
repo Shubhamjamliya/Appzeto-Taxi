@@ -3,8 +3,8 @@ import { driverRouter } from './driverRoutes.js';
 import { rideRouter } from './rideRoutes.js';
 import { userRouter } from './userRoutes.js';
 
-export const apiRouter = Router();
+export const taxiRouter = Router();
 
-apiRouter.use('/users', userRouter);
-apiRouter.use('/drivers', driverRouter);
-apiRouter.use('/rides', rideRouter);
+taxiRouter.use('/users', userRouter);
+taxiRouter.use('/drivers', driverRouter);
+taxiRouter.use('/rides', rideRouter);

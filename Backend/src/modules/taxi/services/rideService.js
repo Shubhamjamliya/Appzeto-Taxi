@@ -1,10 +1,10 @@
 import mongoose from 'mongoose';
+import { ApiError } from '../../../utils/ApiError.js';
+import { toPoint } from '../../../utils/geo.js';
 import { RIDE_STATUS } from '../constants/index.js';
 import { Driver } from '../models/Driver.js';
 import { Ride } from '../models/Ride.js';
 import { User } from '../models/User.js';
-import { ApiError } from '../utils/ApiError.js';
-import { toPoint } from '../utils/geo.js';
 
 export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare }) => {
   const user = await User.findById(userId);

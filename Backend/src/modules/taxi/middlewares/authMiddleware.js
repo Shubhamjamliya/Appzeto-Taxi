@@ -1,7 +1,7 @@
+import { ApiError } from '../../../utils/ApiError.js';
 import { Driver } from '../models/Driver.js';
 import { User } from '../models/User.js';
 import { verifyAccessToken } from '../services/tokenService.js';
-import { ApiError } from '../utils/ApiError.js';
 
 const roleModelMap = {
   driver: Driver,

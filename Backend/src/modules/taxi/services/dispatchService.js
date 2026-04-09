@@ -1,11 +1,11 @@
+import { Ride } from '../models/Ride.js';
+import { User } from '../models/User.js';
+import { matchDrivers } from './matchingService.js';
 import {
   DISPATCH_RADII,
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
-import { Ride } from '../models/Ride.js';
-import { User } from '../models/User.js';
-import { matchDrivers } from './matchingService.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;

@@ -1,5 +1,6 @@
 import { Server } from 'socket.io';
-import { env } from '../config/env.js';
+import { env } from '../../../config/env.js';
+import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import {
   addSocketSubscriptions,
@@ -11,7 +12,6 @@ import {
 import { findZoneByPickup } from '../services/matchingService.js';
 import { acceptRideAssignment, createRideRecord } from '../services/rideService.js';
 import { verifyAccessToken } from '../services/tokenService.js';
-import { normalizePoint, toPoint } from '../utils/geo.js';
 
 const getIdentityFromSocket = (socket) => {
   const token = socket.handshake.auth?.token;
@@ -37,7 +37,7 @@ const onAsync = (socket, handler) => async (payload = {}) => {
   }
 };
 
-export const configureSocketServer = (httpServer) => {
+export const configureTaxiSocketServer = (httpServer) => {
   const io = new Server(httpServer, {
     cors: {
       origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),

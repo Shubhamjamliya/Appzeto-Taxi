@@ -24,4 +24,4 @@ const zoneSchema = new mongoose.Schema(
 
 zoneSchema.index({ geometry: '2dsphere' });
 
-export const Zone = mongoose.model('Zone', zoneSchema);
+export const Zone = mongoose.models.Zone || mongoose.model('Zone', zoneSchema);

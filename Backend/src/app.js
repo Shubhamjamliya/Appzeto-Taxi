@@ -2,8 +2,8 @@ import cors from 'cors';
 import express from 'express';
 import morgan from 'morgan';
 import { env } from './config/env.js';
-import { errorHandler, notFoundHandler } from './middlewares/errorMiddleware.js';
-import { apiRouter } from './routes/index.js';
+import { errorHandler, notFoundHandler } from './modules/taxi/middlewares/errorMiddleware.js';
+import { taxiRouter } from './modules/taxi/routes/index.js';
 
 export const createApp = () => {
   const app = express();
@@ -22,7 +22,22 @@ export const createApp = () => {
     res.json({ success: true, message: 'Taxi backend is healthy' });
   });
 
-  app.use('/api', apiRouter);
+  // Keep both mounts during integration so existing clients using /api or /api/v1 continue to work.
+  app.use('/api', taxiRouter);
+  app.use('/api/v1', taxiRouter);
+
+  app.get(['/api', '/api/v1'], (_req, res) => {
+    res.json({
+      success: true,
+      message: 'Taxi API is mounted',
+      routes: {
+        users: ['/api/users', '/api/v1/users'],
+        drivers: ['/api/drivers', '/api/v1/drivers'],
+        rides: ['/api/rides', '/api/v1/rides'],
+      },
+    });
+  });
+
   app.use(notFoundHandler);
   app.use(errorHandler);
 

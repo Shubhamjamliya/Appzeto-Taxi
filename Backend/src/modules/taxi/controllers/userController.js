@@ -1,7 +1,7 @@
+import { ApiError } from '../../../utils/ApiError.js';
 import { User } from '../models/User.js';
 import { comparePassword, hashPassword } from '../services/passwordService.js';
 import { signAccessToken } from '../services/tokenService.js';
-import { ApiError } from '../utils/ApiError.js';
 
 export const registerUser = async (req, res) => {
   const { name, phone, password } = req.body;

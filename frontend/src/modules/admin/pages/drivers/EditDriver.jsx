@@ -55,7 +55,7 @@ const EditDriver = () => {
     const fetchInitialData = async () => {
       setIsFetching(true);
       try {
-        const locRes = await fetch('https://taxi-a276.onrender.com/api/v1/admin/service-locations', {
+        const locRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const locData = await locRes.json();
@@ -64,7 +64,7 @@ const EditDriver = () => {
           setLocations(Array.isArray(results) ? results : []);
         }
 
-        const countRes = await fetch('https://taxi-a276.onrender.com/api/v1/countries', {
+        const countRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/countries', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const countData = await countRes.json();
@@ -74,7 +74,7 @@ const EditDriver = () => {
         }
 
         try {
-          const transRes = await fetch('https://taxi-a276.onrender.com/api/v1/common/ride_modules', {
+          const transRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/common/ride_modules', {
             headers: { 'Authorization': `Bearer ${token}` }
           });
           const transData = await transRes.json();
@@ -98,7 +98,7 @@ const EditDriver = () => {
           setTransportTypes([{ _id: 'taxi', name: 'Taxi' }, { _id: 'delivery', name: 'Delivery' }]);
         }
 
-        const response = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}`, {
+        const response = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const data = await response.json();
@@ -136,7 +136,7 @@ const EditDriver = () => {
       if (!formData.area || !formData.transportType) return;
       try {
         const typeFilter = (formData.transportType.toLowerCase() === 'delivery') ? 'delivery' : 'taxi';
-        const res = await fetch(`https://taxi-a276.onrender.com/api/v1/types/${formData.area}?transport_type=${typeFilter}`);
+        const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/types/${formData.area}?transport_type=${typeFilter}`);
         const data = await res.json();
         if (data.success) {
           setVehicleTypes(Array.isArray(data.data) ? data.data : (data.data?.results || []));
@@ -198,7 +198,7 @@ const EditDriver = () => {
         country: formData.country
       };
 
-      const response = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/drivers/${id}`, {
+      const response = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -596,3 +596,4 @@ const EditDriver = () => {
 };
 
 export default EditDriver;
+

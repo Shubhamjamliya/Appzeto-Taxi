@@ -40,7 +40,7 @@ const OwnerNeededDocuments = () => {
   const fetchDocuments = async () => {
     setIsLoading(true);
     try {
-      const res = await fetch('https://taxi-a276.onrender.com/api/v1/admin/owner-management/owner-needed-document', {
+      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/owner-management/owner-needed-document', {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -79,8 +79,8 @@ const OwnerNeededDocuments = () => {
     setSubmitting(true);
     const isEditing = view === 'edit';
     const url = isEditing
-      ? `https://taxi-a276.onrender.com/api/v1/admin/owner-management/owner-needed-document/${editingId}`
-      : 'https://taxi-a276.onrender.com/api/v1/admin/owner-management/owner-needed-document';
+      ? `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owner-management/owner-needed-document/${editingId}`
+      : globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/owner-management/owner-needed-document';
     
     try {
       const res = await fetch(url, {
@@ -122,7 +122,7 @@ const OwnerNeededDocuments = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this document requirement?")) return;
     try {
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/owner-management/owner-needed-document/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owner-management/owner-needed-document/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -134,7 +134,7 @@ const OwnerNeededDocuments = () => {
 
   const handleToggleStatus = async (id, current) => {
     try {
-      await fetch(`https://taxi-a276.onrender.com/api/v1/admin/owner-management/owner-needed-document/${id}`, {
+      await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owner-management/owner-needed-document/${id}`, {
         method: 'PATCH',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -364,3 +364,4 @@ const OwnerNeededDocuments = () => {
 };
 
 export default OwnerNeededDocuments;
+

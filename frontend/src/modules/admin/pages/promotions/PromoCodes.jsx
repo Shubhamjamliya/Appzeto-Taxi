@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BASE = 'https://taxi-a276.onrender.com/api/v1/admin/promos';
+const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos';
 
 const PromoCodes = () => {
   const [view, setView] = useState('list');
@@ -41,8 +41,8 @@ const PromoCodes = () => {
     try {
       const [promosRes, locRes, usersRes] = await Promise.all([
         fetch(BASE, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('https://taxi-a276.onrender.com/api/v1/admin/service-locations', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch('https://taxi-a276.onrender.com/api/v1/admin/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', { headers: { 'Authorization': `Bearer ${token}` } }),
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const pData = await promosRes.json();
@@ -419,3 +419,4 @@ const PromoCodes = () => {
 };
 
 export default PromoCodes;
+

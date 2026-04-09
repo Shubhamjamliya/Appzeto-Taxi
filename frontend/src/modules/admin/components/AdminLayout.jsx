@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import Rydon24Logo from '../../../assets/rydon24_logo.png';
 import { NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
-import { motion } from 'framer-motion';
 import { socketService } from '../../../shared/api/socket';
 import { 
   BarChart3, 
@@ -44,7 +43,10 @@ import {
   ShieldCheck
 } from 'lucide-react';
 
-const SidebarItem = ({ icon: Icon, label, path, isCollapsed }) => (
+const SidebarItem = ({ icon, label, path, isCollapsed }) => {
+  const Icon = icon;
+
+  return (
   <NavLink
     to={path}
     className={({ isActive }) =>
@@ -54,13 +56,15 @@ const SidebarItem = ({ icon: Icon, label, path, isCollapsed }) => (
           : 'text-gray-400 hover:text-white hover:bg-white/5'
       }`
     }
-  >
+    >
     <Icon size={20} className="shrink-0" />
     {!isCollapsed && <span className="font-semibold text-[14px] tracking-tight">{label}</span>}
   </NavLink>
-);
+  );
+};
 
-const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed }) => {
+const SidebarGroup = ({ icon, label, subItems, isCollapsed }) => {
+  const Icon = icon;
   const [isOpen, setIsOpen] = useState(false);
   
   return (
@@ -147,11 +151,10 @@ const NestedGroup = ({ label, subItems }) => {
 };
 
 const AdminLayout = () => {
-  const [isSidebarOpen, setSidebarOpen] = useState(true);
+  const [isSidebarOpen] = useState(true);
   const [isCollapsed, setCollapsed] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const [notifications, setNotifications] = useState([]);
 
   // Dynamic Page Title Resolver
   const getPageTitle = () => {
@@ -196,7 +199,7 @@ const AdminLayout = () => {
     }
 
     if (token) {
-      const socket = socketService.connect();
+      socketService.connect();
       
       // Global Admin Listeners
       socketService.on('new_sos', (data) => {
@@ -206,7 +209,7 @@ const AdminLayout = () => {
       });
 
       socketService.on('new_driver_registration', (data) => {
-         setNotifications(prev => [{ id: Date.now(), title: 'New Driver', message: `${data.name} just registered.` }, ...prev]);
+         console.log('New driver registration:', data);
       });
 
       return () => {
@@ -273,7 +276,7 @@ const AdminLayout = () => {
          { label: 'User Bulk Upload', path: '/admin/users/bulk-upload' },
        ]
     },
-    { icon: Wallet, label: 'Add Wallet Payment', path: '/admin/wallet/payment' },
+    { icon: Wallet, label: 'Payment History', path: '/admin/wallet/payment' },
     { 
        icon: Car, 
        label: 'Driver Management', 
@@ -432,7 +435,7 @@ const AdminLayout = () => {
                    <img src={Rydon24Logo} alt="RYDON24" className="w-10 h-10 object-contain" />
                 </div>
                 {!isCollapsed && (
-                   <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="flex flex-col">
+                   <div className="flex flex-col">
                       <h3 className="text-[15px] font-black text-white leading-tight">Super Admin</h3>
                       <div className="flex items-center gap-1.5 mt-1">
                          <div className="w-4 h-4 rounded-full bg-amber-400 flex items-center justify-center">
@@ -440,7 +443,7 @@ const AdminLayout = () => {
                          </div>
                          <span className="text-[11px] font-bold text-gray-400 uppercase tracking-widest">Super Admin</span>
                       </div>
-                   </motion.div>
+                   </div>
                 )}
              </div>
              <button 

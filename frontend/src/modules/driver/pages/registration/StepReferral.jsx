@@ -1,15 +1,46 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { ArrowLeft, Gift, ArrowRight, Tag } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+    getStoredDriverRegistrationSession,
+    saveDriverReferral,
+    saveDriverRegistrationSession,
+} from '../../services/registrationService';
 
 const StepReferral = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [referral, setReferral] = useState('');
+    const session = {
+        ...getStoredDriverRegistrationSession(),
+        ...(location.state || {}),
+    };
+    const [referral, setReferral] = useState(session.referralCode || '');
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleNext = (skip = false) => {
-        navigate('/taxi/driver/step-vehicle', { state: { ...location.state, referralCode: skip ? '' : referral } });
+    const handleNext = async (skip = false) => {
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = await saveDriverReferral({
+                registrationId: session.registrationId,
+                phone: session.phone,
+                referralCode: skip ? '' : referral,
+            });
+
+            const nextState = saveDriverRegistrationSession({
+                ...session,
+                referralCode: skip ? '' : referral,
+                referralSession: response?.data?.session || null,
+            });
+
+            navigate('/taxi/driver/step-vehicle', { state: nextState });
+        } catch (err) {
+            setError(err?.message || 'Unable to save referral code');
+        } finally {
+            setLoading(false);
+        }
     };
 
     return (
@@ -28,6 +59,10 @@ const StepReferral = () => {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">Got a Code?</h1>
                     <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">Enter referral for joining bonus</p>
                 </div>
+
+                {error && (
+                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                )}
 
                 <div className="space-y-5">
                     <div className="bg-slate-50 p-5 rounded-[2.5rem] flex items-center gap-4 transition-all shadow-sm">
@@ -55,19 +90,19 @@ const StepReferral = () => {
                     </div>
 
                     <div className="space-y-3 pt-2">
-                        <motion.button 
-                            whileTap={{ scale: 0.98 }}
+                        <button 
                             onClick={() => handleNext(false)}
-                            disabled={!referral}
+                            disabled={loading || !referral}
                             className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                                 referral ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
                             }`}
                         >
-                            Apply Code <ArrowRight size={16} strokeWidth={3} />
-                        </motion.button>
+                            {loading ? 'Saving...' : 'Apply Code'} <ArrowRight size={16} strokeWidth={3} />
+                        </button>
                         
                         <button 
                             onClick={() => handleNext(true)}
+                            disabled={loading}
                             className="w-full h-10 text-[11px] font-black text-slate-400 uppercase tracking-widest hover:text-slate-600 transition-colors"
                         >
                             Skip for now

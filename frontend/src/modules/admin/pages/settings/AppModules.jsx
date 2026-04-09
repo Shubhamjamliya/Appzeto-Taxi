@@ -16,8 +16,9 @@ import {
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 
-const BASE_ASSET_URL = import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+const BASE_ASSET_URL = BACKEND_ORIGIN;
 
 const AppModules = () => {
   const [loading, setLoading] = useState(true);
@@ -117,18 +118,10 @@ const AppModules = () => {
     e.preventDefault();
     try {
       setSubmitting(true);
-      const payload = new FormData();
-      payload.append('name', formData.name);
-      payload.append('transport_type', formData.transport_type);
-      payload.append('service_type', formData.service_type);
-      payload.append('order_by', formData.order_by);
-      payload.append('short_description', formData.short_description);
-      payload.append('description', formData.description);
-      payload.append('active', formData.active ? '1' : '0');
-      
-      if (iconFile) {
-        payload.append('mobile_menu_icon', iconFile);
-      }
+      const payload = {
+        ...formData,
+        active: formData.active,
+      };
 
       if (editId) {
         await adminService.updateAppModule(editId, payload);
@@ -161,7 +154,7 @@ const AppModules = () => {
 
   const getFullImageUrl = (icon) => {
     if (!icon) return null;
-    if (icon.startsWith('http')) return icon;
+    if (icon.startsWith('http') || icon.startsWith('data:')) return icon;
     return `${BASE_ASSET_URL}${icon}`;
   };
 

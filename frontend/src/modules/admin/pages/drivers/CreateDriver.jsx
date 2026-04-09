@@ -54,13 +54,13 @@ const CreateDriver = () => {
         const token = localStorage.getItem('adminToken') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzdiZTZhYmJlOTJlYjYwMGYwMmQxNiIsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwibW9iaWxlIjoiOTk5OTk5OTk5OSIsInJvbGUiOiJzdXBlci1hZG1pbiIsImlhdCI6MTc3NTA0OTExNywiZXhwIjoxODA2NTg1MTE3fQ.5KJmXJwaVefWhnc97EqtArkA1z7ZOhsJwA9fbyRVPdQ';
         
         // Fetch Service Locations
-        const locRes = await fetch('https://taxi-a276.onrender.com/api/v1/admin/service-locations', {
+        const locRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const locData = await locRes.json();
         
         // Fetch Countries
-        const countRes = await fetch('https://taxi-a276.onrender.com/api/v1/countries');
+        const countRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/countries');
         const countData = await countRes.json();
 
         if (locData.success) {
@@ -82,7 +82,7 @@ const CreateDriver = () => {
 
         // Correct Transport Types API
         try {
-          const transRes = await fetch('https://taxi-a276.onrender.com/api/v1/common/ride_modules');
+          const transRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/common/ride_modules');
           const transData = await transRes.json();
           if (transData.success) {
             // ride_modules often returns keys or simple list
@@ -116,7 +116,7 @@ const CreateDriver = () => {
       if (!formData.area || !formData.transportType) return;
       try {
         const typeFilter = formData.transportType.toLowerCase();
-        const res = await fetch(`https://taxi-a276.onrender.com/api/v1/types/${formData.area}?transport_type=${typeFilter}`);
+        const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/types/${formData.area}?transport_type=${typeFilter}`);
         const data = await res.json();
         if (data.success) {
           setVehicleTypes(Array.isArray(data.data) ? data.data : (data.data?.results || []));
@@ -196,7 +196,7 @@ const CreateDriver = () => {
       };
 
       console.log('Registering Driver with payload:', payload);
-      const response = await fetch('https://taxi-a276.onrender.com/api/v1/admin/drivers', {
+      const response = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/drivers', {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -582,3 +582,4 @@ const CreateDriver = () => {
 };
 
 export default CreateDriver;
+

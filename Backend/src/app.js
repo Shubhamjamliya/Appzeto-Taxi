@@ -1,29 +1,46 @@
-const express = require('express');
-const cors = require('cors');
-const morgan = require('morgan');
+import cors from 'cors';
+import express from 'express';
+import morgan from 'morgan';
+import { env } from './config/env.js';
+import { errorHandler, notFoundHandler } from './modules/taxi/middlewares/errorMiddleware.js';
+import { taxiRouter } from './modules/taxi/routes/index.js';
 
-const { registerRoutes } = require('./routes');
-
-function createApp() {
+export const createApp = () => {
   const app = express();
 
-  app.use(cors());
-  app.use(express.json({ limit: '2mb' }));
-  app.use(morgan('dev'));
+  app.use(
+    cors({
+      origin: env.corsOrigin === '*' ? true : env.corsOrigin.split(','),
+      credentials: true,
+    }),
+  );
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.urlencoded({ extended: true }));
+  app.use(morgan(env.nodeEnv === 'production' ? 'combined' : 'dev'));
 
-  app.get('/health', (req, res) => res.json({ ok: true }));
-
-  registerRoutes(app);
-
-  // eslint-disable-next-line no-unused-vars
-  app.use((err, req, res, next) => {
-    // eslint-disable-next-line no-console
-    console.error(err);
-    res.status(500).json({ message: 'Internal Server Error' });
+  app.get('/health', (_req, res) => {
+    res.json({ success: true, message: 'Taxi backend is healthy' });
   });
 
+  // Keep both mounts during integration so existing clients using /api or /api/v1 continue to work.
+  app.use('/api', taxiRouter);
+  app.use('/api/v1', taxiRouter);
+
+  app.get(['/api', '/api/v1'], (_req, res) => {
+    res.json({
+      success: true,
+      message: 'Taxi API is mounted',
+      routes: {
+        admins: ['/api/admin', '/api/v1/admin'],
+        users: ['/api/users', '/api/v1/users'],
+        drivers: ['/api/drivers', '/api/v1/drivers'],
+        rides: ['/api/rides', '/api/v1/rides'],
+      },
+    });
+  });
+
+  app.use(notFoundHandler);
+  app.use(errorHandler);
+
   return app;
-}
-
-module.exports = { createApp };
-
+};

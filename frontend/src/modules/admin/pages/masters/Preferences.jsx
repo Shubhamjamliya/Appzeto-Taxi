@@ -48,9 +48,7 @@ const Preferences = () => {
     if (!formData.name) return alert('Please enter preference name');
     try {
       setIsSubmitting(true);
-      const data = new FormData();
-      data.append('name', formData.name);
-      if (formData.icon) data.append('icon', formData.icon);
+      const data = { name: formData.name };
       await adminService.createPreference(data);
       setFormData({ name: '', icon: null });
       setIconPreview(null);

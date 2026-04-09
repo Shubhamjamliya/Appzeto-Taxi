@@ -21,7 +21,7 @@ const DeletedOwners = () => {
     try {
       const token = localStorage.getItem('adminToken');
       // following the established pattern: /api/v1/admin/owners/deleted
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/owners/deleted?limit=${itemsPerPage}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owners/deleted?limit=${itemsPerPage}`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -44,7 +44,7 @@ const DeletedOwners = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/owners/deleted/${id}/restore`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owners/deleted/${id}/restore`, {
         method: 'PATCH',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -62,7 +62,7 @@ const DeletedOwners = () => {
     setIsSubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/owners/deleted/${id}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owners/deleted/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -241,3 +241,4 @@ const Shield = ({ size, strokeWidth }) => (
 );
 
 export default DeletedOwners;
+

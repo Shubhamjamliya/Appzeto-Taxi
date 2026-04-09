@@ -21,7 +21,7 @@ const UserReferralSettings = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch('https://taxi-a276.onrender.com/api/v1/admin/referral/settings/user', {
+        const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', {
           headers: { 'Authorization': `Bearer ${token}` }
         });
         const json = await res.json();
@@ -44,7 +44,7 @@ const UserReferralSettings = () => {
   const handleUpdate = async () => {
     setSaving(true);
     try {
-      const res = await fetch('https://taxi-a276.onrender.com/api/v1/admin/referral/settings/user', {
+      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -172,3 +172,4 @@ const UserReferralSettings = () => {
 };
 
 export default UserReferralSettings;
+

@@ -1,25 +1,62 @@
 import React, { useState } from 'react';
-import { motion } from 'framer-motion';
 import { ArrowLeft, User, Mail, Phone, Lock, ChevronRight } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
+import {
+    getStoredDriverRegistrationSession,
+    saveDriverPersonalDetails,
+    saveDriverRegistrationSession,
+} from '../../services/registrationService';
 
 const StepPersonal = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const phone = location.state?.phone || '95898 14119';
+    const session = {
+        ...getStoredDriverRegistrationSession(),
+        ...(location.state || {}),
+    };
+    const phone = session.phone || '95898 14119';
+    const registrationId = session.registrationId || '';
+    const role = session.role || 'driver';
 
     const [formData, setFormData] = useState({
-        fullName: '',
-        email: '',
-        gender: '',
+        fullName: session.fullName || '',
+        email: session.email || '',
+        gender: session.gender || '',
         password: ''
     });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleContinue = () => {
+    const handleContinue = async () => {
         if (formData.fullName && formData.email && formData.gender && formData.password) {
-            navigate('/taxi/driver/step-referral', { state: { ...location.state, ...formData } });
+            setLoading(true);
+            setError('');
+
+            try {
+                const { password: _password, ...safeFormData } = formData;
+                const response = await saveDriverPersonalDetails({
+                    registrationId,
+                    phone,
+                    ...formData,
+                });
+
+                const nextState = saveDriverRegistrationSession({
+                    ...session,
+                    registrationId,
+                    phone,
+                    role,
+                    ...safeFormData,
+                    personalSession: response?.data?.session || null,
+                });
+
+                navigate('/taxi/driver/step-referral', { state: nextState });
+            } catch (err) {
+                setError(err?.message || 'Unable to save personal details');
+            } finally {
+                setLoading(false);
+            }
         } else {
-            alert('Please fill all required details');
+            setError('Please fill all required details');
         }
     };
 
@@ -38,6 +75,10 @@ const StepPersonal = () => {
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">Personal Details</h1>
                     <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">Tell us more about yourself</p>
                 </div>
+
+                {error && (
+                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                )}
 
                 <div className="space-y-3.5">
                     {/* Full Name */}
@@ -123,17 +164,17 @@ const StepPersonal = () => {
                 </div>
 
                 <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
-                    <motion.button 
-                        whileTap={{ scale: 0.98 }}
+                    <button 
                         onClick={handleContinue}
+                        disabled={loading}
                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                             formData.fullName && formData.email && formData.gender && formData.password 
                             ? 'bg-slate-900 text-white shadow-slate-900/10' 
                             : 'bg-slate-100 text-slate-300 pointer-events-none'
                         }`}
                     >
-                        Continue <ChevronRight size={16} strokeWidth={3} />
-                    </motion.button>
+                        {loading ? 'Saving...' : 'Continue'} <ChevronRight size={16} strokeWidth={3} />
+                    </button>
                 </div>
             </main>
         </div>

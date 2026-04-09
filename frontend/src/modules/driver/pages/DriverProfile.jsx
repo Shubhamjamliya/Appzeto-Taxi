@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     User, 
@@ -30,14 +30,70 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
+import { clearDriverRegistrationSession, getCurrentDriver } from '../services/registrationService';
 
 const DriverProfile = () => {
     const navigate = useNavigate();
     const [isRouteBookingEnabled, setIsRouteBookingEnabled] = useState(false);
+    const [isLogoutOpen, setIsLogoutOpen] = useState(false);
+    const [driver, setDriver] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    useEffect(() => {
+        let active = true;
+
+        const loadDriver = async () => {
+            setIsLoading(true);
+            setError('');
+
+            try {
+                const response = await getCurrentDriver();
+                if (!active) return;
+                setDriver(response?.data || null);
+            } catch (err) {
+                if (!active) return;
+                setError(err?.message || 'Unable to load driver profile');
+            } finally {
+                if (active) {
+                    setIsLoading(false);
+                }
+            }
+        };
+
+        loadDriver();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const handleLogout = () => {
+        clearDriverRegistrationSession();
+        localStorage.removeItem('token');
+        localStorage.removeItem('role');
+        setIsLogoutOpen(false);
+        navigate('/taxi/driver/login', { replace: true });
+    };
 
     // Dynamic Section Data with Project-mapped Paths
     const role = localStorage.getItem('role') || 'driver';
     const isOwner = role === 'owner';
+    const driverName = useMemo(() => {
+        if (!driver?.name) return 'Driver';
+        return String(driver.name);
+    }, [driver?.name]);
+
+    const driverPhone = useMemo(() => driver?.phone || 'N/A', [driver?.phone]);
+    const driverEmail = useMemo(() => driver?.email || 'N/A', [driver?.email]);
+    const driverVehicle = useMemo(() => {
+        const parts = [driver?.registerFor, driver?.vehicleType].filter(Boolean);
+        return parts.length > 0 ? parts.join(' - ') : 'N/A';
+    }, [driver?.registerFor, driver?.vehicleType]);
+    const driverLocation = useMemo(() => driver?.city || 'N/A', [driver?.city]);
+    const driverNumber = useMemo(() => driver?.vehicleNumber || 'N/A', [driver?.vehicleNumber]);
+    const driverColor = useMemo(() => driver?.vehicleColor || 'N/A', [driver?.vehicleColor]);
+    const driverRating = useMemo(() => Number(driver?.rating || 0), [driver?.rating]);
 
     const sections = [
         ...(isOwner ? [{
@@ -47,10 +103,10 @@ const DriverProfile = () => {
                 { id: 'drivers', label: 'Manage Drivers', icon: <UserPlus size={20} />, path: '/taxi/driver/manage-drivers' },
             ]
         }] : []),
-        {
-            title: 'Your Account',
-            items: [
-                { id: 'personal', label: 'Personal Information', sub: '+91 95898 14119', icon: <User size={20} />, path: '/taxi/driver/edit-profile' },
+                {
+                    title: 'Your Account',
+                    items: [
+                { id: 'personal', label: 'Personal Information', sub: driverPhone, icon: <User size={20} />, path: '/taxi/driver/edit-profile' },
                 { id: 'wallet', label: 'Wallet', icon: <Wallet size={20} />, path: '/taxi/driver/wallet' },
                 ...(!isOwner ? [
                     { id: 'vehicle', label: 'My Vehicle', icon: <Car size={20} />, path: '/taxi/driver/vehicle-fleet' },
@@ -107,11 +163,11 @@ const DriverProfile = () => {
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
                         <h2 className="text-[22px] font-black text-slate-900 leading-tight uppercase">
-                            hritik<br/>raghuwanshi
+                            {isLoading ? 'Loading...' : driverName}
                         </h2>
                         <div className="flex items-center gap-1.5 text-sky-500">
                             <Star size={14} fill="currentColor" />
-                            <span className="text-[14px] font-black">0</span>
+                            <span className="text-[14px] font-black">{driverRating.toFixed(1)}</span>
                         </div>
                     </div>
                     {/* Integrated Profile Image */}
@@ -126,6 +182,38 @@ const DriverProfile = () => {
                              <Check size={12} className="text-white" strokeWidth={4} />
                         </div>
                     </div>
+                </div>
+                <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 border border-slate-100">
+                    {error ? (
+                        <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                    ) : (
+                        <div className="grid grid-cols-2 gap-3 text-left">
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Phone</p>
+                                <p className="text-[12px] font-black text-slate-900">{driverPhone}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Email</p>
+                                <p className="text-[12px] font-black text-slate-900 break-all">{driverEmail}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
+                                <p className="text-[12px] font-black text-slate-900">{driverVehicle}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">City</p>
+                                <p className="text-[12px] font-black text-slate-900">{driverLocation}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle No.</p>
+                                <p className="text-[12px] font-black text-slate-900">{driverNumber}</p>
+                            </div>
+                            <div>
+                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Color</p>
+                                <p className="text-[12px] font-black text-slate-900">{driverColor}</p>
+                            </div>
+                        </div>
+                    )}
                 </div>
             </header>
 
@@ -174,15 +262,50 @@ const DriverProfile = () => {
             {/* Sign Out Section */}
             <div className="px-6 py-10">
                 <button 
-                    onClick={() => navigate('/login')}
+                    onClick={() => setIsLogoutOpen(true)}
                     className="flex items-center gap-3 text-rose-500 font-black text-[12px] uppercase tracking-[0.2em] active:translate-x-1 transition-transform"
                 >
                     <LogOut size={16} strokeWidth={2.5} />
-                    Terminate Session
+                    Logout
                 </button>
             </div>
 
             <DriverBottomNav />
+
+            <AnimatePresence>
+                {isLogoutOpen && (
+                    <div className="fixed inset-0 z-[200] flex items-center justify-center bg-black/45 px-5 backdrop-blur-sm">
+                        <motion.div
+                            initial={{ opacity: 0, scale: 0.96, y: 12 }}
+                            animate={{ opacity: 1, scale: 1, y: 0 }}
+                            exit={{ opacity: 0, scale: 0.96, y: 12 }}
+                            className="w-full max-w-xs rounded-[28px] bg-white p-6 shadow-2xl border border-slate-100"
+                        >
+                            <div className="space-y-2 text-center">
+                                <h3 className="text-[18px] font-black text-slate-900 uppercase tracking-tight">Logout</h3>
+                                <p className="text-[12px] font-bold text-slate-400">
+                                    Are you sure you want to logout?
+                                </p>
+                            </div>
+
+                            <div className="mt-6 grid grid-cols-2 gap-3">
+                                <button
+                                    onClick={() => setIsLogoutOpen(false)}
+                                    className="h-12 rounded-2xl border border-slate-200 text-slate-700 font-black text-[12px] uppercase tracking-widest"
+                                >
+                                    No
+                                </button>
+                                <button
+                                    onClick={handleLogout}
+                                    className="h-12 rounded-2xl bg-rose-500 text-white font-black text-[12px] uppercase tracking-widest"
+                                >
+                                    Yes
+                                </button>
+                            </div>
+                        </motion.div>
+                    </div>
+                )}
+            </AnimatePresence>
         </div>
     );
 };

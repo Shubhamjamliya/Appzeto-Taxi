@@ -3,13 +3,19 @@ import {
   Search, MoreVertical, FileText, Star, Plus, Eye, Edit2, Key,
   XCircle, Trash2, Lock, Loader2, ChevronRight
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+
+const ACTION_MENU_WIDTH = 176;
+const ACTION_MENU_GAP = 8;
+const ACTION_MENU_MAX_HEIGHT = 260;
 
 const DriverList = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [passwordModal, setPasswordModal] = useState({ isOpen: false, driverId: null, password: '', isSubmitting: false });
   const [drivers, setDrivers] = useState([]);
@@ -27,10 +33,10 @@ const DriverList = () => {
             return d.approve === true || d.status?.toLowerCase() === 'active' || d.status?.toLowerCase() === 'approved';
           }).map(d => ({
             id: d._id,
-            name: d.name || d.user_id?.name || 'Unknown',
+            name: d.name || 'Unknown',
             serviceLocation: d.city || d.service_location?.name || 'India',
-            phone: d.mobile || d.user_id?.mobile || 'N/A',
-            transportType: d.transport_type || 'All - Bike',
+            phone: d.phone || d.mobile || 'N/A',
+            transportType: d.transport_type || d.register_for || d.vehicle_type || 'All - Bike',
             rating: d.rating || d.average_rating || d.avg_rating || 0,
             registeredAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : 'N/A',
             status: d.approve ? 'Approved' : (d.status || 'Approved')
@@ -48,16 +54,65 @@ const DriverList = () => {
     fetchDrivers();
   }, []);
 
+  const closeMenu = () => {
+    setActiveMenu(null);
+    setMenuPosition(null);
+  };
+
   const toggleMenu = (e, userId) => {
     e.stopPropagation();
-    setActiveMenu(activeMenu === userId ? null : userId);
+    if (activeMenu === userId) {
+      closeMenu();
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const viewportPadding = 12;
+    const spaceBelow = window.innerHeight - rect.bottom - ACTION_MENU_GAP;
+    const spaceAbove = rect.top - ACTION_MENU_GAP;
+    const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+
+    const left = Math.min(
+      Math.max(viewportPadding, rect.right - ACTION_MENU_WIDTH),
+      window.innerWidth - ACTION_MENU_WIDTH - viewportPadding,
+    );
+
+    setMenuPosition({
+      left,
+      ...(openUp
+        ? { bottom: Math.max(viewportPadding, window.innerHeight - rect.top + ACTION_MENU_GAP) }
+        : {
+            top: Math.max(
+              viewportPadding,
+              Math.min(
+                rect.bottom + ACTION_MENU_GAP,
+                window.innerHeight - ACTION_MENU_MAX_HEIGHT - viewportPadding,
+              ),
+            ),
+          }),
+    });
+    setActiveMenu(userId);
   };
 
   useEffect(() => {
-    const closeMenu = () => setActiveMenu(null);
-    window.addEventListener('click', closeMenu);
-    return () => window.removeEventListener('click', closeMenu);
-  }, []);
+    if (!activeMenu) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+
+    const handleReset = () => closeMenu();
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('scroll', handleReset, true);
+    window.addEventListener('resize', handleReset);
+
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('scroll', handleReset, true);
+      window.removeEventListener('resize', handleReset);
+    };
+  }, [activeMenu]);
 
   const handleAction = async (action, driverId) => {
     const confirmMsg = action === 'delete' ? 'Are you sure you want to delete this driver?' : 'Are you sure you want to disapprove this driver?';
@@ -99,6 +154,11 @@ const DriverList = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      {error && (
+        <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+          {error}
+        </div>
+      )}
       {/* Breadcrumb */}
       <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
         <span>Drivers</span>
@@ -118,7 +178,7 @@ const DriverList = () => {
       </div>
 
       {/* Table Card */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-visible">
         {/* Toolbar */}
         <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-4">
           <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -209,27 +269,6 @@ const DriverList = () => {
                         >
                           <MoreVertical size={16} />
                         </button>
-                        
-                        {activeMenu === driver.id && (
-                          <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-[9999]">
-                            <button onClick={() => navigate(`/admin/drivers/${driver.id}`)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                              <Eye size={13} className="text-gray-400" /> View Profile
-                            </button>
-                            <button onClick={() => navigate(`/admin/drivers/edit/${driver.id}`)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                              <Edit2 size={13} className="text-gray-400" /> Edit
-                            </button>
-                            <button onClick={() => { setActiveMenu(null); setPasswordModal({ isOpen: true, driverId: driver.id, password: '', isSubmitting: false }); }} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                              <Key size={13} className="text-gray-400" /> Update Password
-                            </button>
-                            <button onClick={() => handleAction('disapprove', driver.id)} className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2">
-                              <XCircle size={13} /> Disapprove
-                            </button>
-                            <div className="h-px bg-gray-100 my-1" />
-                            <button onClick={() => handleAction('delete', driver.id)} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2">
-                              <Trash2 size={13} /> Delete
-                            </button>
-                          </div>
-                        )}
                       </div>
                     </td>
                   </tr>
@@ -251,6 +290,68 @@ const DriverList = () => {
           </div>
         )}
       </div>
+
+      {activeMenu && menuPosition && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998] bg-transparent" onClick={closeMenu} />
+          <div
+            className="fixed z-[9999] bg-white rounded-lg shadow-2xl border border-gray-200 py-1 overflow-y-auto"
+            style={{
+              width: ACTION_MENU_WIDTH,
+              maxHeight: `min(${ACTION_MENU_MAX_HEIGHT}px, calc(100vh - 24px))`,
+              ...menuPosition,
+            }}
+          >
+            <button
+              onClick={() => {
+                closeMenu();
+                navigate(`/admin/drivers/${activeMenu}`);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Eye size={13} className="text-gray-400" /> View Profile
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                navigate(`/admin/drivers/edit/${activeMenu}`);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Edit2 size={13} className="text-gray-400" /> Edit
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+            >
+              <Key size={13} className="text-gray-400" /> Update Password
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                handleAction('disapprove', activeMenu);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
+            >
+              <XCircle size={13} /> Disapprove
+            </button>
+            <div className="h-px bg-gray-100 my-1" />
+            <button
+              onClick={() => {
+                closeMenu();
+                handleAction('delete', activeMenu);
+              }}
+              className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2"
+            >
+              <Trash2 size={13} /> Delete
+            </button>
+          </div>
+        </>,
+        document.body,
+      )}
 
       {/* Password Modal */}
       {passwordModal.isOpen && (

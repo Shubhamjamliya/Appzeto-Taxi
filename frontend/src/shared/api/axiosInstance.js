@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { API_BASE_URL } from './runtimeConfig';
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL,
+  baseURL: API_BASE_URL,
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json',
@@ -40,7 +41,7 @@ api.interceptors.response.use(
         console.warn('Unauthorized! Logging out...');
         // Optional: localStorage.clear(); window.location.href = '/login';
       }
-      return Promise.reject(error.response.data);
+      return Promise.reject({ ...error.response.data, status: error.response.status });
     }
     return Promise.reject({ message: 'Network error or server down.' });
   }

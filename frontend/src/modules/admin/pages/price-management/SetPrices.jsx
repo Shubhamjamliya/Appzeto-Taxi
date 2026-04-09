@@ -81,7 +81,7 @@ const SetPrices = () => {
     status: 'active'
   });
 
-  const baseUrl = 'https://taxi-a276.onrender.com/api/v1/admin';
+  const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
   const token = localStorage.getItem('adminToken');
 
   useEffect(() => {
@@ -692,3 +692,4 @@ const SetPrices = () => {
 };
 
 export default SetPrices;
+

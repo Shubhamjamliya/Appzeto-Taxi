@@ -5,9 +5,12 @@ import { ShieldCheck, Mail, Lock, ArrowRight, Car, Loader2, AlertCircle } from '
 import { motion, AnimatePresence } from 'framer-motion';
 import { adminService } from '../../services/adminService';
 
+const STATIC_ADMIN_EMAIL = 'admin@gmail.com';
+const STATIC_ADMIN_PASSWORD = 'admin';
+
 const AdminLogin = () => {
-  const [email, setEmail] = useState(''); 
-  const [password, setPassword] = useState(''); 
+  const [email, setEmail] = useState(STATIC_ADMIN_EMAIL); 
+  const [password, setPassword] = useState(STATIC_ADMIN_PASSWORD); 
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const navigate = useNavigate();
@@ -18,31 +21,12 @@ const AdminLogin = () => {
     setError('');
 
     try {
-      // PRO-LEVEL: Call standardized service instead of fetch
-      const data = await adminService.login({ email, password });
-      console.log("Login Full Response:", data);
-
-      if (data.success || data.access_token || data.token) {
-        const token = data.access_token || data.token || data.data?.token;
-        const admin = data.user || data.admin || data.data?.admin || data.data?.user;
-
-        if (token) {
-          // Store the token and admin info
-          localStorage.setItem('adminToken', token);
-          if (admin) localStorage.setItem('adminInfo', JSON.stringify(admin));
-          
-          // Navigation with a slight delay for better UX feel
-          setTimeout(() => {
-            navigate('/admin/dashboard');
-          }, 500);
-        } else {
-          setError('Authentication succeeded but no security token was received from server.');
-        }
-      } else {
-        setError(data.message || 'Authentication failed. Please check your credentials.');
-      }
+      const response = await adminService.login({ email, password });
+      localStorage.setItem('adminToken', response.data?.token || '');
+      localStorage.setItem('adminInfo', JSON.stringify(response.data?.admin || {}));
+      setTimeout(() => navigate('/admin/dashboard'), 300);
     } catch (err) {
-      setError(err.message || 'Network error. Please try again later.');
+      setError(err.message || 'Unable to complete admin login.');
       console.error('Login error:', err);
     } finally {
       setIsLoading(false);
@@ -98,6 +82,13 @@ const AdminLogin = () => {
         </AnimatePresence>
 
         <form onSubmit={handleLogin} className="space-y-6">
+          <div className="rounded-2xl border border-blue-100 bg-blue-50 px-4 py-3 text-left">
+            <p className="text-[11px] font-black uppercase tracking-[1.5px] text-blue-700">Static Admin Login</p>
+            <p className="mt-1 text-[13px] font-semibold text-blue-900">
+              Email: {STATIC_ADMIN_EMAIL} | Password: {STATIC_ADMIN_PASSWORD}
+            </p>
+          </div>
+
           <div className="space-y-4">
             <div className="relative group">
                <div className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-all">

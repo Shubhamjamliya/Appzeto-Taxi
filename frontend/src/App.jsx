@@ -1,5 +1,5 @@
-import { useState, Suspense, lazy } from 'react';
-import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
+import { Suspense, lazy } from 'react';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import './App.css';
@@ -132,6 +132,11 @@ const AddDriver = lazy(() => import('./modules/driver/pages/settings/AddDriver')
 const AdminLayout = lazy(() => import('./modules/admin/components/AdminLayout'));
 const AdminLogin = lazy(() => import('./modules/admin/pages/auth/AdminLogin'));
 const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDashboard'));
+const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
+const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
+const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
+const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
+const AdminPaymentHistory = lazy(() => import('./modules/admin/pages/wallet/PaymentHistory'));
 const AdminUserList = lazy(() => import('./modules/admin/pages/users/UserList'));
 const AdminUserDetails = lazy(() => import('./modules/admin/pages/users/UserDetails'));
 const AdminDeleteRequestUsers = lazy(() => import('./modules/admin/pages/users/DeleteRequestUsers'));
@@ -237,6 +242,40 @@ const AdminReportPlaceholder = ({ title }) => (
     <p className="mt-2 font-bold italic tracking-tight text-primary">Report engine initializing...</p>
   </div>
 );
+
+const AdminSectionPlaceholder = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  const title = location.pathname
+    .split('/')
+    .filter(Boolean)
+    .slice(1)
+    .join(' / ')
+    .replace(/-/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+
+  return (
+    <div className="flex items-center justify-center min-h-[70vh]">
+      <div className="max-w-xl w-full bg-white rounded-[32px] border border-gray-100 shadow-sm p-10 text-center">
+        <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-5">
+          <FileText size={28} />
+        </div>
+        <h2 className="text-2xl font-black text-gray-950 uppercase tracking-tight">{title || 'Admin Section'}</h2>
+        <p className="mt-3 text-sm font-medium text-gray-500 leading-6">
+          This admin section is not wired to the user app. It stays inside the admin shell so navigation remains safe.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate('/admin/dashboard')}
+          className="mt-8 inline-flex items-center justify-center px-6 py-3 rounded-xl bg-[#2563EB] text-white text-[12px] font-black uppercase tracking-widest shadow-lg shadow-blue-900/20"
+        >
+          Back to Dashboard
+        </button>
+      </div>
+    </div>
+  );
+};
 
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
@@ -409,6 +448,7 @@ function App() {
             <Route path="/taxi/driver" element={<DriverLayout />}>
               <Route path="lang-select" element={<LanguageSelect />} />
               <Route path="welcome" element={<DriverWelcome />} />
+              <Route path="login" element={<PhoneRegistration />} />
               <Route path="reg-phone" element={<PhoneRegistration />} />
               <Route path="otp-verify" element={<OTPVerification />} />
               <Route path="step-personal" element={<StepPersonal />} />
@@ -445,6 +485,11 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" />} />
               <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="chat" element={<AdminChat />} />
+              <Route path="trips" element={<AdminTrips />} />
+              <Route path="deliveries" element={<AdminDeliveries />} />
+              <Route path="ongoing" element={<AdminOngoing />} />
+              <Route path="wallet/payment" element={<AdminPaymentHistory />} />
               <Route path="users" element={<AdminUserList />} />
               <Route path="users/:id" element={<AdminUserDetails />} />
               <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
@@ -510,6 +555,7 @@ function App() {
               <Route path="cms" element={<AdminCMSBuilder />} />
               <Route path="settings/cms/header-footer" element={<AdminHeaderFooter />} />
               <Route path="support" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Help & Ticket Management - Under Development</div>} />
+              <Route path="*" element={<AdminSectionPlaceholder />} />
               
               {/* Report Module Routes */}
               <Route path="reports/user" element={<AdminUserReport />} />

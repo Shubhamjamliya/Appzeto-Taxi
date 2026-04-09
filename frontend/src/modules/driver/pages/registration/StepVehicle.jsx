@@ -1,5 +1,4 @@
-import React, { useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useState } from 'react';
 import { 
     ArrowLeft, 
     Car, 
@@ -10,19 +9,25 @@ import {
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { getLucideIcon } from '../../utils/iconMapping';
+import {
+    getStoredDriverRegistrationSession,
+    getDriverServiceLocations,
+    saveDriverRegistrationSession,
+    saveDriverVehicle,
+} from '../../services/registrationService';
 
 const StepVehicle = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const role = location.state?.role || 'driver';
+    const session = {
+        ...getStoredDriverRegistrationSession(),
+        ...(location.state || {}),
+    };
+    const role = session.role || 'driver';
     const isOwner = role === 'owner';
-    
-    const locations = [
-        { id: '1', name: 'Indore' },
-        { id: '2', name: 'Bhopal' },
-        { id: '3', name: 'Dewas' },
-        { id: '4', name: 'Ujjain' }
-    ];
+    const [locations, setLocations] = useState([]);
+    const [locationsLoading, setLocationsLoading] = useState(true);
+    const [locationsError, setLocationsError] = useState('');
 
     const vehicleTypes = [
         { id: 'v1', label: 'Bike', icon: 'bike_icon' },
@@ -31,23 +36,58 @@ const StepVehicle = () => {
     ];
 
     const [formData, setFormData] = useState({
-        registerFor: 'taxi',
-        locationId: '',
-        vehicleTypeId: '',
-        make: '',
-        model: '',
-        year: '',
-        number: '',
-        color: '',
+        registerFor: session.registerFor || 'taxi',
+        locationId: session.locationId || '',
+        vehicleTypeId: session.vehicleTypeId || '',
+        make: session.make || '',
+        model: session.model || '',
+        year: session.year || '',
+        number: session.number || '',
+        color: session.color || '',
         // Company info for owners
-        companyName: '',
-        companyAddress: '',
-        city: '',
-        postalCode: '',
-        taxNumber: ''
+        companyName: session.companyName || '',
+        companyAddress: session.companyAddress || '',
+        city: session.city || '',
+        postalCode: session.postalCode || '',
+        taxNumber: session.taxNumber || ''
     });
+    const [loading, setLoading] = useState(false);
+    const [error, setError] = useState('');
 
-    const handleContinue = () => {
+    useEffect(() => {
+        let active = true;
+
+        const loadLocations = async () => {
+            try {
+                setLocationsLoading(true);
+                setLocationsError('');
+
+                const response = await getDriverServiceLocations();
+                const results = response?.data?.results || response?.data || [];
+
+                if (active) {
+                    setLocations(Array.isArray(results) ? results : []);
+                }
+            } catch (err) {
+                if (active) {
+                    setLocationsError(err?.message || 'Unable to load service locations');
+                    setLocations([]);
+                }
+            } finally {
+                if (active) {
+                    setLocationsLoading(false);
+                }
+            }
+        };
+
+        loadLocations();
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    const handleContinue = async () => {
         let required = [];
         if (isOwner) {
             required = ['locationId', 'companyName', 'companyAddress', 'city', 'postalCode', 'taxNumber'];
@@ -56,9 +96,48 @@ const StepVehicle = () => {
         }
 
         if (required.every(key => formData[key])) {
-            navigate('/taxi/driver/step-documents', { state: { ...location.state, ...formData } });
+            setLoading(true);
+            setError('');
+
+            try {
+                const selectedServiceLocation = locations.find(
+                    (item) => String(item._id || item.id) === String(formData.locationId)
+                );
+
+                const response = await saveDriverVehicle({
+                    registrationId: session.registrationId,
+                    phone: session.phone,
+                    registerFor: formData.registerFor,
+                    locationId: formData.locationId,
+                    locationName: selectedServiceLocation?.name || selectedServiceLocation?.service_location_name || '',
+                    serviceLocation: selectedServiceLocation || null,
+                    vehicleTypeId: formData.vehicleTypeId,
+                    make: formData.make,
+                    model: formData.model,
+                    year: formData.year,
+                    number: formData.number,
+                    color: formData.color,
+                    companyName: formData.companyName,
+                    companyAddress: formData.companyAddress,
+                    city: isOwner ? formData.city : selectedServiceLocation?.name || selectedServiceLocation?.service_location_name || formData.city,
+                    postalCode: formData.postalCode,
+                    taxNumber: formData.taxNumber,
+                });
+
+                const nextState = saveDriverRegistrationSession({
+                    ...session,
+                    ...formData,
+                    vehicleSession: response?.data?.session || null,
+                });
+
+                navigate('/taxi/driver/step-documents', { state: nextState });
+            } catch (err) {
+                setError(err?.message || 'Unable to save vehicle details');
+            } finally {
+                setLoading(false);
+            }
         } else {
-            alert(isOwner ? 'Please fill all company information fields' : 'Please fill all vehicle information fields');
+            setError(isOwner ? 'Please fill all company information fields' : 'Please fill all vehicle information fields');
         }
     };
 
@@ -79,6 +158,14 @@ const StepVehicle = () => {
                         {isOwner ? 'Your business details' : 'Complete your registration'}
                     </p>
                 </div>
+
+                {locationsError && (
+                    <p className="text-[11px] font-bold text-rose-500">{locationsError}</p>
+                )}
+
+                {error && (
+                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                )}
 
                 <div className="space-y-5">
                     {/* Register For Selection (Only for drivers) */}
@@ -118,10 +205,15 @@ const StepVehicle = () => {
                         <select 
                             value={formData.locationId}
                             onChange={(e) => setFormData(p => ({ ...p, locationId: e.target.value, vehicleTypeId: '' }))}
-                            className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 appearance-none cursor-pointer"
+                            disabled={locationsLoading || locations.length === 0}
+                            className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 appearance-none cursor-pointer disabled:opacity-50"
                         >
-                            <option value="">Select city</option>
-                            {locations.map(loc => <option key={loc.id} value={loc.id}>{loc.name}</option>)}
+                            <option value="">{locationsLoading ? 'Loading service locations...' : 'Select city'}</option>
+                            {locations.map(loc => (
+                                <option key={loc._id || loc.id} value={loc._id || loc.id}>
+                                    {loc.service_location_name || loc.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
@@ -266,9 +358,9 @@ const StepVehicle = () => {
                 </div>
 
                 <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
-                    <motion.button 
-                        whileTap={{ scale: 0.98 }}
+                    <button 
                         onClick={handleContinue}
+                        disabled={loading}
                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                             (isOwner ? 
                                 (formData.locationId && formData.companyName && formData.companyAddress && formData.city && formData.postalCode && formData.taxNumber) : 
@@ -277,8 +369,8 @@ const StepVehicle = () => {
                             : 'bg-slate-100 text-slate-300 pointer-events-none'
                         }`}
                     >
-                        Continue <ChevronRight size={16} strokeWidth={3} />
-                    </motion.button>
+                        {loading ? 'Saving...' : 'Continue'} <ChevronRight size={16} strokeWidth={3} />
+                    </button>
                 </div>
             </main>
         </div>

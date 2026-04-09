@@ -15,7 +15,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
-const BASE = 'https://taxi-a276.onrender.com/api/v1/admin';
+const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
 
 const ManageFleet = () => {
   const [view, setView] = useState('list'); // 'list' | 'create' | 'edit'
@@ -52,7 +52,7 @@ const ManageFleet = () => {
         fetch(`${BASE}/owner-management/manage-fleet`, { headers }),
         fetch(`${BASE}/owner-management/manage-owners`, { headers }), // Fetching owners
         fetch(`${BASE}/service-locations`, { headers }),
-        fetch(`https://taxi-a276.onrender.com/api/v1/common/ride_modules`, { headers })
+        fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/common/ride_modules`, { headers })
       ]);
 
       const fData = await fleetRes.json();
@@ -98,7 +98,7 @@ const ManageFleet = () => {
     try {
       const typeFilter = (formData.transport_type || 'taxi').toLowerCase();
       // Most of the app uses /api/v1/types/{area_id}?transport_type=...
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/types/${formData.service_location_id}?transport_type=${typeFilter}`, { headers });
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/types/${formData.service_location_id}?transport_type=${typeFilter}`, { headers });
       const data = await res.json();
       if (data.success) {
         const list = Array.isArray(data.data) ? data.data : (data.data?.results || []);
@@ -634,3 +634,4 @@ const ManageFleet = () => {
 };
 
 export default ManageFleet;
+

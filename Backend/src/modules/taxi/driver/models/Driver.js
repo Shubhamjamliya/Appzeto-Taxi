@@ -1,0 +1,121 @@
+import mongoose from 'mongoose';
+import { VEHICLE_TYPES } from '../../constants/index.js';
+
+const driverSchema = new mongoose.Schema(
+  {
+    name: {
+      type: String,
+      required: true,
+      trim: true,
+    },
+    phone: {
+      type: String,
+      required: true,
+      unique: true,
+      trim: true,
+    },
+    email: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    gender: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    password: {
+      type: String,
+      required: true,
+      minlength: 6,
+      select: false,
+    },
+    isOnline: {
+      type: Boolean,
+      default: false,
+    },
+    isOnRide: {
+      type: Boolean,
+      default: false,
+    },
+    socketId: {
+      type: String,
+      default: null,
+    },
+    vehicleType: {
+      type: String,
+      enum: VEHICLE_TYPES,
+      required: true,
+    },
+    registerFor: {
+      type: String,
+      default: 'taxi',
+      trim: true,
+    },
+    vehicleNumber: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    vehicleColor: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    city: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    referralCode: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    approve: {
+      type: Boolean,
+      default: true,
+    },
+    status: {
+      type: String,
+      default: 'approved',
+      trim: true,
+    },
+    rating: {
+      type: Number,
+      default: 5,
+      min: 0,
+      max: 5,
+    },
+    zoneId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Zone',
+      default: null,
+    },
+    location: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        required: true,
+        default: [0, 0],
+      },
+    },
+    documents: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+    onboarding: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
+    },
+  },
+  { timestamps: true },
+);
+
+driverSchema.index({ location: '2dsphere' });
+
+export const Driver = mongoose.models.Driver || mongoose.model('Driver', driverSchema);

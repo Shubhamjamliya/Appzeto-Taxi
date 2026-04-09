@@ -38,7 +38,7 @@ const BannerImage = () => {
   const [imagePreview, setImagePreview] = useState(null);
 
   const token = localStorage.getItem('adminToken') || '';
-  const baseUrl = 'https://taxi-a276.onrender.com/api/v1/admin';
+  const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
 
   // Helper to resolve image URL
   const resolveImageUrl = (img) => {
@@ -581,3 +581,4 @@ const BannerImage = () => {
 };
 
 export default BannerImage;
+

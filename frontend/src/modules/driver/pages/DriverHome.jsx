@@ -18,7 +18,7 @@ import {
     User
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleMap, useJsApiLoader, Marker, Polyline } from '@react-google-maps/api';
+import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
 
 import MapGrid from '@/assets/premium_grid_map.png';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
@@ -30,6 +30,7 @@ import BikeIcon from '@/assets/icons/bike.png';
 import CarIcon from '@/assets/icons/car.png';
 
 import { socketService } from '../../../shared/api/socket';
+import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 
 const containerStyle = {
     width: '100%',
@@ -71,10 +72,7 @@ const DriverHome = () => {
     const [dutySeconds, setDutySeconds] = useState(0);
     const [map, setMap] = useState(null);
 
-    const { isLoaded } = useJsApiLoader({
-        id: 'google-map-script',
-        googleMapsApiKey: "" 
-    });
+    const { isLoaded } = useAppGoogleMapsLoader();
 
     const onLoad = useCallback(function callback(map) {
         setMap(map);
@@ -211,12 +209,12 @@ const DriverHome = () => {
             </header>
 
             <div className="absolute inset-0 z-0 h-full bg-[#E5E7EB] overflow-hidden">
-                {isLoaded ? (
+                {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
                     <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={14} onLoad={onLoad} onUnmount={onUnmount} options={mapOptions}>
                         <Marker position={center} icon={{ url: isOnline ? BikeIcon : CarIcon, scaledSize: new window.google.maps.Size(40, 40), anchor: new window.google.maps.Point(20, 20)}} />
                         {isOnline && <Polyline path={path} options={{ strokeColor: '#000000', strokeOpacity: 0.8, strokeWeight: 4 }} />}
                     </GoogleMap>
-                ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-black uppercase text-[10px] tracking-widest">Loading Map...</div>}
+                ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-black uppercase text-[10px] tracking-widest">Map unavailable until Google Maps key is configured</div>}
                 <div className="absolute right-5 top-28 flex flex-col gap-2 z-20">
                     <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Target size={16} /></button>
                     <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Layers size={16} /></button>

@@ -70,9 +70,9 @@ const ReferralSettings = () => {
     const fetchAllSettings = async () => {
       try {
         const [uRes, dRes, jRes] = await Promise.all([
-          fetch('https://taxi-a276.onrender.com/api/v1/admin/referral/settings/user', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('https://taxi-a276.onrender.com/api/v1/admin/referral/settings/driver', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch('https://taxi-a276.onrender.com/api/v1/admin/referral/settings/joining-bonus', { headers: { 'Authorization': `Bearer ${token}` } })
+          fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/driver', { headers: { 'Authorization': `Bearer ${token}` } }),
+          fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/joining-bonus', { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
         const uData = await uRes.json();
@@ -101,7 +101,7 @@ const ReferralSettings = () => {
     if (type === 'joining') { url = 'joining-bonus'; body = joiningBonus; }
 
     try {
-      const res = await fetch(`https://taxi-a276.onrender.com/api/v1/admin/referral/settings/${url}`, {
+      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/referral/settings/${url}`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`,
@@ -299,3 +299,4 @@ const ReferralSettings = () => {
 };
 
 export default ReferralSettings;
+

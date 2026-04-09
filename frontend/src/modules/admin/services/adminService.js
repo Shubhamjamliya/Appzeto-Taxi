@@ -21,6 +21,7 @@ export const adminService = {
    * Driver Management
    */
   getDrivers: (page = 1, limit = 50) => api.get(`/admin/drivers?page=${page}&limit=${limit}`),
+  getDriver: (id) => api.get(`/admin/drivers/${id}`),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),
@@ -35,6 +36,10 @@ export const adminService = {
    * Common / Configuration Data
    */
   getServiceLocations: () => api.get('/admin/service-locations'),
+  createServiceLocation: (data) => api.post('/admin/service-locations', data),
+  updateServiceLocation: (id, data) => api.patch(`/admin/service-locations/${id}`, data),
+  deleteServiceLocation: (id) => api.delete(`/admin/service-locations/${id}`),
+  getCountries: () => api.get('/countries'),
   getRideModules: () => api.get('/common/ride_modules'),
   getVehicleTypes: (locationId, transportType) => api.get(`/types/${locationId}?transport_type=${transportType}`),
 
@@ -92,6 +97,7 @@ export const adminService = {
   getUserWallets: () => api.get('/admin/wallet/users'),
   getDriverWallets: () => api.get('/admin/wallet/drivers'),
   getWithdrawalRequests: () => api.get('/admin/wallet/withdrawals'),
+  getWithdrawals: () => api.get('/admin/wallet/withdrawals'),
   updateWithdrawalStatus: (id, status) => api.patch(`/admin/wallet/withdrawals/${id}`, { status }),
 
   /**
@@ -124,9 +130,7 @@ export const adminService = {
    * Preferences Management (Master)
    */
   getPreferences: (params) => api.get('/admin/preferences', { params: params }),
-  createPreference: (formData) => api.post('/admin/preferences', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
+  createPreference: (data) => api.post('/admin/preferences', data),
   getPreference: (id) => api.get(`/admin/preferences/${id}`),
   updatePreference: (id, formData) => api.patch(`/admin/preferences/${id}`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
@@ -155,12 +159,8 @@ export const adminService = {
    * App Modules Management
    */
   getAppModules: (params) => api.get('/admin/common/app-modules', { params }),
-  createAppModule: (formData) => api.post('/admin/common/app-modules', formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
-  updateAppModule: (id, formData) => api.patch(`/admin/common/app-modules/${id}`, formData, {
-    headers: { 'Content-Type': 'multipart/form-data' }
-  }),
+  createAppModule: (data) => api.post('/admin/common/app-modules', data),
+  updateAppModule: (id, data) => api.patch(`/admin/common/app-modules/${id}`, data),
   deleteAppModule: (id) => api.delete(`/admin/common/app-modules/${id}`),
 
   /**

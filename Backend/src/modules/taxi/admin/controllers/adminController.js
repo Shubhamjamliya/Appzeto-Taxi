@@ -49,6 +49,9 @@ export const deleteServiceLocation = asyncHandler(async (req, res) => {
   await adminService.deleteServiceLocation(req.params.id);
   ok(res, { deleted: true });
 });
+export const getNearbyServiceLocations = asyncHandler(async (req, res) =>
+  ok(res, { results: await adminService.listNearbyServiceLocations(req.query) }),
+);
 export const getRideModules = asyncHandler(async (_req, res) => ok(res, await adminService.listRideModules()));
 export const getVehicleTypes = asyncHandler(async (req, res) =>
   ok(res, await adminService.listVehicleTypes(req.params.locationId, req.query.transport_type)),

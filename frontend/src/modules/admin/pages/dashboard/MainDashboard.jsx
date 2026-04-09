@@ -25,6 +25,7 @@ import {
   ShieldAlert
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
+import { BACKEND_LABEL } from '../../../../shared/api/runtimeConfig';
 
 const TopStatCard = ({ label, value, trend, icon: Icon, color, isLoading }) => (
   <div className="bg-white p-5 rounded-[24px] border border-gray-100 shadow-sm relative overflow-hidden group min-h-[140px]">
@@ -151,7 +152,7 @@ const MainDashboard = () => {
         });
       } catch (err) {
         console.error('Dashboard Fetch Error:', err);
-        setDashboardError('Dashboard data is unavailable right now. Start the backend on http://localhost:4000 to load live metrics.');
+        setDashboardError(`Dashboard data is unavailable right now. Start the backend on ${BACKEND_LABEL} to load live metrics.`);
         setStats(prev => ({ ...prev, isLoading: false }));
       }
     };

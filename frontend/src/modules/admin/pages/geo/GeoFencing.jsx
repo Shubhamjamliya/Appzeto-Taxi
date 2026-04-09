@@ -408,25 +408,6 @@ const GeoFencing = () => {
             <p className="text-[12px] font-bold text-slate-500">Dedicated live map for zone intelligence and fleet spread.</p>
           </div>
 
-          <div className="bg-white rounded-2xl border border-cyan-100 p-2 shadow-sm mb-5">
-            <div className="grid grid-cols-3 gap-1">
-              {GEO_NAV_ITEMS.map((item) => {
-                const isActive = location.pathname === item.path;
-                return (
-                  <Link
-                    key={item.path}
-                    to={item.path}
-                    className={`px-2 py-3 rounded-xl text-center text-[10px] font-black uppercase tracking-widest transition-all ${
-                      isActive ? 'bg-[#082f49] text-white shadow-lg' : 'text-gray-500 hover:bg-gray-50'
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                );
-              })}
-            </div>
-          </div>
-
           <div className="grid grid-cols-2 gap-3 mb-5">
             <div className="bg-white rounded-2xl border border-cyan-100 p-4 shadow-sm">
               <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-2">Online Fleet</p>

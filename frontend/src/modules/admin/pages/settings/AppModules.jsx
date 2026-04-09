@@ -16,11 +16,9 @@ import {
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 
-const BASE_ASSET_URL =
-  import.meta.env.VITE_ASSET_BASE_URL ||
-  import.meta.env.VITE_API_BASE_URL?.replace('/api/v1', '').replace('/api', '') ||
-  'http://localhost:4000';
+const BASE_ASSET_URL = BACKEND_ORIGIN;
 
 const AppModules = () => {
   const [loading, setLoading] = useState(true);

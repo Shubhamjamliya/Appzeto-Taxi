@@ -4,7 +4,10 @@ import { env } from './env.js';
 export const connectDatabase = async () => {
   mongoose.set('strictQuery', true);
 
-  await mongoose.connect(env.mongoUri, {
+  const connection = await mongoose.connect(env.mongoUri, {
     autoIndex: env.nodeEnv !== 'production',
   });
+
+  const { host, name } = connection.connection;
+  console.log(`MongoDB connected to ${host}/${name}`);
 };

@@ -1,4 +1,6 @@
-const LEGACY_BACKEND_ORIGIN = 'https://taxi-a276.onrender.com';
+import { BACKEND_ORIGIN } from './runtimeConfig';
+
+const LEGACY_BACKEND_ORIGIN = BACKEND_ORIGIN;
 const SHIM_FLAG = '__LEGACY_BACKEND_SHIM_INSTALLED__';
 
 const jsonResponse = (payload, status = 200) =>

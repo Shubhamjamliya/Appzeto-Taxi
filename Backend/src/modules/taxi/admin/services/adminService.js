@@ -3,6 +3,8 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
+import { Driver } from '../../driver/models/Driver.js';
+import { hashPassword } from '../../driver/services/authService.js';
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -32,6 +34,28 @@ const normalizeBoolean = (value) => {
 const findById = (items, id) => items.find((item) => String(item._id) === String(id));
 
 const removeById = (items, id) => items.filter((item) => String(item._id) !== String(id));
+
+const serializeDriver = (driver) => ({
+  _id: driver._id,
+  name: driver.name || '',
+  phone: driver.phone || '',
+  mobile: driver.phone || '',
+  email: driver.email || '',
+  city: driver.city || '',
+  transport_type: driver.registerFor || driver.vehicleType || '',
+  register_for: driver.registerFor || '',
+  vehicle_type: driver.vehicleType || '',
+  vehicle_number: driver.vehicleNumber || '',
+  vehicle_color: driver.vehicleColor || '',
+  rating: driver.rating || 0,
+  approve: Boolean(driver.approve),
+  status: driver.status || (driver.approve ? 'approved' : 'pending'),
+  active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
+  documents: driver.documents || {},
+  onboarding: driver.onboarding || {},
+  createdAt: driver.createdAt,
+  updatedAt: driver.updatedAt,
+});
 
 const DEFAULT_SERVICE_LOCATION_CENTER = { lat: 22.7196, lng: 75.8577 };
 
@@ -184,31 +208,81 @@ export const deleteUser = async (id) => {
 };
 
 export const listDrivers = async ({ page = 1, limit = 50 }) => {
-  const state = await ensureAdminState();
-  return buildPaginator(state.drivers, page, limit);
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [drivers, total] = await Promise.all([
+    Driver.find().sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.countDocuments(),
+  ]);
+
+  return {
+    results: drivers.map(serializeDriver),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
 };
 
 export const updateDriver = async (id, payload) => {
-  const state = await ensureAdminState();
-  const driver = findById(state.drivers, id);
+  const update = {
+    ...payload,
+  };
+
+  if ('approve' in payload) {
+    update.approve = Boolean(payload.approve);
+  }
+
+  if (payload.status !== undefined) {
+    update.status = String(payload.status);
+  } else if ('approve' in payload) {
+    update.status = update.approve ? 'approved' : 'pending';
+  }
+
+  if ('phone' in update) {
+    update.phone = String(update.phone);
+  }
+
+  const driver = await Driver.findByIdAndUpdate(id, update, { new: true });
   if (!driver) throw new ApiError(404, 'Driver not found');
-  Object.assign(driver, payload);
-  await state.save();
-  return driver;
+  return serializeDriver(driver);
 };
 
 export const updateDriverPassword = async (id, password) => {
   if (!password || String(password).length < 4) {
     throw new ApiError(400, 'Password must be at least 4 characters');
   }
-  return updateDriver(id, { password_last_updated_at: new Date() });
+  const driver = await Driver.findByIdAndUpdate(
+    id,
+    {
+      password: await hashPassword(password),
+      password_last_updated_at: new Date(),
+    },
+    { new: true },
+  );
+
+  if (!driver) throw new ApiError(404, 'Driver not found');
+  return serializeDriver(driver);
 };
 
 export const deleteDriver = async (id) => {
-  const state = await ensureAdminState();
-  state.drivers = removeById(state.drivers, id);
-  await state.save();
+  const deleted = await Driver.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Driver not found');
+  }
   return true;
+};
+
+export const getDriverById = async (id) => {
+  const driver = await Driver.findById(id).lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+  return serializeDriver(driver);
 };
 
 export const listSubscriptionPlans = async () => (await ensureAdminState()).subscriptionPlans;

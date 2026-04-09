@@ -31,6 +31,10 @@ export const sendDriverOtp = (payload) => api.post('/drivers/onboarding/send-otp
 
 export const verifyDriverOtp = (payload) => api.post('/drivers/onboarding/verify-otp', payload);
 
+export const sendDriverLoginOtp = (payload) => api.post('/drivers/auth/send-otp', payload);
+
+export const verifyDriverLoginOtp = (payload) => api.post('/drivers/auth/verify-otp', payload);
+
 export const saveDriverPersonalDetails = (payload) => api.patch('/drivers/onboarding/personal', payload);
 
 export const saveDriverReferral = (payload) => api.patch('/drivers/onboarding/referral', payload);
@@ -42,6 +46,13 @@ export const saveDriverDocuments = (payload) => api.patch('/drivers/onboarding/d
 export const completeDriverOnboarding = (payload) => api.post('/drivers/onboarding/complete', payload);
 
 export const getCurrentDriver = () => api.get('/drivers/me');
+
+export const getDriverApprovalStatus = () =>
+  api.get('/drivers/approval-status', {
+    params: {
+      t: Date.now(),
+    },
+  });
 
 export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {

@@ -5,6 +5,7 @@ import { getCurrentDriver } from '../services/registrationService';
 const onboardingRoutes = new Set([
     '/taxi/driver/lang-select',
     '/taxi/driver/welcome',
+    '/taxi/driver/login',
     '/taxi/driver/reg-phone',
     '/taxi/driver/otp-verify',
     '/taxi/driver/step-personal',
@@ -34,7 +35,7 @@ const DriverLayout = () => {
 
         if (!token) {
             setIsAllowed(false);
-            navigate('/taxi/driver/reg-phone', { replace: true });
+            navigate('/taxi/driver/login', { replace: true });
             return;
         }
 
@@ -67,7 +68,7 @@ const DriverLayout = () => {
                 setIsAllowed(false);
 
                 if (error?.status === 401) {
-                    navigate('/taxi/driver/reg-phone', { replace: true });
+                    navigate('/taxi/driver/login', { replace: true });
                     return;
                 }
 

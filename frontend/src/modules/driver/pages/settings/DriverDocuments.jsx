@@ -1,22 +1,94 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, FileCheck, AlertCircle, CheckCircle2, MoreVertical, Eye, FileText, Smartphone, RefreshCw, X, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, FileCheck, CheckCircle2, Eye, FileText, Smartphone, RefreshCw, X, ShieldAlert } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentDriver } from '../../services/registrationService';
+
+const DOC_TEMPLATES = [
+    {
+        key: 'drivingLicense',
+        name: 'Driving License',
+        icon: <FileCheck size={20} />,
+    },
+    {
+        key: 'aadharFront',
+        name: 'Aadhar Card Front',
+        icon: <Smartphone size={20} />,
+    },
+    {
+        key: 'aadharBack',
+        name: 'Aadhar Card Back',
+        icon: <FileText size={20} />,
+    },
+    {
+        key: 'vehicleRC',
+        name: 'Registration (RC)',
+        icon: <ShieldAlert size={20} />,
+    },
+];
+
+const formatDate = (value) => {
+    if (!value) return 'Uploaded';
+    try {
+        return new Date(value).toLocaleString();
+    } catch {
+        return String(value);
+    }
+};
 
 const DriverDocuments = () => {
     const navigate = useNavigate();
     const [isSyncing, setIsSyncing] = useState(false);
     const [selectedDoc, setSelectedDoc] = useState(null);
-    const [docs, setDocs] = useState([
-        { id: 1, name: 'Driving License', status: 'Verified', date: 'Exp: 10/2030', icon: <FileCheck size={20} /> },
-        { id: 2, name: 'Aadhar Card', status: 'Verified', date: 'Uploaded 2024', icon: <Smartphone size={20} /> },
-        { id: 3, name: 'Vehicle Insurance', status: 'Under Review', date: 'Uploaded 2h ago', icon: <FileText size={20} /> },
-        { id: 4, name: 'Registration (RC)', status: 'Action Required', date: 'Expired', icon: <ShieldAlert size={20} /> }
-    ]);
+    const [driver, setDriver] = useState(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const loadDriver = async () => {
+        setIsSyncing(true);
+        setError('');
+
+        try {
+            const response = await getCurrentDriver();
+            setDriver(response?.data || null);
+        } catch (err) {
+            setError(err?.message || 'Unable to load driver documents');
+        } finally {
+            setIsLoading(false);
+            setIsSyncing(false);
+        }
+    };
+
+    useEffect(() => {
+        loadDriver();
+    }, []);
+
+    const docs = useMemo(() => {
+        const documents = driver?.documents || {};
+
+        return DOC_TEMPLATES.map((template, index) => {
+            const doc = documents[template.key] || null;
+            const previewUrl = doc?.previewUrl || doc?.secureUrl || doc?.url || '';
+            const uploadedAt = doc?.uploadedAt || doc?.createdAt || doc?.updatedAt || '';
+            const hasDoc = Boolean(previewUrl || doc);
+
+            return {
+                id: template.key,
+                name: template.name,
+                status: hasDoc ? 'Uploaded' : 'Missing',
+                date: hasDoc ? formatDate(uploadedAt) : 'Not uploaded',
+                icon: template.icon,
+                previewUrl,
+                fileName: doc?.fileName || template.name,
+                publicId: doc?.publicId || '',
+                uploadedAt,
+                order: index,
+            };
+        });
+    }, [driver?.documents]);
 
     const handleSync = () => {
-        setIsSyncing(true);
-        setTimeout(() => setIsSyncing(false), 2000);
+        loadDriver();
     };
 
     return (
@@ -41,7 +113,15 @@ const DriverDocuments = () => {
                                 <p className="text-[11px] font-bold text-slate-400 opacity-60 uppercase tracking-widest">{selectedDoc.status}</p>
                             </div>
                             <div className="aspect-[3/2] bg-slate-100 rounded-2xl flex items-center justify-center border border-slate-200 shadow-inner group overflow-hidden">
-                                 <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest text-[9px]">Document Preview Unavailable</p>
+                                {selectedDoc.previewUrl ? (
+                                    <img
+                                        src={selectedDoc.previewUrl}
+                                        alt={selectedDoc.name}
+                                        className="w-full h-full object-cover"
+                                    />
+                                ) : (
+                                    <p className="text-[10px] font-black text-slate-300 uppercase tracking-widest text-[9px]">Document Preview Unavailable</p>
+                                )}
                             </div>
                             <button onClick={() => setSelectedDoc(null)} className="w-full h-12 bg-slate-900 text-white rounded-2xl text-[12px] font-black uppercase tracking-widest mt-2 active:scale-97 transition-all">Close Viewer</button>
                         </motion.div>
@@ -56,8 +136,12 @@ const DriverDocuments = () => {
                              <CheckCircle2 size={24} strokeWidth={3} />
                          </div>
                          <div className="space-y-0.5">
-                             <h3 className="text-[14px] font-black tracking-tight leading-none text-slate-900 uppercase">89% Compliance</h3>
-                             <p className="text-[10px] font-bold text-slate-400 opacity-60 leading-tight tracking-widest">1 Action Required</p>
+                             <h3 className="text-[14px] font-black tracking-tight leading-none text-slate-900 uppercase">
+                                {isLoading ? 'Loading Documents' : `${docs.filter((doc) => doc.status === 'Uploaded').length} Uploaded`}
+                             </h3>
+                             <p className="text-[10px] font-bold text-slate-400 opacity-60 leading-tight tracking-widest">
+                                {docs.filter((doc) => doc.status !== 'Uploaded').length} Action Required
+                             </p>
                          </div>
                      </div>
                      <button 
@@ -65,26 +149,35 @@ const DriverDocuments = () => {
                         className={`text-[10px] font-black uppercase tracking-widest px-4 py-2 rounded-xl transition-all shadow-sm ${isSyncing ? 'bg-slate-100 text-slate-300' : 'bg-blue-50 text-blue-500 active:bg-blue-100'}`}
                         disabled={isSyncing}
                      >
-                        {isSyncing ? <RefreshCw className="animate-spin" size={14} /> : 'Bulk Sync'}
+                        {isSyncing ? <RefreshCw className="animate-spin" size={14} /> : 'Refresh'}
                     </button>
                 </div>
 
                 <div className="space-y-4">
                      <div className="flex items-center justify-between px-1">
-                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60 ml-2">Verified Documents</h3>
+                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60 ml-2">Uploaded Documents</h3>
                           <button className="text-[10px] font-black text-slate-600 uppercase tracking-widest border-b border-slate-200 pb-0.5">Audit Feed</button>
                      </div>
 
                      <div className="space-y-3">
-                         {docs.map((doc) => (
+                         {error && (
+                            <div className="bg-rose-50 border border-rose-100 text-rose-600 px-4 py-3 rounded-2xl text-[11px] font-bold">
+                                {error}
+                            </div>
+                         )}
+
+                         {!error && docs.length === 0 ? (
+                            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm text-center text-[11px] font-bold text-slate-400">
+                                No documents uploaded yet.
+                            </div>
+                         ) : docs.map((doc) => (
                              <div 
                                 key={doc.id} 
                                 onClick={() => setSelectedDoc(doc)}
                                 className="bg-white p-4 py-5 rounded-2xl border border-white shadow-[0_5px_30px_rgba(0,0,0,0.015)] flex items-center justify-between group active:scale-98 transition-all overflow-hidden relative cursor-pointer"
                              >
                                  <div className={`absolute top-0 bottom-0 left-0 w-1 ${
-                                     doc.status === 'Verified' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' :
-                                     doc.status === 'Under Review' ? 'bg-amber-500 shadow-[0_0_10px_rgba(245,158,11,0.3)]' : 'bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
+                                     doc.status === 'Uploaded' ? 'bg-emerald-500 shadow-[0_0_10px_rgba(16,185,129,0.3)]' : 'bg-rose-500 shadow-[0_0_10px_rgba(239,68,68,0.3)]'
                                  }`} />
                                  
                                  <div className="flex items-center gap-4">
@@ -98,9 +191,7 @@ const DriverDocuments = () => {
                                  </div>
                                  <div className="flex items-center gap-3">
                                       <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border shadow-sm ${
-                                          doc.status === 'Verified' ? 'bg-emerald-50 text-emerald-500 border-emerald-500/10' :
-                                          doc.status === 'Under Review' ? 'bg-amber-50 text-amber-500 border-amber-500/10' :
-                                          'bg-rose-50 text-rose-500 border-rose-500/10 animate-pulse'
+                                          doc.status === 'Uploaded' ? 'bg-emerald-50 text-emerald-500 border-emerald-500/10' : 'bg-rose-50 text-rose-500 border-rose-500/10 animate-pulse'
                                       }`}>{doc.status}</span>
                                       <Eye size={18} className="text-slate-200 group-hover:text-blue-500 transition-colors" />
                                  </div>

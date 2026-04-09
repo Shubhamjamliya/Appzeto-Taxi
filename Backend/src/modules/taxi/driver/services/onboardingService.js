@@ -364,7 +364,7 @@ export const saveDriverVehicle = async ({
 export const saveDriverDocuments = async ({ registrationId, phone, documents = {} }) => {
   const session = await getSession(registrationId, phone);
 
-  const updatedDocuments = { ...(session.documents || {}) };
+  const updatedDocuments = {};
   const uploadedDocumentKeys = [];
 
   for (const [documentKey, value] of Object.entries(documents || {})) {
@@ -376,23 +376,20 @@ export const saveDriverDocuments = async ({ registrationId, phone, documents = {
     }
   }
 
-  session.documents = updatedDocuments;
-  session.status = 'documents_saved';
-  await session.save();
-
   return {
     message: 'Documents uploaded successfully',
     uploadedDocumentKeys,
-    documents: session.documents,
+    documents: updatedDocuments,
     session: publicSessionPayload(session),
   };
 };
 
-export const completeDriverOnboarding = async ({ registrationId, phone }) => {
+export const completeDriverOnboarding = async ({ registrationId, phone, documents = {} }) => {
   const session = await getSession(registrationId, phone);
 
   if (session.finalDriverId) {
     const existingDriver = await Driver.findById(session.finalDriverId);
+    await DriverRegistrationSession.deleteOne({ _id: session._id });
     return {
       message: 'Registration already completed',
       driver: publicDriverPayload(existingDriver),
@@ -413,8 +410,14 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
     throw new ApiError(400, 'Vehicle details are incomplete');
   }
 
+  const finalDocuments = Object.keys(documents || {}).length > 0 ? documents : session.documents || {};
+  const normalizedDocuments = {};
+  for (const [documentKey, value] of Object.entries(finalDocuments)) {
+    normalizedDocuments[documentKey] = normalizeStoredDocument(value);
+  }
+
   const requiredDocuments = ['aadharFront', 'aadharBack', 'drivingLicense', 'vehicleRC'];
-  const missingDocuments = requiredDocuments.filter((key) => !session.documents?.[key]);
+  const missingDocuments = requiredDocuments.filter((key) => !normalizedDocuments?.[key]);
 
   if (missingDocuments.length > 0) {
     throw new ApiError(400, `Missing required documents: ${missingDocuments.join(', ')}`);
@@ -450,7 +453,7 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
     status: 'pending',
     zoneId: zone?._id || null,
     location: toPoint(serviceLocationCoordinates, 'location'),
-    documents: session.documents,
+    documents: normalizedDocuments,
     onboarding: {
       registrationId: session.registrationId,
       role: session.role,
@@ -463,11 +466,12 @@ export const completeDriverOnboarding = async ({ registrationId, phone }) => {
   session.status = 'completed';
   session.completedAt = new Date();
   await session.save();
+  await DriverRegistrationSession.deleteOne({ _id: session._id });
 
   return {
     message: 'Driver registration completed successfully',
     driver: publicDriverPayload(driver),
-    documents: session.documents,
+    documents: normalizedDocuments,
     token: signAccessToken({ sub: String(driver._id), role: 'driver' }),
     session: publicSessionPayload(session),
   };

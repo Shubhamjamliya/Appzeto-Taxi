@@ -448,6 +448,7 @@ function App() {
             <Route path="/taxi/driver" element={<DriverLayout />}>
               <Route path="lang-select" element={<LanguageSelect />} />
               <Route path="welcome" element={<DriverWelcome />} />
+              <Route path="login" element={<PhoneRegistration />} />
               <Route path="reg-phone" element={<PhoneRegistration />} />
               <Route path="otp-verify" element={<OTPVerification />} />
               <Route path="step-personal" element={<StepPersonal />} />

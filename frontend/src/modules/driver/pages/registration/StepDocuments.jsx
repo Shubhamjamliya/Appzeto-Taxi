@@ -2,6 +2,7 @@ import React, { useRef, useState } from 'react';
 import { ArrowLeft, Camera, FileText, CheckCircle2, ShieldCheck, Smartphone, AlertCircle } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
+    clearDriverRegistrationSession,
     completeDriverOnboarding,
     getStoredDriverRegistrationSession,
     saveDriverDocuments,
@@ -143,11 +144,11 @@ const StepDocuments = () => {
         }
     };
 
-    const isComplete = DOCUMENTS.every((item) => Boolean(docs[item.key]?.uploaded || docs[item.key]?.secureUrl || docs[item.key]?.previewUrl));
+    const isComplete = DOCUMENTS.every((item) => Boolean(docs[item.key]?.uploaded)) && !uploading;
 
     const handleSubmit = async () => {
         if (!isComplete) {
-            setError('Please upload all required documents');
+            setError(uploading ? 'Please wait for the current upload to finish' : 'Please upload all required documents');
             return;
         }
 
@@ -155,9 +156,14 @@ const StepDocuments = () => {
         setError('');
 
         try {
+            const submittedDocuments = Object.fromEntries(
+                Object.entries(docs).filter(([, value]) => Boolean(value?.uploaded || value?.secureUrl))
+            );
+
             const completeResponse = await completeDriverOnboarding({
                 registrationId: session.registrationId,
                 phone: session.phone,
+                documents: submittedDocuments,
             });
 
             const token = completeResponse?.data?.token;
@@ -171,6 +177,7 @@ const StepDocuments = () => {
                 documents: docs,
                 completedRegistration: completeResponse?.data || null,
             });
+            clearDriverRegistrationSession();
 
             navigate('/taxi/driver/registration-status', {
                 state: {

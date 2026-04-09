@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     CheckCircle2,
@@ -9,74 +9,102 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
-import { getCurrentDriver } from '../../services/registrationService';
+import { getDriverApprovalStatus } from '../../services/registrationService';
+
+let lastPollingBootAt = 0;
+const APPROVAL_POLL_MS = 2500;
 
 const RegistrationStatus = () => {
     const navigate = useNavigate();
     const location = useLocation();
     const [checking, setChecking] = useState(true);
     const [statusMessage, setStatusMessage] = useState('Waiting for admin approval');
+    const timeoutRef = useRef(null);
+    const requestInFlightRef = useRef(false);
+    const mountedRef = useRef(false);
 
     const handleDashboard = () => {
+        if (checking) {
+            return;
+        }
+
         navigate('/taxi/driver/home');
     };
 
     useEffect(() => {
+        const startedAt = Date.now();
+        if (startedAt - lastPollingBootAt < 1200) {
+            return () => {};
+        }
+        lastPollingBootAt = startedAt;
+
         if (location.state?.role) {
             localStorage.setItem('role', location.state.role);
         }
 
-        let isActive = true;
+        mountedRef.current = true;
 
         const checkApproval = async () => {
-            const token = localStorage.getItem('token');
-
-            if (!token) {
-                if (isActive) {
-                    setChecking(false);
-                    setStatusMessage('Registration session not found. Please start again.');
-                }
-                navigate('/taxi/driver/reg-phone', { replace: true });
+            if (!mountedRef.current || requestInFlightRef.current) {
                 return;
             }
 
-            try {
-                const response = await getCurrentDriver();
-                const driver = response?.data;
-                const isApproved = driver && driver.approve !== false && String(driver.status || '').toLowerCase() !== 'pending';
+            requestInFlightRef.current = true;
+            const token = localStorage.getItem('token');
 
-                if (!isActive) {
+                if (!token) {
+                    if (mountedRef.current) {
+                        setChecking(false);
+                        setStatusMessage('Registration session not found. Please start again.');
+                    }
+                navigate('/taxi/driver/login', { replace: true });
+                    requestInFlightRef.current = false;
+                    return;
+                }
+
+            try {
+                const response = await getDriverApprovalStatus();
+                const driver = response?.data;
+                const driverStatus = String(driver?.status || '').toLowerCase();
+                const isApproved = Boolean(driver?.approve) || driverStatus === 'approved' || driverStatus === 'active';
+
+                if (!mountedRef.current) {
                     return;
                 }
 
                 if (isApproved) {
                     navigate('/taxi/driver/home', { replace: true });
+                    requestInFlightRef.current = false;
                     return;
                 }
 
                 setChecking(false);
                 setStatusMessage('Your request has been sent to the admin team.');
             } catch (error) {
-                if (!isActive) {
+                if (!mountedRef.current) {
                     return;
                 }
 
                 if (error?.status === 401) {
-                    navigate('/taxi/driver/reg-phone', { replace: true });
+                    navigate('/taxi/driver/login', { replace: true });
+                    requestInFlightRef.current = false;
                     return;
                 }
 
                 setChecking(false);
                 setStatusMessage(error?.message || 'Your request is still under review.');
+            } finally {
+                requestInFlightRef.current = false;
             }
         };
 
         checkApproval();
-        const timer = setInterval(checkApproval, 15000);
+        timeoutRef.current = setInterval(checkApproval, APPROVAL_POLL_MS);
 
         return () => {
-            isActive = false;
-            clearInterval(timer);
+            mountedRef.current = false;
+            requestInFlightRef.current = false;
+            clearInterval(timeoutRef.current);
         };
     }, [location.state, navigate]);
 
@@ -151,9 +179,10 @@ const RegistrationStatus = () => {
             <div className="w-full max-w-sm space-y-4 pb-8">
                 <button
                     onClick={handleDashboard}
+                    disabled={checking}
                     className="w-full h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-transform"
                 >
-                    Go to Dashboard <ChevronRight size={16} strokeWidth={3} />
+                    {checking ? 'Waiting for Approval' : 'Go to Dashboard'} <ChevronRight size={16} strokeWidth={3} />
                 </button>
                 <div className="flex items-center justify-center gap-2 text-slate-300">
                     <Phone size={12} />

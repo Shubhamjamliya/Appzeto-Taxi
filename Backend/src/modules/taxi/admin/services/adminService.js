@@ -862,52 +862,7 @@ export const deleteRole = async (id) => {
   return true;
 };
 
-export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  const state = await ensureAdminState();
-  const items = [...state.appModules].sort((a, b) => Number(a.order_by || 0) - Number(b.order_by || 0));
-  return buildPaginator(items, page, limit);
-};
 
-export const createAppModule = async (payload) => {
-  const state = await ensureAdminState();
-  const moduleItem = {
-    _id: nextId(),
-    name: payload.name,
-    transport_type: payload.transport_type,
-    service_type: payload.service_type,
-    order_by: Number(payload.order_by || 0),
-    short_description: payload.short_description || '',
-    description: payload.description || '',
-    active: normalizeBoolean(payload.active ?? true),
-    mobile_menu_icon:
-      payload.mobile_menu_icon ||
-      (payload.transport_type === 'delivery'
-        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
-        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
-  };
-  state.appModules.unshift(moduleItem);
-  await state.save();
-  return moduleItem;
-};
-
-export const updateAppModule = async (id, payload) => {
-  const state = await ensureAdminState();
-  const moduleItem = findById(state.appModules, id);
-  if (!moduleItem) throw new ApiError(404, 'App module not found');
-  Object.assign(moduleItem, payload, {
-    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
-  });
-  await state.save();
-  return moduleItem;
-};
-
-export const deleteAppModule = async (id) => {
-  const state = await ensureAdminState();
-  state.appModules = removeById(state.appModules, id);
-  await state.save();
-  return true;
-};
 
 export const listNotificationChannels = async () =>
   (await ensureThirdPartySettings()).notification_channels;
@@ -1005,10 +960,7 @@ export const updateMailSettings = async (payload) => {
   return { settings: settings.mail };
 };
 
-export const listOnboardingScreens = async (audience) => {
-  const state = await ensureAdminState();
-  return state.onboardingScreens.filter((screen) => screen.audience === audience || screen.screen === audience);
-};
+
 
 export const buildUserReport = async () => {
   const state = await ensureAdminState();

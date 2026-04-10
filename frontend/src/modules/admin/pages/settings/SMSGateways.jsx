@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  ChevronRight,
-  Loader2,
-  Minus,
-  ArrowUp
+  ChevronRight, 
+  Loader2, 
+  MessageSquare, 
+  ShieldCheck, 
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle,
+  Smartphone
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
@@ -33,7 +37,6 @@ const SMSGateways = () => {
   const handleSave = async (slug, providerSlug) => {
     try {
       setSubmitting(prev => ({ ...prev, [slug]: true }));
-      // Send the whole provider slice: { twilio: { ... } }
       await adminService.updateSMSSettings({ [providerSlug]: settings[providerSlug] });
       toast.success(`${slug} configuration updated`);
     } catch (err) {
@@ -98,103 +101,139 @@ const SMSGateways = () => {
     ]}
   ];
 
+  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
+  const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <Loader2 className="animate-spin text-[#3F51B5]" size={32} />
+      <div className="flex items-center justify-center min-h-screen bg-gray-50">
+        <Loader2 className="animate-spin text-indigo-600" size={32} />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F0F2F5] font-sans pb-20">
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
       
-      {/* Header Area */}
-      <div className="px-6 py-4 flex items-center justify-between border-b border-gray-200 bg-white shadow-sm shrink-0">
-        <h1 className="text-[14px] font-black text-gray-700 uppercase tracking-tight">SMS Gateway</h1>
-        <div className="flex items-center gap-2 text-[12px] font-medium text-gray-500">
-           <span>SMS Gateway</span>
-           <ChevronRight size={12} className="text-gray-300" />
-           <span className="text-gray-400">SMS Gateway</span>
+      {/* Header Block */}
+      <div className="mb-8">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Settings</span>
+          <ChevronRight size={12} />
+          <span>Third-party</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">SMS Gateways</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-gray-900">SMS Gateways</h1>
+          <button onClick={() => window.history.back()} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+            <ArrowLeft size={16} /> Back
+          </button>
         </div>
       </div>
 
-      <div className="p-8 space-y-8">
+      <div className="space-y-8">
         
         {/* Top Feature Toggle Card */}
-        <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 flex items-center justify-between">
-            <span className="text-[14px] font-bold text-gray-700">Enable Firebase OTP</span>
-            <label className="relative inline-flex items-center cursor-pointer">
-               <input 
-                  type="checkbox" 
-                  checked={getSettingValue('firebase.enabled') === "1"} 
-                  onChange={() => handleToggle('Firebase OTP', 'firebase.enabled')}
-                  className="sr-only peer" 
-               />
-              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F51B5]"></div>
+        <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between shadow-sm">
+           <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                 <Smartphone size={20} />
+              </div>
+              <div>
+                 <h3 className="text-sm font-bold text-gray-900">Push Notifications & OTP</h3>
+                 <p className="text-xs text-gray-400">Enable Firebase OTP for user authentication</p>
+              </div>
+           </div>
+           <label className="relative inline-flex items-center cursor-pointer">
+              <input 
+                 type="checkbox" 
+                 checked={getSettingValue('firebase.enabled') === "1"} 
+                 onChange={() => handleToggle('Firebase OTP', 'firebase.enabled')}
+                 className="sr-only peer" 
+              />
+              <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
            </label>
         </div>
 
         {/* SMS Provider Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-           {smsProviders.map((provider) => (
-              <div key={provider.slug} className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 flex flex-col min-h-[480px]">
-                 <div className="flex items-center justify-between mb-8">
-                    <h2 className="text-[13px] font-black text-gray-800 tracking-tight">{provider.name}</h2>
-                    <label className="relative inline-flex items-center cursor-pointer">
-                       <input 
-                          type="checkbox" 
-                          checked={getSettingValue(provider.enableKey) === "1"} 
-                          onChange={() => handleToggle(provider.name, provider.enableKey)}
-                          className="sr-only peer" 
-                       />
-                       <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F51B5]"></div>
-                    </label>
-                 </div>
-
-                 <div className="flex justify-center mb-10">
-                    <img src={provider.logo} alt={provider.name} className="h-10 object-contain" />
-                 </div>
-
-                 <div className="space-y-5 flex-1">
-                    {provider.fields.map((field) => (
-                       <div key={field.key}>
-                          <label className="block text-[11px] font-black text-gray-700 mb-2 uppercase tracking-tight">{field.label}</label>
-                          <input 
-                             type="text"
-                             value={getSettingValue(field.key)}
-                             onChange={(e) => updateLocalValue(field.key, e.target.value)}
-                             placeholder={`Your ${provider.name} ${field.label}`}
-                             className="w-full border border-gray-200 rounded-md px-4 py-2.5 text-[13px] font-medium text-gray-600 outline-none focus:border-[#3F51B5]"
-                          />
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8">
+           {smsProviders.map((provider) => {
+              const isEnabled = getSettingValue(provider.enableKey) === "1";
+              
+              return (
+                 <div key={provider.slug} className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-full transform transition-all duration-200 hover:shadow-md">
+                    {/* Card Header */}
+                    <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white">
+                       <div className="flex items-center gap-4">
+                          <div className="w-14 h-14 rounded-xl flex items-center justify-center border border-gray-100 bg-white p-2">
+                             <img src={provider.logo} alt={provider.name} className="w-full h-full object-contain" />
+                          </div>
+                          <div>
+                             <h3 className="text-sm font-bold text-gray-900 tracking-tight">{provider.name} Integration</h3>
+                             <p className="text-[11px] font-medium text-gray-400 flex items-center gap-1 mt-0.5">
+                                {isEnabled ? (
+                                   <span className="flex items-center gap-1 text-green-600 bg-green-50 px-2 py-0.5 rounded-md">
+                                      <CheckCircle2 size={10} /> Enabled
+                                   </span>
+                                ) : (
+                                   <span className="flex items-center gap-1 text-gray-400 bg-gray-50 px-2 py-0.5 rounded-md">
+                                      <AlertCircle size={10} /> Disabled
+                                   </span>
+                                )}
+                             </p>
+                          </div>
                        </div>
-                    ))}
-                 </div>
+                       <label className="relative inline-flex items-center cursor-pointer">
+                          <input 
+                             type="checkbox" 
+                             checked={isEnabled} 
+                             onChange={() => handleToggle(provider.name, provider.enableKey)}
+                             className="sr-only peer" 
+                          />
+                          <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-indigo-600"></div>
+                       </label>
+                    </div>
 
-                 <div className="flex justify-end mt-8">
-                    <button 
-                       onClick={() => handleSave(provider.name, provider.slug)}
-                       disabled={submitting[provider.name]}
-                       className="px-6 py-2 bg-[#3F51B5] text-white rounded-md text-[12px] font-black uppercase tracking-widest hover:bg-[#303F9F] shadow-md transition-all flex items-center gap-2"
-                    >
-                       {submitting[provider.name] ? <Loader2 size={14} className="animate-spin" /> : 'Save'}
-                    </button>
+                    {/* Card Body */}
+                    <div className="p-6 flex-1 space-y-5">
+                       {provider.fields.map((field) => (
+                          <div key={field.key}>
+                             <label className={labelClass}>{field.label}</label>
+                             <input 
+                                type="text"
+                                value={getSettingValue(field.key)}
+                                onChange={(e) => updateLocalValue(field.key, e.target.value)}
+                                placeholder={`Your ${provider.name} ${field.label}`}
+                                className={inputClass}
+                             />
+                          </div>
+                       ))}
+                    </div>
+
+                    {/* Card Footer */}
+                    <div className="p-4 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
+                       <div className="flex items-center gap-2 text-[10px] text-gray-400 font-semibold uppercase tracking-widest px-2">
+                          <MessageSquare size={12} className="text-gray-300" />
+                          SMS Verified
+                       </div>
+                       <button 
+                          onClick={() => handleSave(provider.name, provider.slug)}
+                          disabled={submitting[provider.name]}
+                          className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-sm active:scale-95 disabled:opacity-50"
+                       >
+                          {submitting[provider.name] ? (
+                             <><Loader2 size={16} className="animate-spin" /> Updating...</>
+                          ) : (
+                             'Update Integration'
+                          )}
+                       </button>
+                    </div>
                  </div>
-              </div>
-           ))}
+              );
+           })}
         </div>
       </div>
-
-      {/* Floating Action Buttons */}
-      <div className="fixed bottom-10 right-10 flex flex-col gap-4 z-50">
-         <button className="w-12 h-12 bg-[#00A99D] text-white rounded-full shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
-           <Minus size={24} strokeWidth={3} className="rotate-90" />
-         </button>
-         <button className="w-12 h-12 bg-[#F44336] text-white rounded-lg shadow-xl flex items-center justify-center hover:scale-110 active:scale-95 transition-all">
-           <ArrowUp size={20} strokeWidth={3} />
-         </button>
-      </div>
-
     </div>
   );
 };

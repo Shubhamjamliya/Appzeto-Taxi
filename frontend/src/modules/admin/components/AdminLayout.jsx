@@ -440,7 +440,7 @@ const AdminLayout = () => {
               { label: 'Firebase Settings', path: '/admin/settings/third-party/firebase' },
               { label: 'Map and Map APIs Settings', path: '/admin/settings/third-party/map-apis' },
               { label: 'Mail Configuration', path: '/admin/settings/third-party/mail' },
-              { label: 'Notification Channel', path: '/admin/settings/third-party/notification-channel' },
+              // { label: 'Notification Channel', path: '/admin/settings/third-party/notification-channel' },
             ],
           },
           // {

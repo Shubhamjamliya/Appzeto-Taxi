@@ -154,7 +154,7 @@ const DriverProfile = () => {
                     <button onClick={() => navigate(-1)} className="p-1 -ml-2 text-slate-600 active:scale-95">
                         <ArrowLeft size={22} strokeWidth={2.5} />
                     </button>
-                    <button className="flex items-center gap-1.5 text-[#88B04B] font-black text-[13px] uppercase tracking-wider">
+                    <button onClick={() => navigate('/ride/chat?admin=true')} className="flex items-center gap-1.5 text-[#88B04B] font-black text-[13px] uppercase tracking-wider">
                         <Info size={18} />
                         Help
                     </button>

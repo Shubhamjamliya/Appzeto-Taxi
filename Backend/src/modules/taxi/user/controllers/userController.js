@@ -64,3 +64,62 @@ export const loginUser = async (req, res) => {
     },
   });
 };
+
+export const verifyUserPhoneForOtpLogin = async (req, res) => {
+  const { phone } = req.body;
+
+  if (!phone) {
+    throw new ApiError(400, 'phone is required');
+  }
+
+  const user = await User.findOne({ phone }).lean();
+
+  if (!user) {
+    res.json({
+      success: true,
+      data: {
+        exists: false,
+        user: null,
+      },
+    });
+    return;
+  }
+
+  const token = signAccessToken({ sub: String(user._id), role: 'user' });
+
+  res.json({
+    success: true,
+    data: {
+      exists: true,
+      token,
+      user: {
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        currentRideId: user.currentRideId || null,
+      },
+    },
+  });
+};
+
+export const getCurrentUser = async (req, res) => {
+  const user = await User.findById(req.auth?.sub).lean();
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      user: {
+        id: user._id,
+        name: user.name || '',
+        phone: user.phone || '',
+        email: user.email || '',
+        currentRideId: user.currentRideId || null,
+        createdAt: user.createdAt || null,
+      },
+    },
+  });
+};

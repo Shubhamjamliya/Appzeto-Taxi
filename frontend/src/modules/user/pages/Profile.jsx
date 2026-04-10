@@ -1,8 +1,9 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
+import { userAuthService } from '../services/authService';
 
 const menuItems = [
   { icon: User,        title: 'Profile Settings',  sub: 'Manage your personal info',        path: '/taxi/user/profile/settings',      bg: 'bg-orange-50',  color: 'text-orange-500' },
@@ -18,6 +19,46 @@ const menuItems = [
 
 const Profile = () => {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState({
+    name: '',
+    phone: '',
+  });
+
+  useEffect(() => {
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    } catch {
+      stored = {};
+    }
+    setProfile({
+      name: stored?.name || '',
+      phone: stored?.phone || '',
+    });
+
+    const loadProfile = async () => {
+      try {
+        const response = await userAuthService.getCurrentUser();
+        const user = response?.data?.user || {};
+        setProfile({
+          name: user.name || stored?.name || '',
+          phone: user.phone || stored?.phone || '',
+        });
+        localStorage.setItem('userInfo', JSON.stringify(user));
+      } catch (error) {
+        // Keep the local fallback if the network is unavailable.
+      }
+    };
+
+    loadProfile();
+  }, []);
+
+  const initials = (profile.name || 'User')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans pb-28 relative overflow-hidden">
@@ -47,13 +88,17 @@ const Profile = () => {
           className="rounded-[22px] border border-white/80 bg-white/90 shadow-[0_8px_24px_rgba(15,23,42,0.06)] px-4 py-4 flex items-center gap-4">
           <div className="relative shrink-0">
             <div className="w-14 h-14 rounded-[18px] bg-orange-500 flex items-center justify-center shadow-[0_6px_16px_rgba(249,115,22,0.25)]">
-              <span className="text-[18px] font-black text-white">HR</span>
+              <span className="text-[18px] font-black text-white">{initials || 'U'}</span>
             </div>
             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
           </div>
           <div className="flex-1 min-w-0">
-            <h2 className="text-[16px] font-black text-slate-900 leading-tight capitalize">Hritik Raghuwanshi</h2>
-            <p className="text-[11px] font-bold text-slate-400 mt-0.5">+91 98765 43210</p>
+            <h2 className="text-[16px] font-black text-slate-900 leading-tight capitalize">
+              {profile.name || 'User'}
+            </h2>
+            <p className="text-[11px] font-bold text-slate-400 mt-0.5">
+              {profile.phone ? `+91 ${profile.phone}` : '+91'}
+            </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-100 rounded-full px-2 py-0.5">

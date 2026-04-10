@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
+import { Admin } from '../models/Admin.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
@@ -341,6 +342,28 @@ const syncSettingRows = (rows, payload) =>
     };
   });
 
+const syncDefaultAdminRecord = async () => {
+  const now = new Date();
+
+  await Admin.collection.updateOne(
+    { email: 'admin@gmail.com' },
+    {
+      $set: {
+        name: 'Super Admin',
+        email: 'admin@gmail.com',
+        phone: '9999999999',
+        password: '12345',
+        permissions: ['*'],
+        updatedAt: now,
+      },
+      $setOnInsert: {
+        createdAt: now,
+      },
+    },
+    { upsert: true },
+  );
+};
+
 export const ensureAdminState = async () => {
   let state = await AdminPanelState.findOne({ scope: 'default' });
 
@@ -369,6 +392,17 @@ export const ensureAdminState = async () => {
 
     await state.save();
   }
+
+  const defaultAdmin = state.admins?.find(
+    (item) => item.email?.toLowerCase() === 'admin@gmail.com',
+  );
+
+  if (defaultAdmin && defaultAdmin.password !== '12345') {
+    defaultAdmin.password = '12345';
+    await state.save();
+  }
+
+  await syncDefaultAdminRecord();
 
   return state;
 };

@@ -95,7 +95,7 @@ export const createDefaultAdminState = () => {
         _id: objectId(),
         name: 'Super Admin',
         email: 'admin@gmail.com',
-        password: 'admin',
+        password: '12345',
         role: 'super-admin',
       },
     ],

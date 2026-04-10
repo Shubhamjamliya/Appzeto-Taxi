@@ -1,12 +1,46 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, User, Mail, Smartphone, Camera, CheckCircle2 } from 'lucide-react';
+import { userAuthService } from '../../services/authService';
 
 const ProfileSettings = () => {
-  const [name, setName] = useState('Hritik Raghuwanshi');
-  const [email, setEmail] = useState('hritik@rydon24.com');
+  const [name, setName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    let stored = {};
+    try {
+      stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
+    } catch {
+      stored = {};
+    }
+    if (stored?.name) setName(stored.name);
+    if (stored?.email) setEmail(stored.email);
+    if (stored?.phone) setPhone(stored.phone);
+
+    const loadProfile = async () => {
+      try {
+        const response = await userAuthService.getCurrentUser();
+        const user = response?.data?.user || {};
+        setName(user.name || stored?.name || '');
+        setEmail(user.email || stored?.email || '');
+        setPhone(user.phone || stored?.phone || '');
+        localStorage.setItem('userInfo', JSON.stringify(user));
+      } catch (error) {
+        setName((prev) => prev || '');
+        setEmail((prev) => prev || '');
+        setPhone((prev) => prev || '');
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadProfile();
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#FDFDFD] max-w-lg mx-auto flex flex-col font-sans relative">
@@ -23,9 +57,13 @@ const ProfileSettings = () => {
       <div className="flex-1 p-5 space-y-10 overflow-y-auto no-scrollbar">
          {/* AVATAR EDIT AREA */}
          <div className="flex flex-col items-center gap-4 py-4">
-            <div className="relative group cursor-pointer">
-               <div className="w-[100px] h-[100px] rounded-[40px] bg-white p-1 border-2 border-primary/20 shadow-xl overflow-hidden active:scale-95 transition-all">
-                  <img src="https://ui-avatars.com/api/?name=Hritik+Raghuwanshi&background=E85D04&color=fff" className="w-(full h-full rounded-[34px] object-cover" alt="User" />
+         <div className="relative group cursor-pointer">
+            <div className="w-[100px] h-[100px] rounded-[40px] bg-white p-1 border-2 border-primary/20 shadow-xl overflow-hidden active:scale-95 transition-all">
+                  <img
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(name || 'User')}&background=E85D04&color=fff`}
+                    className="w-full h-full rounded-[34px] object-cover"
+                    alt="User"
+                  />
                </div>
                <div className="absolute -bottom-1 -right-1 bg-white p-2 rounded-2xl shadow-xl border border-gray-50 text-primary">
                   <Camera size={18} strokeWidth={3} />
@@ -43,6 +81,7 @@ const ProfileSettings = () => {
                      type="text" 
                      value={name}
                      onChange={(e) => setName(e.target.value)}
+                     disabled={loading}
                      className="flex-1 bg-transparent border-none text-[16px] font-black text-gray-950 focus:outline-none"
                   />
                   <CheckCircle2 size={16} className="text-green-500" />
@@ -57,6 +96,7 @@ const ProfileSettings = () => {
                      type="email" 
                      value={email}
                      onChange={(e) => setEmail(e.target.value)}
+                     disabled={loading}
                      className="flex-1 bg-transparent border-none text-[16px] font-black text-gray-950 focus:outline-none"
                   />
                </div>
@@ -66,7 +106,9 @@ const ProfileSettings = () => {
                <label className="text-[12px] font-black text-gray-400 ml-1 uppercase tracking-widest">Phone Number</label>
                <div className="flex items-center gap-4 bg-gray-50/50 border border-gray-50 rounded-[28px] p-4 px-5 shadow-sm opacity-80 cursor-not-allowed">
                   <Smartphone size={18} className="text-gray-300" />
-                  <span className="flex-1 bg-transparent border-none text-[16px] font-black text-gray-400">+91 98765 43210</span>
+                  <span className="flex-1 bg-transparent border-none text-[16px] font-black text-gray-400">
+                    {phone ? `+91 ${phone}` : '+91'}
+                  </span>
                   <div className="bg-green-100 text-green-700 text-[9px] font-black px-2 py-0.5 rounded uppercase tracking-widest">Verified</div>
                </div>
             </div>
@@ -77,9 +119,10 @@ const ProfileSettings = () => {
          <motion.button 
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate('/profile')}
+            disabled={loading}
             className="w-full bg-[#1C2833] py-5 rounded-[28px] text-[18px] font-black text-white shadow-xl shadow-gray-200 active:bg-black transition-all"
          >
-            Save Changes
+            {loading ? 'Loading...' : 'Save Changes'}
          </motion.button>
       </div>
     </div>

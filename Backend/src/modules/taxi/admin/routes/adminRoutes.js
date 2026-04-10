@@ -6,6 +6,8 @@ import {
   createGoodsType,
   createRentalPackageType,
   createOwner,
+  createOwnerBooking,
+  createOwnerNeededDocument,
   createPreference,
   createRole,
   createServiceLocation,
@@ -19,6 +21,8 @@ import {
   deleteRentalPackageType,
   deleteLanguage,
   deleteOwner,
+  deleteOwnerBooking,
+  deleteOwnerNeededDocument,
   deletePreference,
   deleteRole,
   deleteSetPrice,
@@ -51,6 +55,8 @@ import {
   getOverallEarnings,
   getOwners,
   getOwnerOnboarding,
+  getOwnerBookings,
+  getOwnerNeededDocuments,
   getPaymentGateways,
   getPaymentSettings,
   getPreferences,
@@ -83,6 +89,8 @@ import {
   updateMailSettings,
   updateMapSettings,
   updateOwner,
+  updateOwnerBooking,
+  updateOwnerNeededDocument,
   updatePaymentSettings,
   updatePreferenceStatus,
   updateSetPrice,
@@ -152,6 +160,14 @@ adminRouter.post('/admin/owner-management/manage-owners', createOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
+adminRouter.get('/admin/owner-management/bookings', getOwnerBookings);
+adminRouter.post('/admin/owner-management/bookings', createOwnerBooking);
+adminRouter.patch('/admin/owner-management/bookings/:id', updateOwnerBooking);
+adminRouter.delete('/admin/owner-management/bookings/:id', deleteOwnerBooking);
+adminRouter.get('/admin/owner-management/owner-needed-document', getOwnerNeededDocuments);
+adminRouter.post('/admin/owner-management/owner-needed-document', createOwnerNeededDocument);
+adminRouter.patch('/admin/owner-management/owner-needed-document/:id', updateOwnerNeededDocument);
+adminRouter.delete('/admin/owner-management/owner-needed-document/:id', deleteOwnerNeededDocument);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);

@@ -125,6 +125,20 @@ export const deleteOwner = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
+export const getOwnerBookings = asyncHandler(async (_req, res) =>
+  ok(res, { results: await adminService.listOwnerBookings() }),
+);
+export const createOwnerBooking = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createOwnerBooking(req.body)),
+);
+export const updateOwnerBooking = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateOwnerBooking(req.params.id, req.body)),
+);
+export const deleteOwnerBooking = asyncHandler(async (req, res) => {
+  await adminService.deleteOwnerBooking(req.params.id);
+  ok(res, { deleted: true });
+});
+
 export const getDashboardData = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getDashboardData()),
 );
@@ -211,6 +225,20 @@ export const updateRentalPackageType = asyncHandler(async (req, res) =>
 );
 export const deleteRentalPackageType = asyncHandler(async (req, res) => {
   await adminService.deleteRentalPackageType(req.params.id);
+  ok(res, { deleted: true });
+});
+
+export const getOwnerNeededDocuments = asyncHandler(async (_req, res) =>
+  ok(res, { results: await adminService.listOwnerNeededDocuments() }),
+);
+export const createOwnerNeededDocument = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createOwnerNeededDocument(req.body)),
+);
+export const updateOwnerNeededDocument = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateOwnerNeededDocument(req.params.id, req.body)),
+);
+export const deleteOwnerNeededDocument = asyncHandler(async (req, res) => {
+  await adminService.deleteOwnerNeededDocument(req.params.id);
   ok(res, { deleted: true });
 });
 

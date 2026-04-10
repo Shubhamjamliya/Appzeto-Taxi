@@ -208,3 +208,9 @@ export const downloadFinanceReport = asyncHandler(async (_req, res) =>
 export const downloadFleetFinanceReport = asyncHandler(async (_req, res) =>
   sendCsv(res, 'fleet-finance-report.csv', await adminService.buildFleetFinanceReport()),
 );
+export const getGeneralSettingsCategory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getGeneralSettings(req.params.category)),
+);
+export const updateGeneralSettingsCategory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateGeneralSettings(req.params.category, req.body)),
+);

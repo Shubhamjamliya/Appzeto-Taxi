@@ -33,6 +33,7 @@ import {
   getDriverOnboarding,
   getDrivers,
   getFirebaseSettings,
+  getGeneralSettingsCategory,
   getLanguages,
   getMailSettings,
   getMapSettings,
@@ -65,6 +66,7 @@ import {
   updateDriver,
   updateDriverPassword,
   updateFirebaseSettings,
+  updateGeneralSettingsCategory,
   updateLanguageStatus,
   updateMailSettings,
   updateMapSettings,
@@ -166,6 +168,9 @@ adminRouter.get('/admin/integration-settings/map', getMapSettings);
 adminRouter.patch('/admin/integration-settings/map', updateMapSettings);
 adminRouter.get('/admin/integration-settings/mail', getMailSettings);
 adminRouter.patch('/admin/integration-settings/mail', updateMailSettings);
+
+adminRouter.get('/admin/general-settings/:category', getGeneralSettingsCategory);
+adminRouter.patch('/admin/general-settings/:category', updateGeneralSettingsCategory);
 
 adminRouter.get('/on-boarding', getUserOnboarding);
 adminRouter.get('/on-boarding-driver', getDriverOnboarding);

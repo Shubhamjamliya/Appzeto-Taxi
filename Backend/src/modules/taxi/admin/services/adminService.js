@@ -2,6 +2,8 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
+import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
+import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Owner } from '../models/Owner.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
@@ -1023,4 +1025,57 @@ export const buildFleetFinanceReport = async () => {
       active: item.active,
     })),
   );
+};
+
+export const ensureBusinessSettings = async () => {
+  let settings = await AdminBusinessSetting.findOne({ scope: 'default' });
+  if (!settings) {
+    settings = await AdminBusinessSetting.create(createDefaultBusinessSettings());
+  }
+  return settings;
+};
+
+export const getGeneralSettings = async (category) => {
+  const settings = await ensureBusinessSettings();
+  const mapper = {
+    customize: 'customization',
+    'transport-ride': 'transport_ride',
+    'bid-ride': 'bid_ride',
+    general: 'general',
+    wallet: 'customization', // Merged as per request
+    tip: 'transport_ride',    // Merged as per request
+  };
+
+  const key = mapper[category] || category;
+  let data = settings[key] || {};
+
+  return { settings: data };
+};
+
+export const updateGeneralSettings = async (category, payload) => {
+  const settings = await ensureBusinessSettings();
+  const mapper = {
+    customize: 'customization',
+    'transport-ride': 'transport_ride',
+    'bid-ride': 'bid_ride',
+    general: 'general',
+    wallet: 'customization', // Merged as per request
+    tip: 'transport_ride',    // Merged as per request
+  };
+
+  const key = mapper[category] || category;
+  if (!settings.schema.path(key)) {
+    return { settings: {} };
+  }
+
+  const newValues = payload.settings || payload;
+
+  settings[key] = {
+    ...(settings[key] || {}),
+    ...newValues,
+  };
+
+  settings.markModified(key);
+  await settings.save();
+  return { settings: settings[key] };
 };

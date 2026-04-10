@@ -115,6 +115,14 @@ export const adminService = {
   updateZone: (id, zoneData) => api.patch(`/admin/zones/${id}`, zoneData),
   deleteZone: (id) => api.delete(`/admin/zones/${id}`),
   toggleZoneStatus: (id) => api.patch(`/admin/zones/${id}/toggle-status`),
+  getAirports: () => api.get('/admin/airports'),
+  createAirport: (airportData) => api.post('/admin/airports', airportData),
+  updateAirport: (id, airportData) => api.patch(`/admin/airports/${id}`, airportData),
+  deleteAirport: (id) => api.delete(`/admin/airports/${id}`),
+  getRentalPackageTypes: () => api.get('/admin/types/rental-packages'),
+  createRentalPackageType: (data) => api.post('/admin/types/rental-packages', data),
+  updateRentalPackageType: (id, data) => api.patch(`/admin/types/rental-packages/${id}`, data),
+  deleteRentalPackageType: (id) => api.delete(`/admin/types/rental-packages/${id}`),
 
   /**
    * Languages Management (Master)

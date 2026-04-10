@@ -7,6 +7,53 @@ const zoneSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'ServiceLocation',
+      default: null,
+    },
+    unit: {
+      type: String,
+      default: 'km',
+      trim: true,
+    },
+    peak_zone_ride_count: {
+      type: Number,
+      default: null,
+    },
+    peak_zone_radius: {
+      type: Number,
+      default: null,
+    },
+    peak_zone_selection_duration: {
+      type: Number,
+      default: null,
+    },
+    peak_zone_duration: {
+      type: Number,
+      default: null,
+    },
+    peak_zone_surge_percentage: {
+      type: Number,
+      default: null,
+    },
+    maximum_distance_for_regular_rides: {
+      type: Number,
+      default: null,
+    },
+    maximum_distance_for_outstation_rides: {
+      type: Number,
+      default: null,
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+    status: {
+      type: String,
+      default: 'active',
+      trim: true,
+    },
     geometry: {
       type: {
         type: String,

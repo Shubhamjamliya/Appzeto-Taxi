@@ -1,20 +1,27 @@
 import { Router } from 'express';
 import {
   approveOwner,
+  createAirport,
   createAppModule,
+  createGoodsType,
+  createRentalPackageType,
   createOwner,
   createPreference,
   createRole,
   createServiceLocation,
+  createSetPrice,
   createSubscriptionPlan,
   createUser,
   createZone,
   deleteAppModule,
   deleteDriver,
+  deleteGoodsType,
+  deleteRentalPackageType,
   deleteLanguage,
   deleteOwner,
   deletePreference,
   deleteRole,
+  deleteSetPrice,
   deleteServiceLocation,
   deleteUser,
   deleteZone,
@@ -25,6 +32,7 @@ import {
   downloadOwnerReport,
   downloadUserReport,
   getAdminStatus,
+  getAirports,
   getAppModules,
   getCancelChart,
   getCountries,
@@ -33,6 +41,8 @@ import {
   getDriverOnboarding,
   getDrivers,
   getFirebaseSettings,
+  getGoodsTypes,
+  getRentalPackageTypes,
   getLanguages,
   getMailSettings,
   getMapSettings,
@@ -46,6 +56,7 @@ import {
   getPreferences,
   getRideModules,
   getRoles,
+  getSetPrices,
   getServiceLocations,
   getSmsSettings,
   getSubscriptionPlans,
@@ -62,21 +73,26 @@ import {
   toggleChannelPush,
   toggleZoneStatus,
   updateAppModule,
+  updateAirport,
   updateDriver,
   updateDriverPassword,
   updateFirebaseSettings,
+  updateGoodsType,
+  updateRentalPackageType,
   updateLanguageStatus,
   updateMailSettings,
   updateMapSettings,
   updateOwner,
   updatePaymentSettings,
   updatePreferenceStatus,
+  updateSetPrice,
   updateServiceLocation,
   updateSmsSettings,
   updateUser,
   updateVehicleType,
   updateZone,
   createVehicleType,
+  deleteAirport,
   deleteVehicleType,
 } from '../controllers/adminController.js';
 import { promotionsRouter } from '../promotions/routes/index.js';
@@ -113,6 +129,22 @@ adminRouter.get('/admin/types/vehicle-types', getVehicleTypeCatalog);
 adminRouter.post('/admin/types/vehicle-types', createVehicleType);
 adminRouter.patch('/admin/types/vehicle-types/:id', updateVehicleType);
 adminRouter.delete('/admin/types/vehicle-types/:id', deleteVehicleType);
+adminRouter.get('/admin/types/set-prices', getSetPrices);
+adminRouter.post('/admin/types/set-prices', createSetPrice);
+adminRouter.patch('/admin/types/set-prices/:id', updateSetPrice);
+adminRouter.delete('/admin/types/set-prices/:id', deleteSetPrice);
+adminRouter.get('/admin/airports', getAirports);
+adminRouter.post('/admin/airports', createAirport);
+adminRouter.patch('/admin/airports/:id', updateAirport);
+adminRouter.delete('/admin/airports/:id', deleteAirport);
+adminRouter.get('/admin/goods-types', getGoodsTypes);
+adminRouter.post('/admin/goods-types', createGoodsType);
+adminRouter.patch('/admin/goods-types/:id', updateGoodsType);
+adminRouter.delete('/admin/goods-types/:id', deleteGoodsType);
+adminRouter.get('/admin/types/rental-packages', getRentalPackageTypes);
+adminRouter.post('/admin/types/rental-packages', createRentalPackageType);
+adminRouter.patch('/admin/types/rental-packages/:id', updateRentalPackageType);
+adminRouter.delete('/admin/types/rental-packages/:id', deleteRentalPackageType);
 adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
 adminRouter.get('/admin/owner-management/manage-owners', getOwners);

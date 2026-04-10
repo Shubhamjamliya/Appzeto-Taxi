@@ -174,6 +174,7 @@ const AdminBannerImage = lazy(() => import('./modules/admin/pages/promotions/Ban
 // Price Management
 const AdminServiceLocation = lazy(() => import('./modules/admin/pages/price-management/ServiceLocation'));
 const AdminZoneManagement = lazy(() => import('./modules/admin/pages/price-management/ZoneManagement'));
+const AdminAirportManagement = lazy(() => import('./modules/admin/pages/price-management/Airport'));
 const AdminSetPrices = lazy(() => import('./modules/admin/pages/price-management/SetPrices'));
 const AdminVehicleType = lazy(() => import('./modules/admin/pages/price-management/VehicleType'));
 const AdminRentalPackageTypes = lazy(() => import('./modules/admin/pages/price-management/RentalPackageTypes'));
@@ -545,7 +546,7 @@ function App() {
                 <Route index element={<Navigate to="service-location" />} />
                 <Route path="service-location" element={<AdminServiceLocation />} />
                 <Route path="zone" element={<AdminZoneManagement />} />
-                <Route path="airport" element={<AdminPricingPlaceholder title="Airport Management" />} />
+                <Route path="airport" element={<AdminAirportManagement />} />
                 <Route path="vehicle-type" element={<AdminVehicleType />} />
                 <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
                 <Route path="set-price" element={<AdminSetPrices />} />

@@ -75,7 +75,7 @@ const resolvePageTitle = (pathname, sections) => {
   return 'RYDON24 Admin';
 };
 
-const SidebarItem = ({ icon: Icon, label, path, isCollapsed }) => (
+const SidebarItem = ({ icon, label, path, isCollapsed }) => (
   <NavLink
     to={path}
     end
@@ -87,23 +87,15 @@ const SidebarItem = ({ icon: Icon, label, path, isCollapsed }) => (
       }`
     }
   >
-    <Icon 
-      size={18} 
-      className="shrink-0" 
-    />
+    {React.createElement(icon, { size: 18, className: 'shrink-0' })}
     {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
   </NavLink>
 );
 
-const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed, pathname, forceOpen = false }) => {
+const SidebarGroup = ({ icon, label, subItems, isCollapsed, pathname, forceOpen = false }) => {
   const isActive = hasActiveChild(pathname, subItems);
-  const [isOpen, setIsOpen] = useState(forceOpen || isActive);
-
-  useEffect(() => {
-    if (forceOpen || isActive) {
-      setIsOpen(true);
-    }
-  }, [forceOpen, isActive]);
+  const [isOpen, setIsOpen] = useState(false);
+  const isExpanded = forceOpen || isActive || isOpen;
 
   return (
     <div className="space-y-1">
@@ -111,22 +103,22 @@ const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed, pathname, forc
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className={`group w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all duration-200 ${
-          isActive || isOpen ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
+          isActive || isExpanded ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon 
-            size={18} 
-            className={`shrink-0 ${isActive || isOpen ? 'text-indigo-400' : ''}`} 
-          />
+          {React.createElement(icon, {
+            size: 18,
+            className: `shrink-0 ${isActive || isExpanded ? 'text-indigo-400' : ''}`,
+          })}
           {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
         </div>
         {!isCollapsed && (
-          <ChevronRight size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+          <ChevronRight size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
         )}
       </button>
 
-      {!isCollapsed && isOpen && (
+      {!isCollapsed && isExpanded && (
         <div className="pl-6 pr-2 space-y-1">
           {subItems.map((item) =>
             item.subItems ? (
@@ -161,13 +153,8 @@ const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed, pathname, forc
 
 const NestedGroup = ({ label, subItems, pathname, forceOpen = false }) => {
   const isActive = hasActiveChild(pathname, subItems);
-  const [isOpen, setIsOpen] = useState(forceOpen || isActive);
-
-  useEffect(() => {
-    if (forceOpen || isActive) {
-      setIsOpen(true);
-    }
-  }, [forceOpen, isActive]);
+  const [isOpen, setIsOpen] = useState(false);
+  const isExpanded = forceOpen || isActive || isOpen;
 
   return (
     <div className="space-y-1">
@@ -175,17 +162,17 @@ const NestedGroup = ({ label, subItems, pathname, forceOpen = false }) => {
         type="button"
         onClick={() => setIsOpen((current) => !current)}
         className={`group w-full flex items-center justify-between px-3 py-1.5 rounded-lg transition-all ${
-          isActive || isOpen ? 'text-white' : 'text-slate-500 hover:text-slate-200'
+          isActive || isExpanded ? 'text-white' : 'text-slate-500 hover:text-slate-200'
         }`}
       >
         <span className="flex items-center gap-3 text-[12px] font-medium">
           <div className="h-1 w-1 shrink-0 rounded-full bg-slate-600" />
           <span>{label}</span>
         </span>
-        <ChevronRight size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
+        <ChevronRight size={12} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
       </button>
 
-      {isOpen && (
+      {isExpanded && (
         <div className="pl-4 space-y-1">
           {subItems.map((item) => (
             <NavLink
@@ -275,17 +262,10 @@ const ModeSwitcher = ({ mode, setMode }) => {
 };
 
 const AdminLayout = () => {
-  const [isSidebarOpen] = useState(true);
-  const [isCollapsed, setCollapsed] = useState(false);
-  const [mode, setModeState] = useState(() => {
-    const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
-    if (savedMode === ADMIN_MODE || savedMode === OWNER_MODE) {
-      return savedMode;
-    }
-    return OWNER_MODE;
-  });
   const navigate = useNavigate();
   const location = useLocation();
+  const [isSidebarOpen] = useState(true);
+  const [isCollapsed, setCollapsed] = useState(false);
 
   const adminSections = useMemo(
     () => [
@@ -502,12 +482,12 @@ const AdminLayout = () => {
     []
   );
 
+  const isOwnerRoute = location.pathname.startsWith('/admin/owners') || location.pathname.startsWith('/admin/fleet');
+  const mode = isOwnerRoute ? OWNER_MODE : ADMIN_MODE;
   const sidebarSections = mode === OWNER_MODE ? ownerSections : adminSections;
   const pageTitle = resolvePageTitle(location.pathname, sidebarSections);
-  const isOwnerRoute = location.pathname.startsWith('/admin/owners') || location.pathname.startsWith('/admin/fleet');
 
   const setMode = (nextMode) => {
-    setModeState(nextMode);
     localStorage.setItem(MODE_STORAGE_KEY, nextMode);
 
     if (nextMode === OWNER_MODE && !isOwnerRoute) {
@@ -518,13 +498,6 @@ const AdminLayout = () => {
       navigate('/admin/dashboard');
     }
   };
-
-  useEffect(() => {
-    if (isOwnerRoute && mode !== OWNER_MODE) {
-      setModeState(OWNER_MODE);
-      localStorage.setItem(MODE_STORAGE_KEY, OWNER_MODE);
-    }
-  }, [isOwnerRoute, mode]);
 
   useEffect(() => {
     const token = localStorage.getItem('adminToken');

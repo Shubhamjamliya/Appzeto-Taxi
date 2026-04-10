@@ -51,6 +51,10 @@ export const adminService = {
   updateOwner: (id, ownerData) => api.patch(`/admin/owner-management/manage-owners/${id}`, ownerData),
   deleteOwner: (id) => api.delete(`/admin/owner-management/manage-owners/${id}`),
   approveOwner: (id, data) => api.patch(`/admin/owner-management/manage-owners/${id}/approve`, data),
+  getOwnerBookings: () => api.get('/admin/owner-management/bookings'),
+  createOwnerBooking: (data) => api.post('/admin/owner-management/bookings', data),
+  updateOwnerBooking: (id, data) => api.patch(`/admin/owner-management/bookings/${id}`, data),
+  deleteOwnerBooking: (id) => api.delete(`/admin/owner-management/bookings/${id}`),
 
   /**
    * Reports Management
@@ -115,6 +119,14 @@ export const adminService = {
   updateZone: (id, zoneData) => api.patch(`/admin/zones/${id}`, zoneData),
   deleteZone: (id) => api.delete(`/admin/zones/${id}`),
   toggleZoneStatus: (id) => api.patch(`/admin/zones/${id}/toggle-status`),
+  getAirports: () => api.get('/admin/airports'),
+  createAirport: (airportData) => api.post('/admin/airports', airportData),
+  updateAirport: (id, airportData) => api.patch(`/admin/airports/${id}`, airportData),
+  deleteAirport: (id) => api.delete(`/admin/airports/${id}`),
+  getRentalPackageTypes: () => api.get('/admin/types/rental-packages'),
+  createRentalPackageType: (data) => api.post('/admin/types/rental-packages', data),
+  updateRentalPackageType: (id, data) => api.patch(`/admin/types/rental-packages/${id}`, data),
+  deleteRentalPackageType: (id) => api.delete(`/admin/types/rental-packages/${id}`),
 
   /**
    * Languages Management (Master)

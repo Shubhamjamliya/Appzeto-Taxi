@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Bell, 
   Plus, 
@@ -14,6 +14,8 @@ import {
   AlertCircle
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+
+const Motion = motion;
 
 const SendNotification = () => {
   const [view, setView] = useState('list'); // 'list' or 'create'
@@ -36,13 +38,23 @@ const SendNotification = () => {
 
   const token = localStorage.getItem('adminToken') || '';
   const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
-  const dashboardUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/dashboard';
-
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      const bootstrapRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/promotions/bootstrap`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (bootstrapRes.ok) {
+        const bootstrapData = await bootstrapRes.json();
+        if (bootstrapData.success) {
+          setNotifications(bootstrapData.data?.notifications || []);
+          setServiceLocations(bootstrapData.data?.service_locations || []);
+          return;
+        }
+      }
+
       // Fetch Notifications
-      // Based on common backend patterns and user feedback, using /notifications instead of /dashboard/push-notifications
       const notiRes = await fetch(`${baseUrl}/notifications`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
@@ -83,11 +95,11 @@ const SendNotification = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token, baseUrl]);
 
   useEffect(() => {
     fetchData();
-  }, []);
+  }, [fetchData]);
 
   const handleImageChange = (e) => {
     const file = e.target.files[0];
@@ -450,7 +462,7 @@ const SendNotification = () => {
       {/* TOAST NOTIFICATION */}
       <AnimatePresence>
         {showToast && (
-          <motion.div 
+            <Motion.div 
             initial={{ opacity: 0, y: 50, scale: 0.9 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 50, scale: 0.9 }}
@@ -467,7 +479,7 @@ const SendNotification = () => {
                    <X size={20} />
                 </button>
              </div>
-          </motion.div>
+            </Motion.div>
         )}
       </AnimatePresence>
     </div>

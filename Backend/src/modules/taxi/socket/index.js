@@ -3,6 +3,16 @@ import { env } from '../../../config/env.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { Driver } from '../driver/models/Driver.js';
 import {
+  broadcastSupportMessage,
+  createSupportMessage,
+  getSupportParticipantRoom,
+  getSupportRoom,
+  getSupportRoleRoom,
+  markSupportMessagesAsRead,
+  parseSupportConversationKey,
+  setSupportChatServer,
+} from '../chat/services/supportChatService.js';
+import {
   addSocketSubscriptions,
   joinRideRoom,
   notifyRideAccepted,
@@ -46,6 +56,7 @@ export const configureTaxiSocketServer = (httpServer) => {
   });
 
   setSocketServer(io);
+  setSupportChatServer(io);
 
   io.on('connection', async (socket) => {
     const identity = getIdentityFromSocket(socket);
@@ -58,9 +69,67 @@ export const configureTaxiSocketServer = (httpServer) => {
 
     addSocketSubscriptions(socket, { role: identity.role, entityId: identity.sub });
 
+    socket.join(getSupportParticipantRoom(identity.role, identity.sub));
+    socket.join(getSupportRoleRoom(identity.role));
+
     if (identity.role === 'driver') {
       await Driver.findByIdAndUpdate(identity.sub, { socketId: socket.id });
     }
+
+    socket.on('chat:join', ({ conversationKey }) => {
+      if (conversationKey) {
+        const parsed = parseSupportConversationKey(conversationKey);
+
+        if (parsed) {
+          for (const key of parsed.keys) {
+            socket.join(getSupportRoom(key));
+          }
+          return;
+        }
+
+        socket.join(getSupportRoom(conversationKey));
+      }
+    });
+
+    socket.on(
+      'chat:send',
+      onAsync(socket, async ({ message, receiverRole, receiverId, conversationKey }) => {
+        let nextReceiverRole = receiverRole;
+        let nextReceiverId = receiverId;
+
+        if (identity.role === 'admin' && (!nextReceiverRole || !nextReceiverId) && conversationKey) {
+          const parsed = parseSupportConversationKey(conversationKey);
+          nextReceiverRole = parsed?.peerRole;
+          nextReceiverId = parsed?.peerId;
+        }
+
+        const savedMessage = await createSupportMessage({
+          senderRole: identity.role,
+          senderId: identity.sub,
+          receiverRole: nextReceiverRole,
+          receiverId: nextReceiverId,
+          conversationKey,
+          message,
+        });
+
+        broadcastSupportMessage(savedMessage);
+      }),
+    );
+
+    socket.on(
+      'chat:read',
+      onAsync(socket, async ({ conversationKey }) => {
+        if (!conversationKey) {
+          return;
+        }
+
+        await markSupportMessagesAsRead({
+          role: identity.role,
+          id: identity.sub,
+          conversationKey,
+        });
+      }),
+    );
 
     socket.on('joinRide', ({ rideId }) => {
       if (rideId) {

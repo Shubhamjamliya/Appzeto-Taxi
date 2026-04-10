@@ -13,6 +13,9 @@ import {
   Car
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
+import { adminService } from '../../services/adminService';
+
+const MotionDiv = motion.div;
 
 const StatusToggle = ({ active, onToggle }) => (
   <button
@@ -37,9 +40,6 @@ const RentalPackageTypes = () => {
     status: 'active'
   });
 
-  const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
-  const token = localStorage.getItem('adminToken');
-
   useEffect(() => {
     fetchPackages();
   }, []);
@@ -47,12 +47,8 @@ const RentalPackageTypes = () => {
   const fetchPackages = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/types/rental-packages`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await adminService.getRentalPackageTypes();
       if (data.success) {
-        // Robust extraction
         const items = data.data?.rental_packages || (Array.isArray(data.data) ? data.data : (data.data?.results || data.results || []));
         setPackages(items);
       }
@@ -66,19 +62,9 @@ const RentalPackageTypes = () => {
   const handleSave = async (e) => {
     e.preventDefault();
     try {
-      const method = editingId ? 'PATCH' : 'POST';
-      const url = editingId ? `${baseUrl}/types/rental-packages/${editingId}` : `${baseUrl}/types/rental-packages`;
-      
-      const res = await fetch(url, {
-        method,
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-
-      const data = await res.json();
+      const data = editingId
+        ? await adminService.updateRentalPackageType(editingId, formData)
+        : await adminService.createRentalPackageType(formData);
       if (data.success) {
         setView('list');
         setEditingId(null);
@@ -107,11 +93,7 @@ const RentalPackageTypes = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this rental package type?")) return;
     try {
-      const res = await fetch(`${baseUrl}/types/rental-packages/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
+      const data = await adminService.deleteRentalPackageType(id);
       if (data.success) fetchPackages();
     } catch (error) {
       console.error("Error deleting:", error);
@@ -122,7 +104,7 @@ const RentalPackageTypes = () => {
     <div className="min-h-screen bg-[#F8FAFC] p-4 lg:p-8 font-['Inter']">
       <AnimatePresence mode="wait">
         {view === 'list' ? (
-          <motion.div
+          <MotionDiv
             key="list"
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -200,12 +182,11 @@ const RentalPackageTypes = () => {
                                 onToggle={async () => {
                                   const nextStatus = (pkg.status === 'active' || pkg.active === true) ? 'inactive' : 'active';
                                   try {
-                                    const res = await fetch(`${baseUrl}/types/rental-packages/${pkg._id || pkg.id}`, {
-                                      method: 'PATCH',
-                                      headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                                      body: JSON.stringify({ status: nextStatus, active: nextStatus === 'active' })
+                                    const data = await adminService.updateRentalPackageType(pkg._id || pkg.id, {
+                                      status: nextStatus,
+                                      active: nextStatus === 'active'
                                     });
-                                    if ((await res.json()).success) fetchPackages();
+                                    if (data?.success) fetchPackages();
                                   } catch (e) { console.error(e); }
                                 }} 
                               />
@@ -241,9 +222,9 @@ const RentalPackageTypes = () => {
                 </div>
               </div>
             </div>
-          </motion.div>
+          </MotionDiv>
         ) : (
-          <motion.div
+          <MotionDiv
             key="form"
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
@@ -338,7 +319,7 @@ const RentalPackageTypes = () => {
                   </div>
                </form>
             </div>
-          </motion.div>
+          </MotionDiv>
         )}
       </AnimatePresence>
     </div>

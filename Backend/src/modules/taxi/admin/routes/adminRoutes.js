@@ -1,20 +1,31 @@
 import { Router } from 'express';
 import {
   approveOwner,
+  createAirport,
   createAppModule,
+  createGoodsType,
+  createRentalPackageType,
   createOwner,
+  createOwnerBooking,
+  createOwnerNeededDocument,
   createPreference,
   createRole,
   createServiceLocation,
+  createSetPrice,
   createSubscriptionPlan,
   createUser,
   createZone,
   deleteAppModule,
   deleteDriver,
+  deleteGoodsType,
+  deleteRentalPackageType,
   deleteLanguage,
   deleteOwner,
+  deleteOwnerBooking,
+  deleteOwnerNeededDocument,
   deletePreference,
   deleteRole,
+  deleteSetPrice,
   deleteServiceLocation,
   deleteUser,
   deleteZone,
@@ -25,6 +36,7 @@ import {
   downloadOwnerReport,
   downloadUserReport,
   getAdminStatus,
+  getAirports,
   getAppModules,
   getCancelChart,
   getCountries,
@@ -33,6 +45,8 @@ import {
   getDriverOnboarding,
   getDrivers,
   getFirebaseSettings,
+  getGoodsTypes,
+  getRentalPackageTypes,
   getGeneralSettingsCategory,
   getLanguages,
   getMailSettings,
@@ -42,11 +56,14 @@ import {
   getOverallEarnings,
   getOwners,
   getOwnerOnboarding,
+  getOwnerBookings,
+  getOwnerNeededDocuments,
   getPaymentGateways,
   getPaymentSettings,
   getPreferences,
   getRideModules,
   getRoles,
+  getSetPrices,
   getServiceLocations,
   getSmsSettings,
   getSubscriptionPlans,
@@ -63,24 +80,32 @@ import {
   toggleChannelPush,
   toggleZoneStatus,
   updateAppModule,
+  updateAirport,
   updateDriver,
   updateDriverPassword,
   updateFirebaseSettings,
+  updateGoodsType,
+  updateRentalPackageType,
   updateGeneralSettingsCategory,
   updateLanguageStatus,
   updateMailSettings,
   updateMapSettings,
   updateOwner,
+  updateOwnerBooking,
+  updateOwnerNeededDocument,
   updatePaymentSettings,
   updatePreferenceStatus,
+  updateSetPrice,
   updateServiceLocation,
   updateSmsSettings,
   updateUser,
   updateVehicleType,
   updateZone,
   createVehicleType,
+  deleteAirport,
   deleteVehicleType,
 } from '../controllers/adminController.js';
+import { promotionsRouter } from '../promotions/routes/index.js';
 
 export const adminRouter = Router();
 
@@ -114,6 +139,22 @@ adminRouter.get('/admin/types/vehicle-types', getVehicleTypeCatalog);
 adminRouter.post('/admin/types/vehicle-types', createVehicleType);
 adminRouter.patch('/admin/types/vehicle-types/:id', updateVehicleType);
 adminRouter.delete('/admin/types/vehicle-types/:id', deleteVehicleType);
+adminRouter.get('/admin/types/set-prices', getSetPrices);
+adminRouter.post('/admin/types/set-prices', createSetPrice);
+adminRouter.patch('/admin/types/set-prices/:id', updateSetPrice);
+adminRouter.delete('/admin/types/set-prices/:id', deleteSetPrice);
+adminRouter.get('/admin/airports', getAirports);
+adminRouter.post('/admin/airports', createAirport);
+adminRouter.patch('/admin/airports/:id', updateAirport);
+adminRouter.delete('/admin/airports/:id', deleteAirport);
+adminRouter.get('/admin/goods-types', getGoodsTypes);
+adminRouter.post('/admin/goods-types', createGoodsType);
+adminRouter.patch('/admin/goods-types/:id', updateGoodsType);
+adminRouter.delete('/admin/goods-types/:id', deleteGoodsType);
+adminRouter.get('/admin/types/rental-packages', getRentalPackageTypes);
+adminRouter.post('/admin/types/rental-packages', createRentalPackageType);
+adminRouter.patch('/admin/types/rental-packages/:id', updateRentalPackageType);
+adminRouter.delete('/admin/types/rental-packages/:id', deleteRentalPackageType);
 adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
 adminRouter.get('/admin/owner-management/manage-owners', getOwners);
@@ -121,6 +162,14 @@ adminRouter.post('/admin/owner-management/manage-owners', createOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
+adminRouter.get('/admin/owner-management/bookings', getOwnerBookings);
+adminRouter.post('/admin/owner-management/bookings', createOwnerBooking);
+adminRouter.patch('/admin/owner-management/bookings/:id', updateOwnerBooking);
+adminRouter.delete('/admin/owner-management/bookings/:id', deleteOwnerBooking);
+adminRouter.get('/admin/owner-management/owner-needed-document', getOwnerNeededDocuments);
+adminRouter.post('/admin/owner-management/owner-needed-document', createOwnerNeededDocument);
+adminRouter.patch('/admin/owner-management/owner-needed-document/:id', updateOwnerNeededDocument);
+adminRouter.delete('/admin/owner-management/owner-needed-document/:id', deleteOwnerNeededDocument);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
@@ -182,3 +231,5 @@ adminRouter.get('/admin/reports/driver-duty/download', downloadDriverDutyReport)
 adminRouter.get('/admin/reports/owner/download', downloadOwnerReport);
 adminRouter.get('/admin/reports/finance/download', downloadFinanceReport);
 adminRouter.get('/admin/reports/fleet-finance/download', downloadFleetFinanceReport);
+
+adminRouter.use('/', promotionsRouter);

@@ -4,6 +4,8 @@ import { motion } from 'framer-motion';
 import AuthLayout from '../../components/AuthLayout';
 import { ChevronDown, Phone } from 'lucide-react';
 
+const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
+
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
@@ -16,10 +18,14 @@ const Login = () => {
     if (!isValidPhone) return;
 
     setLoading(true);
-    // Mock API Call
     setTimeout(() => {
       setLoading(false);
-      navigate('/verify-otp', { state: { phone: phoneNumber } });
+      navigate('/taxi/user/verify-otp', {
+        state: {
+          phone: phoneNumber,
+          otp: generateOtp(),
+        },
+      });
     }, 1500);
   };
 

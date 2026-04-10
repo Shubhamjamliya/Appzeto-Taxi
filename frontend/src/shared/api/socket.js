@@ -1,45 +1,95 @@
-/**
- * Mock Socket Service
- * Standardized to prevent ReferenceErrors and console noise
- * All Socket.IO functionality has been removed.
- */
-// SOCKET.IO COMPLETELY REMOVED TO PREVENT ERRORS
-// Real-time Push functionality is disabled as requested.
+import { io } from 'socket.io-client';
+import { BACKEND_ORIGIN } from './runtimeConfig';
+
+const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN;
+
+const resolveTokenForRole = (role) => {
+  const normalizedRole = String(role || localStorage.getItem('role') || '').toLowerCase();
+  const adminToken = localStorage.getItem('adminToken');
+  const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+  const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
+
+  if (normalizedRole === 'admin') {
+    return adminToken;
+  }
+
+  if (normalizedRole === 'driver') {
+    return driverToken;
+  }
+
+  if (normalizedRole === 'user') {
+    return userToken;
+  }
+
+  return adminToken || userToken || driverToken || null;
+};
 
 class SocketService {
   constructor() {
     this.socket = null;
+    this.currentToken = null;
   }
 
-  connect() {
-    console.log('🔇 Socket.IO has been disabled in the frontend.');
-    return null;
-    // console.log('🔌 Socket connection bypassed');
-    return this;
+  connect(options = {}) {
+    const token = options.token || resolveTokenForRole(options.role);
+
+    if (!token) {
+      return null;
+    }
+
+    if (this.socket && this.currentToken === token) {
+      return this.socket;
+    }
+
+    if (this.socket) {
+      this.socket.disconnect();
+    }
+
+    this.currentToken = token;
+    this.socket = io(SOCKET_ORIGIN, {
+      auth: { token },
+      transports: ['websocket'],
+      withCredentials: true,
+      reconnection: true,
+    });
+
+    return this.socket;
   }
 
   disconnect() {
-    // No action needed
-    // console.log('🔌 Socket disconnected');
+    if (this.socket) {
+      this.socket.disconnect();
+      this.socket = null;
+      this.currentToken = null;
+    }
   }
 
-  // Generic event stub
-  // Pure mock implementation - satisfy calling components
   on(event, callback) {
-    // No action needed
-    // Doing nothing - prevents errors in components
+    if (this.socket) {
+      this.socket.on(event, callback);
+    }
   }
 
   off(event, callback) {
-    // No action needed
-    // Doing nothing
+    if (this.socket) {
+      if (callback) {
+        this.socket.off(event, callback);
+        return;
+      }
+
+      this.socket.off(event);
+    }
   }
 
   emit(event, data) {
-    // No action needed
-    // Doing nothing
+    if (this.socket) {
+      this.socket.emit(event, data);
+    }
+  }
+
+  isConnected() {
+    return Boolean(this.socket?.connected);
   }
 }
 
 export const socketService = new SocketService();
-

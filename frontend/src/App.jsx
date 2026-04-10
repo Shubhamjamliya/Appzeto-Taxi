@@ -174,6 +174,7 @@ const AdminBannerImage = lazy(() => import('./modules/admin/pages/promotions/Ban
 // Price Management
 const AdminServiceLocation = lazy(() => import('./modules/admin/pages/price-management/ServiceLocation'));
 const AdminZoneManagement = lazy(() => import('./modules/admin/pages/price-management/ZoneManagement'));
+const AdminAirportManagement = lazy(() => import('./modules/admin/pages/price-management/Airport'));
 const AdminSetPrices = lazy(() => import('./modules/admin/pages/price-management/SetPrices'));
 const AdminVehicleType = lazy(() => import('./modules/admin/pages/price-management/VehicleType'));
 const AdminRentalPackageTypes = lazy(() => import('./modules/admin/pages/price-management/RentalPackageTypes'));
@@ -196,6 +197,7 @@ const AdminFleetNeededDocuments = lazy(() => import('./modules/admin/pages/owner
 const AdminWithdrawalRequestOwners = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwners'));
 const AdminWithdrawalRequestOwnerDetail = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwnerDetail'));
 const AdminDeletedOwners = lazy(() => import('./modules/admin/pages/owners/DeletedOwners'));
+const AdminOwnerBookings = lazy(() => import('./modules/admin/pages/owners/OwnerBookings'));
 
 const AdminGeoFencing = lazy(() => import('./modules/admin/pages/geo/GeoFencing'));
 const AdminFinance = lazy(() => import('./modules/admin/pages/finance/Finance'));
@@ -535,7 +537,7 @@ function App() {
               <Route path="fleet/manage" element={<AdminManageFleet />} />
               <Route path="owners/documents" element={<AdminOwnerNeededDocuments />} />
               <Route path="owners/deleted" element={<AdminDeletedOwners />} />
-              <Route path="owners/bookings" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest italic decoration-indigo-200">Global Fleet Bookings - Indexing</div>} />
+              <Route path="owners/bookings" element={<AdminOwnerBookings />} />
               <Route path="referrals/config" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Referral Configuration - Under Setup</div>} />
               <Route path="referrals/active" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Active Referrals Logs - Under Setup</div>} />
               <Route path="geo/*" element={<AdminGeoFencing />} />
@@ -545,7 +547,7 @@ function App() {
                 <Route index element={<Navigate to="service-location" />} />
                 <Route path="service-location" element={<AdminServiceLocation />} />
                 <Route path="zone" element={<AdminZoneManagement />} />
-                <Route path="airport" element={<AdminPricingPlaceholder title="Airport Management" />} />
+                <Route path="airport" element={<AdminAirportManagement />} />
                 <Route path="vehicle-type" element={<AdminVehicleType />} />
                 <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
                 <Route path="set-price" element={<AdminSetPrices />} />

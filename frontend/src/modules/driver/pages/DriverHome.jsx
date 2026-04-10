@@ -113,7 +113,7 @@ const DriverHome = () => {
     // Socket Integration
     useEffect(() => {
         if (isOnline) {
-            socketService.connect();
+            socketService.connect({ role: 'driver' });
             
             socketService.on('new_request', (data) => {
                 setCurrentRequest({

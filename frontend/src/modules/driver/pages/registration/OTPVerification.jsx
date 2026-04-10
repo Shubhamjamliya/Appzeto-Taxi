@@ -14,7 +14,7 @@ import {
 const OTPVerification = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [otp, setOtp] = useState(['', '', '', '', '', '']);
+    const [otp, setOtp] = useState(['', '', '', '']);
     const inputs = useRef([]);
     const [timer, setTimer] = useState(30);
     const [loading, setLoading] = useState(false);
@@ -32,7 +32,7 @@ const OTPVerification = () => {
     const isLoginFlow = Boolean(session.loginMode);
 
     useEffect(() => {
-        if (debugOtp && /^\d{6}$/.test(String(debugOtp))) {
+        if (debugOtp && /^\d{4}$/.test(String(debugOtp))) {
             setOtp(String(debugOtp).split(''));
         }
 
@@ -48,7 +48,7 @@ const OTPVerification = () => {
         newOtp[index] = value;
         setOtp(newOtp);
 
-        if (value && index < 5) {
+        if (value && index < 3) {
             inputs.current[index + 1].focus();
         }
     };
@@ -60,8 +60,8 @@ const OTPVerification = () => {
     };
 
     const handleVerify = async () => {
-        if (otp.join('').length !== 6) {
-            setError('Please enter a valid 6-digit OTP');
+        if (otp.join('').length !== 4) {
+            setError('Please enter a valid 4-digit OTP');
             return;
         }
 
@@ -78,6 +78,7 @@ const OTPVerification = () => {
                 const token = response?.data?.token;
                 if (token) {
                     localStorage.setItem('token', token);
+                    localStorage.setItem('driverToken', token);
                     localStorage.setItem('role', 'driver');
                 }
 
@@ -132,10 +133,10 @@ const OTPVerification = () => {
                 loginMode: isLoginFlow,
             });
 
-            if (nextSession.debugOtp && /^\d{6}$/.test(String(nextSession.debugOtp))) {
+            if (nextSession.debugOtp && /^\d{4}$/.test(String(nextSession.debugOtp))) {
                 setOtp(String(nextSession.debugOtp).split(''));
             } else {
-                setOtp(['', '', '', '', '', '']);
+                setOtp(['', '', '', '']);
             }
 
             setTimer(30);
@@ -202,9 +203,9 @@ const OTPVerification = () => {
 
                     <button 
                         onClick={handleVerify}
-                        disabled={loading || otp.join('').length !== 6}
+                        disabled={loading || otp.join('').length !== 4}
                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
-                            otp.join('').length === 6 ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
+                            otp.join('').length === 4 ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
                         }`}
                     >
                         {loading ? 'Verifying...' : 'Verify & Join'} <CheckCircle2 size={16} strokeWidth={3} />

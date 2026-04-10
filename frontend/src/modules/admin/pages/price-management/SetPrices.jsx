@@ -432,17 +432,20 @@ const SetPrices = () => {
 
                   <div>
                     <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest mb-3 block">Vehicle Type *</label>
-                    <div className="relative">
-                      <input 
-                        list="vehicle-types-list"
+                    <div className="relative group">
+                      <select
                         value={formData.vehicle_type}
                         onChange={(e) => setFormData({...formData, vehicle_type: e.target.value})}
-                        placeholder="Select or Type Vehicle Type"
-                        className="w-full bg-slate-50 border-slate-200 border rounded-2xl py-4 px-5 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all outline-none"
-                      />
-                      <datalist id="vehicle-types-list">
-                        {vehicleTypes.map(v => <option key={v._id || v.id} value={v.name}>{v.name}</option>)}
-                      </datalist>
+                        style={{ color: '#000000' }}
+                        className="w-full appearance-none bg-slate-50 border-slate-200 border rounded-2xl py-4 px-5 text-sm font-bold text-slate-900 focus:ring-2 focus:ring-indigo-600/20 focus:border-indigo-600 transition-all outline-none"
+                      >
+                        <option value="" className="bg-white text-gray-950 font-bold">Select Vehicle Type</option>
+                        {vehicleTypes.map((v) => (
+                          <option key={v._id || v.id} value={v._id || v.id} className="bg-white text-gray-950 font-bold">
+                            {v.name}
+                          </option>
+                        ))}
+                      </select>
                       <ChevronDown size={16} className="absolute right-5 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                     </div>
                   </div>

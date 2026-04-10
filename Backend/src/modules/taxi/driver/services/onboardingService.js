@@ -26,7 +26,7 @@ const normalizePhone = (phone) => String(phone || '').replace(/\D/g, '').trim();
 
 const normalizeRole = (role) => (String(role || 'driver').toLowerCase() === 'owner' ? 'owner' : 'driver');
 
-const generateOtp = () => String(Math.floor(100000 + Math.random() * 900000));
+const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 
 const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest('hex');
 
@@ -218,8 +218,8 @@ export const startDriverOnboarding = async ({ phone, role = 'driver' }) => {
 export const verifyDriverOtp = async ({ registrationId, phone, otp }) => {
   const session = await getSession(registrationId, phone);
 
-  if (!otp || String(otp).trim().length !== 6) {
-    throw new ApiError(400, 'A valid 6-digit OTP is required');
+  if (!otp || String(otp).trim().length !== 4) {
+    throw new ApiError(400, 'A valid 4-digit OTP is required');
   }
 
   if (!session.otpExpiresAt || new Date(session.otpExpiresAt).getTime() < Date.now()) {

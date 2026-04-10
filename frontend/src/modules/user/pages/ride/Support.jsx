@@ -19,7 +19,7 @@ const Support = () => {
   };
 
   const handleChat = () => {
-    navigate('/ride/chat?admin=true');
+    navigate('/ride/chat?admin=true&role=user');
   };
 
   return (

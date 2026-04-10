@@ -55,6 +55,7 @@ const VehicleType = () => {
   const [view, setView] = useState('list'); // 'list' or 'create'
   const [vehicles, setVehicles] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [vehiclePreferences, setVehiclePreferences] = useState([]);
@@ -63,8 +64,8 @@ const VehicleType = () => {
     name: '',
     short_description: '',
     description: '',
-    transport_type: '',
-    dispatch_type: '',
+    transport_type: 'taxi',
+    dispatch_type: 'normal',
     icon_types: 'car',
     image: null,
     status: true,
@@ -108,6 +109,24 @@ const VehicleType = () => {
   }, []);
 
   const handleSave = async () => {
+    const trimmedName = formData.name.trim();
+
+    if (!trimmedName) {
+      alert('Vehicle name is required.');
+      return;
+    }
+
+    if (!formData.transport_type) {
+      alert('Transport type is required.');
+      return;
+    }
+
+    if (!formData.dispatch_type) {
+      alert('Trip dispatch type is required.');
+      return;
+    }
+
+    setIsSaving(true);
     try {
       const method = editingId ? 'PATCH' : 'POST';
       const url = editingId ? `${baseUrl}/types/vehicle-types/${editingId}` : `${baseUrl}/types/vehicle-types`;
@@ -123,7 +142,7 @@ const VehicleType = () => {
       }
 
       const payload = {
-        name: formData.name,
+        name: trimmedName,
         short_description: formData.short_description,
         description: formData.description,
         transport_type: formData.transport_type,
@@ -149,13 +168,15 @@ const VehicleType = () => {
         setView('list');
         setEditingId(null);
         fetchInitialData();
-        setFormData({ name: '', short_description: '', description: '', transport_type: '', dispatch_type: '', icon_types: 'car', image: null, status: true, supported_other_vehicle_types: [], vehicle_preference: [] });
+        setFormData({ name: '', short_description: '', description: '', transport_type: 'taxi', dispatch_type: 'normal', icon_types: 'car', image: null, status: true, supported_other_vehicle_types: [], vehicle_preference: [] });
       } else {
         alert(result.message || "Failed to save vehicle type");
       }
     } catch (error) {
       console.error("Error saving:", error);
       alert("Error: " + error.message);
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -167,7 +188,7 @@ const VehicleType = () => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.success) fetchVehicles();
+      if (data.success) fetchInitialData();
     } catch (error) {
       console.error("Error deleting:", error);
     }
@@ -208,7 +229,22 @@ const VehicleType = () => {
           </div>
           {view === 'list' ? (
              <button 
-                onClick={() => { setEditingId(null); setView('create'); }}
+                onClick={() => {
+                  setEditingId(null);
+                  setFormData({
+                    name: '',
+                    short_description: '',
+                    description: '',
+                    transport_type: 'taxi',
+                    dispatch_type: 'normal',
+                    icon_types: 'car',
+                    image: null,
+                    status: true,
+                    supported_other_vehicle_types: [],
+                    vehicle_preference: []
+                  });
+                  setView('create');
+                }}
                 className="bg-[#2D3A6E] text-white h-12 px-6 rounded-xl flex items-center gap-2 text-[13px] font-black uppercase tracking-tight hover:bg-[#1a234a] transition-all shadow-lg active:scale-95"
              >
                 <Plus size={18} strokeWidth={3} /> Add Vehicle Type
@@ -350,7 +386,7 @@ const VehicleType = () => {
                      <div className="w-full h-72 rounded-[32px] overflow-hidden border border-gray-100 shadow-sm relative group bg-gray-50 flex items-center justify-center">
                         <img src={MapBackground} className="absolute inset-0 w-full h-full object-cover opacity-60 group-hover:scale-110 transition-transform duration-700" />
                         <div className="relative z-10 p-4 bg-white/40 backdrop-blur-md rounded-full shadow-2xl ring-8 ring-white/10 animate-pulse">
-                           <img src={iconMap[formData.icon_types] || car} className="w-12 h-12 object-contain filter drop-shadow-lg" />
+                           <img src={iconMap[formData.icon_types] || CarIcon} className="w-12 h-12 object-contain filter drop-shadow-lg" />
                         </div>
                      </div>
                   </div>
@@ -426,14 +462,16 @@ const VehicleType = () => {
                      </label>
                      <div className="relative group">
                         <select 
+                           multiple
                            value={formData.supported_other_vehicle_types}
                            onChange={(e) => setFormData({...formData, supported_other_vehicle_types: Array.from(e.target.selectedOptions, option => option.value)})}
-                           className="w-full h-16 px-6 bg-gray-50/50 border border-transparent rounded-[20px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner appearance-none"
+                           className="w-full min-h-40 px-6 py-4 bg-gray-50/50 border border-transparent rounded-[20px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
                         >
-                           <option value="">Select Vehicle Type</option>
                            {vehicles.map(v => <option key={v._id} value={v._id}>{v.name}</option>)}
                         </select>
-                        <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none" size={18} />
+                        <p className="mt-2 text-[10px] font-bold uppercase tracking-widest text-gray-400">
+                           Hold Ctrl or Cmd to choose multiple vehicle types.
+                        </p>
                      </div>
                   </div>
 
@@ -476,10 +514,12 @@ const VehicleType = () => {
                {/* BUTTONS */}
                <div className="flex justify-end pt-12 border-t border-gray-50">
                   <button 
+                     type="button"
                      onClick={handleSave}
+                     disabled={isSaving}
                      className="bg-[#2D3A6E] text-white h-16 px-20 rounded-[24px] text-[13px] font-black uppercase tracking-[0.3em] hover:bg-[#1a234a] transition-all shadow-2xl active:scale-95 flex items-center gap-3"
                   >
-                     Save <ChevronRight size={18} strokeWidth={3} className="ml-2" />
+                     {isSaving ? 'Saving...' : 'Save'} <ChevronRight size={18} strokeWidth={3} className="ml-2" />
                   </button>
                </div>
             </motion.div>

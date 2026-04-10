@@ -56,6 +56,22 @@ export const getRideModules = asyncHandler(async (_req, res) => ok(res, await ad
 export const getVehicleTypes = asyncHandler(async (req, res) =>
   ok(res, await adminService.listVehicleTypes(req.params.locationId, req.query.transport_type)),
 );
+export const getVehicleTypeCatalog = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.listVehicleCatalog()),
+);
+export const getVehiclePreferenceOptions = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.listVehiclePreferences()),
+);
+export const createVehicleType = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createVehicleType(req.body)),
+);
+export const updateVehicleType = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateVehicleType(req.params.id, req.body)),
+);
+export const deleteVehicleType = asyncHandler(async (req, res) => {
+  await adminService.deleteVehicleType(req.params.id);
+  ok(res, { deleted: true });
+});
 
 export const getOwners = asyncHandler(async (_req, res) => ok(res, { results: await adminService.listOwners() }));
 export const createOwner = asyncHandler(async (req, res) => ok(res, await adminService.createOwner(req.body)));

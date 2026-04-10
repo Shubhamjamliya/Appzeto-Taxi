@@ -51,6 +51,8 @@ import {
   getTodayEarnings,
   getUserOnboarding,
   getUsers,
+  getVehiclePreferenceOptions,
+  getVehicleTypeCatalog,
   getVehicleTypes,
   getWithdrawals,
   getZones,
@@ -71,7 +73,10 @@ import {
   updateServiceLocation,
   updateSmsSettings,
   updateUser,
+  updateVehicleType,
   updateZone,
+  createVehicleType,
+  deleteVehicleType,
 } from '../controllers/adminController.js';
 
 export const adminRouter = Router();
@@ -101,6 +106,11 @@ adminRouter.patch('/admin/service-locations/:id', updateServiceLocation);
 adminRouter.delete('/admin/service-locations/:id', deleteServiceLocation);
 adminRouter.get('/common/ride_modules', getRideModules);
 adminRouter.get('/types/:locationId', getVehicleTypes);
+adminRouter.get('/admin/types/vehicle-types', getVehicleTypeCatalog);
+adminRouter.post('/admin/types/vehicle-types', createVehicleType);
+adminRouter.patch('/admin/types/vehicle-types/:id', updateVehicleType);
+adminRouter.delete('/admin/types/vehicle-types/:id', deleteVehicleType);
+adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
 adminRouter.get('/admin/owner-management/manage-owners', getOwners);
 adminRouter.post('/admin/owner-management/manage-owners', createOwner);

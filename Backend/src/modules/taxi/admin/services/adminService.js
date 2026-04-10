@@ -3,6 +3,7 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
+import { Vehicle } from '../models/Vehicle.js';
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -22,6 +23,7 @@ const buildPaginator = (items, page = 1, limit = 50) => {
 };
 
 const nextId = () => new mongoose.Types.ObjectId().toString();
+const toObjectId = (value) => new mongoose.Types.ObjectId(String(value));
 
 const normalizeBoolean = (value) => {
   if (typeof value === 'boolean') return value;
@@ -87,6 +89,28 @@ export const ensureAdminState = async () => {
     state = await AdminPanelState.create(createDefaultAdminState());
   }
 
+  const hasLegacySeededZones =
+    Array.isArray(state.zones) &&
+    state.zones.length === 2 &&
+    state.zones.every((zone) => ['Vijay Nagar Prime', 'Connaught Place Core'].includes(zone?.name));
+
+  const hasLegacySeededServiceLocations =
+    Array.isArray(state.serviceLocations) &&
+    state.serviceLocations.length === 2 &&
+    state.serviceLocations.every((location) => ['Indore', 'New Delhi'].includes(location?.name));
+
+  if (hasLegacySeededZones || hasLegacySeededServiceLocations) {
+    if (hasLegacySeededZones) {
+      state.zones = [];
+    }
+
+    if (hasLegacySeededServiceLocations) {
+      state.serviceLocations = [];
+    }
+
+    await state.save();
+  }
+
   return state;
 };
 
@@ -94,18 +118,6 @@ const ensureServiceLocationsSeeded = async () => {
   const existingCount = await ServiceLocation.countDocuments();
   if (existingCount > 0) {
     return;
-  }
-
-  const state = await ensureAdminState();
-  const seedLocations = (state.serviceLocations || []).map((location) => ({
-    _id: location._id ? new mongoose.Types.ObjectId(String(location._id)) : new mongoose.Types.ObjectId(),
-    ...normalizeServiceLocationPayload(location, location),
-    createdAt: location.createdAt || new Date(),
-    updatedAt: location.updatedAt || new Date(),
-  }));
-
-  if (seedLocations.length > 0) {
-    await ServiceLocation.insertMany(seedLocations, { ordered: false });
   }
 };
 
@@ -372,6 +384,120 @@ export const listVehicleTypes = async (locationId, transportType) => {
     const sameTransport = !transportType || item.transport_type === transportType;
     return sameLocation && sameTransport;
   });
+};
+
+export const listVehicleCatalog = async () => {
+  const state = await ensureAdminState();
+  const preferenceLookup = new Map(
+    (state.preferences || []).map((preference) => [String(preference._id), preference]),
+  );
+
+  const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
+
+  const normalizedItems = items.map((item) => ({
+    ...item,
+    supported_other_vehicle_types: Array.isArray(item.supported_other_vehicle_types)
+      ? item.supported_other_vehicle_types.map((value) => String(value))
+      : [],
+    vehicle_preference: Array.isArray(item.vehicle_preference)
+      ? item.vehicle_preference.map((value) => String(value))
+      : [],
+    vehicle_preference_details: Array.isArray(item.vehicle_preference)
+      ? item.vehicle_preference
+          .map((value) => preferenceLookup.get(String(value)))
+          .filter(Boolean)
+      : [],
+  }));
+
+  return { vehicle_types: normalizedItems };
+};
+
+export const listVehiclePreferences = async () => {
+  return listPreferences();
+};
+
+export const createVehicleType = async (payload) => {
+  if (!payload.name?.trim()) {
+    throw new ApiError(400, 'Vehicle name is required');
+  }
+
+  if (!payload.transport_type?.trim()) {
+    throw new ApiError(400, 'Transport type is required');
+  }
+
+  const vehicle = await Vehicle.create({
+    name: payload.name.trim(),
+    short_description: payload.short_description ?? '',
+    description: payload.description ?? '',
+    transport_type: payload.transport_type,
+    dispatch_type: payload.dispatch_type || 'normal',
+    icon_types: payload.icon_types || 'car',
+    image: payload.image ?? '',
+    status: Number(payload.status ?? 1) ? 1 : 0,
+    active: Number(payload.status ?? 1) === 1,
+    supported_other_vehicle_types: Array.isArray(payload.supported_other_vehicle_types)
+      ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
+      : [],
+    vehicle_preference: Array.isArray(payload.vehicle_preference)
+      ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
+      : [],
+  });
+
+  return vehicle.toObject();
+};
+
+export const updateVehicleType = async (id, payload) => {
+  const vehicle = await Vehicle.findById(id);
+  if (!vehicle) {
+    throw new ApiError(404, 'Vehicle type not found');
+  }
+
+  if (payload.name !== undefined) {
+    vehicle.name = String(payload.name).trim();
+  }
+  if (payload.short_description !== undefined) {
+    vehicle.short_description = payload.short_description ?? '';
+  }
+  if (payload.description !== undefined) {
+    vehicle.description = payload.description ?? '';
+  }
+  if (payload.transport_type !== undefined) {
+    vehicle.transport_type = payload.transport_type;
+  }
+  if (payload.dispatch_type !== undefined) {
+    vehicle.dispatch_type = payload.dispatch_type || 'normal';
+  }
+  if (payload.icon_types !== undefined) {
+    vehicle.icon_types = payload.icon_types || 'car';
+  }
+  if (payload.image !== undefined) {
+    vehicle.image = payload.image ?? '';
+  }
+  if (payload.status !== undefined) {
+    vehicle.status = Number(payload.status) ? 1 : 0;
+    vehicle.active = vehicle.status === 1;
+  }
+  if (payload.supported_other_vehicle_types !== undefined) {
+    vehicle.supported_other_vehicle_types = Array.isArray(payload.supported_other_vehicle_types)
+      ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
+      : [];
+  }
+  if (payload.vehicle_preference !== undefined) {
+    vehicle.vehicle_preference = Array.isArray(payload.vehicle_preference)
+      ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
+      : [];
+  }
+
+  await vehicle.save();
+  return vehicle.toObject();
+};
+
+export const deleteVehicleType = async (id) => {
+  const deleted = await Vehicle.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Vehicle type not found');
+  }
+  return true;
 };
 
 export const listOwners = async () => (await ensureAdminState()).owners;

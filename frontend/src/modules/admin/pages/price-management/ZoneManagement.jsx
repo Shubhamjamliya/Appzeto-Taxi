@@ -19,10 +19,21 @@ const mapContainerStyle = {
   borderRadius: '40px'
 };
 
+const normalizeText = (value) => String(value || '').trim().toLowerCase();
+
+const isDriverAvailable = (driver) => {
+  const status = normalizeText(driver?.status);
+  const approve = driver?.approve;
+  const active = driver?.active;
+
+  return active !== false && approve !== false && status !== 'inactive' && status !== 'declined';
+};
+
 const ZoneManagement = () => {
   const [view, setView] = useState('list'); // 'list' or 'create'
   const [zones, setZones] = useState([]);
   const [serviceLocations, setServiceLocations] = useState([]);
+  const [drivers, setDrivers] = useState([]);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState('');
   const [saving, setSaving] = useState(false);
@@ -55,9 +66,10 @@ const ZoneManagement = () => {
     setLoading(true);
     setFetchError('');
     try {
-      const [zoneRes, slRes] = await Promise.all([
+      const [zoneRes, slRes, driverRes] = await Promise.all([
         adminService.getZones(),
-        adminService.getServiceLocations()
+        adminService.getServiceLocations(),
+        adminService.getDrivers(1, 200),
       ]);
 
       // Robust Zone Parsing
@@ -71,6 +83,11 @@ const ZoneManagement = () => {
         const locs = slRes.success ? (slRes.data?.results || slRes.data) : slRes;
         setServiceLocations(Array.isArray(locs) ? locs : []);
       }
+
+      if (driverRes) {
+        const driverItems = driverRes.success ? (driverRes.data?.results || driverRes.data) : driverRes;
+        setDrivers(Array.isArray(driverItems) ? driverItems : []);
+      }
     } catch (err) {
       console.error("Fetch error:", err);
       setFetchError(`Zone data could not be loaded. Make sure the backend API is running on ${BACKEND_LABEL}.`);
@@ -82,6 +99,12 @@ const ZoneManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
+
+  useEffect(() => {
+    if (view === 'create') {
+      fetchData();
+    }
+  }, [view]);
 
   const onPolygonComplete = (polygon) => {
     const coords = polygon.getPath().getArray().map(p => ({
@@ -105,8 +128,8 @@ const ZoneManagement = () => {
   };
 
   const handleSave = async () => {
-    if (!formData.service_location_id || !formData.name.English || polygonCoords.length === 0) {
-      alert("Please complete the form and draw a zone boundary.");
+    if (!formData.name.English.trim() || polygonCoords.length === 0) {
+      alert("Please add a zone name and draw a polygon on the map using the polygon tool. The zone needs at least 3 points.");
       return;
     }
 
@@ -236,6 +259,32 @@ const ZoneManagement = () => {
   const handleViewInMap = (zone) => {
     handleEdit(zone);
   };
+
+  const selectedServiceLocation = serviceLocations.find(
+    (location) => String(location._id || location.id) === String(formData.service_location_id),
+  );
+
+  const availableDrivers = drivers.filter((driver) => {
+    if (!isDriverAvailable(driver)) {
+      return false;
+    }
+
+    if (!formData.service_location_id) {
+      return true;
+    }
+
+    const selectedLocationId = String(selectedServiceLocation?._id || selectedServiceLocation?.id || '');
+    const driverLocationId = String(driver.service_location_id || driver.location_id || '');
+    const selectedLocationName = normalizeText(
+      selectedServiceLocation?.name || selectedServiceLocation?.service_location_name,
+    );
+    const driverCity = normalizeText(driver.city);
+
+    return (
+      (selectedLocationId && driverLocationId === selectedLocationId) ||
+      (selectedLocationName && driverCity === selectedLocationName)
+    );
+  });
 
   const StatusToggle = ({ active, onToggle }) => (
     <button 
@@ -442,13 +491,81 @@ const ZoneManagement = () => {
                     onChange={(e) => setFormData({...formData, service_location_id: e.target.value})}
                     className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                   >
-                    <option value="">Select Location</option>
+                    <option value="">Optional: Select Location</option>
                     {serviceLocations.map(sl => (
                       <option key={sl._id || sl.id} value={sl._id || sl.id}>
                         {sl.service_location_name || sl.name || 'Unknown Location'}
                       </option>
                     ))}
                   </select>
+                  {serviceLocations.length === 0 ? (
+                    <p className="text-xs text-amber-700">
+                      No service locations found yet. Create one in `/admin/pricing/service-location` first.
+                    </p>
+                  ) : null}
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Service Location</p>
+                      <p className="mt-1 text-base font-black text-slate-900">
+                        {selectedServiceLocation?.service_location_name || selectedServiceLocation?.name || 'All Locations'}
+                      </p>
+                    </div>
+                    <div className="text-right">
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Available Drivers</p>
+                      <p className="mt-1 text-2xl font-black text-indigo-700">{availableDrivers.length}</p>
+                    </div>
+                  </div>
+                  <p className="mt-2 text-sm text-slate-500">
+                    {selectedServiceLocation
+                      ? `${selectedServiceLocation.country || 'Unknown country'} • ${selectedServiceLocation.timezone || 'No timezone set'}`
+                      : 'Choose a service location to narrow the drivers list, or leave it empty to see all active drivers.'}
+                  </p>
+                </div>
+
+                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
+                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Available Drivers</p>
+                      <p className="mt-1 text-sm font-semibold text-slate-600">
+                        {selectedServiceLocation
+                          ? `Drivers available around ${selectedServiceLocation.service_location_name || selectedServiceLocation.name}`
+                          : 'Showing all active drivers'}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="mt-3 space-y-3">
+                    {availableDrivers.length > 0 ? (
+                      availableDrivers.map((driver) => (
+                        <div
+                          key={driver._id || driver.id}
+                          className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
+                        >
+                          <div>
+                            <p className="text-sm font-bold text-slate-900">{driver.name || 'Unnamed Driver'}</p>
+                            <p className="mt-1 text-xs text-slate-500">
+                              {(driver.city || 'Unknown city')} • {(driver.mobile || 'No phone')}
+                            </p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">
+                              {driver.status || 'available'}
+                            </p>
+                            <p className="mt-1 text-xs text-slate-400">
+                              Rating: {driver.rating ?? '-'}
+                            </p>
+                          </div>
+                        </div>
+                      ))
+                    ) : (
+                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
+                        No active drivers found for this service location yet.
+                      </div>
+                    )}
+                  </div>
                 </div>
 
                 {/* Language Tabs */}
@@ -469,7 +586,7 @@ const ZoneManagement = () => {
                   </div>
 
                   <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-600">Name</label>
+                    <label className="text-sm font-semibold text-slate-600">Name <span className="text-rose-500">*</span></label>
                     <input 
                       type="text" 
                       placeholder="Enter name"
@@ -530,7 +647,7 @@ const ZoneManagement = () => {
                 {/* Peak Zone Parameters Grid */}
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Ride Count <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-semibold text-slate-600">Peak Zone Ride Count</label>
                     <input 
                       type="number" 
                       value={formData.peak_zone_ride_count}
@@ -539,7 +656,7 @@ const ZoneManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Radius <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-semibold text-slate-600">Peak Zone Radius</label>
                     <input 
                       type="number" 
                       value={formData.peak_zone_radius}
@@ -548,7 +665,7 @@ const ZoneManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Selection Duration in mins <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-semibold text-slate-600">Peak Zone Selection Duration in mins</label>
                     <input 
                       type="number" 
                       value={formData.peak_zone_selection_duration}
@@ -557,7 +674,7 @@ const ZoneManagement = () => {
                     />
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Duration in mins <span className="text-rose-500">*</span></label>
+                    <label className="text-xs font-semibold text-slate-600">Peak Zone Duration in mins</label>
                     <input 
                       type="number" 
                       value={formData.peak_zone_duration}
@@ -566,7 +683,7 @@ const ZoneManagement = () => {
                     />
                   </div>
                   <div className="col-span-1 space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Surge percentage <span className="text-rose-500">*</span> <span className="text-cyan-500 cursor-pointer">How It Works</span></label>
+                    <label className="text-xs font-semibold text-slate-600">Peak Zone Surge percentage <span className="text-cyan-500 cursor-pointer">How It Works</span></label>
                     <input 
                       type="number" 
                       value={formData.peak_zone_surge_percentage}
@@ -592,6 +709,12 @@ const ZoneManagement = () => {
               {/* Right Column: Map */}
               <div className="space-y-4">
                 <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
+                  {polygonCoords.length === 0 ? (
+                    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                      Draw the zone first: use the polygon tool on the map, click at least 3 points, then finish the shape.
+                    </div>
+                  ) : null}
+
                   {/* Search Bar inside map container area */}
                   <div className="mb-4 relative z-10">
                     {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (

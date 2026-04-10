@@ -154,33 +154,4 @@ export const installLegacyBackendShim = () => {
 
   globalThis[SHIM_FLAG] = true;
   globalThis.__LEGACY_BACKEND_ORIGIN__ = LEGACY_BACKEND_ORIGIN;
-
-  const originalFetch = globalThis.fetch?.bind(globalThis);
-
-  if (!originalFetch) {
-    return;
-  }
-
-  const patchedFetch = async (input, init) => {
-    const request = input instanceof Request ? input : null;
-    const url = request?.url || String(input);
-    const method = (init?.method || request?.method || 'GET').toUpperCase();
-
-    if (url.startsWith(LEGACY_BACKEND_ORIGIN)) {
-      const payload = routePayload(new URL(url).pathname, method);
-
-      if (payload instanceof Response) {
-        return payload;
-      }
-
-      return jsonResponse(payload);
-    }
-
-    return originalFetch(input, init);
-  };
-
-  globalThis.fetch = patchedFetch;
-  if (typeof window !== 'undefined') {
-    window.fetch = patchedFetch;
-  }
 };

@@ -3,6 +3,8 @@ import { AdminAppSetting } from '../models/AdminAppSetting.js';
 import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
+import { AdminThirdPartySetting } from '../models/AdminThirdPartySetting.js';
+import { createDefaultThirdPartySettings } from '../data/defaultThirdPartySettings.js';
 import { connectDatabase } from '../../../../config/database.js';
 
 const seed = async () => {
@@ -19,14 +21,23 @@ const seed = async () => {
     );
     console.log('App settings seeded successfully.');
 
-    // Refresh Business Settings (to clear tip/wallet from there)
+    // Seed Third Party Settings
+    const thirdPartyDefaults = createDefaultThirdPartySettings();
+    await AdminThirdPartySetting.findOneAndUpdate(
+      { scope: 'default' },
+      { $set: thirdPartyDefaults },
+      { upsert: true, new: true }
+    );
+    console.log('Third-party integration settings seeded successfully.');
+
+    // Refresh Business Settings
     const bizDefaults = createDefaultBusinessSettings();
     await AdminBusinessSetting.findOneAndUpdate(
       { scope: 'default' },
       { $set: bizDefaults },
       { upsert: true, new: true }
     );
-    console.log('Business settings refreshed (cleaned).');
+    console.log('Business settings refreshed.');
 
     process.exit(0);
   } catch (error) {

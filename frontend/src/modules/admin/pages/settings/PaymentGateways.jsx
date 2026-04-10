@@ -12,7 +12,7 @@ import toast from 'react-hot-toast';
 const PaymentGateways = () => {
   const [loading, setLoading] = useState(true);
   const [gateways, setGateways] = useState([]);
-  const [settingsRows, setSettingsRows] = useState([]);
+  const [settings, setSettings] = useState({});
   const [activeTab, setActiveTab] = useState('config'); // 'config' or 'raw'
   const [entries, setEntries] = useState(10);
   const [searchTerm, setSearchTerm] = useState('');
@@ -26,7 +26,7 @@ const PaymentGateways = () => {
         adminService.getPaymentSettings()
       ]);
       setGateways(gwRes.data?.results || []);
-      setSettingsRows(setRes.data?.rows || []);
+      setSettings(setRes.data?.settings || {});
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load data');
@@ -54,8 +54,16 @@ const PaymentGateways = () => {
   const handleToggle = async (slug, key, currentValue) => {
     try {
       const newValue = currentValue === "1" ? "0" : "1";
-      await adminService.updatePaymentSettings({ [key]: newValue });
-      setSettingsRows(prev => prev.map(row => row.key === key ? { ...row, value: newValue } : row));
+      // Send as nested object for update: { razor_pay: { enabled: "0" } }
+      const [parent, child] = key.split('.');
+      await adminService.updatePaymentSettings({ [parent]: { [child]: newValue } });
+      
+      setSettings(prev => {
+        const next = { ...prev };
+        if (!next[parent]) next[parent] = {};
+        next[parent][child] = newValue;
+        return next;
+      });
       toast.success(`${slug} ${newValue === "1" ? 'enabled' : 'disabled'}`);
     } catch (err) {
       toast.error('Failed to toggle status');
@@ -63,48 +71,57 @@ const PaymentGateways = () => {
   };
 
   const getSettingValue = (key) => {
-    return settingsRows.find(r => r.key === key)?.value || '';
+    const parts = key.split('.');
+    if (parts.length === 2) {
+      return settings[parts[0]]?.[parts[1]] || '';
+    }
+    return settings[key] || '';
   };
 
   const updateLocalValue = (key, value) => {
-    setSettingsRows(prev => prev.map(row => row.key === key ? { ...row, value } : row));
+    const [parent, child] = key.split('.');
+    setSettings(prev => {
+       const next = { ...prev };
+       if (!next[parent]) next[parent] = {};
+       next[parent][child] = value;
+       return next;
+    });
   };
 
-  // Group settings by typical gateway prefixes
   const gatewayGroups = [
-    { name: 'RAZOR PAY', slug: 'razor_pay', logo: 'https://cdn.razorpay.com/logo.svg', enableKey: 'enable_razor_pay', fields: [
-      { label: 'Razor Pay Environment', key: 'razor_pay_environment', type: 'select', options: ['test', 'live'] },
-      { label: 'Razor Pay Test Api Key', key: 'razor_pay_test_api_key' },
-      { label: 'Razor pay Test Secrect Key', key: 'razor_pay_test_secrect_key' },
-      { label: 'Razor Pay Live Api Key', key: 'razor_pay_live_api_key' },
-      { label: 'Razor Pay Secrect key', key: 'razor_pay_secrect_key' }
+    { name: 'RAZOR PAY', slug: 'razor_pay', logo: 'https://cdn.razorpay.com/logo.svg', enableKey: 'razor_pay.enabled', fields: [
+      { label: 'Razor Pay Environment', key: 'razor_pay.environment', type: 'select', options: ['test', 'live'] },
+      { label: 'Razor Pay Test Api Key', key: 'razor_pay.test_api_key' },
+      { label: 'Razor pay Test Secrect Key', key: 'razor_pay.test_secret_key' },
+      { label: 'Razor Pay Live Api Key', key: 'razor_pay.live_api_key' },
+      { label: 'Razor Pay Secrect key', key: 'razor_pay.live_secret_key' }
     ]},
-    { name: 'CASHFREE', slug: 'cash_free', logo: 'https://www.cashfree.com/images/cashfree-logo.svg', enableKey: 'enable_cashfree', fields: [
-      { label: 'Cashfree Environment', key: 'cash_free_environment', type: 'select', options: ['test', 'live'] },
-      { label: 'Cashfree Test Secret Key', key: 'cash_free_secret_key' },
-      { label: 'Cashfree Production Secret Key', key: 'cash_free_production_secret_key' },
-      { label: 'Cashfree Test App ID', key: 'cash_free_app_id' },
-      { label: 'Cashfree Production App ID', key: 'cash_free_production_app_id' }
+    { name: 'PHONE PAY', slug: 'phone_pay', logo: 'https://www.phonepe.com/webstatic/8101/static/m/83f6ed9f4a0a996dc7a69b7.svg', enableKey: 'phone_pay.enabled', fields: [
+      { label: 'PhonePay Environment', key: 'phone_pay.environment', type: 'select', options: ['test', 'production'] },
+      { label: 'Merchant ID', key: 'phone_pay.merchant_id' },
+      { label: 'Salt Key', key: 'phone_pay.salt_key' },
+      { label: 'Salt Index', key: 'phone_pay.salt_index' }
     ]},
-    { name: 'STRIPE', slug: 'stripe', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg', enableKey: 'enable_stripe', fields: [
-      { label: 'Stripe Environment', key: 'stripe_environment', type: 'select', options: ['test', 'live'] },
-      { label: 'Stripe Test Secret Key', key: 'stripe_test_secret_key' },
-      { label: 'Stripe Test Publishable Key', key: 'stripe_test_publishable_key' },
-      { label: 'Stripe Production Secret Key', key: 'stripe_live_secret_key' },
-      { label: 'Stripe Production Publishable Key', key: 'stripe_live_publishable_key' }
-    ]},
-    { name: 'PAYPAL', slug: 'paypal', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/b5/PayPal.svg', enableKey: 'enable_paypal', fields: [
-      { label: 'Paypal Environment', key: 'paypal_environment', type: 'select', options: ['sandbox', 'live'] },
-      { label: 'Paypal Sandbox Client ID', key: 'paypal_sandbox_client_id' },
-      { label: 'Paypal Sandbox Secret', key: 'paypal_sandbox_client_secret' },
-      { label: 'Paypal Live Client ID', key: 'paypal_client_id' },
-      { label: 'Paypal Live Secret', key: 'paypal_client_secret' }
+    { name: 'STRIPE', slug: 'stripe', logo: 'https://upload.wikimedia.org/wikipedia/commons/b/ba/Stripe_Logo%2C_revised_2016.svg', enableKey: 'stripe.enabled', fields: [
+      { label: 'Stripe Environment', key: 'stripe.environment', type: 'select', options: ['test', 'live'] },
+      { label: 'Stripe Test Secret Key', key: 'stripe.test_secret_key' },
+      { label: 'Stripe Test Publishable Key', key: 'stripe.test_publishable_key' },
+      { label: 'Stripe Production Secret Key', key: 'stripe.live_secret_key' },
+      { label: 'Stripe Production Publishable Key', key: 'stripe.live_publishable_key' }
     ]}
   ];
 
-  const filteredSettings = settingsRows.filter(row => 
-    row.key.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    row.value.toLowerCase().includes(searchTerm.toLowerCase())
+  const filteredSettings = Object.entries(settings).flatMap(([parentKey, subObj]) => 
+     Object.entries(subObj || {}).map(([childKey, value]) => ({
+        _id: `${parentKey}.${childKey}`,
+        key: `${parentKey}.${childKey}`,
+        value: String(value),
+        module: 'payment',
+        is_active: childKey === 'enabled' ? value === '1' : true
+     }))
+  ).filter(item => 
+      item.key.toLowerCase().includes(searchTerm.toLowerCase()) || 
+      item.value.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
   return (
@@ -176,11 +193,7 @@ const PaymentGateways = () => {
 
                    <div className="flex justify-end mt-8">
                       <button 
-                         onClick={() => {
-                            const data = {};
-                            gw.fields.forEach(f => data[f.key] = getSettingValue(f.key));
-                            handleSave(gw.name, data);
-                         }}
+                         onClick={() => handleSave(gw.name, { [gw.slug]: settings[gw.slug] })}
                          disabled={submitting[gw.name]}
                          className="px-6 py-2 bg-[#3F51B5] text-white rounded-md text-[12px] font-black uppercase tracking-widest hover:bg-[#303F9F] shadow-md transition-all flex items-center gap-2"
                       >

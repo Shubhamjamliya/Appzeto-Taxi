@@ -403,8 +403,8 @@ const AdminLayout = () => {
         title: 'Masters',
         items: [
           { icon: Globe, label: 'Language', path: '/admin/masters/languages' },
-          { icon: Star, label: 'Preferences', path: '/admin/masters/preferences' },
-          { icon: ShieldCheck, label: 'Roles', path: '/admin/masters/roles' },
+          // { icon: Star, label: 'Preferences', path: '/admin/masters/preferences' },
+          // { icon: ShieldCheck, label: 'Roles', path: '/admin/masters/roles' },
         ],
       },
       {
@@ -443,11 +443,11 @@ const AdminLayout = () => {
               { label: 'Notification Channel', path: '/admin/settings/third-party/notification-channel' },
             ],
           },
-          {
-            icon: PlusCircle,
-            label: 'Addons',
-            subItems: [{ label: 'Dispatcher Addons', path: '/admin/settings/addons/dispatcher' }],
-          },
+          // {
+          //   icon: PlusCircle,
+          //   label: 'Addons',
+          //   subItems: [{ label: 'Dispatcher Addons', path: '/admin/settings/addons/dispatcher' }],
+          // },
           {
             icon: Monitor,
             label: 'CMS-Landing Website',

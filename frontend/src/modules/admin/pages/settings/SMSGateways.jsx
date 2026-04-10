@@ -10,14 +10,14 @@ import toast from 'react-hot-toast';
 
 const SMSGateways = () => {
   const [loading, setLoading] = useState(true);
-  const [settingsRows, setSettingsRows] = useState([]);
+  const [settings, setSettings] = useState({});
   const [submitting, setSubmitting] = useState({});
 
   const fetchData = async () => {
     try {
       setLoading(true);
       const res = await adminService.getSMSSettings();
-      setSettingsRows(res.data?.rows || []);
+      setSettings(res.data?.settings || {});
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load SMS settings');
@@ -30,10 +30,11 @@ const SMSGateways = () => {
     fetchData();
   }, []);
 
-  const handleSave = async (slug, data) => {
+  const handleSave = async (slug, providerSlug) => {
     try {
       setSubmitting(prev => ({ ...prev, [slug]: true }));
-      await adminService.updateSMSSettings(data);
+      // Send the whole provider slice: { twilio: { ... } }
+      await adminService.updateSMSSettings({ [providerSlug]: settings[providerSlug] });
       toast.success(`${slug} configuration updated`);
     } catch (err) {
       toast.error('Failed to save configuration');
@@ -43,19 +44,36 @@ const SMSGateways = () => {
   };
 
   const getSettingValue = (key) => {
-    return settingsRows.find(r => r.key === key)?.value || '';
+    const parts = key.split('.');
+    if (parts.length === 2) {
+      return settings[parts[0]]?.[parts[1]] || '';
+    }
+    return settings[key] || '';
   };
 
   const updateLocalValue = (key, value) => {
-    setSettingsRows(prev => prev.map(row => row.key === key ? { ...row, value } : row));
+    const [parent, child] = key.split('.');
+    setSettings(prev => {
+       const next = { ...prev };
+       if (!next[parent]) next[parent] = {};
+       next[parent][child] = value;
+       return next;
+    });
   };
 
   const handleToggle = async (slug, key) => {
     try {
       const currentValue = getSettingValue(key);
       const newValue = currentValue === "1" ? "0" : "1";
-      await adminService.updateSMSSettings({ [key]: newValue });
-      updateLocalValue(key, newValue);
+      const [parent, child] = key.split('.');
+      await adminService.updateSMSSettings({ [parent]: { [child]: newValue } });
+      
+      setSettings(prev => {
+        const next = { ...prev };
+        if (!next[parent]) next[parent] = {};
+        next[parent][child] = newValue;
+        return next;
+      });
       toast.success(`${slug} ${newValue === "1" ? 'enabled' : 'disabled'}`);
     } catch (err) {
       toast.error('Failed to toggle status');
@@ -63,24 +81,20 @@ const SMSGateways = () => {
   };
 
   const smsProviders = [
-    { name: 'Twilio', slug: 'twilio', logo: 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Twilio-logo.svg', enableKey: 'enable_twilio', fields: [
-      { label: 'Sid', key: 'twilio_sid' },
-      { label: 'Token', key: 'twilio_token' },
-      { label: 'Twilio Mobile Number', key: 'twilio_from_number' }
+    { name: 'Twilio', slug: 'twilio', logo: 'https://upload.wikimedia.org/wikipedia/commons/7/7e/Twilio-logo.svg', enableKey: 'twilio.enabled', fields: [
+      { label: 'Sid', key: 'twilio.sid' },
+      { label: 'Token', key: 'twilio.token' },
+      { label: 'Twilio Mobile Number', key: 'twilio.from_number' }
     ]},
-    { name: 'SMS ALA', slug: 'smsala', logo: 'https://smsala.com/wp-content/uploads/2021/04/smsala-logo-1.png', enableKey: 'enable_sms_ala', fields: [
-      { label: 'Api Key', key: 'smsala_api_key' },
-      { label: 'Api Secret Key', key: 'smsala_secrect_key' },
-      { label: 'Token', key: 'smsala_token' },
-      { label: 'SMS ALA Mobile Number', key: 'smsala_from_number' }
+    { name: 'SMS ALA', slug: 'smsala', logo: 'https://smsala.com/wp-content/uploads/2021/04/smsala-logo-1.png', enableKey: 'smsala.enabled', fields: [
+      { label: 'Api Key', key: 'smsala.api_key' },
+      { label: 'Api Secret Key', key: 'smsala.secret_key' },
+      { label: 'Token', key: 'smsala.token' },
+      { label: 'SMS ALA Mobile Number', key: 'smsala.from_number' }
     ]},
-    { name: 'SMS India Hub', slug: 'sms_india_hub', logo: 'https://www.smsindiahub.in/wp-content/uploads/2019/11/sms-india-hub-logo-1.png', enableKey: 'enable_sms_india_hub', fields: [
-      { label: 'SMS India Hub Api Key', key: 'sms_india_hub_api_key' },
-      { label: 'SMS India Hub SID', key: 'sms_india_hub_sid' }
-    ]},
-    { name: 'Kudi SMS', slug: 'kudi_sms', logo: 'https://kudisms.com/img/logo.png', enableKey: 'enable_kudi_sms_api_key', fields: [
-      { label: 'Kudi SMS Api Key', key: 'kudi_sms_api_key' },
-      { label: 'Kudi SMS Sender ID', key: 'kudi_sms_sender_id' }
+    { name: 'SMS India Hub', slug: 'india_hub', logo: 'https://www.smsindiahub.in/wp-content/uploads/2019/11/sms-india-hub-logo-1.png', enableKey: 'india_hub.enabled', fields: [
+      { label: 'SMS India Hub Api Key', key: 'india_hub.api_key' },
+      { label: 'SMS India Hub SID', key: 'india_hub.sid' }
     ]}
   ];
 
@@ -109,14 +123,14 @@ const SMSGateways = () => {
         
         {/* Top Feature Toggle Card */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-100 p-8 flex items-center justify-between">
-           <span className="text-[14px] font-bold text-gray-700">Enable Firebase OTP</span>
-           <label className="relative inline-flex items-center cursor-pointer">
-              <input 
-                 type="checkbox" 
-                 checked={getSettingValue('enable_firebase_otp') === "1"} 
-                 onChange={() => handleToggle('Firebase OTP', 'enable_firebase_otp')}
-                 className="sr-only peer" 
-              />
+            <span className="text-[14px] font-bold text-gray-700">Enable Firebase OTP</span>
+            <label className="relative inline-flex items-center cursor-pointer">
+               <input 
+                  type="checkbox" 
+                  checked={getSettingValue('firebase.enabled') === "1"} 
+                  onChange={() => handleToggle('Firebase OTP', 'firebase.enabled')}
+                  className="sr-only peer" 
+               />
               <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-[#3F51B5]"></div>
            </label>
         </div>
@@ -159,11 +173,7 @@ const SMSGateways = () => {
 
                  <div className="flex justify-end mt-8">
                     <button 
-                       onClick={() => {
-                          const data = {};
-                          provider.fields.forEach(f => data[f.key] = getSettingValue(f.key));
-                          handleSave(provider.name, data);
-                       }}
+                       onClick={() => handleSave(provider.name, provider.slug)}
                        disabled={submitting[provider.name]}
                        className="px-6 py-2 bg-[#3F51B5] text-white rounded-md text-[12px] font-black uppercase tracking-widest hover:bg-[#303F9F] shadow-md transition-all flex items-center gap-2"
                     >

@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { socketService } from '../../../shared/api/socket';
 import { getSupportConversations, getSupportMessages, markSupportMessagesRead, sendSupportMessage } from '../chat/chatApi';
-import { getChatSession } from '../chat/chatIdentity';
+import { getChatSession, parseSupportConversationKey } from '../chat/chatIdentity';
 
 const quickReplies = ['Payment issue', 'Ride delayed', 'Lost item', 'Safety concern'];
 
@@ -78,6 +78,20 @@ const SupportChatPanel = ({
   const isAdminPanel = mode === 'admin';
   const isLiveEnabled = session.isAuthenticated;
 
+  useEffect(() => {
+    if (!session.role || session.role === 'guest') {
+      return undefined;
+    }
+
+    localStorage.setItem('chatRole', session.role);
+
+    return () => {
+      if (localStorage.getItem('chatRole') === session.role) {
+        localStorage.removeItem('chatRole');
+      }
+    };
+  }, [session.role]);
+
   const [conversations, setConversations] = useState([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState('');
   const [messages, setMessages] = useState([]);
@@ -92,6 +106,48 @@ const SupportChatPanel = ({
     () => conversations.find((item) => item.conversationKey === selectedConversationKey) || null,
     [conversations, selectedConversationKey],
   );
+
+  const isMessageForActiveConversation = (message, conversationKey = selectedConversationKey) => {
+    const parsedConversation = parseSupportConversationKey(conversationKey);
+
+    if (!parsedConversation || !message?.sender || !message?.receiver) {
+      return false;
+    }
+
+    const sessionId = session.id ? String(session.id) : '';
+    const senderId = String(message.sender.id || '');
+    const receiverId = String(message.receiver.id || '');
+
+    if (!sessionId || !senderId || !receiverId) {
+      return message.conversationKey === conversationKey || message.conversationKey === parsedConversation.canonicalKey;
+    }
+
+    if (session.role === 'admin') {
+      return (
+        message.sender.role === 'admin' &&
+        senderId === sessionId &&
+        message.receiver.role === parsedConversation.peerRole &&
+        receiverId === String(parsedConversation.peerId)
+      ) || (
+        message.sender.role === parsedConversation.peerRole &&
+        senderId === String(parsedConversation.peerId) &&
+        message.receiver.role === 'admin' &&
+        receiverId === sessionId
+      );
+    }
+
+    return (
+      message.sender.role === session.role &&
+      senderId === sessionId &&
+      message.receiver.role === 'admin' &&
+      receiverId === String(parsedConversation.adminId)
+    ) || (
+      message.sender.role === 'admin' &&
+      senderId === String(parsedConversation.adminId) &&
+      message.receiver.role === session.role &&
+      receiverId === sessionId
+    );
+  };
 
   const visibleConversations = useMemo(() => {
     const query = search.trim().toLowerCase();
@@ -112,20 +168,34 @@ const SupportChatPanel = ({
     setConversations((current) => {
       const index = current.findIndex((item) => item.conversationKey === message.conversationKey);
       const latestMessage = normalizeMessage(message);
-
-      const peer =
-        session.role === 'admin'
+      const parsedConversation = parseSupportConversationKey(message.conversationKey);
+      const adminSide =
+        latestMessage.sender.role === 'admin'
           ? {
-              role: latestMessage.sender.role === 'admin' ? latestMessage.receiver.role : latestMessage.sender.role,
-              id: latestMessage.sender.role === 'admin' ? latestMessage.receiver.id : latestMessage.sender.id,
-              name: latestMessage.sender.role === 'admin' ? latestMessage.receiver.name : latestMessage.sender.name,
-              phone: latestMessage.sender.role === 'admin' ? latestMessage.receiver.phone : latestMessage.sender.phone,
+              role: 'admin',
+              id: latestMessage.sender.id,
+              name: latestMessage.sender.name,
+              phone: latestMessage.sender.phone,
             }
           : {
               role: 'admin',
               id: latestMessage.receiver.id,
-              name: latestMessage.receiver.name || 'Support Team',
-              phone: latestMessage.receiver.phone || '',
+              name: latestMessage.receiver.name,
+              phone: latestMessage.receiver.phone,
+            };
+
+      const peer =
+        session.role === 'admin'
+          ? {
+              role: parsedConversation?.peerRole || (latestMessage.sender.role === 'admin' ? latestMessage.receiver.role : latestMessage.sender.role),
+              id: parsedConversation?.peerId || (latestMessage.sender.role === 'admin' ? latestMessage.receiver.id : latestMessage.sender.id),
+              name: latestMessage.sender.role === 'admin' ? latestMessage.receiver.name : latestMessage.sender.name,
+              phone: latestMessage.sender.role === 'admin' ? latestMessage.receiver.phone : latestMessage.sender.phone,
+            }
+          : {
+              ...adminSide,
+              name: adminSide.name || 'Support Team',
+              phone: adminSide.phone || '',
             };
 
       const unreadCount =
@@ -162,13 +232,13 @@ const SupportChatPanel = ({
       return undefined;
     }
 
-    socketService.connect({ role: session.role });
+    socketService.connect({ role: session.role, token: session.token });
 
     const handleMessage = (incomingMessage) => {
       const message = normalizeMessage(incomingMessage);
       syncConversationList(message);
 
-      if (message.conversationKey === selectedConversationKey) {
+      if (isMessageForActiveConversation(message)) {
         setMessages((current) => {
           if (current.some((item) => item.id === message.id)) {
             return current;
@@ -219,7 +289,7 @@ const SupportChatPanel = ({
       setError('');
 
       try {
-        const response = await getSupportConversations();
+        const response = await getSupportConversations(session.token);
         const nextConversations = (response?.data?.conversations || []).map(normalizeConversation);
 
         if (!active) {
@@ -273,31 +343,26 @@ const SupportChatPanel = ({
     let active = true;
 
     const loadMessages = async () => {
+      setMessages([]);
       setLoading(true);
       setError('');
 
       try {
-        const response = await getSupportMessages(selectedConversationKey);
-        const nextMessages = (response?.data?.messages || []).map(normalizeMessage);
+        const response = await getSupportMessages(selectedConversationKey, session.token);
+        const nextMessages = (response?.data?.messages || [])
+          .map(normalizeMessage)
+          .filter((message) => isMessageForActiveConversation(message, selectedConversationKey));
 
         if (!active) {
           return;
         }
 
-        setMessages((current) => {
-          const merged = new Map(current.map((item) => [item.id, item]));
-
-          for (const message of nextMessages) {
-            merged.set(message.id, message);
-          }
-
-          return Array.from(merged.values()).sort(
-            (left, right) => new Date(left.createdAt || 0) - new Date(right.createdAt || 0),
-          );
-        });
+        setMessages(
+          nextMessages.sort((left, right) => new Date(left.createdAt || 0) - new Date(right.createdAt || 0)),
+        );
         socketService.emit('chat:join', { conversationKey: selectedConversationKey });
         socketService.emit('chat:read', { conversationKey: selectedConversationKey });
-        await markSupportMessagesRead(selectedConversationKey);
+        await markSupportMessagesRead(selectedConversationKey, session.token);
       } catch (chatError) {
         if (!active) {
           return;
@@ -319,11 +384,20 @@ const SupportChatPanel = ({
   }, [isLiveEnabled, selectedConversationKey]);
 
   useEffect(() => {
+    const parsedConversation = parseSupportConversationKey(selectedConversationKey);
+
+    if (parsedConversation && parsedConversation.canonicalKey !== selectedConversationKey) {
+      setSelectedConversationKey(parsedConversation.canonicalKey);
+    }
+  }, [selectedConversationKey]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSelectConversation = (conversationKey) => {
-    setSelectedConversationKey(conversationKey);
+    const parsedConversation = parseSupportConversationKey(conversationKey);
+    setSelectedConversationKey(parsedConversation?.canonicalKey || conversationKey);
   };
 
   const handleSend = async () => {
@@ -334,12 +408,13 @@ const SupportChatPanel = ({
 
     setSending(true);
     setError('');
+    const parsedConversation = parseSupportConversationKey(selectedConversationKey);
 
     const payload = isAdminPanel
       ? {
           message: text,
-          receiverRole: selectedConversation?.peer?.role || 'user',
-          receiverId: selectedConversation?.peer?.id,
+          receiverRole: parsedConversation?.peerRole || selectedConversation?.peer?.role || 'user',
+          receiverId: parsedConversation?.peerId || selectedConversation?.peer?.id,
           conversationKey: selectedConversationKey,
         }
       : {
@@ -351,7 +426,7 @@ const SupportChatPanel = ({
       if (socketService.isConnected()) {
         socketService.emit('chat:send', payload);
       } else {
-        const response = await sendSupportMessage(payload);
+        const response = await sendSupportMessage(payload, session.token);
         const savedMessage = normalizeMessage(response?.data?.message);
 
         if (savedMessage?.id) {
@@ -519,7 +594,10 @@ const SupportChatPanel = ({
             ) : (
               <div className="mx-auto flex max-w-4xl flex-col gap-4">
                 {messages.map((message) => {
-                  const isMine = message.sender.role === session.role;
+                  const isMine =
+                    message.sender.id && session.id
+                      ? String(message.sender.id) === String(session.id)
+                      : message.sender.role === session.role;
 
                   return (
                     <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

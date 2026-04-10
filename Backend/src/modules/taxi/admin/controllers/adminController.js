@@ -322,17 +322,18 @@ export const getPaymentGateways = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listPaymentGateways() }),
 );
 export const getPaymentSettings = asyncHandler(async (_req, res) =>
-  ok(res, { rows: await adminService.getPaymentSettings() }),
+  ok(res, await adminService.getPaymentSettings()),
 );
 export const updatePaymentSettings = asyncHandler(async (req, res) =>
-  ok(res, { rows: await adminService.updatePaymentSettings(req.body) }),
+  ok(res, await adminService.updatePaymentSettings(req.body)),
 );
 
+export const getSmsSettings = asyncHandler(async (_req, res) => ok(res, await adminService.getSMSSettings()));
 export const getSmsSettings = asyncHandler(async (_req, res) =>
   ok(res, { rows: await adminService.getSmsSettings() }),
 );
 export const updateSmsSettings = asyncHandler(async (req, res) =>
-  ok(res, { rows: await adminService.updateSmsSettings(req.body) }),
+  ok(res, await adminService.updateSMSSettings(req.body)),
 );
 
 export const getFirebaseSettings = asyncHandler(async (_req, res) =>
@@ -400,4 +401,10 @@ export const downloadFleetFinanceReport = asyncHandler(async (_req, res) =>
     "fleet-finance-report.csv",
     await adminService.buildFleetFinanceReport(),
   ),
+);
+export const getGeneralSettingsCategory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getGeneralSettings(req.params.category)),
+);
+export const updateGeneralSettingsCategory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateGeneralSettings(req.params.category, req.body)),
 );

@@ -13,27 +13,48 @@ const api = axios.create({
 api.interceptors.request.use(
   (config) => {
     const requestPath = String(config.url || '').split('?')[0];
+    const existingAuthorization = config.headers?.Authorization || config.headers?.authorization;
+
+    if (existingAuthorization) {
+      return config;
+    }
+
     const storedRole = localStorage.getItem('role');
+    const chatRole = localStorage.getItem('chatRole');
+    const normalizedChatRole = String(chatRole || '').toLowerCase();
+    const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+    const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
     const isAdminRoute =
       /^\/admin(\/|$)/.test(requestPath) ||
       /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
     const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
+    const isChatRoute = /^\/chats?(\/|$)/.test(requestPath);
 
     let token = null;
 
-    if (isAdminRoute) {
+    if (isChatRoute) {
+      if (normalizedChatRole === 'admin') {
+        token = localStorage.getItem('adminToken');
+      } else if (normalizedChatRole === 'driver') {
+        token = driverToken;
+      } else if (normalizedChatRole === 'user') {
+        token = userToken;
+      }
+    } else if (isAdminRoute) {
       token = localStorage.getItem('adminToken');
     } else if (isDriverRoute || storedRole === 'driver') {
-      token = localStorage.getItem('token');
+      token = driverToken;
+    } else if (storedRole === 'user') {
+      token = userToken;
     } else if (storedRole === 'admin') {
       token = localStorage.getItem('adminToken');
     } else {
-      token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+      token = localStorage.getItem('adminToken') || userToken || driverToken;
     }
 
     if (!token) {
-      token = localStorage.getItem('token');
+      token = userToken || driverToken || localStorage.getItem('token');
     }
 
     if (token) {

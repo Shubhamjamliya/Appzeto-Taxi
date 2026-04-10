@@ -3,11 +3,15 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
+import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
+import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
 import { OwnerNeededDocument } from '../models/OwnerNeededDocument.js';
 import { OwnerBooking } from '../models/OwnerBooking.js';
 import { Owner } from '../models/Owner.js';
+import { AdminThirdPartySetting } from '../models/AdminThirdPartySetting.js';
+import { createDefaultThirdPartySettings } from '../data/defaultThirdPartySettings.js';
 import { RentalPackageType } from '../models/RentalPackageType.js';
 import { SetPrice } from '../models/SetPrice.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
@@ -15,6 +19,19 @@ import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { hashPassword } from '../../driver/services/authService.js';
+
+const deepMerge = (target, source) => {
+  const result = { ...target };
+  for (const key in source) {
+    if (source[key] instanceof Object && key in result && result[key] instanceof Object) {
+      result[key] = deepMerge(result[key], source[key]);
+    } else {
+      result[key] = source[key];
+    }
+  }
+  return result;
+};
+import { signAccessToken } from '../../services/tokenService.js';
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -441,12 +458,18 @@ export const loginAdmin = async ({ email, password }) => {
     throw new ApiError(401, 'Invalid admin credentials');
   }
 
+  const dbAdmin = await Admin.findOne({ phone: '9999999999' }).select('_id name phone email');
+
+  if (!dbAdmin) {
+    throw new ApiError(500, 'Unable to resolve admin account');
+  }
+
   return {
-    token: `admin-session-${admin._id}`,
+    token: signAccessToken({ sub: String(dbAdmin._id), role: 'admin' }),
     admin: {
-      id: admin._id,
-      name: admin.name,
-      email: admin.email,
+      id: String(dbAdmin._id),
+      name: dbAdmin.name || admin.name,
+      email: dbAdmin.email || admin.email,
       role: admin.role,
     },
   };
@@ -1746,119 +1769,105 @@ export const deleteRole = async (id) => {
   return true;
 };
 
-export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  const state = await ensureAdminState();
-  const items = [...state.appModules].sort((a, b) => Number(a.order_by || 0) - Number(b.order_by || 0));
-  return buildPaginator(items, page, limit);
+
+
+export const listNotificationChannels = async () =>
+  (await ensureThirdPartySettings()).notification_channels;
+
+export const toggleChannelPush = async (id, status) => {
+  const settings = await ensureThirdPartySettings();
+  const index = settings.notification_channels.findIndex((c) => String(c._id) === String(id));
+  if (index === -1) throw new ApiError(404, 'Channel not found');
+
+  settings.notification_channels[index].push_notification = !!status;
+  settings.markModified('notification_channels');
+  await settings.save();
+  return settings.notification_channels[index];
 };
 
-export const createAppModule = async (payload) => {
-  const state = await ensureAdminState();
-  const moduleItem = {
-    _id: nextId(),
-    name: payload.name,
-    transport_type: payload.transport_type,
-    service_type: payload.service_type,
-    order_by: Number(payload.order_by || 0),
-    short_description: payload.short_description || '',
-    description: payload.description || '',
-    active: normalizeBoolean(payload.active ?? true),
-    mobile_menu_icon:
-      payload.mobile_menu_icon ||
-      (payload.transport_type === 'delivery'
-        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
-        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
-  };
-  state.appModules.unshift(moduleItem);
-  await state.save();
-  return moduleItem;
+export const toggleChannelMail = async (id, status) => {
+  const settings = await ensureThirdPartySettings();
+  const index = settings.notification_channels.findIndex((c) => String(c._id) === String(id));
+  if (index === -1) throw new ApiError(404, 'Channel not found');
+
+  settings.notification_channels[index].mail = !!status;
+  settings.markModified('notification_channels');
+  await settings.save();
+  return settings.notification_channels[index];
 };
 
-export const updateAppModule = async (id, payload) => {
-  const state = await ensureAdminState();
-  const moduleItem = findById(state.appModules, id);
-  if (!moduleItem) throw new ApiError(404, 'App module not found');
-  Object.assign(moduleItem, payload, {
-    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
-  });
-  await state.save();
-  return moduleItem;
+export const listPaymentGateways = async () => []; // Legacy or static list if needed
+
+export const getPaymentSettings = async () => {
+  const settings = await ensureThirdPartySettings();
+  return { settings: settings.payment || {} };
 };
-
-export const deleteAppModule = async (id) => {
-  const state = await ensureAdminState();
-  state.appModules = removeById(state.appModules, id);
-  await state.save();
-  return true;
-};
-
-export const listNotificationChannels = async () => (await ensureAdminState()).notificationChannels;
-
-export const updateNotificationChannelField = async (id, field, value) => {
-  const state = await ensureAdminState();
-  const channel = findById(state.notificationChannels, id);
-  if (!channel) throw new ApiError(404, 'Notification channel not found');
-  channel[field] = normalizeBoolean(value);
-  await state.save();
-  return channel;
-};
-
-export const listPaymentGateways = async () => (await ensureAdminState()).paymentGateways;
-
-export const getPaymentSettings = async () => (await ensureAdminState()).paymentSettings;
 
 export const updatePaymentSettings = async (payload) => {
-  const state = await ensureAdminState();
-  state.paymentSettings = syncSettingRows(state.paymentSettings, payload);
-  await state.save();
-  return state.paymentSettings;
+  const settings = await ensureThirdPartySettings();
+  settings.payment = deepMerge(settings.payment || {}, payload);
+  settings.markModified('payment');
+  await settings.save();
+  return { settings: settings.payment };
 };
 
-export const getSmsSettings = async () => (await ensureAdminState()).smsSettings;
-
-export const updateSmsSettings = async (payload) => {
-  const state = await ensureAdminState();
-  state.smsSettings = syncSettingRows(state.smsSettings, payload);
-  await state.save();
-  return state.smsSettings;
+export const getSMSSettings = async () => {
+  const settings = await ensureThirdPartySettings();
+  return { settings: settings.sms || {} };
 };
 
-export const getFirebaseSettings = async () => (await ensureAdminState()).firebaseSettings;
+export const updateSMSSettings = async (payload) => {
+  const settings = await ensureThirdPartySettings();
+  settings.sms = deepMerge(settings.sms || {}, payload);
+  settings.markModified('sms');
+  await settings.save();
+  return { settings: settings.sms };
+};
+
+export const getFirebaseSettings = async () => {
+  const settings = await ensureThirdPartySettings();
+  return { settings: settings.firebase || {} };
+};
 
 export const updateFirebaseSettings = async (payload) => {
-  const state = await ensureAdminState();
-  state.firebaseSettings = {
-    ...state.firebaseSettings,
+  const settings = await ensureThirdPartySettings();
+  settings.firebase = {
+    ...settings.firebase,
     ...payload,
-    firebase_json_name: payload.firebase_json_name || state.firebaseSettings.firebase_json_name,
+    firebase_json_name: payload.firebase_json_name || settings.firebase.firebase_json_name,
   };
-  await state.save();
-  return state.firebaseSettings;
+  settings.markModified('firebase');
+  await settings.save();
+  return { settings: settings.firebase };
 };
 
-export const getMapSettings = async () => (await ensureAdminState()).mapSettings;
+export const getMapSettings = async () => {
+  const settings = await ensureThirdPartySettings();
+  return { settings: settings.map_apis || {} };
+};
 
 export const updateMapSettings = async (payload) => {
-  const state = await ensureAdminState();
-  state.mapSettings = { ...state.mapSettings, ...payload };
-  await state.save();
-  return state.mapSettings;
+  const settings = await ensureThirdPartySettings();
+  settings.map_apis = { ...settings.map_apis, ...payload };
+  settings.markModified('map_apis');
+  await settings.save();
+  return { settings: settings.map_apis };
 };
 
-export const getMailSettings = async () => (await ensureAdminState()).mailSettings;
+export const getMailSettings = async () => {
+  const settings = await ensureThirdPartySettings();
+  return { settings: settings.mail || {} };
+};
 
 export const updateMailSettings = async (payload) => {
-  const state = await ensureAdminState();
-  state.mailSettings = { ...state.mailSettings, ...payload };
-  await state.save();
-  return state.mailSettings;
+  const settings = await ensureThirdPartySettings();
+  settings.mail = { ...settings.mail, ...payload };
+  settings.markModified('mail');
+  await settings.save();
+  return { settings: settings.mail };
 };
 
-export const listOnboardingScreens = async (audience) => {
-  const state = await ensureAdminState();
-  return state.onboardingScreens.filter((screen) => screen.audience === audience || screen.screen === audience);
-};
+
 
 export const buildUserReport = async () => {
   const state = await ensureAdminState();
@@ -1922,5 +1931,162 @@ export const buildFleetFinanceReport = async () => {
       transport_type: item.transport_type,
       active: item.active,
     })),
+  );
+};
+
+export const ensureBusinessSettings = async () => {
+  let settings = await AdminBusinessSetting.findOne({ scope: 'default' });
+  if (!settings) {
+    settings = await AdminBusinessSetting.create(createDefaultBusinessSettings());
+  }
+  return settings;
+};
+
+/**
+ * Ensures a default third-party settings document exists.
+ */
+export const ensureThirdPartySettings = async () => {
+  let settings = await AdminThirdPartySetting.findOne({ scope: 'default' });
+  if (!settings) {
+    settings = await AdminThirdPartySetting.create(createDefaultThirdPartySettings());
+  }
+  return settings;
+};
+
+import { AdminAppSetting } from '../models/AdminAppSetting.js';
+import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
+
+/**
+ * Ensures a default administrative application settings document exists.
+ */
+export const ensureAppSettings = async () => {
+  let settings = await AdminAppSetting.findOne({ scope: 'default' });
+  if (!settings) {
+    settings = await AdminAppSetting.create(createDefaultAppSettings());
+  }
+  return settings;
+};
+
+export const getGeneralSettings = async (category) => {
+  const bizSettings = await ensureBusinessSettings();
+  const appSettings = await ensureAppSettings();
+
+  const businessMapper = {
+    customize: 'customization',
+    'transport-ride': 'transport_ride',
+    'bid-ride': 'bid_ride',
+    general: 'general',
+  };
+
+  const appMapper = {
+    wallet: 'wallet_setting',
+    tip: 'tip_setting',
+  };
+
+  if (appMapper[category]) {
+    return { settings: appSettings[appMapper[category]] || {} };
+  }
+
+  const key = businessMapper[category] || category;
+  return { settings: bizSettings[key] || {} };
+};
+
+export const updateGeneralSettings = async (category, payload) => {
+  const bizSettings = await ensureBusinessSettings();
+  const appSettings = await ensureAppSettings();
+
+  const businessMapper = {
+    customize: 'customization',
+    'transport-ride': 'transport_ride',
+    'bid-ride': 'bid_ride',
+    general: 'general',
+  };
+
+  const appMapper = {
+    wallet: 'wallet_setting',
+    tip: 'tip_setting',
+  };
+
+  const newValues = payload.settings || payload;
+
+  if (appMapper[category]) {
+    const key = appMapper[category];
+    appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
+    appSettings.markModified(key);
+    await appSettings.save();
+    return { settings: appSettings[key] };
+  }
+
+  const bizKey = businessMapper[category] || category;
+  if (!bizSettings.schema.path(bizKey)) {
+    return { settings: {} };
+  }
+
+  bizSettings[bizKey] = { ...(bizSettings[bizKey] || {}), ...newValues };
+  bizSettings.markModified(bizKey);
+  await bizSettings.save();
+  return { settings: bizSettings[bizKey] };
+};
+
+export const listAppModules = async ({ page = 1, limit = 20 }) => {
+  const settings = await ensureAppSettings();
+  const items = [...(settings.app_modules || [])].sort(
+    (a, b) => Number(a.order_by || 0) - Number(b.order_by || 0),
+  );
+  return buildPaginator(items, page, limit);
+};
+
+export const createAppModule = async (payload) => {
+  const settings = await ensureAppSettings();
+  const moduleItem = {
+    _id: nextId(),
+    name: payload.name,
+    transport_type: payload.transport_type,
+    service_type: payload.service_type,
+    order_by: Number(payload.order_by || 0),
+    short_description: payload.short_description || '',
+    description: payload.description || '',
+    active: normalizeBoolean(payload.active ?? true),
+    mobile_menu_icon:
+      payload.mobile_menu_icon ||
+      (payload.transport_type === 'delivery'
+        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
+        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
+  };
+  settings.app_modules.unshift(moduleItem);
+  settings.markModified('app_modules');
+  await settings.save();
+  return moduleItem;
+};
+
+export const updateAppModule = async (id, payload) => {
+  const settings = await ensureAppSettings();
+  const index = settings.app_modules.findIndex((m) => String(m._id) === String(id));
+  if (index === -1) throw new ApiError(404, 'App module not found');
+
+  const moduleItem = settings.app_modules[index];
+  Object.assign(moduleItem, payload, {
+    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
+  });
+
+  settings.app_modules[index] = moduleItem;
+  settings.markModified('app_modules');
+  await settings.save();
+  return moduleItem;
+};
+
+export const deleteAppModule = async (id) => {
+  const settings = await ensureAppSettings();
+  settings.app_modules = settings.app_modules.filter((m) => String(m._id) === String(id));
+  settings.markModified('app_modules');
+  await settings.save();
+  return true;
+};
+
+export const listOnboardingScreens = async (audience) => {
+  const settings = await ensureAppSettings();
+  return (settings.onboarding_screens || []).filter(
+    (screen) => screen.audience === audience || screen.screen === audience,
   );
 };

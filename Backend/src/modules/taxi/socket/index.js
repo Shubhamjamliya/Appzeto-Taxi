@@ -78,6 +78,15 @@ export const configureTaxiSocketServer = (httpServer) => {
 
     socket.on('chat:join', ({ conversationKey }) => {
       if (conversationKey) {
+        const parsed = parseSupportConversationKey(conversationKey);
+
+        if (parsed) {
+          for (const key of parsed.keys) {
+            socket.join(getSupportRoom(key));
+          }
+          return;
+        }
+
         socket.join(getSupportRoom(conversationKey));
       }
     });
@@ -99,6 +108,7 @@ export const configureTaxiSocketServer = (httpServer) => {
           senderId: identity.sub,
           receiverRole: nextReceiverRole,
           receiverId: nextReceiverId,
+          conversationKey,
           message,
         });
 

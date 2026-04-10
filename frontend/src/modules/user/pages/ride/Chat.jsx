@@ -7,9 +7,19 @@ import SupportChatPanel from '../../../shared/components/SupportChatPanel';
 const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const isAdminChat = new URLSearchParams(location.search).get('admin') === 'true';
-  const supportRole = localStorage.getItem('role') === 'driver' ? 'driver' : 'user';
-  const hasLiveToken = Boolean(localStorage.getItem('token'));
+  const searchParams = new URLSearchParams(location.search);
+  const isAdminChat = searchParams.get('admin') === 'true';
+  const routeRole = searchParams.get('role');
+  const supportRole = routeRole === 'driver' || routeRole === 'user'
+    ? routeRole
+    : localStorage.getItem('role') === 'driver'
+      ? 'driver'
+      : 'user';
+  const hasLiveToken = Boolean(
+    supportRole === 'driver'
+      ? localStorage.getItem('driverToken') || localStorage.getItem('token')
+      : localStorage.getItem('userToken') || localStorage.getItem('token'),
+  );
   const bottomRef = useRef(null);
 
   if (isAdminChat && hasLiveToken) {
@@ -21,12 +31,14 @@ const Chat = () => {
           </button>
           <div className="text-right">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Support</p>
-            <h1 className="text-[16px] font-black text-slate-900">Admin Chat</h1>
+            <h1 className="text-[16px] font-black text-slate-900">
+              {supportRole === 'driver' ? 'Driver Chat' : 'User Chat'}
+            </h1>
           </div>
         </div>
         <SupportChatPanel
           mode="participant"
-          title="Rydon24 Support"
+          title={supportRole === 'driver' ? 'Driver Support' : 'User Support'}
           subtitle="Connected to the support desk"
           preferredRole={supportRole}
         />

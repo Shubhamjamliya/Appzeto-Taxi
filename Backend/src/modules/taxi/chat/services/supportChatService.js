@@ -18,7 +18,8 @@ const supportAdminCache = {
 
 const SUPPORT_ADMIN_CACHE_TTL_MS = 60_000;
 const SUPPORT_ROLE_RE = /^(admin|user|driver)$/;
-const SUPPORT_CONVERSATION_RE = /^admin:([^|]+)\|(user|driver):([^|]+)$/;
+const SUPPORT_CONVERSATION_CANONICAL_RE = /^(user|driver):([^:]+):([^:]+)$/;
+const SUPPORT_CONVERSATION_LEGACY_RE = /^admin:([^|]+)\|(user|driver):([^|]+)$/;
 
 let chatIo = null;
 
@@ -44,6 +45,95 @@ const serializeEntity = (entity, role) => ({
   phone: entity.phone || '',
 });
 
+const buildLegacySupportConversationKey = ({ adminId, peerRole, peerId }) =>
+  `admin:${String(adminId)}|${String(peerRole)}:${String(peerId)}`;
+
+const buildSupportConversationKey = ({ channel, adminId, peerId }) =>
+  `${String(channel)}:${String(adminId)}:${String(peerId)}`;
+
+const uniqueValues = (values) => Array.from(new Set(values.filter(Boolean)));
+
+const buildSupportConversationKeyFromMessage = (message) => {
+  const senderRole = normalizeRole(message?.senderRole);
+  const receiverRole = normalizeRole(message?.receiverRole);
+  const senderId = message?.senderId ? String(message.senderId) : '';
+  const receiverId = message?.receiverId ? String(message.receiverId) : '';
+
+  if (senderRole === 'admin' && receiverRole && senderId && receiverId) {
+    return buildSupportConversationKey({
+      channel: receiverRole,
+      adminId: senderId,
+      peerId: receiverId,
+    });
+  }
+
+  if (receiverRole === 'admin' && senderRole && senderRole !== 'admin' && senderId && receiverId) {
+    return buildSupportConversationKey({
+      channel: senderRole,
+      adminId: receiverId,
+      peerId: senderId,
+    });
+  }
+
+  return String(message?.conversationKey || '');
+};
+
+const buildConversationIdentityQuery = async ({ role, id, conversationKey }) => {
+  const normalizedRole = normalizeRole(role);
+  const entityId = String(id || '');
+  const parsed = parseSupportConversationKey(conversationKey);
+
+  if (!normalizedRole || !entityId || !parsed) {
+    throw new ApiError(400, 'Conversation lookup requires identity and a conversation key');
+  }
+
+  if (normalizedRole === 'admin') {
+    if (parsed.adminId !== entityId) {
+      throw new ApiError(403, 'Conversation does not belong to this admin account');
+    }
+
+    return {
+      $or: [
+        {
+          senderRole: 'admin',
+          senderId: toObjectId(entityId),
+          receiverRole: parsed.peerRole,
+          receiverId: toObjectId(parsed.peerId),
+        },
+        {
+          senderRole: parsed.peerRole,
+          senderId: toObjectId(parsed.peerId),
+          receiverRole: 'admin',
+          receiverId: toObjectId(entityId),
+        },
+      ],
+    };
+  }
+
+  const defaultAdminId = await resolveDefaultSupportAdminId();
+
+  if (parsed.peerRole !== normalizedRole || parsed.adminId !== defaultAdminId) {
+    throw new ApiError(403, 'Conversation does not belong to this support thread');
+  }
+
+  return {
+    $or: [
+      {
+        senderRole: normalizedRole,
+        senderId: toObjectId(entityId),
+        receiverRole: 'admin',
+        receiverId: toObjectId(parsed.adminId),
+      },
+      {
+        senderRole: 'admin',
+        senderId: toObjectId(parsed.adminId),
+        receiverRole: normalizedRole,
+        receiverId: toObjectId(entityId),
+      },
+    ],
+  };
+};
+
 export const setSupportChatServer = (io) => {
   chatIo = io;
 };
@@ -57,17 +147,61 @@ export const getSupportRoleRoom = (role) => `chat:role:${role}`;
 export const getSupportParticipantRoom = (role, entityId) => `chat:participant:${role}:${entityId}`;
 
 export const parseSupportConversationKey = (conversationKey) => {
-  const match = SUPPORT_CONVERSATION_RE.exec(String(conversationKey || ''));
+  const raw = String(conversationKey || '');
+  const canonicalMatch = SUPPORT_CONVERSATION_CANONICAL_RE.exec(raw);
 
-  if (!match) {
+  if (canonicalMatch) {
+    const channel = canonicalMatch[1];
+    const adminId = canonicalMatch[2];
+    const peerId = canonicalMatch[3];
+    const legacyKey = buildLegacySupportConversationKey({
+      adminId,
+      peerRole: channel,
+      peerId,
+    });
+
+    return {
+      format: 'canonical',
+      channel,
+      adminId,
+      peerRole: channel,
+      peerId,
+      canonicalKey: raw,
+      legacyKey,
+      keys: uniqueValues([raw, legacyKey]),
+    };
+  }
+
+  const legacyMatch = SUPPORT_CONVERSATION_LEGACY_RE.exec(raw);
+
+  if (!legacyMatch) {
     return null;
   }
 
+  const adminId = legacyMatch[1];
+  const peerRole = legacyMatch[2];
+  const peerId = legacyMatch[3];
+  const canonicalKey = buildSupportConversationKey({
+    channel: peerRole,
+    adminId,
+    peerId,
+  });
+
   return {
-    adminId: match[1],
-    peerRole: match[2],
-    peerId: match[3],
+    format: 'legacy',
+    channel: peerRole,
+    adminId,
+    peerRole,
+    peerId,
+    canonicalKey,
+    legacyKey: raw,
+    keys: uniqueValues([canonicalKey, raw]),
   };
+};
+
+const getConversationKeys = (conversationKey) => {
+  const parsed = parseSupportConversationKey(conversationKey);
+  return parsed?.keys || null;
 };
 
 const getEntityModel = (role) => roleModelMap[normalizeRole(role)];
@@ -107,9 +241,6 @@ export const resolveDefaultSupportAdminId = async () => {
   return supportAdminCache.id;
 };
 
-const buildSupportConversationKey = ({ adminId, peerRole, peerId }) =>
-  `admin:${String(adminId)}|${String(peerRole)}:${String(peerId)}`;
-
 export const resolveSupportConversationKey = async ({
   senderRole,
   senderId,
@@ -129,8 +260,8 @@ export const resolveSupportConversationKey = async ({
     }
 
     return buildSupportConversationKey({
+      channel: normalizedReceiverRole,
       adminId: senderId,
-      peerRole: normalizedReceiverRole,
       peerId: receiverId,
     });
   }
@@ -148,8 +279,8 @@ export const resolveSupportConversationKey = async ({
     : await resolveDefaultSupportAdminId();
 
   return buildSupportConversationKey({
+    channel: normalizedSenderRole,
     adminId,
-    peerRole: normalizedSenderRole,
     peerId: senderId,
   });
 };
@@ -168,6 +299,9 @@ export const resolveSupportPeerFromConversationKey = async (conversationKey, aut
       role: parsed.peerRole,
       id: parsed.peerId,
       adminId: parsed.adminId,
+      canonicalKey: parsed.canonicalKey,
+      legacyKey: parsed.legacyKey,
+      keys: parsed.keys,
     };
   }
 
@@ -181,6 +315,9 @@ export const resolveSupportPeerFromConversationKey = async (conversationKey, aut
     role: 'admin',
     id: parsed.adminId,
     adminId: parsed.adminId,
+    canonicalKey: parsed.canonicalKey,
+    legacyKey: parsed.legacyKey,
+    keys: parsed.keys,
   };
 };
 
@@ -211,6 +348,7 @@ export const createSupportMessage = async ({
   senderId,
   receiverRole,
   receiverId,
+  conversationKey,
   message,
 }) => {
   const normalizedSenderRole = normalizeRole(senderRole);
@@ -225,14 +363,16 @@ export const createSupportMessage = async ({
     throw new ApiError(400, 'Message cannot be empty');
   }
 
-  const conversationKey = await resolveSupportConversationKey({
+  const parsedConversation = conversationKey ? parseSupportConversationKey(conversationKey) : null;
+  const resolvedConversationKey = await resolveSupportConversationKey({
     senderRole: normalizedSenderRole,
     senderId,
     receiverRole: normalizedReceiverRole,
     receiverId,
   });
 
-  const parsed = parseSupportConversationKey(conversationKey);
+  const parsed = parseSupportConversationKey(resolvedConversationKey);
+
   if (!parsed) {
     throw new ApiError(400, 'Unable to resolve support conversation');
   }
@@ -244,7 +384,13 @@ export const createSupportMessage = async ({
   );
 
   const doc = await SupportChatMessage.create({
-    conversationKey,
+    conversationKey: buildSupportConversationKeyFromMessage({
+      conversationKey: parsedConversation?.canonicalKey || resolvedConversationKey,
+      senderRole: normalizedSenderRole,
+      receiverRole: normalizedReceiverRole || (normalizedSenderRole === 'admin' ? 'admin' : 'admin'),
+      senderId,
+      receiverId: normalizedSenderRole === 'admin' ? receiverId : parsed.adminId,
+    }),
     senderRole: normalizedSenderRole,
     senderId: toObjectId(senderId),
     senderName: senderSummary.name,
@@ -261,21 +407,25 @@ export const createSupportMessage = async ({
 
 export const listSupportConversations = async ({ role, id }) => {
   const normalizedRole = normalizeRole(role);
+  const entityId = String(id || '');
 
-  if (!normalizedRole || !id) {
+  if (!normalizedRole || !entityId) {
     throw new ApiError(400, 'Chat identity is required');
   }
 
   const query =
     normalizedRole === 'admin'
       ? {
-          conversationKey: new RegExp(`^admin:${String(id)}\\|`),
+          $or: [
+            { senderRole: 'admin', senderId: toObjectId(entityId) },
+            { receiverRole: 'admin', receiverId: toObjectId(entityId) },
+          ],
         }
       : {
-          conversationKey: await resolveSupportConversationKey({
-            senderRole: normalizedRole,
-            senderId: id,
-          }),
+          $or: [
+            { senderRole: normalizedRole, senderId: toObjectId(entityId) },
+            { receiverRole: normalizedRole, receiverId: toObjectId(entityId) },
+          ],
         };
 
   const messages = await SupportChatMessage.find(query)
@@ -285,17 +435,18 @@ export const listSupportConversations = async ({ role, id }) => {
   const grouped = new Map();
 
   for (const message of messages) {
-    const current = grouped.get(message.conversationKey);
+    const canonicalKey = buildSupportConversationKeyFromMessage(message);
+    const current = grouped.get(canonicalKey);
 
     if (!current) {
-      grouped.set(message.conversationKey, {
+      grouped.set(canonicalKey, {
         latest: message,
         unreadCount: 0,
       });
     }
 
     if (message.receiverRole === normalizedRole && !message.readAt) {
-      const existing = grouped.get(message.conversationKey);
+      const existing = grouped.get(canonicalKey);
       existing.unreadCount += 1;
     }
   }
@@ -303,8 +454,8 @@ export const listSupportConversations = async ({ role, id }) => {
   if (normalizedRole !== 'admin' && grouped.size === 0) {
     const adminId = await resolveDefaultSupportAdminId();
     const conversationKey = buildSupportConversationKey({
+      channel: normalizedRole,
       adminId,
-      peerRole: normalizedRole,
       peerId: id,
     });
 
@@ -367,39 +518,50 @@ export const listSupportConversations = async ({ role, id }) => {
 
 export const getSupportMessages = async ({ role, id, conversationKey }) => {
   const normalizedRole = normalizeRole(role);
+  const entityId = String(id || '');
 
-  if (!normalizedRole || !id || !conversationKey) {
+  if (!normalizedRole || !entityId || !conversationKey) {
     throw new ApiError(400, 'Conversation lookup requires identity and a conversation key');
   }
 
-  const access = await resolveSupportPeerFromConversationKey(conversationKey, normalizedRole);
-  if (normalizedRole !== 'admin' && access.id !== String(await resolveDefaultSupportAdminId())) {
-    throw new ApiError(403, 'Conversation does not belong to this support thread');
-  }
+  const query = await buildConversationIdentityQuery({
+    role: normalizedRole,
+    id: entityId,
+    conversationKey,
+  });
 
-  if (normalizedRole === 'admin' && !String(conversationKey).startsWith(`admin:${String(id)}|`)) {
-    throw new ApiError(403, 'Conversation does not belong to this admin account');
-  }
-
-  const messages = await SupportChatMessage.find({ conversationKey }).sort({ createdAt: 1 }).lean();
+  const messages = await SupportChatMessage.find(query).sort({ createdAt: 1 }).lean();
 
   return messages.map((message) => serializeMessage(message));
 };
 
 export const markSupportMessagesAsRead = async ({ role, id, conversationKey }) => {
   const normalizedRole = normalizeRole(role);
+  const entityId = String(id || '');
 
-  if (!normalizedRole || !id || !conversationKey) {
+  if (!normalizedRole || !entityId || !conversationKey) {
     throw new ApiError(400, 'Conversation read receipt requires identity and a conversation key');
   }
 
-  await resolveSupportPeerFromConversationKey(conversationKey, normalizedRole);
+  const parsed = parseSupportConversationKey(conversationKey);
+
+  if (!parsed) {
+    throw new ApiError(400, 'Invalid conversation key');
+  }
+
+  await resolveSupportPeerFromConversationKey(parsed.canonicalKey, normalizedRole);
+
+  const query = await buildConversationIdentityQuery({
+    role: normalizedRole,
+    id: entityId,
+    conversationKey,
+  });
 
   const result = await SupportChatMessage.updateMany(
     {
-      conversationKey,
+      ...query,
       receiverRole: normalizedRole,
-      receiverId: toObjectId(id),
+      receiverId: toObjectId(entityId),
       readAt: null,
     },
     {
@@ -419,7 +581,13 @@ export const broadcastSupportMessage = (message) => {
     return;
   }
 
-  chatIo.to(getSupportRoom(message.conversationKey)).emit('chat:message', message);
+  const parsed = parseSupportConversationKey(message.conversationKey);
+  const rooms = parsed ? parsed.keys.map((key) => getSupportRoom(key)) : [getSupportRoom(message.conversationKey)];
+
+  for (const room of rooms) {
+    chatIo.to(room).emit('chat:message', message);
+  }
+
   chatIo.to(getSupportParticipantRoom(message.sender.role, message.sender.id)).emit('chat:message', message);
   chatIo.to(getSupportParticipantRoom(message.receiver.role, message.receiver.id)).emit('chat:message', message);
   chatIo.to(getSupportRoleRoom('admin')).emit('chat:conversation-updated', {

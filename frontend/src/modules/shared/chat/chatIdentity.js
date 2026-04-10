@@ -30,8 +30,58 @@ export const readJsonLocalStorage = (key) => {
   }
 };
 
+export const parseSupportConversationKey = (conversationKey) => {
+  const raw = String(conversationKey || '');
+  const canonicalMatch = /^(user|driver):([^:]+):([^:]+)$/.exec(raw);
+
+  if (canonicalMatch) {
+    const channel = canonicalMatch[1];
+    const adminId = canonicalMatch[2];
+    const peerId = canonicalMatch[3];
+    const legacyKey = `admin:${adminId}|${channel}:${peerId}`;
+
+    return {
+      format: 'canonical',
+      channel,
+      adminId,
+      peerRole: channel,
+      peerId,
+      canonicalKey: raw,
+      legacyKey,
+      keys: [raw, legacyKey],
+    };
+  }
+
+  const legacyMatch = /^admin:([^|]+)\|(user|driver):([^|]+)$/.exec(raw);
+
+  if (!legacyMatch) {
+    return null;
+  }
+
+  const adminId = legacyMatch[1];
+  const peerRole = legacyMatch[2];
+  const peerId = legacyMatch[3];
+  const canonicalKey = `${peerRole}:${adminId}:${peerId}`;
+
+  return {
+    format: 'legacy',
+    channel: peerRole,
+    adminId,
+    peerRole,
+    peerId,
+    canonicalKey,
+    legacyKey: raw,
+    keys: [canonicalKey, raw],
+  };
+};
+
 export const resolveChatRole = (preferredRole) => {
-  const role = String(preferredRole || localStorage.getItem('role') || '').toLowerCase();
+  const role = String(
+    preferredRole ||
+      localStorage.getItem('chatRole') ||
+      localStorage.getItem('role') ||
+      '',
+  ).toLowerCase();
 
   if (role === 'admin' || role === 'driver' || role === 'user') {
     return role;
@@ -51,17 +101,22 @@ export const resolveChatRole = (preferredRole) => {
 export const resolveChatToken = (preferredRole) => {
   const role = resolveChatRole(preferredRole);
   const adminToken = localStorage.getItem('adminToken');
-  const userToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+  const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
   if (role === 'admin') {
     return adminToken;
   }
 
-  if (role === 'driver' || role === 'user') {
+  if (role === 'driver') {
+    return driverToken;
+  }
+
+  if (role === 'user') {
     return userToken;
   }
 
-  return adminToken || userToken || null;
+  return adminToken || userToken || driverToken || null;
 };
 
 export const getChatSession = (preferredRole) => {

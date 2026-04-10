@@ -12,7 +12,10 @@ import {
   Car,
   Package,
   Layers,
-  ArrowLeft
+  ArrowLeft,
+  CheckCircle2,
+  ShieldCheck,
+  LayoutGrid
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import toast from 'react-hot-toast';
@@ -37,7 +40,6 @@ const AppModules = () => {
     description: '',
     active: true
   });
-  const [iconFile, setIconFile] = useState(null);
   const [iconPreview, setIconPreview] = useState(null);
 
   const fetchModules = async (page = 1) => {
@@ -87,14 +89,12 @@ const AppModules = () => {
       });
       setIconPreview(null);
     }
-    setIconFile(null);
     setIsModalOpen(true);
   };
 
   const handleCloseModal = () => {
     setIsModalOpen(false);
     setEditId(null);
-    setIconFile(null);
     setIconPreview(null);
   };
 
@@ -104,14 +104,6 @@ const AppModules = () => {
       ...prev,
       [name]: type === 'checkbox' ? checked : value
     }));
-  };
-
-  const handleFileChange = (e) => {
-    const file = e.target.files[0];
-    if (file) {
-      setIconFile(file);
-      setIconPreview(URL.createObjectURL(file));
-    }
   };
 
   const handleSubmit = async (e) => {
@@ -162,104 +154,120 @@ const AppModules = () => {
   const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
       
       {/* Header Block */}
-      <div className="mb-6">
+      <div className="mb-8">
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-          <span>App Settings</span>
+          <span>Settings</span>
           <ChevronRight size={12} />
-          <span className="text-gray-700">App Modules</span>
+          <span>App Configuration</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Service Modules</span>
         </div>
         <div className="flex items-center justify-between">
           <h1 className="text-xl font-semibold text-gray-900">Application Modules</h1>
           <button 
             onClick={() => handleOpenModal()}
-            className="flex items-center gap-2 bg-indigo-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+            className="flex items-center gap-2 bg-indigo-600 text-white px-5 py-2.5 rounded-lg text-sm font-semibold hover:bg-indigo-700 transition-all shadow-sm active:scale-95"
           >
-            <Plus size={16} /> Add Module
+            <Plus size={18} /> New Module
           </button>
         </div>
       </div>
 
-      {/* Table Section */}
-      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-4">
-          <div className="relative flex-1 max-w-xs">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
+      {/* Main Table Section */}
+      <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-12">
+        <div className="p-5 border-b border-gray-100 flex items-center justify-between gap-4 bg-white">
+          <div className="relative flex-1 max-w-sm">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
             <input 
               type="text" 
-              placeholder="Filter modules..." 
-              className="w-full pl-10 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-indigo-500 outline-none transition-all"
+              placeholder="Search by module name..." 
+              className="w-full pl-11 pr-4 py-2.5 bg-gray-50/50 border border-gray-200 rounded-lg text-sm focus:bg-white focus:border-indigo-500 outline-none transition-all"
             />
           </div>
-          <div className="text-xs font-medium text-gray-500">
-            Total count: <span className="text-gray-900 font-semibold">{pagination.total}</span>
+          <div className="flex items-center gap-2">
+             <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest px-3 py-1 bg-gray-50 rounded-md border border-gray-100">
+                Total: {pagination.total} Modules
+             </span>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full text-left border-collapse">
             <thead>
-              <tr className="bg-gray-50/50">
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Module</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Order</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Service Logic</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center">Transport</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-center border-r border-gray-100">Status</th>
-                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+              <tr className="bg-gray-50 text-[11px] font-bold text-gray-500 uppercase tracking-wider">
+                <th className="px-6 py-4">Module Identifier</th>
+                <th className="px-6 py-4 text-center">Priority</th>
+                <th className="px-6 py-4 text-center text-indigo-600">Service Path</th>
+                <th className="px-6 py-4 text-center">Type</th>
+                <th className="px-6 py-4 text-center">Availability</th>
+                <th className="px-6 py-4 text-right">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
               {loading ? (
                  [...Array(5)].map((_, i) => (
                    <tr key={i} className="animate-pulse">
-                     <td colSpan="6" className="px-6 py-6"><div className="h-4 bg-gray-50 rounded w-full"></div></td>
+                     <td colSpan="6" className="px-6 py-8"><div className="h-4 bg-gray-50 rounded w-full"></div></td>
                    </tr>
                  ))
               ) : modules.length === 0 ? (
                 <tr>
-                  <td colSpan="6" className="px-6 py-12 text-center text-gray-400 text-sm">No modules found.</td>
+                  <td colSpan="6" className="px-6 py-16 text-center text-gray-400 text-sm italic">No active modules found in the system.</td>
                 </tr>
               ) : (
                 modules.map((m) => (
-                  <tr key={m._id} className="hover:bg-gray-50/50 transition-colors">
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-lg bg-gray-100 flex items-center justify-center p-1.5">
+                  <tr key={m._id} className="group hover:bg-gray-50/70 transition-colors">
+                    <td className="px-6 py-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-xl bg-gray-50 border border-gray-100 flex items-center justify-center p-2 group-hover:bg-white transition-colors">
                            {m.mobile_menu_icon ? (
                              <img src={getFullImageUrl(m.mobile_menu_icon)} className="w-full h-full object-contain" alt="" />
-                           ) : <Layers size={18} className="text-gray-300" />}
+                           ) : <LayoutGrid size={20} className="text-gray-300" />}
                         </div>
                         <div>
-                          <p className="text-sm font-semibold text-gray-900">{m.name}</p>
-                          <p className="text-[11px] text-gray-400 truncate max-w-[150px]">{m.short_description || m.description}</p>
+                          <p className="text-sm font-bold text-gray-900">{m.name}</p>
+                          <p className="text-[11px] text-gray-400 font-medium max-w-[200px] truncate">{m.short_description || 'No description provided'}</p>
                         </div>
                       </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="text-sm font-medium text-gray-600">#{m.order_by}</span>
+                    <td className="px-6 py-5 text-center">
+                      <div className="inline-flex items-center justify-center w-8 h-8 rounded-full bg-gray-100 text-[11px] font-black text-gray-500">
+                        {m.order_by}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                      <span className="px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider bg-blue-50 text-blue-600 border border-blue-100">
+                    <td className="px-6 py-5 text-center">
+                      <span className="px-3 py-1 rounded-lg text-[10px] font-black uppercase tracking-widest bg-indigo-50 text-indigo-600 border border-indigo-100">
                         {m.service_type}
                       </span>
                     </td>
-                    <td className="px-6 py-4 text-center">
-                       <div className="flex flex-col items-center gap-0.5">
-                         {m.transport_type === 'taxi' ? <Car size={14} className="text-indigo-500" /> : <Package size={14} className="text-orange-500" />}
-                         <span className="text-[10px] font-medium text-gray-400">{m.transport_type}</span>
+                    <td className="px-6 py-5 text-center">
+                       <div className="flex flex-col items-center gap-1">
+                         {m.transport_type === 'taxi' ? (
+                           <Car size={16} className="text-gray-400 group-hover:text-indigo-600 transition-colors" />
+                         ) : (
+                           <Package size={16} className="text-gray-400 group-hover:text-amber-600 transition-colors" />
+                         )}
+                         <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter italic">{m.transport_type}</span>
                        </div>
                     </td>
-                    <td className="px-6 py-4 text-center border-r border-gray-100">
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${m.active ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-400'}`}>
-                        {m.active ? 'ACTIVE' : 'INACTIVE'}
-                      </span>
+                    <td className="px-6 py-5 text-center">
+                      {m.active ? (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-50 text-emerald-600 text-[10px] font-bold uppercase">
+                           <CheckCircle2 size={10} /> Active
+                        </span>
+                      ) : (
+                        <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-gray-50 text-gray-400 text-[10px] font-bold uppercase">
+                           Disabled
+                        </span>
+                      )}
                     </td>
-                    <td className="px-6 py-4 text-right">
-                      <div className="flex items-center justify-end gap-2">
-                        <button onClick={() => handleOpenModal(m)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit size={16} /></button>
-                        <button onClick={() => handleDelete(m._id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} /></button>
+                    <td className="px-6 py-5 text-right">
+                      <div className="flex items-center justify-end gap-1">
+                        <button onClick={() => handleOpenModal(m)} className="p-2.5 text-gray-400 hover:text-indigo-600 hover:bg-white rounded-lg transition-all border border-transparent hover:border-indigo-100"><Edit size={16} /></button>
+                        <button onClick={() => handleDelete(m._id)} className="p-2.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition-all border border-transparent hover:border-red-100"><Trash2 size={16} /></button>
                       </div>
                     </td>
                   </tr>
@@ -268,128 +276,126 @@ const AppModules = () => {
             </tbody>
           </table>
         </div>
-
-        {/* Pagination */}
-        {pagination.last_page > 1 && (
-          <div className="px-6 py-4 bg-gray-50/50 border-t border-gray-100 flex items-center justify-between">
-            <p className="text-xs text-gray-500">Page {pagination.current_page} of {pagination.last_page}</p>
-            <div className="flex items-center gap-1.5">
-               <button 
-                disabled={pagination.current_page === 1}
-                onClick={() => fetchModules(pagination.current_page - 1)}
-                className="px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50"
-               >Prev</button>
-               <button 
-                disabled={pagination.current_page === pagination.last_page}
-                onClick={() => fetchModules(pagination.current_page + 1)}
-                className="px-3 py-1.5 text-xs text-gray-600 bg-white border border-gray-200 rounded-md hover:bg-gray-50 disabled:opacity-50"
-               >Next</button>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Modal */}
       {isModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/40 backdrop-blur-sm">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-xl max-h-[90vh] overflow-y-auto">
-            <div className="p-6 border-b border-gray-100 flex items-center justify-between sticky top-0 bg-white z-10">
-              <h3 className="text-lg font-semibold text-gray-900">{editId ? 'Edit App Module' : 'New App Module'}</h3>
-              <button onClick={handleCloseModal} className="text-gray-400 hover:text-gray-600 transition-colors"><X size={20} /></button>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col transform transition-all scale-100">
+            <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-white shrink-0">
+               <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+                     <Edit size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-bold text-gray-900">{editId ? 'Update Module' : 'Add New Module'}</h3>
+                    <p className="text-[11px] text-gray-400 font-medium">Configure service accessibility and appearance</p>
+                  </div>
+               </div>
+              <button onClick={handleCloseModal} className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-full transition-all"><X size={18} /></button>
             </div>
 
-            <form onSubmit={handleSubmit} className="p-6 space-y-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-                <div className="col-span-1">
-                  <label className={labelClass}><Smartphone size={12} className="inline mr-1 text-gray-400" /> Module Name *</label>
+            <form onSubmit={handleSubmit} className="p-8 space-y-7 overflow-y-auto">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="md:col-span-2">
+                  <label className={labelClass}>Visible System Name *</label>
                   <input 
                     required 
                     name="name" 
                     value={formData.name} 
                     onChange={handleInputChange} 
                     className={inputClass} 
-                    placeholder="e.g. Taxi Service" 
-                  />
-                </div>
-                <div className="col-span-1">
-                  <label className={labelClass}>Order Priority</label>
-                  <input 
-                    type="number" 
-                    name="order_by" 
-                    value={formData.order_by} 
-                    onChange={handleInputChange} 
-                    className={inputClass} 
+                    placeholder="e.g. Premium Cabs" 
                   />
                 </div>
                 
-                <div className="col-span-1">
-                  <label className={labelClass}>Transport Type</label>
+                <div>
+                  <label className={labelClass}>Transport Domain</label>
                   <select name="transport_type" value={formData.transport_type} onChange={handleInputChange} className={inputClass}>
                     <option value="taxi">Rideshare / Taxi</option>
                     <option value="delivery">Logistics / Delivery</option>
                   </select>
                 </div>
-                <div className="col-span-1">
-                  <label className={labelClass}>Service Type</label>
+
+                <div>
+                  <label className={labelClass}>Service Logic Path</label>
                   <select name="service_type" value={formData.service_type} onChange={handleInputChange} className={inputClass}>
-                    <option value="normal">Static / Instant</option>
-                    <option value="rental">Rental / Package</option>
-                    <option value="outstation">Outstation / Multi-city</option>
+                    <option value="normal">Normal Booking</option>
+                    <option value="rental">Hourly Rental</option>
+                    <option value="outstation">Outstation Trip</option>
+                    <option value="bid">Bidding System</option>
                   </select>
                 </div>
 
-                <div className="col-span-2">
-                  <label className={labelClass}>Short Tagline</label>
-                  <input 
-                    name="short_description" 
-                    value={formData.short_description} 
-                    onChange={handleInputChange} 
-                    className={inputClass} 
-                    placeholder="Brief highlight in 5-6 words" 
-                  />
+                <div>
+                   <label className={labelClass}>Display Order</label>
+                   <input 
+                     type="number" 
+                     name="order_by" 
+                     value={formData.order_by} 
+                     onChange={handleInputChange} 
+                     className={inputClass} 
+                   />
                 </div>
 
-                <div className="col-span-2">
-                   <label className={labelClass}><Upload size={12} className="inline mr-1 text-gray-400" /> Module Icon</label>
-                   <div className="flex items-center gap-4 p-4 border border-gray-100 rounded-lg bg-gray-50/50">
-                      <div className="w-16 h-16 rounded-lg bg-white border border-gray-200 flex items-center justify-center overflow-hidden">
-                        {iconPreview ? <img src={iconPreview} className="w-full h-full object-contain" alt="" /> : <Layers size={20} className="text-gray-200" />}
+                <div>
+                   <label className={labelClass}>Status</label>
+                   <div className="flex items-center h-10 px-4 bg-gray-50 border border-gray-100 rounded-lg">
+                      <label className="flex items-center gap-3 cursor-pointer w-full">
+                         <input 
+                          type="checkbox" 
+                          name="active" 
+                          checked={formData.active} 
+                          onChange={handleInputChange} 
+                          className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
+                         />
+                         <span className="text-xs font-bold text-gray-600 uppercase tracking-tighter">Enabled on App</span>
+                      </label>
+                   </div>
+                </div>
+
+                <div className="md:col-span-2">
+                   <label className={labelClass}>Menu Icon Asset</label>
+                   <div className="flex items-center gap-6 p-5 border border-dashed border-gray-200 rounded-xl bg-gray-50/20 group hover:border-indigo-300 transition-colors">
+                      <div className="w-20 h-20 rounded-2xl bg-white border border-gray-100 shadow-sm flex items-center justify-center p-4">
+                        {iconPreview ? <img src={iconPreview} className="w-full h-full object-contain" alt="" /> : <LayoutGrid size={24} className="text-gray-200" />}
                       </div>
                       <div className="flex-1">
-                        <input type="file" onChange={handleFileChange} className="text-xs text-gray-500 mb-1" />
-                        <p className="text-[10px] text-gray-400">SVG or transparent PNG recommended.</p>
+                        <label className="cursor-pointer bg-white border border-gray-200 text-[11px] font-bold text-gray-600 px-4 py-2 rounded-lg hover:bg-gray-50 shadow-sm transition-all inline-block mb-2">
+                           Select Image Icon
+                           <input type="file" className="hidden" />
+                        </label>
+                        <p className="text-[10px] text-gray-400 font-medium">Recommended SVG or PNG (256x256)</p>
                       </div>
                    </div>
                 </div>
 
-                <div className="col-span-2 flex items-center gap-2 pt-2">
-                   <input 
-                    type="checkbox" 
-                    id="active" 
-                    name="active" 
-                    checked={formData.active} 
+                <div className="md:col-span-2">
+                  <label className={labelClass}>Service Tagline / Description</label>
+                  <textarea 
+                    name="short_description" 
+                    value={formData.short_description} 
                     onChange={handleInputChange} 
-                    className="w-4 h-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500"
-                   />
-                   <label htmlFor="active" className="text-sm font-medium text-gray-700">Module is currently active</label>
+                    className={`${inputClass} h-20 resize-none py-3`}
+                    placeholder="Explain what this module offers..." 
+                  />
                 </div>
               </div>
-
-              <div className="pt-6 border-t border-gray-100 flex gap-3">
-                <button 
-                  type="button" 
-                  onClick={handleCloseModal} 
-                  className="flex-1 py-2.5 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
-                >Discard</button>
-                <button 
-                  type="submit" 
-                  disabled={submitting} 
-                  className="flex-[2] py-2.5 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50"
-                >
-                  {submitting ? <Loader2 size={18} className="animate-spin mx-auto" /> : (editId ? 'Update Module' : 'Create Module')}
-                </button>
-              </div>
             </form>
+
+            <div className="p-6 bg-gray-50 border-t border-gray-100 flex gap-4 shrink-0">
+               <button 
+                  onClick={handleCloseModal} 
+                  className="flex-1 py-3 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors"
+               >Discard Settings</button>
+               <button 
+                  onClick={handleSubmit}
+                  disabled={submitting} 
+                  className="flex-[2] py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700 transition-all shadow-md shadow-indigo-100 disabled:opacity-50"
+               >
+                  {submitting ? <Loader2 size={18} className="animate-spin mx-auto" /> : (editId ? 'Update Configuration' : 'Integrate Module')}
+               </button>
+            </div>
           </div>
         </div>
       )}

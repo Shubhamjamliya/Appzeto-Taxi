@@ -47,6 +47,7 @@ import {
   getFirebaseSettings,
   getGoodsTypes,
   getRentalPackageTypes,
+  getGeneralSettingsCategory,
   getLanguages,
   getMailSettings,
   getMapSettings,
@@ -85,6 +86,7 @@ import {
   updateFirebaseSettings,
   updateGoodsType,
   updateRentalPackageType,
+  updateGeneralSettingsCategory,
   updateLanguageStatus,
   updateMailSettings,
   updateMapSettings,
@@ -215,6 +217,9 @@ adminRouter.get('/admin/integration-settings/map', getMapSettings);
 adminRouter.patch('/admin/integration-settings/map', updateMapSettings);
 adminRouter.get('/admin/integration-settings/mail', getMailSettings);
 adminRouter.patch('/admin/integration-settings/mail', updateMailSettings);
+
+adminRouter.get('/admin/general-settings/:category', getGeneralSettingsCategory);
+adminRouter.patch('/admin/general-settings/:category', updateGeneralSettingsCategory);
 
 adminRouter.get('/on-boarding', getUserOnboarding);
 adminRouter.get('/on-boarding-driver', getDriverOnboarding);

@@ -6,17 +6,22 @@ const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN;
 const resolveTokenForRole = (role) => {
   const normalizedRole = String(role || localStorage.getItem('role') || '').toLowerCase();
   const adminToken = localStorage.getItem('adminToken');
-  const userToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+  const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
   if (normalizedRole === 'admin') {
     return adminToken;
   }
 
-  if (normalizedRole === 'driver' || normalizedRole === 'user') {
+  if (normalizedRole === 'driver') {
+    return driverToken;
+  }
+
+  if (normalizedRole === 'user') {
     return userToken;
   }
 
-  return adminToken || userToken || null;
+  return adminToken || userToken || driverToken || null;
 };
 
 class SocketService {

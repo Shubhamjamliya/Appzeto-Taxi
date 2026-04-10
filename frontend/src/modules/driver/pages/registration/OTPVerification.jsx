@@ -78,6 +78,7 @@ const OTPVerification = () => {
                 const token = response?.data?.token;
                 if (token) {
                     localStorage.setItem('token', token);
+                    localStorage.setItem('driverToken', token);
                     localStorage.setItem('role', 'driver');
                 }
 

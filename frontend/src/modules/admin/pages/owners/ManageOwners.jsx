@@ -34,6 +34,7 @@ const ManageOwners = () => {
   const [areas, setAreas] = useState([]);
 
   const [transportTypes, setTransportTypes] = useState([
+    { transport_type: 'all' },
     { transport_type: 'taxi' },
     { transport_type: 'delivery' },
     { transport_type: 'intercity' }
@@ -452,7 +453,9 @@ const ManageOwners = () => {
                         <option value="">Select Transport Type</option>
                         {transportTypes.map((t, idx) => (
                           <option key={idx} value={t.transport_type}>
-                            {t.transport_type.charAt(0).toUpperCase() + t.transport_type.slice(1)}
+                            {t.transport_type === 'all'
+                              ? 'All'
+                              : t.transport_type.charAt(0).toUpperCase() + t.transport_type.slice(1)}
                           </option>
                         ))}
                       </select>

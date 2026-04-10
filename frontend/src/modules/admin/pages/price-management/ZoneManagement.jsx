@@ -21,6 +21,31 @@ const mapContainerStyle = {
 
 const normalizeText = (value) => String(value || '').trim().toLowerCase();
 
+const buildCountryBoundaryUrl = (countryName) =>
+  `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
+    countryName,
+  )}&format=jsonv2&limit=1&polygon_geojson=1`;
+
+const normalizeBoundaryRings = (geojson) => {
+  if (!geojson) return [];
+
+  if (geojson.type === 'Polygon') {
+    return geojson.coordinates
+      .map((ring) => ring.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) })))
+      .filter((ring) => ring.length >= 3);
+  }
+
+  if (geojson.type === 'MultiPolygon') {
+    return geojson.coordinates
+      .flatMap((polygon) =>
+        polygon.map((ring) => ring.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) }))),
+      )
+      .filter((ring) => ring.length >= 3);
+  }
+
+  return [];
+};
+
 const isDriverAvailable = (driver) => {
   const status = normalizeText(driver?.status);
   const approve = driver?.approve;
@@ -42,6 +67,10 @@ const ZoneManagement = () => {
   const [activeTab, setActiveTab] = useState('English');
   const [mapCenter, setMapCenter] = useState({ lat: 21.1458, lng: 79.0882 }); // Default India (Nagpur approx)
   const [autocomplete, setAutocomplete] = useState(null);
+  const [countryBoundaryPaths, setCountryBoundaryPaths] = useState([]);
+  const [boundaryLoading, setBoundaryLoading] = useState(false);
+  const [boundaryError, setBoundaryError] = useState('');
+  const mapRef = useRef(null);
 
   // Map & Drawing States
   const [polygonCoords, setPolygonCoords] = useState([]);
@@ -105,6 +134,28 @@ const ZoneManagement = () => {
       fetchData();
     }
   }, [view]);
+
+  const fitMapToPaths = (paths) => {
+    if (!mapRef.current || !window.google || !Array.isArray(paths) || paths.length === 0) {
+      return;
+    }
+
+    const bounds = new window.google.maps.LatLngBounds();
+    let hasPoint = false;
+
+    paths.forEach((ring) => {
+      ring.forEach((point) => {
+        if (Number.isFinite(point?.lat) && Number.isFinite(point?.lng)) {
+          bounds.extend(point);
+          hasPoint = true;
+        }
+      });
+    });
+
+    if (hasPoint) {
+      mapRef.current.fitBounds(bounds, 40);
+    }
+  };
 
   const onPolygonComplete = (polygon) => {
     const coords = polygon.getPath().getArray().map(p => ({
@@ -263,6 +314,75 @@ const ZoneManagement = () => {
   const selectedServiceLocation = serviceLocations.find(
     (location) => String(location._id || location.id) === String(formData.service_location_id),
   );
+  const selectedCountry =
+    selectedServiceLocation?.country ||
+    selectedServiceLocation?.service_location_name ||
+    selectedServiceLocation?.name ||
+    '';
+
+  useEffect(() => {
+    if (view !== 'create' || !selectedCountry) {
+      setCountryBoundaryPaths([]);
+      setBoundaryLoading(false);
+      setBoundaryError('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadCountryBoundary = async () => {
+      setBoundaryLoading(true);
+      setBoundaryError('');
+
+      try {
+        const response = await fetch(buildCountryBoundaryUrl(selectedCountry), {
+          headers: {
+            Accept: 'application/json',
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Boundary request failed with status ${response.status}`);
+        }
+
+        const payload = await response.json();
+        const feature = Array.isArray(payload) ? payload[0] : null;
+        const nextPaths = normalizeBoundaryRings(feature?.geojson);
+
+        if (!cancelled) {
+          setCountryBoundaryPaths(nextPaths);
+
+          if (nextPaths.length > 0) {
+            fitMapToPaths(nextPaths);
+          } else {
+            setBoundaryError(`No border data found for ${selectedCountry}.`);
+          }
+        }
+      } catch (error) {
+        if (!cancelled) {
+          console.error('Country boundary load failed:', error);
+          setCountryBoundaryPaths([]);
+          setBoundaryError(`Could not load ${selectedCountry} border outline.`);
+        }
+      } finally {
+        if (!cancelled) {
+          setBoundaryLoading(false);
+        }
+      }
+    };
+
+    loadCountryBoundary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCountry, view]);
+
+  useEffect(() => {
+    if (polygonCoords.length > 0) {
+      fitMapToPaths([polygonCoords]);
+    }
+  }, [polygonCoords]);
 
   const availableDrivers = drivers.filter((driver) => {
     if (!isDriverAvailable(driver)) {
@@ -488,7 +608,21 @@ const ZoneManagement = () => {
                   <label className="text-sm font-semibold text-slate-600">Service Location</label>
                   <select 
                     value={formData.service_location_id}
-                    onChange={(e) => setFormData({...formData, service_location_id: e.target.value})}
+                    onChange={(e) => {
+                      const nextId = e.target.value;
+                      setFormData({...formData, service_location_id: nextId});
+
+                      const nextLocation = serviceLocations.find(
+                        (location) => String(location._id || location.id) === String(nextId),
+                      );
+
+                      const lat = Number(nextLocation?.latitude);
+                      const lng = Number(nextLocation?.longitude);
+
+                      if (Number.isFinite(lat) && Number.isFinite(lng)) {
+                        setMapCenter({ lat, lng });
+                      }
+                    }}
                     className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                   >
                     <option value="">Optional: Select Location</option>
@@ -523,6 +657,26 @@ const ZoneManagement = () => {
                       ? `${selectedServiceLocation.country || 'Unknown country'} • ${selectedServiceLocation.timezone || 'No timezone set'}`
                       : 'Choose a service location to narrow the drivers list, or leave it empty to see all active drivers.'}
                   </p>
+                </div>
+
+                <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-400">Country Border</p>
+                      <p className="mt-1 text-base font-black text-slate-900">
+                        {selectedCountry || 'Select a service location first'}
+                      </p>
+                    </div>
+                    {boundaryLoading ? <Loader2 size={18} className="animate-spin text-rose-600" /> : null}
+                  </div>
+                  <p className="mt-2 text-sm text-slate-600">
+                    {selectedCountry
+                      ? 'The map will outline the selected country border so you can draw the zone inside it.'
+                      : 'Pick a service location and the country border will be drawn on the map.'}
+                  </p>
+                  {boundaryError ? (
+                    <p className="mt-2 text-xs font-semibold text-amber-700">{boundaryError}</p>
+                  ) : null}
                 </div>
 
                 <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
@@ -746,11 +900,14 @@ const ZoneManagement = () => {
                           <p className="text-sm text-slate-500 mt-2">Check your browser API key and Maps JavaScript API setup.</p>
                         </div>
                       </div>
-                    ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-                      <GoogleMap
-                        mapContainerStyle={{ width: '100%', height: '100%' }}
-                        center={mapCenter}
-                        zoom={12}
+	                    ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+	                      <GoogleMap
+	                        onLoad={(map) => {
+	                          mapRef.current = map;
+	                        }}
+	                        mapContainerStyle={{ width: '100%', height: '100%' }}
+	                        center={mapCenter}
+	                        zoom={12}
                         options={{
                           mapTypeControl: true,
                           streetViewControl: true,
@@ -758,10 +915,26 @@ const ZoneManagement = () => {
                           mapTypeControlOptions: {
                             position: isLoaded ? window.google.maps.ControlPosition.TOP_LEFT : 0
                           }
-                        }}
-                      >
-                        <DrawingManager
-                          onPolygonComplete={onPolygonComplete}
+	                        }}
+	                      >
+	                        {countryBoundaryPaths.map((ring, index) => (
+	                          <Polygon
+	                            key={`country-boundary-${index}`}
+	                            paths={ring}
+	                            options={{
+	                              fillColor: '#ef4444',
+	                              fillOpacity: 0.18,
+	                              strokeColor: '#b91c1c',
+	                              strokeWeight: 2,
+	                              clickable: false,
+	                              editable: false,
+	                              draggable: false,
+	                              zIndex: 1,
+	                            }}
+	                          />
+	                        ))}
+	                        <DrawingManager
+	                          onPolygonComplete={onPolygonComplete}
                           options={{
                             drawingControl: true,
                             drawingControlOptions: {
@@ -780,16 +953,17 @@ const ZoneManagement = () => {
                         {polygonCoords.length > 0 && (
                           <Polygon
                             paths={polygonCoords}
-                            options={{
-                              fillColor: '#6366f1',
-                              fillOpacity: 0.35,
-                              strokeColor: '#6366f1',
-                              strokeWeight: 3,
-                              editable: true,
-                              draggable: true
-                            }}
-                          />
-                        )}
+	                            options={{
+	                              fillColor: '#6366f1',
+	                              fillOpacity: 0.35,
+	                              strokeColor: '#6366f1',
+	                              strokeWeight: 3,
+	                              editable: true,
+	                              draggable: true,
+	                              zIndex: 2
+	                            }}
+	                          />
+	                        )}
                       </GoogleMap>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-slate-50 p-6 text-center">

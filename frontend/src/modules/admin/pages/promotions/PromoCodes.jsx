@@ -56,7 +56,7 @@ const PromoCodes = () => {
       const [promosRes, locRes, usersRes] = await Promise.all([
         fetch(BASE, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos/users', { headers: { 'Authorization': `Bearer ${token}` } })
       ]);
 
       const pData = await promosRes.json();

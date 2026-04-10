@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
+import { Owner } from '../models/Owner.js';
 import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
@@ -36,6 +37,22 @@ const normalizeBoolean = (value) => {
 const findById = (items, id) => items.find((item) => String(item._id) === String(id));
 
 const removeById = (items, id) => items.filter((item) => String(item._id) !== String(id));
+
+const serializeOwner = (owner) => ({
+  _id: owner._id,
+  company_name: owner.company_name || '',
+  name: owner.name || '',
+  mobile: owner.mobile || '',
+  email: owner.email || '',
+  service_location_id: owner.service_location_id?._id || owner.service_location_id || '',
+  service_location: owner.service_location_id?.service_location_name || owner.service_location_id?.name || '',
+  transport_type: owner.transport_type || '',
+  active: owner.active !== false,
+  approve: Boolean(owner.approve),
+  status: owner.status || (owner.approve ? 'approved' : 'pending'),
+  createdAt: owner.createdAt,
+  updatedAt: owner.updatedAt,
+});
 
 const serializeDriver = (driver) => ({
   _id: driver._id,
@@ -147,6 +164,7 @@ const ensureServiceLocationsSeeded = async () => {
 
 export const getAdminModuleInfo = async () => {
   const state = await ensureAdminState();
+  const ownerCount = await Owner.countDocuments();
   return {
     module: 'admin',
     ready: true,
@@ -154,7 +172,7 @@ export const getAdminModuleInfo = async () => {
     snapshot: {
       users: state.users.length,
       drivers: state.drivers.length,
-      owners: state.owners.length,
+      owners: ownerCount,
       zones: state.zones.length,
     },
   };
@@ -574,43 +592,130 @@ export const deleteVehicleType = async (id) => {
   return true;
 };
 
-export const listOwners = async () => (await ensureAdminState()).owners;
+export const listOwners = async () => {
+  const owners = await Owner.find()
+    .populate('service_location_id', 'name service_location_name')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return owners.map(serializeOwner);
+};
 
 export const createOwner = async (payload) => {
-  const state = await ensureAdminState();
-  const owner = {
-    _id: nextId(),
-    company_name: payload.company_name,
-    name: payload.name,
-    mobile: payload.mobile,
-    email: payload.email,
-    service_location_id: payload.service_location_id,
-    transport_type: payload.transport_type,
-    active: true,
-    approve: false,
-    createdAt: new Date(),
-  };
-  state.owners.unshift(owner);
-  await state.save();
-  return owner;
+  if (!payload.company_name?.trim()) {
+    throw new ApiError(400, 'Company name is required');
+  }
+  if (!payload.name?.trim()) {
+    throw new ApiError(400, 'Owner name is required');
+  }
+  if (!payload.mobile?.trim()) {
+    throw new ApiError(400, 'Mobile number is required');
+  }
+  if (!payload.email?.trim()) {
+    throw new ApiError(400, 'Email is required');
+  }
+  if (!payload.password || String(payload.password).length < 6) {
+    throw new ApiError(400, 'Password must be at least 6 characters');
+  }
+  if (payload.password !== payload.password_confirmation) {
+    throw new ApiError(400, 'Passwords do not match');
+  }
+
+  const normalizedEmail = String(payload.email).trim().toLowerCase();
+  const normalizedMobile = String(payload.mobile).trim();
+
+  const existingOwner = await Owner.findOne({
+    $or: [{ email: normalizedEmail }, { mobile: normalizedMobile }],
+  }).lean();
+
+  if (existingOwner) {
+    throw new ApiError(409, 'Owner with this email or mobile already exists');
+  }
+
+  const owner = await Owner.create({
+    company_name: String(payload.company_name).trim(),
+    name: String(payload.name).trim(),
+    mobile: normalizedMobile,
+    email: normalizedEmail,
+    password: await hashPassword(String(payload.password)),
+    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+    transport_type: payload.transport_type || 'taxi',
+    active: normalizeBoolean(payload.active ?? true),
+    approve: normalizeBoolean(payload.approve ?? false),
+    status: normalizeBoolean(payload.approve ?? false) ? 'approved' : 'pending',
+  });
+
+  const populatedOwner = await Owner.findById(owner._id)
+    .populate('service_location_id', 'name service_location_name')
+    .lean();
+
+  return serializeOwner(populatedOwner);
 };
 
 export const updateOwner = async (id, payload) => {
-  const state = await ensureAdminState();
-  const owner = findById(state.owners, id);
+  const owner = await Owner.findById(id);
   if (!owner) throw new ApiError(404, 'Owner not found');
-  Object.assign(owner, payload);
-  await state.save();
-  return owner;
+
+  if (payload.company_name !== undefined) {
+    owner.company_name = String(payload.company_name).trim();
+  }
+  if (payload.name !== undefined) {
+    owner.name = String(payload.name).trim();
+  }
+  if (payload.mobile !== undefined) {
+    const mobile = String(payload.mobile).trim();
+    const duplicateMobile = await Owner.findOne({ _id: { $ne: id }, mobile }).lean();
+    if (duplicateMobile) {
+      throw new ApiError(409, 'Another owner already uses this mobile number');
+    }
+    owner.mobile = mobile;
+  }
+  if (payload.email !== undefined) {
+    const email = String(payload.email).trim().toLowerCase();
+    const duplicateEmail = await Owner.findOne({ _id: { $ne: id }, email }).lean();
+    if (duplicateEmail) {
+      throw new ApiError(409, 'Another owner already uses this email');
+    }
+    owner.email = email;
+  }
+  if (payload.service_location_id !== undefined) {
+    owner.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
+  }
+  if (payload.transport_type !== undefined) {
+    owner.transport_type = payload.transport_type || 'taxi';
+  }
+  if (payload.active !== undefined) {
+    owner.active = normalizeBoolean(payload.active);
+  }
+  if (payload.approve !== undefined) {
+    owner.approve = normalizeBoolean(payload.approve);
+    owner.status = owner.approve ? 'approved' : 'pending';
+  }
+  if (payload.password) {
+    if (String(payload.password).length < 6) {
+      throw new ApiError(400, 'Password must be at least 6 characters');
+    }
+    if (payload.password !== payload.password_confirmation) {
+      throw new ApiError(400, 'Passwords do not match');
+    }
+    owner.password = await hashPassword(String(payload.password));
+  }
+
+  await owner.save();
+
+  const populatedOwner = await Owner.findById(owner._id)
+    .populate('service_location_id', 'name service_location_name')
+    .lean();
+
+  return serializeOwner(populatedOwner);
 };
 
 export const approveOwner = async (id, payload) =>
   updateOwner(id, { approve: normalizeBoolean(payload.approve), active: true });
 
 export const deleteOwner = async (id) => {
-  const state = await ensureAdminState();
-  state.owners = removeById(state.owners, id);
-  await state.save();
+  const owner = await Owner.findByIdAndDelete(id);
+  if (!owner) throw new ApiError(404, 'Owner not found');
   return true;
 };
 
@@ -880,10 +985,10 @@ export const buildDriverDutyReport = async () => {
 };
 
 export const buildOwnerReport = async () => {
-  const state = await ensureAdminState();
+  const owners = await listOwners();
   return csvFromRows(
     ['company_name', 'name', 'email', 'transport_type', 'active'],
-    state.owners.map((item) => ({
+    owners.map((item) => ({
       company_name: item.company_name,
       name: item.name,
       email: item.email,
@@ -908,10 +1013,10 @@ export const buildFinanceReport = async () => {
 };
 
 export const buildFleetFinanceReport = async () => {
-  const state = await ensureAdminState();
+  const owners = await listOwners();
   return csvFromRows(
     ['company_name', 'owner', 'transport_type', 'active'],
-    state.owners.map((item) => ({
+    owners.map((item) => ({
       company_name: item.company_name,
       owner: item.name,
       transport_type: item.transport_type,

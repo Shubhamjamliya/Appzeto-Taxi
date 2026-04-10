@@ -1,5 +1,4 @@
-import React, { useEffect, useState } from 'react';
-import { motion } from 'framer-motion';
+import React, { useEffect, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import {
     CheckCircle2,
@@ -10,34 +9,102 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
+import { getDriverApprovalStatus } from '../../services/registrationService';
+
+let lastPollingBootAt = 0;
+const APPROVAL_POLL_MS = 2500;
 
 const RegistrationStatus = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const [timeLeft, setTimeLeft] = useState(10);
+    const [checking, setChecking] = useState(true);
+    const [statusMessage, setStatusMessage] = useState('Waiting for admin approval');
+    const timeoutRef = useRef(null);
+    const requestInFlightRef = useRef(false);
+    const mountedRef = useRef(false);
 
     const handleDashboard = () => {
+        if (checking) {
+            return;
+        }
+
         navigate('/taxi/driver/home');
     };
 
     useEffect(() => {
+        const startedAt = Date.now();
+        if (startedAt - lastPollingBootAt < 1200) {
+            return () => {};
+        }
+        lastPollingBootAt = startedAt;
+
         if (location.state?.role) {
             localStorage.setItem('role', location.state.role);
         }
 
-        const timer = setInterval(() => {
-            setTimeLeft((prev) => {
-                if (prev <= 1) {
-                    clearInterval(timer);
-                    navigate('/taxi/driver/home');
-                    return 0;
+        mountedRef.current = true;
+
+        const checkApproval = async () => {
+            if (!mountedRef.current || requestInFlightRef.current) {
+                return;
+            }
+
+            requestInFlightRef.current = true;
+            const token = localStorage.getItem('token');
+
+                if (!token) {
+                    if (mountedRef.current) {
+                        setChecking(false);
+                        setStatusMessage('Registration session not found. Please start again.');
+                    }
+                navigate('/taxi/driver/login', { replace: true });
+                    requestInFlightRef.current = false;
+                    return;
                 }
 
-                return prev - 1;
-            });
-        }, 1000);
+            try {
+                const response = await getDriverApprovalStatus();
+                const driver = response?.data;
+                const isApproved = driver && (driver.approve === true || ['approved', 'active'].includes(String(driver.status || '').toLowerCase()));
 
-        return () => clearInterval(timer);
+                if (!mountedRef.current) {
+                    return;
+                }
+
+                if (isApproved) {
+                    navigate('/taxi/driver/home', { replace: true });
+                    requestInFlightRef.current = false;
+                    return;
+                }
+
+                setChecking(false);
+                setStatusMessage('Your request has been sent to the admin team.');
+            } catch (error) {
+                if (!mountedRef.current) {
+                    return;
+                }
+
+                if (error?.status === 401) {
+                    navigate('/taxi/driver/login', { replace: true });
+                    requestInFlightRef.current = false;
+                    return;
+                }
+
+                setChecking(false);
+                setStatusMessage(error?.message || 'Your request is still under review.');
+            } finally {
+                requestInFlightRef.current = false;
+            }
+        };
+
+        checkApproval();
+        timeoutRef.current = setInterval(checkApproval, APPROVAL_POLL_MS);
+
+        return () => {
+            mountedRef.current = false;
+            requestInFlightRef.current = false;
+            clearInterval(timeoutRef.current);
+        };
     }, [location.state, navigate]);
 
     return (
@@ -50,13 +117,9 @@ const RegistrationStatus = () => {
                 />
             </div>
 
-            <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
-                animate={{ scale: 1, opacity: 1 }}
-                className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-amber-500 shadow-2xl shadow-amber-500/10 mb-6"
-            >
+            <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-amber-500 shadow-2xl shadow-amber-500/10 mb-6">
                 <Clock size={32} strokeWidth={2.5} className="animate-pulse" />
-            </motion.div>
+            </div>
 
             <div className="space-y-2 max-w-sm">
                 <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
@@ -67,7 +130,7 @@ const RegistrationStatus = () => {
                 </p>
                 <div className="pt-2">
                     <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
-                        Auto-redirect in {timeLeft}s
+                        {checking ? 'Checking approval status' : 'Pending admin action'}
                     </span>
                 </div>
             </div>
@@ -97,7 +160,7 @@ const RegistrationStatus = () => {
                             Manual Audit
                         </h4>
                         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                            Waiting for Admin Signature
+                            {statusMessage}
                         </p>
                     </div>
                     <div className="w-4 h-4 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
@@ -106,24 +169,20 @@ const RegistrationStatus = () => {
 
             <div className="mt-8 p-5 bg-amber-50/50 rounded-2xl border border-amber-100/50 max-w-sm">
                 <p className="text-[10px] font-bold text-slate-600 leading-relaxed italic">
-                    Registration on RYDON24 usually takes{' '}
-                    <span className="text-amber-600 font-extrabold underline decoration-amber-500/20 underline-offset-4">
-                        2 - 4 hours
-                    </span>
-                    . We will notify you once your account is active.
+                    We have sent your request to admin. You will be able to open the driver panel only after approval.
                 </p>
             </div>
 
             <div className="flex-1" />
 
             <div className="w-full max-w-sm space-y-4 pb-8">
-                <motion.button
-                    whileTap={{ scale: 0.98 }}
+                <button
                     onClick={handleDashboard}
-                    className="w-full h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10"
+                    disabled={checking}
+                    className="w-full h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-transform"
                 >
-                    Go to Dashboard <ChevronRight size={16} strokeWidth={3} />
-                </motion.button>
+                    {checking ? 'Waiting for Approval' : 'Go to Dashboard'} <ChevronRight size={16} strokeWidth={3} />
+                </button>
                 <div className="flex items-center justify-center gap-2 text-slate-300">
                     <Phone size={12} />
                     <span className="text-[9px] font-black uppercase tracking-widest">

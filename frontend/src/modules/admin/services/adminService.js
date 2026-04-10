@@ -21,6 +21,7 @@ export const adminService = {
    * Driver Management
    */
   getDrivers: (page = 1, limit = 50) => api.get(`/admin/drivers?page=${page}&limit=${limit}`),
+  getDriver: (id) => api.get(`/admin/drivers/${id}`),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),

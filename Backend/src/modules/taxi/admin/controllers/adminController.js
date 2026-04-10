@@ -21,6 +21,7 @@ export const deleteUser = asyncHandler(async (req, res) => {
 });
 
 export const getDrivers = asyncHandler(async (req, res) => ok(res, await adminService.listDrivers(req.query)));
+export const getDriver = asyncHandler(async (req, res) => ok(res, await adminService.getDriverById(req.params.id)));
 export const updateDriver = asyncHandler(async (req, res) => ok(res, await adminService.updateDriver(req.params.id, req.body)));
 export const updateDriverPassword = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateDriverPassword(req.params.id, req.body.password)),

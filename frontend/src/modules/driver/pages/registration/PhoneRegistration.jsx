@@ -1,20 +1,26 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ArrowLeft, Phone, ArrowRight, ShieldCheck } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import {
+    clearDriverRegistrationSession,
     saveDriverRegistrationSession,
+    sendDriverLoginOtp,
     sendDriverOtp,
-    getStoredDriverRegistrationSession,
 } from '../../services/registrationService';
 
 const PhoneRegistration = () => {
     const navigate = useNavigate();
-    const storedSession = getStoredDriverRegistrationSession();
-    const [phone, setPhone] = useState(storedSession.phone || '');
-    const [role, setRole] = useState(storedSession.role || 'driver');
+    const location = useLocation();
+    const [phone, setPhone] = useState('');
+    const [role, setRole] = useState('driver');
     const [agreed, setAgreed] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
+    const isLoginPage = location.pathname === '/taxi/driver/login';
+
+    useEffect(() => {
+        clearDriverRegistrationSession();
+    }, []);
 
     const handleSendOTP = async () => {
         if (phone.length !== 10) {
@@ -31,13 +37,17 @@ const PhoneRegistration = () => {
         setError('');
 
         try {
-            const response = await sendDriverOtp({ phone, role });
+            clearDriverRegistrationSession();
+            const response = isLoginPage
+                ? await sendDriverLoginOtp({ phone })
+                : await sendDriverOtp({ phone, role });
             const session = response?.data?.session || {};
             const nextState = saveDriverRegistrationSession({
                 phone,
                 role,
-                registrationId: session.registrationId,
+                registrationId: session.registrationId || '',
                 debugOtp: session.debugOtp || '',
+                loginMode: isLoginPage,
             });
 
             navigate('/taxi/driver/otp-verify', {
@@ -64,9 +74,11 @@ const PhoneRegistration = () => {
             <main className="space-y-6 max-w-sm mx-auto">
                 <div className="space-y-1.5">
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
-                        Join Redigo {role === 'owner' ? 'as Owner' : ''}
+                        {isLoginPage ? 'Driver Login' : `Join Redigo ${role === 'owner' ? 'as Owner' : ''}`}
                     </h1>
-                    <p className="text-[12px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">Let's verify your mobile to get started</p>
+                    <p className="text-[12px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">
+                        {isLoginPage ? 'Enter your registered mobile number to receive OTP' : "Let's verify your mobile to get started"}
+                    </p>
                 </div>
 
                     <div className="space-y-5">
@@ -123,9 +135,31 @@ const PhoneRegistration = () => {
                             onClick={() => setRole(role === 'driver' ? 'owner' : 'driver')}
                             className="w-full h-12 rounded-xl flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.15em] text-slate-400 hover:text-slate-900 transition-colors border border-dashed border-slate-200 hover:border-slate-900 group"
                         >
-                            Login as a <span className="text-slate-900 group-hover:underline">{role === 'driver' ? 'Owner' : 'Driver'}</span>
+                            {isLoginPage ? (
+                                <>Switch to <span className="text-slate-900 group-hover:underline">{role === 'driver' ? 'Owner' : 'Driver'}</span></>
+                            ) : (
+                                <>Login as a <span className="text-slate-900 group-hover:underline">{role === 'driver' ? 'Owner' : 'Driver'}</span></>
+                            )}
                         </button>
                     </div>
+
+                    {!isLoginPage && (
+                        <button
+                            onClick={() => navigate('/taxi/driver/login')}
+                            className="w-full h-12 rounded-xl flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.15em] text-slate-900 hover:text-white hover:bg-slate-900 transition-colors border border-slate-900 bg-white group"
+                        >
+                            Already have an account? Login
+                        </button>
+                    )}
+
+                    {isLoginPage && (
+                        <button
+                            onClick={() => navigate('/taxi/driver/welcome')}
+                            className="w-full h-12 rounded-xl flex items-center justify-center gap-2 text-[11px] font-black uppercase tracking-[0.15em] text-slate-900 hover:text-white hover:bg-slate-900 transition-colors border border-slate-900 bg-white group"
+                        >
+                            Signup
+                        </button>
+                    )}
                 </div>
 
                 <div className="pt-6 flex items-center justify-center gap-2.5 text-slate-300 grayscale opacity-30">

@@ -144,11 +144,11 @@ const StepDocuments = () => {
         }
     };
 
-    const isComplete = DOCUMENTS.every((item) => Boolean(docs[item.key]?.uploaded || docs[item.key]?.secureUrl || docs[item.key]?.previewUrl));
+    const isComplete = DOCUMENTS.every((item) => Boolean(docs[item.key]?.uploaded)) && !uploading;
 
     const handleSubmit = async () => {
         if (!isComplete) {
-            setError('Please upload all required documents');
+            setError(uploading ? 'Please wait for the current upload to finish' : 'Please upload all required documents');
             return;
         }
 
@@ -156,20 +156,35 @@ const StepDocuments = () => {
         setError('');
 
         try {
+            const submittedDocuments = Object.fromEntries(
+                Object.entries(docs).filter(([, value]) => Boolean(value?.uploaded || value?.secureUrl))
+            );
+
             const completeResponse = await completeDriverOnboarding({
                 registrationId: session.registrationId,
                 phone: session.phone,
+                documents: submittedDocuments,
             });
 
-            const nextState = saveDriverRegistrationSession({
+            const token = completeResponse?.data?.token;
+            if (token) {
+                localStorage.setItem('token', token);
+                localStorage.setItem('role', 'driver');
+            }
+
+            saveDriverRegistrationSession({
                 ...session,
                 documents: docs,
                 completedRegistration: completeResponse?.data || null,
             });
-
             clearDriverRegistrationSession();
+
             navigate('/taxi/driver/registration-status', {
-                state: nextState,
+                state: {
+                    ...session,
+                    documents: docs,
+                    completedRegistration: completeResponse?.data || null,
+                },
             });
         } catch (submitError) {
             setError(submitError?.message || 'Unable to complete registration');

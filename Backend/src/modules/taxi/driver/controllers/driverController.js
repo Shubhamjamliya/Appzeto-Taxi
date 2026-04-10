@@ -3,6 +3,12 @@ import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { findZoneByPickup } from '../services/locationService.js';
+import { listDriverServiceLocations } from '../services/serviceLocationService.js';
+import {
+  startDriverLoginOtp,
+  verifyDriverLoginOtp,
+} from '../services/loginOtpService.js';
+import { verifyAccessToken } from '../../services/tokenService.js';
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -119,6 +125,94 @@ export const goOnline = async (req, res) => {
     success: true,
     data: driver,
   });
+};
+
+export const getCurrentDriver = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      email: driver.email,
+      gender: driver.gender,
+      vehicleType: driver.vehicleType,
+      registerFor: driver.registerFor,
+      vehicleNumber: driver.vehicleNumber,
+      vehicleColor: driver.vehicleColor,
+      city: driver.city,
+      approve: driver.approve,
+      status: driver.status,
+      rating: driver.rating,
+      isOnline: driver.isOnline,
+      isOnRide: driver.isOnRide,
+      documents: driver.documents || {},
+      onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+export const getDriverApprovalStatus = async (req, res) => {
+  const authorization = req.headers.authorization || '';
+  const [, token] = authorization.split(' ');
+
+  if (!token) {
+    throw new ApiError(401, 'Authorization token is required');
+  }
+
+  const payload = verifyAccessToken(token);
+
+  if (payload.role !== 'driver') {
+    throw new ApiError(403, 'Insufficient permissions for this resource');
+  }
+
+  const driver = await Driver.findById(payload.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      approve: driver.approve,
+      status: driver.status,
+      isOnline: driver.isOnline,
+      isOnRide: driver.isOnRide,
+    },
+  });
+};
+
+export const getServiceLocations = async (_req, res) => {
+  const results = await listDriverServiceLocations();
+
+  res.json({
+    success: true,
+    data: { results },
+  });
+};
+
+export const startDriverLoginOtpRequest = async (req, res) => {
+  const result = await startDriverLoginOtp(req.body);
+  res.status(201).json({ success: true, data: result });
+};
+
+export const verifyDriverLoginOtpRequest = async (req, res) => {
+  const result = await verifyDriverLoginOtp(req.body);
+  res.json({ success: true, data: result });
 };
 
 export const startOnboarding = async (req, res) => {

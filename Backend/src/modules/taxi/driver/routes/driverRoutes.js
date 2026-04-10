@@ -5,8 +5,12 @@ import {
   completeOnboarding,
   goOffline,
   goOnline,
+  getCurrentDriver,
+  getDriverApprovalStatus,
   getOnboardingSession,
+  getServiceLocations,
   loginDriver,
+  startDriverLoginOtpRequest,
   saveOnboardingDocuments,
   saveOnboardingPersonal,
   saveOnboardingReferral,
@@ -14,12 +18,18 @@ import {
   registerDriver,
   startOnboarding,
   verifyOnboardingOtp,
+  verifyDriverLoginOtpRequest,
 } from '../controllers/driverController.js';
 
 export const driverRouter = Router();
 
 driverRouter.post('/register', asyncHandler(registerDriver));
 driverRouter.post('/login', asyncHandler(loginDriver));
+driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
+driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
+driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
+driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
+driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));
 driverRouter.post('/onboarding/verify-otp', asyncHandler(verifyOnboardingOtp));
 driverRouter.patch('/onboarding/personal', asyncHandler(saveOnboardingPersonal));

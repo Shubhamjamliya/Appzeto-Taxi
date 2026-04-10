@@ -3,7 +3,11 @@ import { ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     getStoredDriverRegistrationSession,
+    clearDriverRegistrationSession,
     saveDriverRegistrationSession,
+    sendDriverLoginOtp,
+    sendDriverOtp,
+    verifyDriverLoginOtp,
     verifyDriverOtp,
 } from '../../services/registrationService';
 
@@ -25,6 +29,7 @@ const OTPVerification = () => {
     const role = session.role || 'driver';
     const registrationId = session.registrationId || '';
     const debugOtp = session.debugOtp || '';
+    const isLoginFlow = Boolean(session.loginMode);
 
     useEffect(() => {
         if (debugOtp && /^\d{6}$/.test(String(debugOtp))) {
@@ -64,6 +69,23 @@ const OTPVerification = () => {
         setError('');
 
         try {
+            if (isLoginFlow) {
+                const response = await verifyDriverLoginOtp({
+                    phone,
+                    otp: otp.join(''),
+                });
+
+                const token = response?.data?.token;
+                if (token) {
+                    localStorage.setItem('token', token);
+                    localStorage.setItem('role', 'driver');
+                }
+
+                clearDriverRegistrationSession();
+                navigate('/taxi/driver/home', { replace: true });
+                return;
+            }
+
             const response = await verifyDriverOtp({
                 registrationId,
                 phone,
@@ -82,6 +104,43 @@ const OTPVerification = () => {
             navigate('/taxi/driver/step-personal', { state: nextState });
         } catch (err) {
             setError(err?.message || 'OTP verification failed');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleResend = async () => {
+        if (timer > 0) {
+            return;
+        }
+
+        setLoading(true);
+        setError('');
+
+        try {
+            const response = isLoginFlow
+                ? await sendDriverLoginOtp({ phone })
+                : await sendDriverOtp({ phone, role });
+            const nextSession = response?.data?.session || {};
+
+            saveDriverRegistrationSession({
+                ...session,
+                phone,
+                role,
+                registrationId: nextSession.registrationId || registrationId,
+                debugOtp: nextSession.debugOtp || '',
+                loginMode: isLoginFlow,
+            });
+
+            if (nextSession.debugOtp && /^\d{6}$/.test(String(nextSession.debugOtp))) {
+                setOtp(String(nextSession.debugOtp).split(''));
+            } else {
+                setOtp(['', '', '', '', '', '']);
+            }
+
+            setTimer(30);
+        } catch (err) {
+            setError(err?.message || 'Unable to resend OTP');
         } finally {
             setLoading(false);
         }
@@ -129,7 +188,16 @@ const OTPVerification = () => {
 
                 <div className="text-center space-y-4 mt-2">
                     <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                        {timer > 0 ? `Resend Code in ${timer}s` : <span className="text-slate-900 underline underline-offset-4 decoration-slate-200 cursor-pointer" onClick={() => setTimer(30)}>Resend Now</span>}
+                        {timer > 0 ? (
+                            `Resend Code in ${timer}s`
+                        ) : (
+                            <span
+                                className="text-slate-900 underline underline-offset-4 decoration-slate-200 cursor-pointer"
+                                onClick={handleResend}
+                            >
+                                Resend Now
+                            </span>
+                        )}
                     </p>
 
                     <button 

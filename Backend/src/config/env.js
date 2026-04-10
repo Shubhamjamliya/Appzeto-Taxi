@@ -21,6 +21,7 @@ export const env = {
   nodeEnv: process.env.NODE_ENV || 'development',
   port: Number(process.env.PORT || 4000),
   mongoUri: process.env.MONGODB_URI,
+  mongoDbName: process.env.MONGODB_DB_NAME || 'appzeto_taxi',
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   corsOrigin: process.env.CORS_ORIGIN || '*',

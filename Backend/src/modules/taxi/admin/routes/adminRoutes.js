@@ -29,6 +29,7 @@ import {
   getCancelChart,
   getCountries,
   getDashboardData,
+  getDriver,
   getDriverOnboarding,
   getDrivers,
   getFirebaseSettings,
@@ -91,6 +92,7 @@ adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);
 
 adminRouter.get('/admin/drivers', getDrivers);
+adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);

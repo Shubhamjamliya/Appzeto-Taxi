@@ -41,7 +41,7 @@ api.interceptors.response.use(
         console.warn('Unauthorized! Logging out...');
         // Optional: localStorage.clear(); window.location.href = '/login';
       }
-      return Promise.reject(error.response.data);
+      return Promise.reject({ ...error.response.data, status: error.response.status });
     }
     return Promise.reject({ message: 'Network error or server down.' });
   }

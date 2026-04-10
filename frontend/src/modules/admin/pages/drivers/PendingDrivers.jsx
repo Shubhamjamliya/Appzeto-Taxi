@@ -27,8 +27,14 @@ import {
   List,
   LayoutGrid
 } from 'lucide-react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { AnimatePresence } from 'framer-motion';
+import { adminService } from '../../services/adminService';
+
+const ACTION_MENU_WIDTH = 238;
+const ACTION_MENU_GAP = 8;
+const ACTION_MENU_MAX_HEIGHT = 300;
 
 const PendingDrivers = () => {
   const navigate = useNavigate();
@@ -38,11 +44,44 @@ const PendingDrivers = () => {
   const [pendingDrivers, setPendingDrivers] = useState([]);
   const [error, setError] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
+  const [menuPosition, setMenuPosition] = useState(null);
   const [passwordModal, setPasswordModal] = useState({ isOpen: false, driverId: null, password: '', isSubmitting: false });
 
-  const providedToken = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzdiZTZhYmJlOTJlYjYwMGYwMmQxNiIsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwibW9iaWxlIjoiOTk5OTk5OTk5OSIsInR5cCI6InN1cGVyLWFkbWluIiwiaWF0IjoxNzc1MDQ5MTE3LCJleHAiOjE4MDY1ODUxMTd9.5KJmXJwaVefWhnc97EqtArkA1z7ZOhsJwA9fbyRVPdQ';
-  const storedToken = localStorage.getItem('adminToken');
-  const token = (storedToken && storedToken !== 'undefined' && storedToken !== 'null') ? storedToken : providedToken;
+  const openActionMenu = (driverId, anchorEl) => {
+    const rect = anchorEl.getBoundingClientRect();
+    const viewportPadding = 12;
+    const menuHeight = ACTION_MENU_MAX_HEIGHT;
+    const spaceBelow = window.innerHeight - rect.bottom - ACTION_MENU_GAP;
+    const spaceAbove = rect.top - ACTION_MENU_GAP;
+    const openUp = spaceBelow < 220 && spaceAbove > spaceBelow;
+
+    const left = Math.min(
+      Math.max(viewportPadding, rect.right - ACTION_MENU_WIDTH),
+      window.innerWidth - ACTION_MENU_WIDTH - viewportPadding,
+    );
+
+    const position = {
+      left,
+      ...(openUp
+        ? {
+            bottom: Math.max(viewportPadding, window.innerHeight - rect.top + ACTION_MENU_GAP),
+          }
+        : {
+            top: Math.min(
+              rect.bottom + ACTION_MENU_GAP,
+              window.innerHeight - menuHeight - viewportPadding,
+            ),
+          }),
+    };
+
+    setMenuPosition(position);
+    setActiveMenu(driverId);
+  };
+
+  const closeMenu = () => {
+    setActiveMenu(null);
+    setMenuPosition(null);
+  };
 
   const handleAction = async (action, driverId) => {
     const confirmMsg = action === 'delete' ? 'Are you sure you want to delete this pending request?' : 'Are you sure you want to APPROVE this driver?';
@@ -62,83 +101,55 @@ const PendingDrivers = () => {
         setPasswordModal(prev => ({ ...prev, isSubmitting: true }));
       }
 
-      const url = action === 'delete' 
-        ? `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${driverId}`
-        : action === 'password'
-          ? `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/update-password/${driverId}`
-          : `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${driverId}`;
-      
-      const method = action === 'delete' ? 'DELETE' : 'PATCH';
-      let bodyData = null;
       if (action === 'approve') {
-        bodyData = { approve: true, active: true };
+        await adminService.updateDriverStatus(driverId, { approve: true, status: 'approved' });
+      } else if (action === 'delete') {
+        await adminService.deleteDriver(driverId);
       } else if (action === 'password') {
-        bodyData = { password: passwordModal.password };
+        await adminService.updateDriverPassword(driverId, passwordModal.password);
       }
 
-      const response = await fetch(url, {
-        method,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: bodyData ? JSON.stringify(bodyData) : null
-      });
-
-      const data = await response.json();
-      if (response.ok && data.success) {
+      if (action !== 'view' && action !== 'edit') {
         alert(`${action.charAt(0).toUpperCase() + action.slice(1)} successful`);
-        if (action === 'delete' || action === 'approve') {
-          setPendingDrivers(prev => prev.filter(d => d.id !== driverId));
-        }
         if (action === 'password') {
           setPasswordModal({ isOpen: false, driverId: null, password: '', isSubmitting: false });
         }
-      } else {
-        alert(data.message || `Failed to ${action}`);
-        if (action === 'password') setPasswordModal(prev => ({ ...prev, isSubmitting: false }));
+        if (action === 'delete' || action === 'approve') {
+          await fetchPendingDrivers();
+        }
       }
     } catch (err) {
-      alert(`Network error during ${action}`);
+      alert(err?.message || `Network error during ${action}`);
       if (action === 'password') setPasswordModal(prev => ({ ...prev, isSubmitting: false }));
     } finally {
-      setActiveMenu(null);
+      closeMenu();
     }
   };
 
   const fetchPendingDrivers = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/drivers?page=1&limit=50', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-      
-      const responseData = await response.json();
-      if (response.ok && responseData.success) {
-        const driversList = responseData.data?.results || [];
-        const pending = driversList.filter(d => d.approve === false).map(d => ({
+      const responseData = await adminService.getDrivers(1, 50);
+      const driversList = responseData.data?.results || [];
+      const pending = driversList
+        .filter((d) => d.approve === false || String(d.status || '').toLowerCase() === 'pending')
+        .map((d) => ({
           id: d._id,
-          name: d.name || d.user_id?.name || 'Unknown',
-          location: d.service_location?.service_location_name || d.city || 'India',
-          email: d.email || d.user_id?.email || 'N/A',
-          phone: d.mobile || d.user_id?.mobile || 'N/A',
-          transport: d.transport_type || 'N/A',
+          name: d.name || 'Unknown',
+          location: d.city || 'India',
+          email: d.email || 'N/A',
+          phone: d.phone || d.mobile || 'N/A',
+          transport: d.transport_type || d.register_for || 'N/A',
           docs: 'View Docs',
-          status: 'DISAPPROVED',
+          status: 'PENDING',
           reason: d.rejectionReason || '-',
           rating: d.rating || 0.0,
           registeredAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : 'N/A'
         }));
-        
-        setPendingDrivers(pending);
-      } else {
-        setError(responseData.message || 'Failed to fetch pending drivers');
-      }
+
+      setPendingDrivers(pending);
     } catch (err) {
-      setError('Network error occurred.');
+      setError(err?.message || 'Failed to fetch pending drivers');
     } finally {
       setIsLoading(false);
     }
@@ -148,6 +159,25 @@ const PendingDrivers = () => {
     fetchPendingDrivers();
   }, []);
 
+  useEffect(() => {
+    if (!activeMenu) return undefined;
+
+    const handleOutsideMotion = () => closeMenu();
+    const handleKeyDown = (event) => {
+      if (event.key === 'Escape') closeMenu();
+    };
+
+    window.addEventListener('scroll', handleOutsideMotion, true);
+    window.addEventListener('resize', handleOutsideMotion);
+    window.addEventListener('keydown', handleKeyDown);
+
+    return () => {
+      window.removeEventListener('scroll', handleOutsideMotion, true);
+      window.removeEventListener('resize', handleOutsideMotion);
+      window.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [activeMenu]);
+
   const filteredDrivers = pendingDrivers.filter(driver => 
     (driver.name && driver.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
     (driver.phone && driver.phone.includes(searchTerm)) ||
@@ -156,25 +186,26 @@ const PendingDrivers = () => {
 
   return (
     <div className="min-h-screen bg-transparent p-1 font-sans text-gray-950 animate-in fade-in duration-700">
+      {error && (
+        <div className="mb-4 rounded-xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-bold text-rose-600">
+          {error}
+        </div>
+      )}
       
       {/* HEADER */}
       <div className="flex items-center justify-between mb-8 px-1">
-         <motion.div initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}>
+      <div>
             <h1 className="text-[15px] font-black tracking-tight text-gray-800 uppercase">Pending Drivers</h1>
-         </motion.div>
-         <motion.div initial={{ x: 20, opacity: 0 }} animate={{ x: 0, opacity: 1 }} className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+      </div>
+      <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
             <span className="hover:text-indigo-600 transition-colors cursor-pointer text-gray-400">Drivers</span>
             <ChevronRight size={12} className="opacity-50" />
             <span className="text-gray-950 font-black">Pending Drivers</span>
-         </motion.div>
+      </div>
       </div>
 
       {/* CONTROLS */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-6"
-      >
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden mb-6">
         <div className="p-6 flex flex-col md:flex-row items-center justify-between gap-6">
            <div className="flex items-center gap-3">
               <button className="w-10 h-10 bg-teal-500 text-white rounded-xl flex items-center justify-center shadow-lg"><List size={18} /></button>
@@ -207,14 +238,10 @@ const PendingDrivers = () => {
               </button>
            </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* TABLE */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden"
-      >
+      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-visible">
         <div className="overflow-x-auto no-scrollbar">
           <table className="w-full text-left border-collapse">
             <thead>
@@ -263,53 +290,20 @@ const PendingDrivers = () => {
                         </div>
                     </td>
                     <td className="px-8 py-6 text-right">
-                       <div className="relative inline-block">
+                       <div className="relative inline-block z-50">
                           <button 
-                            onClick={(e) => {
+                             onClick={(e) => {
                                e.stopPropagation();
-                               setActiveMenu(activeMenu === driver.id ? null : driver.id);
+                               if (activeMenu === driver.id) {
+                                 closeMenu();
+                                 return;
+                               }
+                               openActionMenu(driver.id, e.currentTarget);
                             }}
                             className="w-10 h-10 ml-auto bg-[#E8F1FF] text-blue-400 rounded-lg flex items-center justify-center hover:bg-blue-100 transition-all shadow-sm"
                           >
                              <MoreVertical size={20} />
                           </button>
-
-                          <AnimatePresence>
-                            {activeMenu === driver.id && (
-                              <>
-                                <div className="fixed inset-0 z-10" onClick={() => setActiveMenu(null)} />
-                                <motion.div 
-                                  initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                                  animate={{ opacity: 1, scale: 1, y: 0 }}
-                                  exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                                  className="absolute right-0 top-full mt-2 z-20 bg-white border border-gray-100 shadow-2xl rounded-2xl p-2 min-w-[180px] text-left"
-                                >
-                                   <button onClick={() => handleAction('approve', driver.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
-                                      <CheckCircle2 size={16} /> Approve
-                                   </button>
-                                   <button onClick={() => handleAction('edit', driver.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 text-amber-500 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
-                                      <Edit2 size={16} /> Edit
-                                   </button>
-                                   <button 
-                                      onClick={() => {
-                                        setActiveMenu(null);
-                                        setPasswordModal({ isOpen: true, driverId: driver.id, password: '', isSubmitting: false });
-                                      }}
-                                      className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest"
-                                   >
-                                      <Key size={16} /> Password
-                                   </button>
-                                   <button onClick={() => handleAction('view', driver.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
-                                      <Eye size={16} /> View Profile
-                                   </button>
-                                   <div className="h-px bg-gray-50 my-1 mx-2" />
-                                   <button onClick={() => handleAction('delete', driver.id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50 text-rose-500 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
-                                      <Trash2 size={16} /> Delete
-                                   </button>
-                                </motion.div>
-                              </>
-                            )}
-                          </AnimatePresence>
                        </div>
                     </td>
                   </tr>
@@ -328,7 +322,7 @@ const PendingDrivers = () => {
               <button className="px-4 py-2 text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors">Next</button>
            </div>
         </div>
-      </motion.div>
+      </div>
 
       {/* OPERATIONAL INTEGRITY */}
       {isLoading === false && (
@@ -350,12 +344,7 @@ const PendingDrivers = () => {
       <AnimatePresence>
         {passwordModal.isOpen && (
           <div className="fixed inset-0 z-[10000] flex items-center justify-center p-6 bg-black/50 backdrop-blur-sm">
-             <motion.div 
-               initial={{ opacity: 0, scale: 0.95 }}
-               animate={{ opacity: 1, scale: 1 }}
-               exit={{ opacity: 0, scale: 0.95 }}
-               className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl overflow-hidden border border-gray-100 p-8 space-y-6"
-             >
+             <div className="bg-white rounded-[32px] w-full max-w-sm shadow-2xl overflow-hidden border border-gray-100 p-8 space-y-6">
                 <div className="flex items-center justify-between">
                    <div>
                      <h3 className="text-xl font-black text-gray-950 uppercase tracking-tight">Security Update</h3>
@@ -386,10 +375,48 @@ const PendingDrivers = () => {
                 >
                   {passwordModal.isSubmitting ? 'Updating...' : 'COMMIT NEW PASSWORD'}
                 </button>
-             </motion.div>
+             </div>
           </div>
         )}
       </AnimatePresence>
+
+      {activeMenu && menuPosition && createPortal(
+        <>
+          <div className="fixed inset-0 z-[9998] bg-transparent" onClick={closeMenu} />
+          <div
+            className="fixed z-[9999] bg-white border border-gray-100 shadow-2xl rounded-2xl p-2 text-left overflow-y-auto"
+            style={{
+              width: ACTION_MENU_WIDTH,
+              maxHeight: `min(${ACTION_MENU_MAX_HEIGHT}px, calc(100vh - 24px))`,
+              ...menuPosition,
+            }}
+          >
+            <button onClick={() => handleAction('approve', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
+              <CheckCircle2 size={16} /> Approve
+            </button>
+            <button onClick={() => handleAction('edit', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-amber-50 text-amber-500 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
+              <Edit2 size={16} /> Edit
+            </button>
+            <button
+              onClick={() => {
+                closeMenu();
+                setPasswordModal({ isOpen: true, driverId: activeMenu, password: '', isSubmitting: false });
+              }}
+              className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-gray-50 text-gray-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest"
+            >
+              <Key size={16} /> Update Password
+            </button>
+            <button onClick={() => handleAction('view', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
+              <Eye size={16} /> View Profile
+            </button>
+            <div className="h-px bg-gray-50 my-1 mx-2" />
+            <button onClick={() => handleAction('delete', activeMenu)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-rose-50 text-rose-500 rounded-xl transition-colors text-[12px] font-black uppercase tracking-widest">
+              <Trash2 size={16} /> Delete
+            </button>
+          </div>
+        </>,
+        document.body,
+      )}
 
     </div>
   );

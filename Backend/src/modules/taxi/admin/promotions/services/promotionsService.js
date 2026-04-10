@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../../utils/ApiError.js';
 import { ServiceLocation } from '../../models/ServiceLocation.js';
 import { ensureAdminState } from '../../services/adminService.js';
+import { User } from '../../../user/models/User.js';
 import { Banner } from '../models/Banner.js';
 import { Notification } from '../models/Notification.js';
 import { PromoCode } from '../models/PromoCode.js';
@@ -148,9 +149,13 @@ const normalizePromoPayload = async (payload, existing = null) => {
   const serviceLocation = await ensureServiceLocationExists(serviceLocationId);
   const state = await ensureAdminState();
   const userId = normalizeText(payload.user_id ?? existing?.user_id);
-  const user = userId
+  const realUser = userId
+    ? await User.findById(toObjectIdOrThrow(userId, 'user id')).select('_id name phone').lean()
+    : null;
+  const legacyUser = !realUser && userId
     ? state.users.find((item) => String(item._id) === String(userId))
     : null;
+  const user = realUser || legacyUser;
 
   if (payload.user_id !== undefined || !existing) {
     if (!userId) {
@@ -501,17 +506,16 @@ export const pushBanner = async (id) => {
 };
 
 export const getPromotionsBootstrap = async () => {
-  const state = await ensureAdminState();
-
-  const [promos, notifications, banners, serviceLocations] = await Promise.all([
+  const [promos, notifications, banners, serviceLocations, users] = await Promise.all([
     listPromoCodes({ page: 1, limit: 50 }),
     listNotifications({ page: 1, limit: 50 }),
     listBanners({ page: 1, limit: 50 }),
     ServiceLocation.find().sort({ createdAt: -1 }).lean(),
+    listAdminUsersForPromotions(),
   ]);
 
   return {
-    users: state.users,
+    users,
     service_locations: serviceLocations.map(serializeServiceLocation),
     promo_codes: promos.results,
     notifications: notifications.results,
@@ -530,6 +534,16 @@ export const listServiceLocationsForPromotions = async () => {
 };
 
 export const listAdminUsersForPromotions = async () => {
-  const state = await ensureAdminState();
-  return state.users;
+  const users = await User.find()
+    .sort({ createdAt: -1 })
+    .select('name phone createdAt updatedAt')
+    .lean();
+
+  return users.map((user) => ({
+    _id: user._id,
+    name: user.name || '',
+    phone: user.phone || '',
+    createdAt: user.createdAt,
+    updatedAt: user.updatedAt,
+  }));
 };

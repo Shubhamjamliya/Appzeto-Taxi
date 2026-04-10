@@ -1,7 +1,9 @@
 import { ApiError } from '../../../../utils/ApiError.js';
 import {
+  broadcastSupportConversationDeleted,
   broadcastSupportMessage,
   createSupportMessage,
+  deleteSupportConversationMessages,
   getSupportMessages,
   listSupportConversations,
   markSupportMessagesAsRead,
@@ -90,6 +92,37 @@ export const sendSupportMessage = async (req, res) => {
     data: {
       message: savedMessage,
       conversationKey: savedMessage.conversationKey,
+    },
+  });
+};
+
+export const deleteSupportConversation = async (req, res) => {
+  const { conversationKey } = req.params;
+
+  if (!conversationKey) {
+    throw new ApiError(400, 'Conversation key is required');
+  }
+
+  const result = await deleteSupportConversationMessages({
+    role: req.auth.role,
+    id: req.auth.sub,
+    conversationKey,
+  });
+
+  broadcastSupportConversationDeleted({
+    conversationKey: result.conversationKey,
+    keys: result.keys,
+    deletedBy: {
+      role: req.auth.role,
+      id: String(req.auth.sub),
+    },
+  });
+
+  res.json({
+    success: true,
+    data: {
+      conversationKey: result.conversationKey,
+      deletedCount: result.deletedCount,
     },
   });
 };

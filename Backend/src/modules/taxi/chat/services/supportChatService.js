@@ -576,6 +576,41 @@ export const markSupportMessagesAsRead = async ({ role, id, conversationKey }) =
   };
 };
 
+export const deleteSupportConversationMessages = async ({ role, id, conversationKey }) => {
+  const normalizedRole = normalizeRole(role);
+  const entityId = String(id || '');
+
+  if (!normalizedRole || !entityId || !conversationKey) {
+    throw new ApiError(400, 'Conversation delete requires identity and a conversation key');
+  }
+
+  const parsed = parseSupportConversationKey(conversationKey);
+
+  if (!parsed) {
+    throw new ApiError(400, 'Invalid conversation key');
+  }
+
+  const query = await buildConversationIdentityQuery({
+    role: normalizedRole,
+    id: entityId,
+    conversationKey: parsed.canonicalKey,
+  });
+
+  const result = await SupportChatMessage.deleteMany({
+    ...query,
+    conversationKey: { $in: parsed.keys },
+  });
+
+  return {
+    deletedCount: result.deletedCount || 0,
+    conversationKey: parsed.canonicalKey,
+    keys: parsed.keys,
+    adminId: parsed.adminId,
+    peerRole: parsed.peerRole,
+    peerId: parsed.peerId,
+  };
+};
+
 export const broadcastSupportMessage = (message) => {
   if (!chatIo || !message) {
     return;
@@ -608,4 +643,31 @@ export const broadcastSupportMessage = (message) => {
       message,
     });
   }
+};
+
+export const broadcastSupportConversationDeleted = (payload) => {
+  if (!chatIo || !payload?.conversationKey) {
+    return;
+  }
+
+  const parsed = parseSupportConversationKey(payload.conversationKey);
+  const keys = payload.keys || parsed?.keys || [payload.conversationKey];
+  const nextPayload = {
+    conversationKey: parsed?.canonicalKey || payload.conversationKey,
+    keys,
+    deletedBy: payload.deletedBy || null,
+  };
+
+  for (const key of keys) {
+    chatIo.to(getSupportRoom(key)).emit('chat:conversation-deleted', nextPayload);
+  }
+
+  if (!parsed) {
+    return;
+  }
+
+  chatIo.to(getSupportParticipantRoom('admin', parsed.adminId)).emit('chat:conversation-deleted', nextPayload);
+  chatIo.to(getSupportParticipantRoom(parsed.peerRole, parsed.peerId)).emit('chat:conversation-deleted', nextPayload);
+  chatIo.to(getSupportRoleRoom('admin')).emit('chat:conversation-deleted', nextPayload);
+  chatIo.to(getSupportRoleRoom(parsed.peerRole)).emit('chat:conversation-deleted', nextPayload);
 };

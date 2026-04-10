@@ -10,13 +10,15 @@ import {
   Search,
   Send,
   ShieldCheck,
+  Trash2,
   UserRound,
 } from 'lucide-react';
 import { socketService } from '../../../shared/api/socket';
-import { getSupportConversations, getSupportMessages, markSupportMessagesRead, sendSupportMessage } from '../chat/chatApi';
+import { deleteSupportConversation, getSupportConversations, getSupportMessages, markSupportMessagesRead, sendSupportMessage } from '../chat/chatApi';
 import { getChatSession, parseSupportConversationKey } from '../chat/chatIdentity';
 
 const quickReplies = ['Payment issue', 'Ride delayed', 'Lost item', 'Safety concern'];
+const AnimatedError = motion.div;
 
 const formatTime = (value) => {
   if (!value) {
@@ -30,7 +32,7 @@ const formatTime = (value) => {
       hour: '2-digit',
       minute: '2-digit',
     }).format(new Date(value));
-  } catch (_error) {
+  } catch {
     return 'Just now';
   }
 };
@@ -99,6 +101,7 @@ const SupportChatPanel = ({
   const [search, setSearch] = useState('');
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
   const bottomRef = useRef(null);
 
@@ -227,6 +230,17 @@ const SupportChatPanel = ({
     });
   };
 
+  const resolveConversationKeys = (conversationKey) => {
+    const parsed = parseSupportConversationKey(conversationKey);
+    return parsed?.keys || (conversationKey ? [conversationKey] : []);
+  };
+
+  const matchesConversationKey = (leftKey, rightKey) => {
+    const leftKeys = resolveConversationKeys(leftKey);
+    const rightKeys = resolveConversationKeys(rightKey);
+    return leftKeys.some((key) => rightKeys.includes(key));
+  };
+
   useEffect(() => {
     if (!isLiveEnabled) {
       return undefined;
@@ -265,13 +279,61 @@ const SupportChatPanel = ({
       setError(payload?.message || 'Socket connection error');
     };
 
+    const handleConversationDeleted = (payload) => {
+      const deletedKeys = payload?.keys || resolveConversationKeys(payload?.conversationKey);
+      const activeConversationKeys = resolveConversationKeys(selectedConversationKey);
+      const isActiveDeleted = activeConversationKeys.some((key) => deletedKeys.includes(key));
+
+      if (isActiveDeleted) {
+        setMessages([]);
+        setDraft('');
+      }
+
+      setConversations((current) => {
+        const next = current.filter((item) => !deletedKeys.includes(item.conversationKey));
+
+        if (!isAdminPanel) {
+          if (next.length === 0 && current.length > 0) {
+            const fallback = current[0];
+            return [
+              {
+                ...fallback,
+                latestMessage: null,
+                unreadCount: 0,
+                updatedAt: null,
+              },
+            ];
+          }
+
+          return next.map((item) =>
+            deletedKeys.includes(item.conversationKey)
+              ? {
+                  ...item,
+                  latestMessage: null,
+                  unreadCount: 0,
+                  updatedAt: null,
+                }
+              : item,
+          );
+        }
+
+        if (isActiveDeleted) {
+          setSelectedConversationKey(next[0]?.conversationKey || '');
+        }
+
+        return next;
+      });
+    };
+
     socketService.on('chat:message', handleMessage);
     socketService.on('chat:conversation-updated', handleConversationUpdate);
+    socketService.on('chat:conversation-deleted', handleConversationDeleted);
     socketService.on('errorMessage', handleSocketError);
 
     return () => {
       socketService.off('chat:message', handleMessage);
       socketService.off('chat:conversation-updated', handleConversationUpdate);
+      socketService.off('chat:conversation-deleted', handleConversationDeleted);
       socketService.off('errorMessage', handleSocketError);
     };
   }, [isLiveEnabled, session.role, selectedConversationKey]);
@@ -398,6 +460,46 @@ const SupportChatPanel = ({
   const handleSelectConversation = (conversationKey) => {
     const parsedConversation = parseSupportConversationKey(conversationKey);
     setSelectedConversationKey(parsedConversation?.canonicalKey || conversationKey);
+  };
+
+  const handleClearChat = async () => {
+    if (!selectedConversationKey || deleting) {
+      return;
+    }
+
+    setDeleting(true);
+    setError('');
+
+    try {
+      await deleteSupportConversation(selectedConversationKey, session.token);
+      const selectedKeys = resolveConversationKeys(selectedConversationKey);
+
+      setMessages([]);
+      setDraft('');
+
+      setConversations((current) => {
+        if (!isAdminPanel) {
+          return current.map((item) =>
+            selectedKeys.some((key) => matchesConversationKey(item.conversationKey, key))
+              ? {
+                  ...item,
+                  latestMessage: null,
+                  unreadCount: 0,
+                  updatedAt: null,
+                }
+              : item,
+          );
+        }
+
+        const next = current.filter((item) => !selectedKeys.some((key) => matchesConversationKey(item.conversationKey, key)));
+        setSelectedConversationKey(next[0]?.conversationKey || '');
+        return next;
+      });
+    } catch (chatError) {
+      setError(chatError?.message || 'Unable to delete chat');
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const handleSend = async () => {
@@ -581,6 +683,14 @@ const SupportChatPanel = ({
             >
               <RefreshCcw size={14} className="inline-block" />
             </button>
+            <button
+              type="button"
+              onClick={handleClearChat}
+              disabled={!selectedConversationKey || messages.length === 0 || deleting}
+              className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <Trash2 size={14} className="inline-block" />
+            </button>
           </div>
 
           <div className="flex-1 overflow-auto px-5 py-5">
@@ -634,14 +744,14 @@ const SupportChatPanel = ({
           <div className="border-t border-slate-100 bg-white p-4">
             <AnimatePresence>
               {error && (
-                <motion.div
+                <AnimatedError
                   initial={{ opacity: 0, y: 6 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 6 }}
                   className="mb-3 rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-[12px] font-semibold text-rose-600"
                 >
                   {error}
-                </motion.div>
+                </AnimatedError>
               )}
             </AnimatePresence>
 

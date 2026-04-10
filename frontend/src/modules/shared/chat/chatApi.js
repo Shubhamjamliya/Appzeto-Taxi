@@ -12,3 +12,6 @@ export const sendSupportMessage = (payload, token) =>
 
 export const markSupportMessagesRead = (conversationKey, token) =>
   api.patch(`/chats/messages/${encodeURIComponent(conversationKey)}/read`, undefined, withToken(token));
+
+export const deleteSupportConversation = (conversationKey, token) =>
+  api.delete(`/chats/messages/${encodeURIComponent(conversationKey)}`, withToken(token));

@@ -15,6 +15,7 @@ import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { hashPassword } from '../../driver/services/authService.js';
+import { signAccessToken } from '../../services/tokenService.js';
 
 const buildPaginator = (items, page = 1, limit = 50) => {
   const safePage = Number(page) || 1;
@@ -442,7 +443,7 @@ export const loginAdmin = async ({ email, password }) => {
   }
 
   return {
-    token: `admin-session-${admin._id}`,
+    token: signAccessToken({ sub: String(admin._id), role: 'admin' }),
     admin: {
       id: admin._id,
       name: admin.name,

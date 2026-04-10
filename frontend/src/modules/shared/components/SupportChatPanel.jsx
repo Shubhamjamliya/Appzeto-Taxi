@@ -347,11 +347,20 @@ const SupportChatPanel = ({
   }, [isLiveEnabled, selectedConversationKey]);
 
   useEffect(() => {
+    const parsedConversation = parseSupportConversationKey(selectedConversationKey);
+
+    if (parsedConversation && parsedConversation.canonicalKey !== selectedConversationKey) {
+      setSelectedConversationKey(parsedConversation.canonicalKey);
+    }
+  }, [selectedConversationKey]);
+
+  useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
 
   const handleSelectConversation = (conversationKey) => {
-    setSelectedConversationKey(conversationKey);
+    const parsedConversation = parseSupportConversationKey(conversationKey);
+    setSelectedConversationKey(parsedConversation?.canonicalKey || conversationKey);
   };
 
   const handleSend = async () => {
@@ -548,7 +557,10 @@ const SupportChatPanel = ({
             ) : (
               <div className="mx-auto flex max-w-4xl flex-col gap-4">
                 {messages.map((message) => {
-                  const isMine = message.sender.role === session.role;
+                  const isMine =
+                    message.sender.id && session.id
+                      ? String(message.sender.id) === String(session.id)
+                      : message.sender.role === session.role;
 
                   return (
                     <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>

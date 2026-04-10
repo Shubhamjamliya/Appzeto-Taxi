@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import Rydon24Logo from '../../../assets/rydon24_logo.png';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { socketService } from '../../../shared/api/socket';
@@ -278,6 +278,7 @@ const AdminLayout = () => {
   const [isSidebarOpen] = useState(true);
   const [isCollapsed, setCollapsed] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const userMenuRef = useRef(null);
   const [mode, setModeState] = useState(() => {
     const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
     if (savedMode === ADMIN_MODE || savedMode === OWNER_MODE) {
@@ -528,6 +529,19 @@ const AdminLayout = () => {
   }, [isOwnerRoute, mode]);
 
   useEffect(() => {
+    const handleDocumentClick = (event) => {
+      if (!userMenuRef.current?.contains(event.target)) {
+        setIsUserMenuOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => {
+      document.removeEventListener('mousedown', handleDocumentClick);
+    };
+  }, []);
+
+  useEffect(() => {
     const token = localStorage.getItem('adminToken');
     if (!token && !window.location.pathname.includes('/admin/login')) {
       navigate('/admin/login');
@@ -648,17 +662,18 @@ const AdminLayout = () => {
               </button>
             </div>
 
-            <div
-              className="group relative flex cursor-pointer items-center gap-3 rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 transition-all hover:bg-gray-100"
-              onMouseEnter={() => setIsUserMenuOpen(true)}
-              onMouseLeave={() => setIsUserMenuOpen(false)}
-              onClick={() => setIsUserMenuOpen((current) => !current)}
-            >
-              <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-500 transition-all group-hover:bg-primary group-hover:text-white">
-                <Users size={14} />
-              </div>
-              <span className="text-[11px] font-black text-gray-950">Admin</span>
-              <ChevronDown size={14} className="text-gray-300" />
+            <div ref={userMenuRef} className="relative">
+              <button
+                type="button"
+                className="group flex cursor-pointer items-center gap-3 rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 transition-all hover:bg-gray-100"
+                onClick={() => setIsUserMenuOpen((current) => !current)}
+              >
+                <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-500 transition-all group-hover:bg-primary group-hover:text-white">
+                  <Users size={14} />
+                </div>
+                <span className="text-[11px] font-black text-gray-950">Admin</span>
+                <ChevronDown size={14} className="text-gray-300" />
+              </button>
 
               <div
                 className={`absolute right-0 top-full z-50 mt-2 w-48 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl transition-all ${
@@ -667,7 +682,10 @@ const AdminLayout = () => {
               >
                 <button
                   type="button"
-                  onClick={handleLogout}
+                  onClick={(event) => {
+                    event.stopPropagation();
+                    handleLogout();
+                  }}
                   className="flex w-full items-center gap-3 rounded-xl px-4 py-3 text-red-600 transition-all hover:bg-red-50"
                 >
                   <LogOut size={16} />

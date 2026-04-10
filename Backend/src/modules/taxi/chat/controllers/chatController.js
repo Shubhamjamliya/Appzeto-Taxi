@@ -79,6 +79,7 @@ export const sendSupportMessage = async (req, res) => {
     senderId: req.auth.sub,
     receiverRole: nextReceiverRole,
     receiverId: nextReceiverId,
+    conversationKey,
     message,
   });
 

@@ -31,16 +31,47 @@ export const readJsonLocalStorage = (key) => {
 };
 
 export const parseSupportConversationKey = (conversationKey) => {
-  const match = /^admin:([^|]+)\|(user|driver):([^|]+)$/.exec(String(conversationKey || ''));
+  const raw = String(conversationKey || '');
+  const canonicalMatch = /^(user|driver):([^:]+):([^:]+)$/.exec(raw);
 
-  if (!match) {
+  if (canonicalMatch) {
+    const channel = canonicalMatch[1];
+    const adminId = canonicalMatch[2];
+    const peerId = canonicalMatch[3];
+    const legacyKey = `admin:${adminId}|${channel}:${peerId}`;
+
+    return {
+      format: 'canonical',
+      channel,
+      adminId,
+      peerRole: channel,
+      peerId,
+      canonicalKey: raw,
+      legacyKey,
+      keys: [raw, legacyKey],
+    };
+  }
+
+  const legacyMatch = /^admin:([^|]+)\|(user|driver):([^|]+)$/.exec(raw);
+
+  if (!legacyMatch) {
     return null;
   }
 
+  const adminId = legacyMatch[1];
+  const peerRole = legacyMatch[2];
+  const peerId = legacyMatch[3];
+  const canonicalKey = `${peerRole}:${adminId}:${peerId}`;
+
   return {
-    adminId: match[1],
-    peerRole: match[2],
-    peerId: match[3],
+    format: 'legacy',
+    channel: peerRole,
+    adminId,
+    peerRole,
+    peerId,
+    canonicalKey,
+    legacyKey: raw,
+    keys: [canonicalKey, raw],
   };
 };
 

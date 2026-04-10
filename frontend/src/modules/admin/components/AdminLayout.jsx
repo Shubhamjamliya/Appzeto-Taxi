@@ -78,16 +78,20 @@ const resolvePageTitle = (pathname, sections) => {
 const SidebarItem = ({ icon: Icon, label, path, isCollapsed }) => (
   <NavLink
     to={path}
+    end
     className={({ isActive }) =>
-      `flex items-center gap-3 px-4 py-3 rounded-xl transition-all duration-300 ${
+      `group flex items-center gap-3 px-4 py-2.5 rounded-lg transition-all duration-200 ${
         isActive
-          ? 'bg-[#2563EB] text-white shadow-lg shadow-blue-900/30'
-          : 'text-gray-400 hover:text-white hover:bg-white/5'
+          ? 'bg-indigo-600 text-white'
+          : 'text-slate-400 hover:text-white hover:bg-slate-800'
       }`
     }
   >
-    <Icon size={20} className="shrink-0" />
-    {!isCollapsed && <span className="font-semibold text-[14px] tracking-tight">{label}</span>}
+    <Icon 
+      size={18} 
+      className="shrink-0" 
+    />
+    {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
   </NavLink>
 );
 
@@ -106,16 +110,19 @@ const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed, pathname, forc
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all duration-300 ${
-          isActive || isOpen ? 'bg-white/5 text-white' : 'text-gray-400 hover:text-white hover:bg-white/5'
+        className={`group w-full flex items-center justify-between px-4 py-2.5 rounded-lg transition-all duration-200 ${
+          isActive || isOpen ? 'text-white' : 'text-slate-400 hover:text-white hover:bg-slate-800'
         }`}
       >
         <div className="flex items-center gap-3">
-          <Icon size={20} className="shrink-0" />
-          {!isCollapsed && <span className="font-semibold text-[14px] tracking-tight">{label}</span>}
+          <Icon 
+            size={18} 
+            className={`shrink-0 ${isActive || isOpen ? 'text-indigo-400' : ''}`} 
+          />
+          {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
         </div>
         {!isCollapsed && (
-          <ChevronRight size={16} className={`transition-transform duration-300 ${isOpen ? 'rotate-90' : ''}`} />
+          <ChevronRight size={14} className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
         )}
       </button>
 
@@ -134,18 +141,15 @@ const SidebarGroup = ({ icon: Icon, label, subItems, isCollapsed, pathname, forc
               <NavLink
                 key={item.path}
                 to={item.path}
+                end
                 className={({ isActive: childActive }) =>
-                  `flex items-center gap-3 px-3 py-2.5 rounded-lg text-[13px] font-medium transition-all ${
-                    childActive ? 'text-white bg-[#2563EB]/10' : 'text-gray-400 hover:text-gray-200'
+                  `flex items-center gap-3 px-3 py-2 rounded-lg text-[13px] font-medium transition-all ${
+                    childActive ? 'text-indigo-400' : 'text-slate-500 hover:text-slate-200'
                   }`
                 }
               >
-                {({ isActive: childActive }) => (
-                  <>
-                    <span className={`h-2.5 w-2.5 rounded-full ${childActive ? 'bg-[#5B7CFF]' : 'bg-gray-500'}`} />
-                    <span>{item.label}</span>
-                  </>
-                )}
+                <div className="h-1 w-1 shrink-0 rounded-full bg-slate-600" />
+                <span>{item.label}</span>
               </NavLink>
             )
           )}
@@ -170,37 +174,32 @@ const NestedGroup = ({ label, subItems, pathname, forceOpen = false }) => {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className={`w-full flex items-center justify-between px-3 py-2 rounded-lg transition-all ${
-          isActive || isOpen ? 'text-white bg-white/5' : 'text-gray-400 hover:text-gray-200 hover:bg-white/5'
+        className={`group w-full flex items-center justify-between px-3 py-1.5 rounded-lg transition-all ${
+          isActive || isOpen ? 'text-white' : 'text-slate-500 hover:text-slate-200'
         }`}
       >
         <span className="flex items-center gap-3 text-[12px] font-medium">
-          <span className={`h-2 w-2 rounded-full ${isActive ? 'bg-[#5B7CFF]' : 'bg-gray-500'}`} />
+          <div className="h-1 w-1 shrink-0 rounded-full bg-slate-600" />
           <span>{label}</span>
         </span>
-        <ChevronRight size={12} className={`transition-transform ${isOpen ? 'rotate-90' : ''}`} />
+        <ChevronRight size={12} className={`transition-transform duration-200 ${isOpen ? 'rotate-90' : ''}`} />
       </button>
 
       {isOpen && (
-        <div className="pl-5 space-y-1">
+        <div className="pl-4 space-y-1">
           {subItems.map((item) => (
             <NavLink
               key={item.path}
               to={item.path}
+              end
               className={({ isActive: childActive }) =>
-                `flex items-center gap-3 px-3 py-2 rounded-lg text-[12px] font-medium transition-all ${
-                  childActive ? 'text-white bg-white/5' : 'text-gray-500 hover:text-gray-300'
+                `flex items-center gap-3 px-3 py-1.5 rounded-lg text-[12px] font-medium transition-all ${
+                  childActive ? 'text-indigo-400' : 'text-slate-600 hover:text-slate-300'
                 }`
               }
             >
-              {({ isActive: childActive }) => (
-                <>
-                  <span
-                    className={`h-1.5 w-1.5 rounded-full ${childActive ? 'bg-[#7C93FF]' : 'bg-gray-600'}`}
-                  />
-                  <span>{item.label}</span>
-                </>
-              )}
+              <div className="h-0.5 w-0.5 shrink-0 rounded-full bg-slate-700" />
+              <span>{item.label}</span>
             </NavLink>
           ))}
         </div>
@@ -224,20 +223,20 @@ const ModeSwitcher = ({ mode, setMode }) => {
       <button
         type="button"
         onClick={() => setIsOpen((current) => !current)}
-        className="flex items-center gap-3 rounded-2xl border border-gray-200 bg-white px-4 py-2 shadow-sm transition-all hover:border-[#2D3A6E]/30 hover:bg-slate-50"
+        className="group flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-2 shadow-sm transition-all hover:border-indigo-400/30 hover:shadow-md active:scale-95"
       >
-        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-[#EEF2FF] text-[#2D3A6E]">
+        <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-all">
           <Briefcase size={16} />
         </div>
         <div className="text-left leading-tight">
-          <p className="text-[10px] font-black uppercase tracking-[0.22em] text-gray-400">Mode</p>
-          <p className="text-[12px] font-black text-gray-900">{active.label}</p>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Panel Mode</p>
+          <p className="text-[13px] font-extrabold text-slate-900">{active.label}</p>
         </div>
-        <ChevronDown size={14} className={`text-gray-400 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+        <ChevronDown size={14} className="text-slate-300 transition-transform group-hover:text-indigo-400" />
       </button>
 
       {isOpen && (
-        <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl">
+        <div className="absolute right-0 top-full z-50 mt-2 w-64 rounded-2xl border border-slate-100 bg-white p-2 shadow-2xl ring-1 ring-black/5 animate-in fade-in slide-in-from-top-2 duration-200">
           {options.map((option) => {
             const selected = option.id === mode;
             return (
@@ -249,22 +248,23 @@ const ModeSwitcher = ({ mode, setMode }) => {
                   setIsOpen(false);
                 }}
                 className={`flex w-full items-center gap-3 rounded-xl px-3 py-3 text-left transition-all ${
-                  selected ? 'bg-[#2D3A6E] text-white' : 'hover:bg-gray-50'
+                  selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-200' : 'hover:bg-slate-50'
                 }`}
               >
                 <span
-                  className={`h-2.5 w-2.5 rounded-full ${
-                    selected ? 'bg-white' : option.id === OWNER_MODE ? 'bg-[#2D3A6E]' : 'bg-[#2563EB]'
+                  className={`h-2.5 w-2.5 rounded-full transition-all ${
+                    selected ? 'bg-white' : 'bg-slate-300'
                   }`}
                 />
                 <span className="flex-1">
-                  <span className={`block text-[12px] font-black ${selected ? 'text-white' : 'text-gray-900'}`}>
+                  <span className={`block text-[13px] font-bold ${selected ? 'text-white' : 'text-slate-900'}`}>
                     {option.label}
                   </span>
-                  <span className={`block text-[11px] ${selected ? 'text-white/70' : 'text-gray-500'}`}>
+                  <span className={`block text-[11px] ${selected ? 'text-indigo-100' : 'text-slate-500'}`}>
                     {option.subtitle}
                   </span>
                 </span>
+                {selected && <div className="h-1.5 w-1.5 rounded-full bg-white animate-pulse" />}
               </button>
             );
           })}
@@ -576,15 +576,13 @@ const AdminLayout = () => {
               </div>
               {!isCollapsed && (
                 <div className="flex flex-col">
-                  <h3 className="text-[15px] font-black leading-tight text-white">
-                    {mode === OWNER_MODE ? 'Owner Panel' : 'Super Admin'}
+                  <h3 className="text-[15px] font-extrabold leading-tight text-white tracking-tight">
+                    {mode === OWNER_MODE ? 'Owner Dashboard' : 'Super Console'}
                   </h3>
                   <div className="mt-1 flex items-center gap-1.5">
-                    <div className="flex h-4 w-4 items-center justify-center rounded-full bg-amber-400">
-                      <Zap size={10} className="text-[#0F172A]" fill="currentColor" />
-                    </div>
-                    <span className="text-[11px] font-bold uppercase tracking-widest text-gray-400">
-                      {mode === OWNER_MODE ? 'Owner Modules' : 'Super Admin'}
+                    <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                      {mode === OWNER_MODE ? 'Fleet Control' : 'System Admin'}
                     </span>
                   </div>
                 </div>
@@ -599,16 +597,16 @@ const AdminLayout = () => {
             </button>
           </div>
 
-          <nav className="no-scrollbar mt-2 flex-1 space-y-1.5 overflow-y-auto px-4 pb-12 scroll-smooth">
+          <nav className="no-scrollbar mt-6 flex-1 space-y-8 overflow-y-auto px-4 pb-12 scroll-smooth">
             {sidebarSections.map((section) => (
-              <div key={section.title}>
-                <div
-                  className={`mb-3 mt-8 rounded-xl bg-white/5 px-4 py-2 text-[11px] font-black uppercase tracking-[2px] text-white/70 ${
-                    isCollapsed ? 'opacity-0' : ''
-                  }`}
-                >
-                  {section.title}
-                </div>
+              <div key={section.title} className="space-y-1">
+                {!isCollapsed && (
+                  <div className="px-4 mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
+                      {section.title}
+                    </span>
+                  </div>
+                )}
                 {section.items.map((item) =>
                   item.subItems ? (
                     <SidebarGroup
@@ -631,8 +629,8 @@ const AdminLayout = () => {
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden bg-[#f0f4f8]">
         <header className="sticky top-0 z-40 flex h-16 items-center justify-between border-b border-gray-100 bg-white px-6 shadow-sm">
           <div className="flex items-center gap-3">
-            <div className="mr-1 h-6 w-1.5 rounded-full bg-[#2563EB]" />
-            <h2 className="text-[15px] font-black uppercase tracking-widest text-slate-800">{pageTitle}</h2>
+            <div className="h-6 w-1 rounded-full bg-indigo-600" />
+            <h2 className="text-[15px] font-bold tracking-tight text-slate-800">{pageTitle}</h2>
           </div>
 
           <div className="flex items-center gap-3">

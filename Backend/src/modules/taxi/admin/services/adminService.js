@@ -1,10 +1,12 @@
 import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
+import { Admin } from '../models/Admin.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
-import { Admin } from '../models/Admin.js';
+import { OwnerNeededDocument } from '../models/OwnerNeededDocument.js';
+import { OwnerBooking } from '../models/OwnerBooking.js';
 import { Owner } from '../models/Owner.js';
 import { RentalPackageType } from '../models/RentalPackageType.js';
 import { SetPrice } from '../models/SetPrice.js';
@@ -180,6 +182,21 @@ const serializeRentalPackageType = (item) => ({
   updatedAt: item.updatedAt,
 });
 
+const serializeOwnerNeededDocument = (item) => ({
+  _id: item._id,
+  id: item._id,
+  name: item.name || '',
+  image_type: item.image_type || 'front_back',
+  has_expiry_date: Boolean(item.has_expiry_date),
+  has_identify_number: Boolean(item.has_identify_number),
+  is_editable: Boolean(item.is_editable),
+  is_required: Boolean(item.is_required),
+  active: item.active !== false,
+  status: item.active === false ? 'inactive' : 'active',
+  createdAt: item.createdAt,
+  updatedAt: item.updatedAt,
+});
+
 const serializeAirport = (item) => ({
   _id: item._id,
   id: item._id,
@@ -226,6 +243,34 @@ const serializeOwner = (owner) => ({
   status: owner.status || (owner.approve ? 'approved' : 'pending'),
   createdAt: owner.createdAt,
   updatedAt: owner.updatedAt,
+});
+
+const serializeOwnerBooking = (item) => ({
+  _id: item._id,
+  id: item._id,
+  owner_id: item.owner_id
+    ? {
+        _id: item.owner_id._id || item.owner_id,
+        name: item.owner_id.full_name || item.owner_id.name || '',
+        email: item.owner_id.email || '',
+        mobile: item.owner_id.mobile || '',
+      }
+    : null,
+  booking_reference: item.booking_reference || '',
+  customer_name: item.customer_name || '',
+  customer_phone: item.customer_phone || '',
+  pickup_location: item.pickup_location || '',
+  dropoff_location: item.dropoff_location || '',
+  trip_type: item.trip_type || 'city',
+  vehicle_type: item.vehicle_type || '',
+  trip_date: item.trip_date,
+  fare_amount: Number(item.fare_amount || 0),
+  payment_status: item.payment_status || 'pending',
+  booking_status: item.booking_status || 'pending',
+  notes: item.notes || '',
+  active: item.active !== false,
+  createdAt: item.createdAt,
+  updatedAt: item.updatedAt,
 });
 
 const serializeDriver = (driver) => ({
@@ -927,6 +972,110 @@ export const deleteOwner = async (id) => {
   return true;
 };
 
+export const listOwnerBookings = async () => {
+  const items = await OwnerBooking.find()
+    .populate('owner_id', 'full_name name email mobile')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return items.map(serializeOwnerBooking);
+};
+
+export const createOwnerBooking = async (payload) => {
+  if (!payload.booking_reference?.trim()) {
+    throw new ApiError(400, 'Booking reference is required');
+  }
+
+  if (!payload.customer_name?.trim()) {
+    throw new ApiError(400, 'Customer name is required');
+  }
+
+  const item = await OwnerBooking.create({
+    owner_id: payload.owner_id ? toObjectId(payload.owner_id) : null,
+    booking_reference: String(payload.booking_reference).trim(),
+    customer_name: String(payload.customer_name).trim(),
+    customer_phone: String(payload.customer_phone || '').trim(),
+    pickup_location: String(payload.pickup_location || '').trim(),
+    dropoff_location: String(payload.dropoff_location || '').trim(),
+    trip_type: payload.trip_type || 'city',
+    vehicle_type: String(payload.vehicle_type || '').trim(),
+    trip_date: payload.trip_date ? new Date(payload.trip_date) : null,
+    fare_amount: toNullableNumber(payload.fare_amount) ?? 0,
+    payment_status: payload.payment_status || 'pending',
+    booking_status: payload.booking_status || 'pending',
+    notes: String(payload.notes || '').trim(),
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+  });
+
+  const populatedItem = await OwnerBooking.findById(item._id)
+    .populate('owner_id', 'full_name name email mobile')
+    .lean();
+
+  return serializeOwnerBooking(populatedItem);
+};
+
+export const updateOwnerBooking = async (id, payload) => {
+  const item = await OwnerBooking.findById(id);
+  if (!item) throw new ApiError(404, 'Owner booking not found');
+
+  if (payload.owner_id !== undefined) {
+    item.owner_id = payload.owner_id ? toObjectId(payload.owner_id) : null;
+  }
+  if (payload.booking_reference !== undefined) {
+    item.booking_reference = String(payload.booking_reference || '').trim();
+  }
+  if (payload.customer_name !== undefined) {
+    item.customer_name = String(payload.customer_name || '').trim();
+  }
+  if (payload.customer_phone !== undefined) {
+    item.customer_phone = String(payload.customer_phone || '').trim();
+  }
+  if (payload.pickup_location !== undefined) {
+    item.pickup_location = String(payload.pickup_location || '').trim();
+  }
+  if (payload.dropoff_location !== undefined) {
+    item.dropoff_location = String(payload.dropoff_location || '').trim();
+  }
+  if (payload.trip_type !== undefined) {
+    item.trip_type = payload.trip_type || 'city';
+  }
+  if (payload.vehicle_type !== undefined) {
+    item.vehicle_type = String(payload.vehicle_type || '').trim();
+  }
+  if (payload.trip_date !== undefined) {
+    item.trip_date = payload.trip_date ? new Date(payload.trip_date) : null;
+  }
+  if (payload.fare_amount !== undefined) {
+    item.fare_amount = toNullableNumber(payload.fare_amount) ?? 0;
+  }
+  if (payload.payment_status !== undefined) {
+    item.payment_status = payload.payment_status || 'pending';
+  }
+  if (payload.booking_status !== undefined) {
+    item.booking_status = payload.booking_status || 'pending';
+  }
+  if (payload.notes !== undefined) {
+    item.notes = String(payload.notes || '').trim();
+  }
+  if (payload.active !== undefined) {
+    item.active = normalizeBoolean(payload.active);
+  }
+
+  await item.save();
+
+  const populatedItem = await OwnerBooking.findById(item._id)
+    .populate('owner_id', 'full_name name email mobile')
+    .lean();
+
+  return serializeOwnerBooking(populatedItem);
+};
+
+export const deleteOwnerBooking = async (id) => {
+  const deleted = await OwnerBooking.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Owner booking not found');
+  return true;
+};
+
 export const getDashboardData = async () => (await ensureAdminState()).dashboard;
 
 export const getOverallEarnings = async () => (await ensureAdminState()).dashboard.overallEarnings;
@@ -1461,6 +1610,65 @@ export const updateRentalPackageType = async (id, payload) => {
 export const deleteRentalPackageType = async (id) => {
   const deleted = await RentalPackageType.findByIdAndDelete(id);
   if (!deleted) throw new ApiError(404, 'Rental package type not found');
+  return true;
+};
+
+export const listOwnerNeededDocuments = async () => {
+  const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
+  return items.map(serializeOwnerNeededDocument);
+};
+
+export const createOwnerNeededDocument = async (payload) => {
+  if (!payload.name?.trim()) {
+    throw new ApiError(400, 'Document name is required');
+  }
+
+  const item = await OwnerNeededDocument.create({
+    name: String(payload.name).trim(),
+    image_type: String(payload.image_type || 'front_back').trim(),
+    has_expiry_date: normalizeBoolean(payload.has_expiry_date),
+    has_identify_number: normalizeBoolean(payload.has_identify_number),
+    is_editable: normalizeBoolean(payload.is_editable),
+    is_required: normalizeBoolean(payload.is_required),
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+  });
+
+  return serializeOwnerNeededDocument(item.toObject());
+};
+
+export const updateOwnerNeededDocument = async (id, payload) => {
+  const item = await OwnerNeededDocument.findById(id);
+  if (!item) throw new ApiError(404, 'Owner needed document not found');
+
+  if (payload.name !== undefined) {
+    item.name = String(payload.name || '').trim();
+  }
+  if (payload.image_type !== undefined) {
+    item.image_type = String(payload.image_type || 'front_back').trim();
+  }
+  if (payload.has_expiry_date !== undefined) {
+    item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
+  }
+  if (payload.has_identify_number !== undefined) {
+    item.has_identify_number = normalizeBoolean(payload.has_identify_number);
+  }
+  if (payload.is_editable !== undefined) {
+    item.is_editable = normalizeBoolean(payload.is_editable);
+  }
+  if (payload.is_required !== undefined) {
+    item.is_required = normalizeBoolean(payload.is_required);
+  }
+  if (payload.active !== undefined) {
+    item.active = normalizeBoolean(payload.active);
+  }
+
+  await item.save();
+  return serializeOwnerNeededDocument(item.toObject());
+};
+
+export const deleteOwnerNeededDocument = async (id) => {
+  const deleted = await OwnerNeededDocument.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Owner needed document not found');
   return true;
 };
 

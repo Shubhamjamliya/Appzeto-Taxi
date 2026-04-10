@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   Plus, Search, Filter, ChevronRight, Edit, Trash2, 
   ChevronDown, LayoutGrid, List, Loader2, Calendar, Ticket,
@@ -7,13 +7,13 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos';
+const Motion = motion;
 
 const PromoCodes = () => {
   const [view, setView] = useState('list');
   const [promos, setPromos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   
   // States for dynamic data
   const [locations, setLocations] = useState([]);
@@ -36,9 +36,23 @@ const PromoCodes = () => {
 
   const token = localStorage.getItem('adminToken') || '';
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async () => {
     setIsLoading(true);
     try {
+      const bootstrapRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/promotions/bootstrap`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+
+      if (bootstrapRes.ok) {
+        const bootstrapData = await bootstrapRes.json();
+        if (bootstrapData.success) {
+          setPromos(bootstrapData.data?.promo_codes || []);
+          setLocations(bootstrapData.data?.service_locations || []);
+          setUsersList(bootstrapData.data?.users || []);
+          return;
+        }
+      }
+
       const [promosRes, locRes, usersRes] = await Promise.all([
         fetch(BASE, { headers: { 'Authorization': `Bearer ${token}` } }),
         fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', { headers: { 'Authorization': `Bearer ${token}` } }),
@@ -58,9 +72,9 @@ const PromoCodes = () => {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [token]);
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [fetchData]);
 
   const handleSave = async (e) => {
     e.preventDefault();
@@ -86,11 +100,13 @@ const PromoCodes = () => {
       } else {
         alert(data.message || "Failed to create promo");
       }
-    } catch (err) { alert("Network Error"); }
+    } catch {
+      alert("Network Error");
+    }
     finally { setSubmitting(false); }
   };
 
-  const filteredPromos = promos.filter(p => p.code.toLowerCase().includes(searchTerm.toLowerCase()));
+  const filteredPromos = promos;
 
   return (
     <div className="space-y-6 p-1 animate-in fade-in duration-500 font-sans text-gray-950 pb-20">
@@ -110,7 +126,7 @@ const PromoCodes = () => {
 
       <AnimatePresence mode="wait">
         {view === 'list' ? (
-          <motion.div 
+            <Motion.div 
             key="list"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
@@ -215,9 +231,9 @@ const PromoCodes = () => {
                   </div>
                </div>
             </div>
-          </motion.div>
+          </Motion.div>
         ) : (
-          <motion.div 
+          <Motion.div 
             key="form"
             initial={{ opacity: 0, scale: 0.98 }}
             animate={{ opacity: 1, scale: 1 }}
@@ -411,7 +427,7 @@ const PromoCodes = () => {
                   </div>
                </form>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
     </div>

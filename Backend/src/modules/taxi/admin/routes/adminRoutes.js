@@ -79,6 +79,7 @@ import {
   createVehicleType,
   deleteVehicleType,
 } from '../controllers/adminController.js';
+import { promotionsRouter } from '../promotions/routes/index.js';
 
 export const adminRouter = Router();
 
@@ -177,3 +178,5 @@ adminRouter.get('/admin/reports/driver-duty/download', downloadDriverDutyReport)
 adminRouter.get('/admin/reports/owner/download', downloadOwnerReport);
 adminRouter.get('/admin/reports/finance/download', downloadFinanceReport);
 adminRouter.get('/admin/reports/fleet-finance/download', downloadFleetFinanceReport);
+
+adminRouter.use('/', promotionsRouter);

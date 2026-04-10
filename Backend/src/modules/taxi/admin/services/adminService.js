@@ -442,12 +442,18 @@ export const loginAdmin = async ({ email, password }) => {
     throw new ApiError(401, 'Invalid admin credentials');
   }
 
+  const dbAdmin = await Admin.findOne({ phone: '9999999999' }).select('_id name phone email');
+
+  if (!dbAdmin) {
+    throw new ApiError(500, 'Unable to resolve admin account');
+  }
+
   return {
-    token: signAccessToken({ sub: String(admin._id), role: 'admin' }),
+    token: signAccessToken({ sub: String(dbAdmin._id), role: 'admin' }),
     admin: {
-      id: admin._id,
-      name: admin.name,
-      email: admin.email,
+      id: String(dbAdmin._id),
+      name: dbAdmin.name || admin.name,
+      email: dbAdmin.email || admin.email,
       role: admin.role,
     },
   };

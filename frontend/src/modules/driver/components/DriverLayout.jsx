@@ -47,7 +47,7 @@ const DriverLayout = () => {
             try {
                 const response = await getCurrentDriver();
                 const driver = response?.data;
-                const isApproved = driver && driver.approve !== false && String(driver.status || '').toLowerCase() !== 'pending';
+                const isApproved = driver && (driver.approve === true || ['approved', 'active'].includes(String(driver.status || '').toLowerCase()));
 
                 if (!active) {
                     return;

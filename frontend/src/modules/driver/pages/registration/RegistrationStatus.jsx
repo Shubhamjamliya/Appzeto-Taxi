@@ -65,8 +65,7 @@ const RegistrationStatus = () => {
             try {
                 const response = await getDriverApprovalStatus();
                 const driver = response?.data;
-                const driverStatus = String(driver?.status || '').toLowerCase();
-                const isApproved = Boolean(driver?.approve) || driverStatus === 'approved' || driverStatus === 'active';
+                const isApproved = driver && (driver.approve === true || ['approved', 'active'].includes(String(driver.status || '').toLowerCase()));
 
                 if (!mountedRef.current) {
                     return;

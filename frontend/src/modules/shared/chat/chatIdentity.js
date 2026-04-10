@@ -30,8 +30,27 @@ export const readJsonLocalStorage = (key) => {
   }
 };
 
+export const parseSupportConversationKey = (conversationKey) => {
+  const match = /^admin:([^|]+)\|(user|driver):([^|]+)$/.exec(String(conversationKey || ''));
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    adminId: match[1],
+    peerRole: match[2],
+    peerId: match[3],
+  };
+};
+
 export const resolveChatRole = (preferredRole) => {
-  const role = String(preferredRole || localStorage.getItem('role') || '').toLowerCase();
+  const role = String(
+    preferredRole ||
+      localStorage.getItem('chatRole') ||
+      localStorage.getItem('role') ||
+      '',
+  ).toLowerCase();
 
   if (role === 'admin' || role === 'driver' || role === 'user') {
     return role;
@@ -51,17 +70,22 @@ export const resolveChatRole = (preferredRole) => {
 export const resolveChatToken = (preferredRole) => {
   const role = resolveChatRole(preferredRole);
   const adminToken = localStorage.getItem('adminToken');
-  const userToken = localStorage.getItem('token');
+  const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+  const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
   if (role === 'admin') {
     return adminToken;
   }
 
-  if (role === 'driver' || role === 'user') {
+  if (role === 'driver') {
+    return driverToken;
+  }
+
+  if (role === 'user') {
     return userToken;
   }
 
-  return adminToken || userToken || null;
+  return adminToken || userToken || driverToken || null;
 };
 
 export const getChatSession = (preferredRole) => {

@@ -86,6 +86,7 @@ const VerifyOTP = () => {
 
         if (payload.exists) {
           localStorage.setItem('token', payload.token || '');
+          localStorage.setItem('userToken', payload.token || '');
           localStorage.setItem('role', 'user');
           localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
           setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);

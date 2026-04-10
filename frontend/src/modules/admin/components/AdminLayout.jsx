@@ -277,6 +277,7 @@ const ModeSwitcher = ({ mode, setMode }) => {
 const AdminLayout = () => {
   const [isSidebarOpen] = useState(true);
   const [isCollapsed, setCollapsed] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [mode, setModeState] = useState(() => {
     const savedMode = localStorage.getItem(MODE_STORAGE_KEY);
     if (savedMode === ADMIN_MODE || savedMode === OWNER_MODE) {
@@ -556,6 +557,7 @@ const AdminLayout = () => {
     socketService.disconnect();
     localStorage.removeItem('adminToken');
     localStorage.removeItem('adminInfo');
+    setIsUserMenuOpen(false);
     navigate('/admin/login');
   };
 
@@ -648,14 +650,23 @@ const AdminLayout = () => {
               </button>
             </div>
 
-            <div className="group relative flex cursor-pointer items-center gap-3 rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 transition-all hover:bg-gray-100">
+            <div
+              className="group relative flex cursor-pointer items-center gap-3 rounded-full border border-gray-100 bg-gray-50 px-3 py-1.5 transition-all hover:bg-gray-100"
+              onMouseEnter={() => setIsUserMenuOpen(true)}
+              onMouseLeave={() => setIsUserMenuOpen(false)}
+              onClick={() => setIsUserMenuOpen((current) => !current)}
+            >
               <div className="flex h-7 w-7 items-center justify-center rounded-full bg-slate-200 text-slate-500 transition-all group-hover:bg-primary group-hover:text-white">
                 <Users size={14} />
               </div>
               <span className="text-[11px] font-black text-gray-950">Admin</span>
               <ChevronDown size={14} className="text-gray-300" />
 
-              <div className="pointer-events-none absolute right-0 top-full z-50 mt-2 w-48 scale-95 rounded-2xl border border-gray-100 bg-white p-2 opacity-0 shadow-xl transition-all group-hover:pointer-events-auto group-hover:scale-100 group-hover:opacity-100">
+              <div
+                className={`absolute right-0 top-full z-50 mt-2 w-48 rounded-2xl border border-gray-100 bg-white p-2 shadow-xl transition-all ${
+                  isUserMenuOpen ? 'pointer-events-auto scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'
+                }`}
+              >
                 <button
                   type="button"
                   onClick={handleLogout}

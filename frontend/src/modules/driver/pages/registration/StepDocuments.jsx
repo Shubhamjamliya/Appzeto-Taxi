@@ -169,6 +169,7 @@ const StepDocuments = () => {
             const token = completeResponse?.data?.token;
             if (token) {
                 localStorage.setItem('token', token);
+                localStorage.setItem('driverToken', token);
                 localStorage.setItem('role', 'driver');
             }
 

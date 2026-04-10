@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { socketService } from '../../../shared/api/socket';
 import { getSupportConversations, getSupportMessages, markSupportMessagesRead, sendSupportMessage } from '../chat/chatApi';
-import { getChatSession } from '../chat/chatIdentity';
+import { getChatSession, parseSupportConversationKey } from '../chat/chatIdentity';
 
 const quickReplies = ['Payment issue', 'Ride delayed', 'Lost item', 'Safety concern'];
 
@@ -78,6 +78,20 @@ const SupportChatPanel = ({
   const isAdminPanel = mode === 'admin';
   const isLiveEnabled = session.isAuthenticated;
 
+  useEffect(() => {
+    if (!session.role || session.role === 'guest') {
+      return undefined;
+    }
+
+    localStorage.setItem('chatRole', session.role);
+
+    return () => {
+      if (localStorage.getItem('chatRole') === session.role) {
+        localStorage.removeItem('chatRole');
+      }
+    };
+  }, [session.role]);
+
   const [conversations, setConversations] = useState([]);
   const [selectedConversationKey, setSelectedConversationKey] = useState('');
   const [messages, setMessages] = useState([]);
@@ -112,20 +126,34 @@ const SupportChatPanel = ({
     setConversations((current) => {
       const index = current.findIndex((item) => item.conversationKey === message.conversationKey);
       const latestMessage = normalizeMessage(message);
-
-      const peer =
-        session.role === 'admin'
+      const parsedConversation = parseSupportConversationKey(message.conversationKey);
+      const adminSide =
+        latestMessage.sender.role === 'admin'
           ? {
-              role: latestMessage.sender.role === 'admin' ? latestMessage.receiver.role : latestMessage.sender.role,
-              id: latestMessage.sender.role === 'admin' ? latestMessage.receiver.id : latestMessage.sender.id,
-              name: latestMessage.sender.role === 'admin' ? latestMessage.receiver.name : latestMessage.sender.name,
-              phone: latestMessage.sender.role === 'admin' ? latestMessage.receiver.phone : latestMessage.sender.phone,
+              role: 'admin',
+              id: latestMessage.sender.id,
+              name: latestMessage.sender.name,
+              phone: latestMessage.sender.phone,
             }
           : {
               role: 'admin',
               id: latestMessage.receiver.id,
-              name: latestMessage.receiver.name || 'Support Team',
-              phone: latestMessage.receiver.phone || '',
+              name: latestMessage.receiver.name,
+              phone: latestMessage.receiver.phone,
+            };
+
+      const peer =
+        session.role === 'admin'
+          ? {
+              role: parsedConversation?.peerRole || (latestMessage.sender.role === 'admin' ? latestMessage.receiver.role : latestMessage.sender.role),
+              id: parsedConversation?.peerId || (latestMessage.sender.role === 'admin' ? latestMessage.receiver.id : latestMessage.sender.id),
+              name: latestMessage.sender.role === 'admin' ? latestMessage.receiver.name : latestMessage.sender.name,
+              phone: latestMessage.sender.role === 'admin' ? latestMessage.receiver.phone : latestMessage.sender.phone,
+            }
+          : {
+              ...adminSide,
+              name: adminSide.name || 'Support Team',
+              phone: adminSide.phone || '',
             };
 
       const unreadCount =
@@ -162,7 +190,7 @@ const SupportChatPanel = ({
       return undefined;
     }
 
-    socketService.connect({ role: session.role });
+    socketService.connect({ role: session.role, token: session.token });
 
     const handleMessage = (incomingMessage) => {
       const message = normalizeMessage(incomingMessage);
@@ -219,7 +247,7 @@ const SupportChatPanel = ({
       setError('');
 
       try {
-        const response = await getSupportConversations();
+        const response = await getSupportConversations(session.token);
         const nextConversations = (response?.data?.conversations || []).map(normalizeConversation);
 
         if (!active) {
@@ -277,7 +305,7 @@ const SupportChatPanel = ({
       setError('');
 
       try {
-        const response = await getSupportMessages(selectedConversationKey);
+        const response = await getSupportMessages(selectedConversationKey, session.token);
         const nextMessages = (response?.data?.messages || []).map(normalizeMessage);
 
         if (!active) {
@@ -297,7 +325,7 @@ const SupportChatPanel = ({
         });
         socketService.emit('chat:join', { conversationKey: selectedConversationKey });
         socketService.emit('chat:read', { conversationKey: selectedConversationKey });
-        await markSupportMessagesRead(selectedConversationKey);
+        await markSupportMessagesRead(selectedConversationKey, session.token);
       } catch (chatError) {
         if (!active) {
           return;
@@ -334,12 +362,13 @@ const SupportChatPanel = ({
 
     setSending(true);
     setError('');
+    const parsedConversation = parseSupportConversationKey(selectedConversationKey);
 
     const payload = isAdminPanel
       ? {
           message: text,
-          receiverRole: selectedConversation?.peer?.role || 'user',
-          receiverId: selectedConversation?.peer?.id,
+          receiverRole: parsedConversation?.peerRole || selectedConversation?.peer?.role || 'user',
+          receiverId: parsedConversation?.peerId || selectedConversation?.peer?.id,
           conversationKey: selectedConversationKey,
         }
       : {
@@ -351,7 +380,7 @@ const SupportChatPanel = ({
       if (socketService.isConnected()) {
         socketService.emit('chat:send', payload);
       } else {
-        const response = await sendSupportMessage(payload);
+        const response = await sendSupportMessage(payload, session.token);
         const savedMessage = normalizeMessage(response?.data?.message);
 
         if (savedMessage?.id) {

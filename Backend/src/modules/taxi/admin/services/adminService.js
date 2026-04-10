@@ -1035,47 +1035,140 @@ export const ensureBusinessSettings = async () => {
   return settings;
 };
 
+import { AdminAppSetting } from '../models/AdminAppSetting.js';
+import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
+
+/**
+ * Ensures a default administrative application settings document exists.
+ */
+export const ensureAppSettings = async () => {
+  let settings = await AdminAppSetting.findOne({ scope: 'default' });
+  if (!settings) {
+    settings = await AdminAppSetting.create(createDefaultAppSettings());
+  }
+  return settings;
+};
+
 export const getGeneralSettings = async (category) => {
-  const settings = await ensureBusinessSettings();
-  const mapper = {
+  const bizSettings = await ensureBusinessSettings();
+  const appSettings = await ensureAppSettings();
+
+  const businessMapper = {
     customize: 'customization',
     'transport-ride': 'transport_ride',
     'bid-ride': 'bid_ride',
     general: 'general',
-    wallet: 'customization', // Merged as per request
-    tip: 'transport_ride',    // Merged as per request
   };
 
-  const key = mapper[category] || category;
-  let data = settings[key] || {};
+  const appMapper = {
+    wallet: 'wallet_setting',
+    tip: 'tip_setting',
+  };
 
-  return { settings: data };
+  if (appMapper[category]) {
+    return { settings: appSettings[appMapper[category]] || {} };
+  }
+
+  const key = businessMapper[category] || category;
+  return { settings: bizSettings[key] || {} };
 };
 
 export const updateGeneralSettings = async (category, payload) => {
-  const settings = await ensureBusinessSettings();
-  const mapper = {
+  const bizSettings = await ensureBusinessSettings();
+  const appSettings = await ensureAppSettings();
+
+  const businessMapper = {
     customize: 'customization',
     'transport-ride': 'transport_ride',
     'bid-ride': 'bid_ride',
     general: 'general',
-    wallet: 'customization', // Merged as per request
-    tip: 'transport_ride',    // Merged as per request
   };
 
-  const key = mapper[category] || category;
-  if (!settings.schema.path(key)) {
-    return { settings: {} };
-  }
+  const appMapper = {
+    wallet: 'wallet_setting',
+    tip: 'tip_setting',
+  };
 
   const newValues = payload.settings || payload;
 
-  settings[key] = {
-    ...(settings[key] || {}),
-    ...newValues,
-  };
+  if (appMapper[category]) {
+    const key = appMapper[category];
+    appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
+    appSettings.markModified(key);
+    await appSettings.save();
+    return { settings: appSettings[key] };
+  }
 
-  settings.markModified(key);
+  const bizKey = businessMapper[category] || category;
+  if (!bizSettings.schema.path(bizKey)) {
+    return { settings: {} };
+  }
+
+  bizSettings[bizKey] = { ...(bizSettings[bizKey] || {}), ...newValues };
+  bizSettings.markModified(bizKey);
+  await bizSettings.save();
+  return { settings: bizSettings[bizKey] };
+};
+
+export const listAppModules = async ({ page = 1, limit = 20 }) => {
+  const settings = await ensureAppSettings();
+  const items = [...(settings.app_modules || [])].sort(
+    (a, b) => Number(a.order_by || 0) - Number(b.order_by || 0),
+  );
+  return buildPaginator(items, page, limit);
+};
+
+export const createAppModule = async (payload) => {
+  const settings = await ensureAppSettings();
+  const moduleItem = {
+    _id: nextId(),
+    name: payload.name,
+    transport_type: payload.transport_type,
+    service_type: payload.service_type,
+    order_by: Number(payload.order_by || 0),
+    short_description: payload.short_description || '',
+    description: payload.description || '',
+    active: normalizeBoolean(payload.active ?? true),
+    mobile_menu_icon:
+      payload.mobile_menu_icon ||
+      (payload.transport_type === 'delivery'
+        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
+        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
+  };
+  settings.app_modules.unshift(moduleItem);
+  settings.markModified('app_modules');
   await settings.save();
-  return { settings: settings[key] };
+  return moduleItem;
+};
+
+export const updateAppModule = async (id, payload) => {
+  const settings = await ensureAppSettings();
+  const index = settings.app_modules.findIndex((m) => String(m._id) === String(id));
+  if (index === -1) throw new ApiError(404, 'App module not found');
+
+  const moduleItem = settings.app_modules[index];
+  Object.assign(moduleItem, payload, {
+    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
+  });
+
+  settings.app_modules[index] = moduleItem;
+  settings.markModified('app_modules');
+  await settings.save();
+  return moduleItem;
+};
+
+export const deleteAppModule = async (id) => {
+  const settings = await ensureAppSettings();
+  settings.app_modules = settings.app_modules.filter((m) => String(m._id) === String(id));
+  settings.markModified('app_modules');
+  await settings.save();
+  return true;
+};
+
+export const listOnboardingScreens = async (audience) => {
+  const settings = await ensureAppSettings();
+  return (settings.onboarding_screens || []).filter(
+    (screen) => screen.audience === audience || screen.screen === audience,
+  );
 };

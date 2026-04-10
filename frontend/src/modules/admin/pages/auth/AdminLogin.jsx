@@ -6,7 +6,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { adminService } from '../../services/adminService';
 
 const STATIC_ADMIN_EMAIL = 'admin@gmail.com';
-const STATIC_ADMIN_PASSWORD = 'admin';
+const STATIC_ADMIN_PASSWORD = '12345';
 
 const AdminLogin = () => {
   const [email, setEmail] = useState(STATIC_ADMIN_EMAIL); 

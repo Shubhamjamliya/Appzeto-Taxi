@@ -5,6 +5,7 @@ import { ensureAdminState } from '../../services/adminService.js';
 import { Banner } from '../models/Banner.js';
 import { Notification } from '../models/Notification.js';
 import { PromoCode } from '../models/PromoCode.js';
+import { uploadDataUrlToCloudinary } from '../../../../../utils/cloudinaryUpload.js';
 
 const nextId = () => new mongoose.Types.ObjectId().toString();
 
@@ -218,11 +219,29 @@ const normalizeNotificationPayload = async (payload, existing = null) => {
 
   const pushTitle = normalizeText(payload.push_title ?? payload.title ?? existing?.push_title);
   const message = normalizeText(payload.message ?? existing?.message);
+  let image = normalizeText(payload.image ?? existing?.image);
+
   if (!pushTitle) {
     throw new ApiError(400, 'Push title is required');
   }
   if (!message) {
     throw new ApiError(400, 'Message is required');
+  }
+
+  // If image is a data URL (base64), upload it to Cloudinary
+  if (image.startsWith('data:')) {
+    try {
+      const uploaded = await uploadDataUrlToCloudinary({
+        dataUrl: image,
+        publicIdPrefix: 'notification',
+      });
+      image = uploaded.secureUrl;
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      // We don't throw here to allow sending notification even if image upload fails?
+      // Actually, it's better to throw so the user knows why it failed.
+      throw new ApiError(500, `Failed to upload notification image: ${error.message}`);
+    }
   }
 
   return {
@@ -231,15 +250,15 @@ const normalizeNotificationPayload = async (payload, existing = null) => {
     send_to: sendTo,
     push_title: pushTitle,
     message,
-    image: normalizeText(payload.image ?? existing?.image),
+    image,
     status: 'sent',
     sent_at: new Date(),
   };
 };
 
-const normalizeBannerPayload = (payload, existing = null) => {
+const normalizeBannerPayload = async (payload, existing = null) => {
   const title = normalizeText(payload.title ?? existing?.title);
-  const image = normalizeText(payload.image ?? existing?.image);
+  let image = normalizeText(payload.image ?? existing?.image);
   const linkType = normalizeText(payload.link_type ?? existing?.link_type ?? 'external_link');
   const redirectUrl = normalizeText(payload.redirect_url ?? payload.external_link ?? payload.deep_link ?? existing?.redirect_url);
   const active = normalizeBoolean(payload.active, existing?.active ?? true);
@@ -250,6 +269,21 @@ const normalizeBannerPayload = (payload, existing = null) => {
   if (!image) {
     throw new ApiError(400, 'Banner image is required');
   }
+
+  // If image is a data URL (base64), upload it to Cloudinary
+  if (image.startsWith('data:')) {
+    try {
+      const uploaded = await uploadDataUrlToCloudinary({
+        dataUrl: image,
+        publicIdPrefix: 'banner',
+      });
+      image = uploaded.secureUrl;
+    } catch (error) {
+      console.error('Cloudinary upload error:', error);
+      throw new ApiError(500, `Failed to upload banner image: ${error.message}`);
+    }
+  }
+
   if (!['external_link', 'deep_link'].includes(linkType)) {
     throw new ApiError(400, 'Link type must be external_link or deep_link');
   }
@@ -425,7 +459,7 @@ export const listBanners = async ({ page = 1, limit = 50, active }) => {
 };
 
 export const createBanner = async (payload) => {
-  const normalizedPayload = normalizeBannerPayload(payload);
+  const normalizedPayload = await normalizeBannerPayload(payload);
   const banner = await Banner.create(normalizedPayload);
   return serializeBanner(banner.toObject());
 };
@@ -436,7 +470,7 @@ export const updateBanner = async (id, payload) => {
     throw new ApiError(404, 'Banner not found');
   }
 
-  const nextPayload = normalizeBannerPayload(payload, banner.toObject());
+  const nextPayload = await normalizeBannerPayload(payload, banner.toObject());
   Object.assign(banner, nextPayload);
   await banner.save();
   return serializeBanner(banner.toObject());

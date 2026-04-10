@@ -535,7 +535,7 @@ const AdminLayout = () => {
 
     if (!token) return undefined;
 
-    socketService.connect();
+    socketService.connect({ role: 'admin' });
 
     socketService.on('new_sos', (data) => {
       console.log('SOS ALERT RECEIVED:', data);

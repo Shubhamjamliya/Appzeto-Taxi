@@ -12,13 +12,32 @@ const api = axios.create({
 // Request Interceptor: Attach Auth Token automatically
 api.interceptors.request.use(
   (config) => {
-    const adminToken = localStorage.getItem('adminToken');
-    const userToken = localStorage.getItem('token'); // Generic user/driver token
+    const requestPath = String(config.url || '').split('?')[0];
+    const storedRole = localStorage.getItem('role');
 
-    if (adminToken) {
-      config.headers.Authorization = `Bearer ${adminToken}`;
-    } else if (userToken) {
-      config.headers.Authorization = `Bearer ${userToken}`;
+    const isAdminRoute =
+      /^\/admin(\/|$)/.test(requestPath) ||
+      /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
+    const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
+
+    let token = null;
+
+    if (isAdminRoute) {
+      token = localStorage.getItem('adminToken');
+    } else if (isDriverRoute || storedRole === 'driver') {
+      token = localStorage.getItem('token');
+    } else if (storedRole === 'admin') {
+      token = localStorage.getItem('adminToken');
+    } else {
+      token = localStorage.getItem('adminToken') || localStorage.getItem('token');
+    }
+
+    if (!token) {
+      token = localStorage.getItem('token');
+    }
+
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
 
     return config;

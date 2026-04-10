@@ -3,9 +3,15 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import AuthLayout from '../../components/AuthLayout';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
+import { userAuthService } from '../../services/authService';
+
+const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 
 const VerifyOTP = () => {
-  const [otp, setOtp] = useState(['', '', '', '', '', '']);
+  const location = useLocation();
+  const phone = location.state?.phone || '88XXXXXX88';
+  const [generatedOtp] = useState(() => String(location.state?.otp || generateOtp()));
+  const [otp, setOtp] = useState(() => generatedOtp.split(''));
   const [timer, setTimer] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
@@ -13,8 +19,6 @@ const VerifyOTP = () => {
   const inputs = useRef([]);
   
   const navigate = useNavigate();
-  const location = useLocation();
-  const phone = location.state?.phone || "88XXXXXX88";
 
   useEffect(() => {
     let interval = null;
@@ -33,7 +37,7 @@ const VerifyOTP = () => {
     setOtp(newOtp);
 
     // Auto move to next input
-    if (value && index < 5) {
+    if (value && index < 3) {
       inputs.current[index + 1].focus();
     }
     
@@ -48,7 +52,7 @@ const VerifyOTP = () => {
 
   const handlePaste = (e) => {
     e.preventDefault();
-    const data = e.clipboardData.getData('text').slice(0, 6);
+    const data = e.clipboardData.getData('text').slice(0, 4);
     if (!/^\d+$/.test(data)) return;
     
     const newOtp = [...otp];
@@ -57,27 +61,45 @@ const VerifyOTP = () => {
       if (inputs.current[i]) inputs.current[i].value = char;
     });
     setOtp(newOtp);
-    if (data.length === 6) inputs.current[5].focus();
+    if (data.length === 4) inputs.current[3].focus();
   };
 
   const handleVerify = async () => {
     const fullOtp = otp.join('');
-    if (fullOtp.length < 6) return;
+    if (fullOtp.length < 4) return;
 
     setLoading(true);
-    // Mock Verification API
-    setTimeout(() => {
-      setLoading(false);
-      // Example: 123456 is correct, others fail for testing
-      if (fullOtp === '123456' || fullOtp === '000000') {
-        setSuccess(true);
-        setTimeout(() => navigate('/signup'), 1500);
-      } else {
+    setTimeout(async () => {
+      if (fullOtp !== generatedOtp) {
+        setLoading(false);
         setError(true);
-        setOtp(['', '', '', '', '', '']);
-        inputs.current[0].focus();
+        setOtp(generatedOtp.split(''));
+        inputs.current[0]?.focus();
+        return;
       }
-    }, 1500);
+
+      try {
+        const response = await userAuthService.verifyOtpLogin(phone);
+        const payload = response?.data || {};
+
+        setSuccess(true);
+
+        if (payload.exists) {
+          localStorage.setItem('token', payload.token || '');
+          localStorage.setItem('role', 'user');
+          localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
+          setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
+        } else {
+          setTimeout(() => navigate('/taxi/user/signup', { state: { phone } }), 1200);
+        }
+      } catch (err) {
+        setError(true);
+        setOtp(generatedOtp.split(''));
+        inputs.current[0]?.focus();
+      } finally {
+        setLoading(false);
+      }
+    }, 900);
   };
 
   const isFilled = otp.every(digit => digit !== '');
@@ -85,7 +107,7 @@ const VerifyOTP = () => {
   return (
     <AuthLayout 
       title="Verify your number" 
-      subtitle={`Enter the 6-digit code sent to +91 ${phone}`}
+      subtitle={`Enter the 4-digit code sent to +91 ${phone}`}
     >
       <div className="absolute top-8 left-8 md:top-10 md:left-10 lg:hidden">
         <button onClick={() => navigate(-1)} className="p-2 hover:bg-gray-100 rounded-full transition-all">
@@ -137,7 +159,7 @@ const VerifyOTP = () => {
               exit={{ opacity: 0 }}
               className="text-red-500 text-center font-bold text-sm"
             >
-              The OTP you entered is incorrect. Please try again. (Hint: 123456)
+              The OTP you entered is incorrect. Please try again. (Hint: 1234)
             </motion.p>
           )}
         </AnimatePresence>

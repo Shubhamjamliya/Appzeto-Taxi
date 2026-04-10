@@ -13,11 +13,33 @@ const userSchema = new mongoose.Schema(
       unique: true,
       trim: true,
     },
+    email: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     password: {
       type: String,
       required: true,
       minlength: 6,
       select: false,
+    },
+    wallet_balance: {
+      type: Number,
+      default: 0,
+    },
+    active: {
+      type: Boolean,
+      default: true,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+    deletion_reason: {
+      type: String,
+      default: '',
+      trim: true,
     },
     currentRideId: {
       type: mongoose.Schema.Types.ObjectId,

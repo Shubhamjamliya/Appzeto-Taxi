@@ -13,6 +13,7 @@ const adminPanelStateSchema = new mongoose.Schema(
     dashboard: { type: Mixed, default: {} },
     admins: { type: [Mixed], default: [] },
     users: { type: [Mixed], default: [] },
+    deletedUsers: { type: [Mixed], default: [] },
     drivers: { type: [Mixed], default: [] },
     owners: { type: [Mixed], default: [] },
     withdrawals: { type: [Mixed], default: [] },

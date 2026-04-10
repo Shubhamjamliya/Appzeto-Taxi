@@ -26,10 +26,34 @@ export const createUser = asyncHandler(async (req, res) =>
 export const updateUser = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateUser(req.params.id, req.body)),
 );
+export const getUser = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getUserById(req.params.id)),
+);
 export const deleteUser = asyncHandler(async (req, res) => {
   await adminService.deleteUser(req.params.id);
   ok(res, { deleted: true });
 });
+
+export const getDeletedUsers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDeletedUsers(req.query)),
+);
+
+export const restoreDeletedUser = asyncHandler(async (req, res) =>
+  ok(res, await adminService.restoreDeletedUser(req.params.id)),
+);
+
+export const permanentlyDeleteDeletedUser = asyncHandler(async (req, res) => {
+  await adminService.permanentlyDeleteDeletedUser(req.params.id);
+  ok(res, { deleted: true });
+});
+
+export const getUserRequests = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listUserRequests(req.params.id)),
+);
+
+export const getUserWalletHistory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listUserWalletHistory(req.params.id)),
+);
 
 export const getDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDrivers(req.query)),
@@ -328,9 +352,8 @@ export const updatePaymentSettings = asyncHandler(async (req, res) =>
   ok(res, await adminService.updatePaymentSettings(req.body)),
 );
 
-export const getSmsSettings = asyncHandler(async (_req, res) => ok(res, await adminService.getSMSSettings()));
 export const getSmsSettings = asyncHandler(async (_req, res) =>
-  ok(res, { rows: await adminService.getSmsSettings() }),
+  ok(res, await adminService.getSMSSettings()),
 );
 export const updateSmsSettings = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateSMSSettings(req.body)),

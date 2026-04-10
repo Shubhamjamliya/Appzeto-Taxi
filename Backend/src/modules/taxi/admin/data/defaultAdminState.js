@@ -128,6 +128,7 @@ export const createDefaultAdminState = () => {
         createdAt: new Date('2026-03-18T15:10:00.000Z'),
       },
     ],
+    deletedUsers: [],
     drivers: [
       {
         _id: driverOneId,

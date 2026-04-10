@@ -9,6 +9,15 @@ const DeleteRequestUsers = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedRows, setSelectedRows] = useState([]);
   const [users, setUsers] = useState([]);
+  const [stats, setStats] = useState({
+    deletedCount: 0,
+    activeCount: 0,
+    totalCount: 0,
+    deletionRate: 0,
+    recentDeleted: 0,
+    todayDeleted: 0,
+    avgAgeHours: 0,
+  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
@@ -16,13 +25,44 @@ const DeleteRequestUsers = () => {
     setIsLoading(true);
     try {
       const token = localStorage.getItem('adminToken');
-      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users/deleted', {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        setUsers(data.data?.results || []);
+      const [deletedRes, activeRes] = await Promise.all([
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users/deleted', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users?page=1&limit=1', {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+      ]);
+      const deletedData = await deletedRes.json();
+      const activeData = await activeRes.json();
+      const deletedList = deletedData.data?.results || [];
+      const activeCount = activeData.data?.paginator?.total ?? activeData.paginator?.total ?? activeData.data?.results?.length ?? 0;
+      const deletedCount = deletedList.length;
+      const totalCount = activeCount + deletedCount;
+      const now = Date.now();
+      const dayMs = 24 * 60 * 60 * 1000;
+      const weekMs = 7 * dayMs;
+      const ageHours = deletedList
+        .filter((user) => user.deletedAt)
+        .map((user) => (now - new Date(user.deletedAt).getTime()) / 36e5)
+        .filter((value) => Number.isFinite(value) && value >= 0);
+      const todayDeleted = deletedList.filter((user) => user.deletedAt && (now - new Date(user.deletedAt).getTime()) <= dayMs).length;
+      const recentDeleted = deletedList.filter((user) => user.deletedAt && (now - new Date(user.deletedAt).getTime()) <= weekMs).length;
+      const avgAgeHours = ageHours.length ? Math.round(ageHours.reduce((sum, value) => sum + value, 0) / ageHours.length) : 0;
+
+      if (deletedData.success) {
+        setUsers(deletedList);
       }
+
+      setStats({
+        deletedCount,
+        activeCount,
+        totalCount,
+        deletionRate: totalCount ? Math.round((deletedCount / totalCount) * 100) : 0,
+        recentDeleted,
+        todayDeleted,
+        avgAgeHours,
+      });
     } catch (err) {
       console.error('Fetch deleted users error:', err);
     } finally {
@@ -234,17 +274,27 @@ const DeleteRequestUsers = () => {
          {/* RIGHT SIDE STATS - MATE STYLE */}
          <div className="space-y-6">
             <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden">
-               <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-6">Request Statistics</h4>
+               <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-6">Deletion Statistics</h4>
                
                <div className="flex flex-col items-center mb-8">
                   <div className="relative w-32 h-32 flex items-center justify-center">
                      <svg className="w-full h-full -rotate-90">
                         <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-gray-50" />
-                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray="364" strokeDashoffset="180" className="text-rose-500" />
+                        <circle
+                          cx="64"
+                          cy="64"
+                          r="58"
+                          stroke="currentColor"
+                          strokeWidth="8"
+                          fill="transparent"
+                          strokeDasharray="364"
+                          strokeDashoffset={364 - (364 * stats.deletionRate) / 100}
+                          className="text-rose-500 transition-all duration-300"
+                        />
                      </svg>
                      <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <p className="text-2xl font-black text-gray-950 leading-none">52%</p>
-                        <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase">Pending</p>
+                        <p className="text-2xl font-black text-gray-950 leading-none">{stats.deletionRate}%</p>
+                        <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase">Queue Load</p>
                      </div>
                   </div>
                </div>
@@ -253,29 +303,29 @@ const DeleteRequestUsers = () => {
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">New requests</span>
+                        <span className="text-[12px] font-bold text-gray-500">Today</span>
                      </div>
-                     <span className="text-[12px] font-black text-gray-950">14</span>
+                     <span className="text-[12px] font-black text-gray-950">{stats.todayDeleted}</span>
                   </div>
                   <div className="flex items-center justify-between">
                      <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">In review</span>
+                        <span className="text-[12px] font-bold text-gray-500">7 Days</span>
                      </div>
-                     <span className="text-[12px] font-black text-gray-950">28</span>
+                     <span className="text-[12px] font-black text-gray-950">{stats.recentDeleted}</span>
                   </div>
                   <div className="flex items-center justify-between pb-2 border-b border-gray-50">
                      <div className="flex items-center gap-2">
                         <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">Approved</span>
+                        <span className="text-[12px] font-bold text-gray-500">Active</span>
                      </div>
-                     <span className="text-[12px] font-black text-gray-950">152</span>
+                     <span className="text-[12px] font-black text-gray-950">{stats.activeCount}</span>
                   </div>
                </div>
 
                <div className="mt-8">
-                  <p className="text-xl font-black text-gray-950">14 Hours</p>
-                  <p className="text-[9px] font-black text-gray-400 uppercase mt-1 tracking-widest">Avg Response Time</p>
+                  <p className="text-xl font-black text-gray-950">{stats.avgAgeHours} Hours</p>
+                  <p className="text-[9px] font-black text-gray-400 uppercase mt-1 tracking-widest">Avg Queue Age</p>
                </div>
             </div>
 

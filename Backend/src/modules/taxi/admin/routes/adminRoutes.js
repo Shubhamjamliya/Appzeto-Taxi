@@ -69,7 +69,13 @@ import {
   getSubscriptionPlans,
   getTodayEarnings,
   getUserOnboarding,
+  getUser,
   getUsers,
+  getDeletedUsers,
+  restoreDeletedUser,
+  permanentlyDeleteDeletedUser,
+  getUserRequests,
+  getUserWalletHistory,
   getVehiclePreferenceOptions,
   getVehicleTypeCatalog,
   getVehicleTypes,
@@ -115,8 +121,14 @@ adminRouter.post('/admin/login', loginAdmin);
 
 adminRouter.get('/admin/users', getUsers);
 adminRouter.post('/admin/users', createUser);
+adminRouter.get('/admin/users/deleted', getDeletedUsers);
+adminRouter.patch('/admin/users/deleted/:id/restore', restoreDeletedUser);
+adminRouter.delete('/admin/users/deleted/:id', permanentlyDeleteDeletedUser);
+adminRouter.get('/admin/users/:id', getUser);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);
+adminRouter.get('/admin/users/:id/requests', getUserRequests);
+adminRouter.get('/admin/users/:id/wallet-history', getUserWalletHistory);
 
 adminRouter.get('/admin/drivers', getDrivers);
 adminRouter.get('/admin/drivers/:id', getDriver);

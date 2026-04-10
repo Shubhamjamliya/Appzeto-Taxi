@@ -18,6 +18,8 @@ import { ServiceLocation } from '../models/ServiceLocation.js';
 import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
+import { Ride } from '../../user/models/Ride.js';
+import { User } from '../../user/models/User.js';
 import { hashPassword } from '../../driver/services/authService.js';
 
 const deepMerge = (target, source) => {
@@ -62,6 +64,19 @@ const normalizeBoolean = (value) => {
 const findById = (items, id) => items.find((item) => String(item._id) === String(id));
 
 const removeById = (items, id) => items.filter((item) => String(item._id) !== String(id));
+
+const moveItemById = (items, id) => {
+  const index = items.findIndex((item) => String(item._id) === String(id));
+
+  if (index === -1) {
+    return { item: null, rest: items };
+  }
+
+  return {
+    item: items[index],
+    rest: [...items.slice(0, index), ...items.slice(index + 1)],
+  };
+};
 
 const toNullableNumber = (value) => {
   if (value === '' || value === null || value === undefined) return null;
@@ -312,6 +327,21 @@ const serializeDriver = (driver) => ({
   updatedAt: driver.updatedAt,
 });
 
+const serializeUser = (user) => ({
+  _id: user._id,
+  id: user._id,
+  name: user.name || '',
+  email: user.email || '',
+  mobile: user.phone || user.mobile || '',
+  phone: user.phone || user.mobile || '',
+  wallet_balance: Number(user.wallet_balance || 0),
+  active: user.active !== false && !user.deletedAt,
+  deletedAt: user.deletedAt || null,
+  deletion_reason: user.deletion_reason || '',
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
 const DEFAULT_SERVICE_LOCATION_CENTER = { lat: 22.7196, lng: 75.8577 };
 
 const normalizeServiceLocationPayload = (payload = {}, fallback = {}) => {
@@ -410,6 +440,11 @@ export const ensureAdminState = async () => {
     await state.save();
   }
 
+  if (!Array.isArray(state.deletedUsers)) {
+    state.deletedUsers = [];
+    await state.save();
+  }
+
   const defaultAdmin = state.admins?.find(
     (item) => item.email?.toLowerCase() === 'admin@gmail.com',
   );
@@ -433,6 +468,10 @@ const ensureServiceLocationsSeeded = async () => {
 
 export const getAdminModuleInfo = async () => {
   const state = await ensureAdminState();
+  const [userCount, deletedUserCount] = await Promise.all([
+    User.countDocuments({ deletedAt: null }),
+    User.countDocuments({ deletedAt: { $ne: null } }),
+  ]);
   const ownerCount = await Owner.countDocuments();
   const zoneCount = await Zone.countDocuments();
   return {
@@ -440,7 +479,8 @@ export const getAdminModuleInfo = async () => {
     ready: true,
     message: 'Admin module is wired and seeded',
     snapshot: {
-      users: state.users.length,
+      users: userCount,
+      deleted_users: deletedUserCount,
       drivers: state.drivers.length,
       owners: ownerCount,
       zones: zoneCount,
@@ -476,41 +516,207 @@ export const loginAdmin = async ({ email, password }) => {
 };
 
 export const listUsers = async ({ page = 1, limit = 50 }) => {
-  const state = await ensureAdminState();
-  return buildPaginator(state.users, page, limit);
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [users, total] = await Promise.all([
+    User.find({ deletedAt: null })
+      .sort({ createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    User.countDocuments({ deletedAt: null }),
+  ]);
+
+  return {
+    results: users.map(serializeUser),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
 };
 
 export const createUser = async (payload) => {
-  const state = await ensureAdminState();
-  const user = {
-    _id: nextId(),
-    name: payload.name || 'New User',
-    email: payload.email || '',
-    mobile: payload.phone || payload.mobile || '',
+  const name = String(payload.name || '').trim();
+  const phone = String(payload.phone || payload.mobile || '').trim();
+  const email = String(payload.email || '').trim();
+  const password = String(payload.password || '').trim();
+
+  if (!name) throw new ApiError(400, 'User name is required');
+  if (!phone) throw new ApiError(400, 'Phone is required');
+  if (!password) throw new ApiError(400, 'Password is required');
+
+  const existingUser = await User.findOne({ phone });
+  if (existingUser) {
+    throw new ApiError(409, 'Phone number already exists');
+  }
+
+  const user = await User.create({
+    name,
+    phone,
+    email,
+    password: await hashPassword(password),
     wallet_balance: Number(payload.wallet_balance || 0),
     active: payload.active ?? true,
-    createdAt: new Date(),
-  };
+  });
 
-  state.users.unshift(user);
-  await state.save();
-  return user;
+  return serializeUser(user.toObject());
 };
 
 export const updateUser = async (id, payload) => {
-  const state = await ensureAdminState();
-  const user = findById(state.users, id);
+  const update = {};
+
+  if (payload.name !== undefined) update.name = String(payload.name || '').trim();
+  if (payload.phone !== undefined || payload.mobile !== undefined) {
+    update.phone = String(payload.phone || payload.mobile || '').trim();
+  }
+  if (payload.email !== undefined) update.email = String(payload.email || '').trim();
+  if (payload.wallet_balance !== undefined) update.wallet_balance = Number(payload.wallet_balance || 0);
+  if (payload.active !== undefined) update.active = Boolean(payload.active);
+  if (payload.password) {
+    update.password = await hashPassword(String(payload.password));
+  }
+
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null },
+    { $set: update },
+    { new: true, runValidators: true },
+  );
+
   if (!user) throw new ApiError(404, 'User not found');
-  Object.assign(user, payload);
-  await state.save();
-  return user;
+  return serializeUser(user.toObject());
 };
 
 export const deleteUser = async (id) => {
-  const state = await ensureAdminState();
-  state.users = removeById(state.users, id);
-  await state.save();
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null },
+    {
+      $set: {
+        deletedAt: new Date(),
+        deletion_reason: 'admin_delete',
+        active: false,
+      },
+    },
+    { new: true },
+  );
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
   return true;
+};
+
+export const listDeletedUsers = async ({ page = 1, limit = 50 }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [users, total] = await Promise.all([
+    User.find({ deletedAt: { $ne: null } })
+      .sort({ deletedAt: -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    User.countDocuments({ deletedAt: { $ne: null } }),
+  ]);
+
+  return {
+    results: users.map(serializeUser),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const restoreDeletedUser = async (id) => {
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: { $ne: null } },
+    {
+      $set: {
+        deletedAt: null,
+        deletion_reason: '',
+        active: true,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!user) {
+    throw new ApiError(404, 'Deleted user not found');
+  }
+
+  return serializeUser(user.toObject());
+};
+
+export const permanentlyDeleteDeletedUser = async (id) => {
+  const deleted = await User.findOneAndDelete({ _id: id, deletedAt: { $ne: null } });
+
+  if (!deleted) {
+    throw new ApiError(404, 'Deleted user not found');
+  }
+  return true;
+};
+
+export const getUserById = async (id) => {
+  const user = await User.findById(id).lean();
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  return serializeUser(user);
+};
+
+export const listUserRequests = async (id) => {
+  const user = await User.findById(id).lean();
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  const rides = await Ride.find({ userId: id }).sort({ createdAt: -1 }).populate('driverId', 'name').lean();
+
+  return {
+    results: rides.map((ride) => ({
+      request_id: String(ride._id),
+      trip_start_time: ride.createdAt,
+      user_id: {
+        _id: String(id),
+        name: user.name || '',
+      },
+      driver_id: ride.driverId
+        ? {
+            _id: ride.driverId._id || ride.driverId,
+            name: ride.driverId.name || 'Pending',
+          }
+        : null,
+      is_completed: String(ride.status).toLowerCase() === 'completed',
+      is_cancelled: String(ride.status).toLowerCase() === 'cancelled',
+      is_paid: String(ride.status).toLowerCase() === 'completed',
+      payment_type: 'cash',
+      status: ride.status,
+    })),
+  };
+};
+
+export const listUserWalletHistory = async (id) => {
+  const user = await User.findById(id).lean();
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  return {
+    results: [],
+  };
 };
 
 export const listDrivers = async ({ page = 1, limit = 50 }) => {
@@ -1870,10 +2076,15 @@ export const updateMailSettings = async (payload) => {
 
 
 export const buildUserReport = async () => {
-  const state = await ensureAdminState();
+  const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
   return csvFromRows(
     ['name', 'email', 'mobile', 'active'],
-    state.users.map((item) => ({ name: item.name, email: item.email, mobile: item.mobile, active: item.active })),
+    users.map((item) => ({
+      name: item.name || '',
+      email: item.email || '',
+      mobile: item.phone || item.mobile || '',
+      active: item.active !== false && !item.deletedAt,
+    })),
   );
 };
 

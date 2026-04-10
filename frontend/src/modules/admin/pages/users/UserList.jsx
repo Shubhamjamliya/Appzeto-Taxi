@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { 
   Search, Download, UserPlus, Star, MoreHorizontal, X,
@@ -22,6 +23,7 @@ const UserList = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
   const [activeMenu, setActiveMenu] = useState(null);
+  const [menuPosition, setMenuPosition] = useState({ top: 0, left: 0 });
   const [selectedRows, setSelectedRows] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -127,7 +129,25 @@ const UserList = () => {
 
   const toggleMenu = (e, userId) => {
     e.stopPropagation();
-    setActiveMenu(activeMenu === userId ? null : userId);
+    if (activeMenu === userId) {
+      setActiveMenu(null);
+      return;
+    }
+
+    const rect = e.currentTarget.getBoundingClientRect();
+    const menuWidth = 176;
+    const menuHeight = 170;
+    const gap = 8;
+    let left = rect.right - menuWidth;
+    left = Math.max(12, Math.min(left, window.innerWidth - menuWidth - 12));
+
+    let top = rect.bottom + gap;
+    if (top + menuHeight > window.innerHeight - 12) {
+      top = Math.max(12, rect.top - gap - menuHeight);
+    }
+
+    setMenuPosition({ top, left });
+    setActiveMenu(userId);
   };
 
   if (isLoading) {
@@ -179,8 +199,8 @@ const UserList = () => {
       </div>
 
       {/* Table */}
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-        <div className="overflow-x-auto">
+      <div className="bg-white rounded-xl border border-gray-200 overflow-visible">
+        <div className="overflow-x-auto overflow-y-visible">
           <table className="w-full">
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
@@ -240,23 +260,6 @@ const UserList = () => {
                       >
                         <MoreHorizontal size={16} />
                       </button>
-                      {activeMenu === user.id && (
-                        <div className="absolute right-0 top-full mt-1 w-44 bg-white rounded-lg shadow-lg border border-gray-200 py-1 z-50">
-                          <button onClick={() => navigate(`/admin/users/${user.id}`)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <UserCheck size={13} className="text-emerald-500" /> View Profile
-                          </button>
-                          <button onClick={() => handleEditUser(user)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <Edit2 size={13} className="text-blue-500" /> Edit
-                          </button>
-                          <button onClick={() => handleEditUser(user)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
-                            <Lock size={13} className="text-amber-500" /> Update Password
-                          </button>
-                          <div className="h-px bg-gray-100 my-1" />
-                          <button onClick={() => handleDeleteUser(user.id)} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2">
-                            <Trash2 size={13} /> Delete
-                          </button>
-                        </div>
-                      )}
                     </div>
                   </td>
                 </tr>
@@ -265,6 +268,32 @@ const UserList = () => {
           </table>
         </div>
       </div>
+
+      {activeMenu &&
+        createPortal(
+          <div className="fixed inset-0 z-[9999]" onClick={() => setActiveMenu(null)}>
+            <div
+              className="absolute w-44 bg-white rounded-lg shadow-2xl border border-gray-200 py-1"
+              style={{ top: menuPosition.top, left: menuPosition.left }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <button onClick={() => navigate(`/admin/users/${activeMenu}`)} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                <UserCheck size={13} className="text-emerald-500" /> View Profile
+              </button>
+              <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                <Edit2 size={13} className="text-blue-500" /> Edit
+              </button>
+              <button onClick={() => handleEditUser(users.find((item) => item.id === activeMenu))} className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2">
+                <Lock size={13} className="text-amber-500" /> Update Password
+              </button>
+              <div className="h-px bg-gray-100 my-1" />
+              <button onClick={() => handleDeleteUser(activeMenu)} className="w-full text-left px-3 py-2 text-xs text-red-600 hover:bg-red-50 flex items-center gap-2">
+                <Trash2 size={13} /> Delete
+              </button>
+            </div>
+          </div>,
+          document.body,
+        )}
 
       <UserModal 
         isOpen={isModalOpen} 

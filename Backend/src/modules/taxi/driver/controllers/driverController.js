@@ -157,6 +157,8 @@ export const getCurrentDriver = async (req, res) => {
       rating: driver.rating,
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
+      location: driver.location,
+      zoneId: driver.zoneId,
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
     },

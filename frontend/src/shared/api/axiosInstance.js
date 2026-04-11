@@ -9,6 +9,39 @@ const api = axios.create({
   },
 });
 
+const decodeBase64Url = (value) => {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + '='.repeat(padding);
+};
+
+const getTokenPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  try {
+    const payload = token.split('.')[1];
+
+    if (!payload) {
+      return null;
+    }
+
+    return JSON.parse(atob(decodeBase64Url(payload)));
+  } catch (_error) {
+    return null;
+  }
+};
+
+const getStoredTokenByRole = (role) => {
+  const entries = [
+    localStorage.getItem(`${role}Token`),
+    localStorage.getItem('token'),
+  ].filter(Boolean);
+
+  return entries.find((token) => getTokenPayload(token)?.role === role) || null;
+};
+
 // Request Interceptor: Attach Auth Token automatically
 api.interceptors.request.use(
   (config) => {
@@ -19,42 +52,37 @@ api.interceptors.request.use(
       return config;
     }
 
-    const storedRole = localStorage.getItem('role');
     const chatRole = localStorage.getItem('chatRole');
     const normalizedChatRole = String(chatRole || '').toLowerCase();
-    const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
-    const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
+    const userToken = getStoredTokenByRole('user');
+    const driverToken = getStoredTokenByRole('driver');
+    const adminToken = getStoredTokenByRole('admin') || localStorage.getItem('adminToken');
 
     const isAdminRoute =
       /^\/admin(\/|$)/.test(requestPath) ||
       /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
     const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
+    const isUserRoute = /^\/rides(\/|$)/.test(requestPath);
     const isChatRoute = /^\/chats?(\/|$)/.test(requestPath);
 
     let token = null;
 
     if (isChatRoute) {
       if (normalizedChatRole === 'admin') {
-        token = localStorage.getItem('adminToken');
+        token = adminToken;
       } else if (normalizedChatRole === 'driver') {
         token = driverToken;
       } else if (normalizedChatRole === 'user') {
         token = userToken;
       }
     } else if (isAdminRoute) {
-      token = localStorage.getItem('adminToken');
-    } else if (isDriverRoute || storedRole === 'driver') {
-      token = driverToken;
-    } else if (storedRole === 'user') {
+      token = adminToken;
+    } else if (isUserRoute) {
       token = userToken;
-    } else if (storedRole === 'admin') {
-      token = localStorage.getItem('adminToken');
+    } else if (isDriverRoute) {
+      token = driverToken;
     } else {
-      token = localStorage.getItem('adminToken') || userToken || driverToken;
-    }
-
-    if (!token) {
-      token = userToken || driverToken || localStorage.getItem('token');
+      token = userToken || driverToken || adminToken;
     }
 
     if (token) {

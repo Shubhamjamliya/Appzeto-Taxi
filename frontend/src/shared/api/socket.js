@@ -3,11 +3,44 @@ import { BACKEND_ORIGIN } from './runtimeConfig';
 
 const SOCKET_ORIGIN = import.meta.env.VITE_SOCKET_URL || BACKEND_ORIGIN;
 
+const decodeBase64Url = (value) => {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + '='.repeat(padding);
+};
+
+const getTokenPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  try {
+    const payload = token.split('.')[1];
+
+    if (!payload) {
+      return null;
+    }
+
+    return JSON.parse(atob(decodeBase64Url(payload)));
+  } catch (_error) {
+    return null;
+  }
+};
+
+const getStoredTokenByRole = (role) => {
+  const entries = [
+    localStorage.getItem(`${role}Token`),
+    localStorage.getItem('token'),
+  ].filter(Boolean);
+
+  return entries.find((token) => getTokenPayload(token)?.role === role) || null;
+};
+
 const resolveTokenForRole = (role) => {
-  const normalizedRole = String(role || localStorage.getItem('role') || '').toLowerCase();
-  const adminToken = localStorage.getItem('adminToken');
-  const userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
-  const driverToken = localStorage.getItem('driverToken') || localStorage.getItem('token');
+  const normalizedRole = String(role || '').toLowerCase();
+  const adminToken = getStoredTokenByRole('admin') || localStorage.getItem('adminToken');
+  const userToken = getStoredTokenByRole('user');
+  const driverToken = getStoredTokenByRole('driver');
 
   if (normalizedRole === 'admin') {
     return adminToken;
@@ -21,7 +54,7 @@ const resolveTokenForRole = (role) => {
     return userToken;
   }
 
-  return adminToken || userToken || driverToken || null;
+  return userToken || driverToken || adminToken || null;
 };
 
 class SocketService {

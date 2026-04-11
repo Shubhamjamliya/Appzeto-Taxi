@@ -2,7 +2,11 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Users, X, Banknote, CreditCard, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
+import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
+import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
+
+const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 
 const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
   const [lng, lat] = coords || [];
@@ -16,56 +20,169 @@ const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
 
 const getDriverPosition = (driver) => toLatLng(driver?.location?.coordinates, null);
 
-const getMarkerPosition = (driver, index, center) => {
-  const position = getDriverPosition(driver);
+const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isLoaded, loadError }) => {
+  const [routePath, setRoutePath] = useState([]);
+  const [routeError, setRouteError] = useState('');
 
-  if (!position) {
-    return {
-      left: `${18 + ((index * 23) % 62)}%`,
-      top: `${18 + ((index * 17) % 46)}%`,
+  useEffect(() => {
+    if (!isLoaded || !dropPosition || !window.google?.maps?.DirectionsService) {
+      setRoutePath([]);
+      setRouteError('');
+      return;
+    }
+
+    let active = true;
+    const directionsService = new window.google.maps.DirectionsService();
+
+    directionsService.route(
+      {
+        origin: center,
+        destination: dropPosition,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: false,
+      },
+      (result, status) => {
+        if (!active) {
+          return;
+        }
+
+        if (status === 'OK' && result?.routes?.[0]?.overview_path?.length) {
+          setRoutePath(
+            result.routes[0].overview_path.map((point) => ({
+              lat: point.lat(),
+              lng: point.lng(),
+            })),
+          );
+          setRouteError('');
+          return;
+        }
+
+        setRoutePath([center, dropPosition]);
+        setRouteError(status || 'Directions unavailable');
+      },
+    );
+
+    return () => {
+      active = false;
     };
+  }, [center, dropPosition, isLoaded]);
+
+  if (!HAS_VALID_GOOGLE_MAPS_KEY) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
+        <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
+          <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
+        </div>
+      </div>
+    );
   }
 
-  const latDelta = (position.lat - center.lat) * 460;
-  const lngDelta = (position.lng - center.lng) * 460;
-  const left = Math.max(10, Math.min(88, 50 + lngDelta));
-  const top = Math.max(10, Math.min(82, 50 - latDelta));
-
-  return {
-    left: `${left}%`,
-    top: `${top}%`,
-  };
-};
-
-const VehicleMapPreview = ({ center, drivers, selectedVehicle }) => {
-  return (
-    <div className="relative h-full w-full overflow-hidden bg-[#dfe8ef]">
-      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(0deg,rgba(255,255,255,.38)_1px,transparent_1px)] bg-[length:52px_52px]" />
-      <div className="absolute -left-10 top-[25%] h-9 w-[120%] -rotate-[8deg] rounded-full bg-white/95 shadow-[0_0_0_1px_rgba(148,163,184,.22)]" />
-      <div className="absolute left-[8%] top-[13%] h-8 w-[112%] rotate-[4deg] rounded-full bg-white/90 shadow-[0_0_0_1px_rgba(148,163,184,.18)]" />
-      <div className="absolute left-[46%] top-[-12%] h-[120%] w-9 rotate-[18deg] rounded-full bg-white/95 shadow-[0_0_0_1px_rgba(148,163,184,.22)]" />
-      <div className="absolute left-[17%] top-[-18%] h-[125%] w-7 -rotate-[2deg] rounded-full bg-white/80" />
-      <div className="absolute right-[9%] top-0 h-full w-8 rotate-[1deg] rounded-full bg-white/75" />
-      <div className="absolute left-[12%] top-[54%] h-20 w-24 rounded-[12px] bg-emerald-200/50" />
-      <div className="absolute right-[15%] top-[18%] h-24 w-28 rounded-[14px] bg-sky-200/45" />
-      <div className="absolute left-[43%] top-[34%] h-14 w-20 rounded-[10px] bg-amber-200/60" />
-      <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-[#f8e001] text-[12px] font-black text-slate-950 shadow-[0_10px_24px_rgba(15,23,42,0.18)]">
-        P
-      </div>
-      {drivers.slice(0, 8).map((driver, index) => (
-        <div
-          key={driver.id || index}
-          className="pointer-events-none absolute z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.18)]"
-          style={getMarkerPosition(driver, index, center)}
-          title={`${driver.name || 'Driver'} - ${driver.vehicleNumber || selectedVehicle?.name || 'Vehicle'}`}
-        >
-          <img src={selectedVehicle?.icon || '/4_Taxi.png'} alt="" className="h-7 w-7 object-contain" />
+  if (loadError) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
+        <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
+          <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+          <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
         </div>
-      ))}
-      <div className="absolute bottom-24 left-4 rounded-[12px] border border-white/70 bg-white/85 px-3 py-2 shadow-sm">
+      </div>
+    );
+  }
+
+  if (!isLoaded) {
+    return (
+      <div className="flex h-full w-full items-center justify-center bg-slate-200">
+        <div className="flex items-center gap-2 rounded-[16px] bg-white/90 px-4 py-3 shadow-sm">
+          <LoaderCircle size={18} className="animate-spin text-slate-500" />
+          <span className="text-[12px] font-black text-slate-700">Loading map</span>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative h-full w-full overflow-hidden">
+      <GoogleMap
+        mapContainerStyle={MAP_CONTAINER_STYLE}
+        center={center}
+        zoom={13}
+        options={{
+          disableDefaultUI: true,
+          zoomControl: true,
+          clickableIcons: false,
+          streetViewControl: false,
+          fullscreenControl: false,
+          mapTypeControl: false,
+          gestureHandling: 'greedy',
+        }}
+      >
+        <MarkerF
+          position={center}
+          title="Pickup"
+          icon={{
+            path: window.google.maps.SymbolPath.CIRCLE,
+            fillColor: '#f8e001',
+            fillOpacity: 1,
+            strokeColor: '#111827',
+            strokeWeight: 2,
+            scale: 8,
+          }}
+        />
+        {dropPosition && (
+          <MarkerF
+            position={dropPosition}
+            title="Drop"
+            icon={{
+              path: window.google.maps.SymbolPath.CIRCLE,
+              fillColor: '#fb923c',
+              fillOpacity: 1,
+              strokeColor: '#ffffff',
+              strokeWeight: 2,
+              scale: 7,
+            }}
+          />
+        )}
+        {routePath.length > 1 && (
+          <PolylineF
+            path={routePath}
+            options={{
+              strokeColor: '#111827',
+              strokeOpacity: 0.85,
+              strokeWeight: 4,
+            }}
+          />
+        )}
+        {drivers.slice(0, 8).map((driver, index) => {
+          const position = getDriverPosition(driver);
+
+          if (!position) {
+            return null;
+          }
+
+          return (
+            <MarkerF
+              key={driver.id || driver._id || index}
+              position={position}
+              title={`${driver.name || 'Driver'} - ${driver.vehicleNumber || selectedVehicle?.name || 'Vehicle'}`}
+              icon={{
+                url: selectedVehicle?.icon || '/4_Taxi.png',
+                scaledSize: new window.google.maps.Size(28, 28),
+              }}
+            />
+          );
+        })}
+      </GoogleMap>
+
+      <div className="pointer-events-none absolute bottom-24 left-4 rounded-[12px] border border-white/70 bg-white/90 px-3 py-2 shadow-sm">
         <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
         <p className="text-[11px] font-black text-slate-800">{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</p>
       </div>
+      {routeError && (
+        <div className="pointer-events-none absolute bottom-10 left-4 rounded-[12px] border border-amber-100 bg-white/90 px-3 py-2 shadow-sm">
+          <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Route</p>
+          <p className="text-[11px] font-black text-slate-700">Using fallback path while directions load.</p>
+        </div>
+      )}
     </div>
   );
 };
@@ -183,6 +300,8 @@ const SelectVehicle = () => {
   const stops = routeState.stops || [];
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const pickupPosition = useMemo(() => toLatLng(pickupCoords), [pickupCoords]);
+  const dropPosition = useMemo(() => toLatLng(dropCoords, null), [dropCoords]);
+  const { isLoaded: isMapLoaded, loadError: mapLoadError } = useAppGoogleMapsLoader();
 
   useEffect(() => {
     let active = true;
@@ -294,12 +413,15 @@ const SelectVehicle = () => {
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 max-w-lg mx-auto relative font-sans overflow-hidden">
-      <div className="h-[44%] w-full relative bg-gray-200">
+    <div className="h-[100dvh] bg-gray-100 max-w-lg mx-auto relative font-sans overflow-hidden">
+      <div className="absolute inset-0 w-full bg-gray-200">
         <VehicleMapPreview
           center={pickupPosition}
+          dropPosition={dropPosition}
           drivers={onlineDrivers}
           selectedVehicle={selectedVehicle}
+          isLoaded={isMapLoaded}
+          loadError={mapLoadError}
         />
 
         <div className="absolute top-6 left-4 right-4 z-20 flex items-center gap-2.5">
@@ -351,10 +473,10 @@ const SelectVehicle = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 top-[41%] bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_100%)] rounded-t-[28px] shadow-[0_-8px_32px_rgba(15,23,42,0.08)] flex flex-col z-40 overflow-hidden">
+      <div className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[66dvh] min-h-[260px] flex-col overflow-hidden rounded-t-[28px] bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_100%)] shadow-[0_-8px_32px_rgba(15,23,42,0.08)]">
         <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
 
-        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pt-2 pb-36 space-y-2">
+        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pt-2 pb-4 space-y-2">
           {isLoadingVehicles && (
             <div className="min-h-[220px] flex flex-col items-center justify-center gap-3 text-slate-400">
               <LoaderCircle size={26} className="animate-spin" />
@@ -431,7 +553,7 @@ const SelectVehicle = () => {
           })}
         </div>
 
-        <div className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 px-4 pt-3 pb-6 space-y-3 shadow-[0_-4px_20px_rgba(15,23,42,0.06)]">
+        <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-6 pt-3 space-y-3 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] backdrop-blur-md">
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowPaymentModal(true)}
@@ -486,7 +608,10 @@ const SelectVehicle = () => {
                   <motion.button
                     key={id}
                     whileTap={{ scale: 0.98 }}
-                    onClick={() => { setPaymentMethod(id); setShowPaymentModal(false); }}
+                    onClick={() => {
+                      setPaymentMethod(id);
+                      setShowPaymentModal(false);
+                    }}
                     className={`w-full flex items-center gap-3.5 p-4 rounded-[18px] border-2 transition-all ${
                       paymentMethod === id ? 'border-orange-200 bg-orange-50/40' : 'border-slate-100 bg-slate-50/50'
                     }`}

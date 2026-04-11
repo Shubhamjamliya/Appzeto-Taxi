@@ -3,6 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star } from 'lucide-react';
 import { socketService } from '../../../../shared/api/socket';
+import api from '../../../../shared/api/axiosInstance';
 
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
 const MOCK_DRIVERS = [
@@ -69,9 +70,15 @@ const SearchingDriver = () => {
   const timerRef = useRef(null);
   const requestStartedRef = useRef(false);
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
+  const selectedVehicleTypeId = routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId;
 
   useEffect(() => {
     if (requestStartedRef.current) {
+      return undefined;
+    }
+
+    if (!selectedVehicleTypeId) {
+      setSearchStatus('Vehicle type missing. Please select a vehicle again.');
       return undefined;
     }
 
@@ -83,11 +90,6 @@ const SearchingDriver = () => {
     }
 
     requestStartedRef.current = true;
-
-    const onRideCreated = ({ rideId }) => {
-      socketService.emit('joinRide', { rideId });
-      setSearchStatus('Booking created. Searching nearby drivers...');
-    };
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
       const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
@@ -125,29 +127,40 @@ const SearchingDriver = () => {
       setSearchStatus(message || 'Could not request ride.');
     };
 
-    socketService.on('rideCreated', onRideCreated);
     socketService.on('rideSearchUpdate', onRideSearchUpdate);
     socketService.on('rideAccepted', onRideAccepted);
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
-    socketService.emit('requestRide', {
+    api.post('/rides', {
       pickup: routeState.pickupCoords || [75.9048, 22.7039],
       drop: routeState.dropCoords || [75.8937, 22.7533],
       fare: routeState.fare || routeState.vehicle?.price || 22,
-      vehicleTypeId: routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId,
+      vehicleTypeId: selectedVehicleTypeId,
       vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
-    });
+    })
+      .then((response) => {
+        const ride = response?.data || response;
+        const rideId = ride?._id || ride?.id;
+
+        if (rideId) {
+          socketService.emit('joinRide', { rideId });
+        }
+
+        setSearchStatus('Booking created. Searching nearby drivers...');
+      })
+      .catch((error) => {
+        setSearchStatus(error?.message || 'Could not create ride request.');
+      });
 
     return () => {
       clearTimeout(timerRef.current);
-      socketService.off('rideCreated', onRideCreated);
       socketService.off('rideSearchUpdate', onRideSearchUpdate);
       socketService.off('rideAccepted', onRideAccepted);
       socketService.off('rideCancelled', onRideCancelled);
       socketService.off('errorMessage', onError);
     };
-  }, []);
+  }, [navigate, otp, routePrefix, routeState, selectedVehicleTypeId]);
 
   const handleCancel = () => { clearTimeout(timerRef.current); navigate(routePrefix || '/'); };
   const isSearching = stage === STAGES.SEARCHING;

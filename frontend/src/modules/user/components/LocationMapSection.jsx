@@ -1,40 +1,22 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { MapPin, Navigation } from 'lucide-react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+import { LoaderCircle, MapPin, Navigation } from 'lucide-react';
+import { GoogleMap } from '@react-google-maps/api';
+import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 
 const STORAGE_KEY = 'rydon24:lastLocation';
 const DEFAULT_CENTER = { lat: 17.385, lon: 78.4867 };
 const DEFAULT_ZOOM = 16;
-
-const PIN_ICON_URL = (() => {
-  const svg = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24">
-      <path d="M12 22s8-4.5 8-12a8 8 0 10-16 0c0 7.5 8 12 8 12z" fill="#10b981" stroke="#065f46" stroke-width="1"/>
-      <circle cx="12" cy="10" r="3.25" fill="#ffffff" opacity="0.95"/>
-    </svg>
-  `.trim();
-
-  return `data:image/svg+xml;charset=UTF-8,${encodeURIComponent(svg)}`;
-})();
-
-const PIN_ICON = L.icon({
-  iconUrl: PIN_ICON_URL,
-  iconSize: [30, 30],
-  iconAnchor: [15, 30],
-});
+const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 
 const LocationMapSection = () => {
   const [coords, setCoords] = useState(null);
   const [centerCoords, setCenterCoords] = useState(DEFAULT_CENTER);
-  const [status, setStatus] = useState('idle'); // idle | loading | ready | denied | error
+  const [status, setStatus] = useState('idle');
   const [isDragging, setIsDragging] = useState(false);
-
-  const mapElRef = useRef(null);
-  const mapRef = useRef(null);
-  const pinnedLayerRef = useRef(null);
-  const rafRef = useRef(0);
+  const [map, setMap] = useState(null);
+  const isDraggingRef = useRef(false);
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   const persistCoords = (next) => {
     setCoords(next);
@@ -53,99 +35,19 @@ const LocationMapSection = () => {
       if (!saved) return;
       const parsed = JSON.parse(saved);
       if (typeof parsed?.lat === 'number' && typeof parsed?.lon === 'number') {
-        const next = { lat: parsed.lat, lon: parsed.lon };
-        persistCoords(next);
+        persistCoords({ lat: parsed.lat, lon: parsed.lon });
       }
     } catch {
       // ignore
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
-    if (!mapElRef.current || mapRef.current) return;
-
-    const map = L.map(mapElRef.current, {
-      zoomControl: false,
-      attributionControl: false,
-      scrollWheelZoom: true,
-      doubleClickZoom: true,
-      touchZoom: true,
-      tap: false,
-    }).setView([centerCoords.lat, centerCoords.lon], DEFAULT_ZOOM);
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-      crossOrigin: true,
-    }).addTo(map);
-
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    map.whenReady(() => {
-      map.invalidateSize();
-    });
-
-    const updateCenter = () => {
-      const center = map.getCenter();
-      setCenterCoords({ lat: center.lat, lon: center.lng });
-    };
-
-    const onMove = () => {
-      if (rafRef.current) return;
-      rafRef.current = window.requestAnimationFrame(() => {
-        rafRef.current = 0;
-        updateCenter();
-      });
-    };
-
-    map.on('move', onMove);
-    map.on('moveend', updateCenter);
-    map.on('dragstart', () => setIsDragging(true));
-    map.on('dragend', () => {
-      setIsDragging(false);
-      const center = map.getCenter();
-      persistCoords({ lat: center.lat, lon: center.lng });
-    });
-
-    updateCenter();
-    mapRef.current = map;
-
-    return () => {
-      map.off('move', onMove);
-      if (pinnedLayerRef.current) {
-        pinnedLayerRef.current.remove();
-        pinnedLayerRef.current = null;
-      }
-      map.remove();
-      mapRef.current = null;
-      if (rafRef.current) {
-        window.cancelAnimationFrame(rafRef.current);
-        rafRef.current = 0;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mapElRef]);
-
-  useEffect(() => {
-    if (!mapRef.current) return;
-
-    if (coords) {
-      mapRef.current.setView([coords.lat, coords.lon], mapRef.current.getZoom(), { animate: true });
-      if (!pinnedLayerRef.current) {
-        pinnedLayerRef.current = L.marker([coords.lat, coords.lon], {
-          icon: PIN_ICON,
-          interactive: false,
-          keyboard: false,
-        }).addTo(mapRef.current);
-        pinnedLayerRef.current.setZIndexOffset?.(500);
-      } else {
-        pinnedLayerRef.current.setLatLng([coords.lat, coords.lon]);
-      }
-    } else if (pinnedLayerRef.current) {
-      pinnedLayerRef.current.remove();
-      pinnedLayerRef.current = null;
+    if (coords && map) {
+      map.panTo({ lat: coords.lat, lng: coords.lon });
+      map.setZoom(DEFAULT_ZOOM);
     }
-  }, [coords]);
+  }, [coords, map]);
 
   const requestLocation = () => {
     if (!navigator.geolocation) {
@@ -162,8 +64,9 @@ const LocationMapSection = () => {
         };
 
         persistCoords(next);
-        if (mapRef.current) {
-          mapRef.current.setView([next.lat, next.lon], DEFAULT_ZOOM, { animate: true });
+        if (map) {
+          map.panTo({ lat: next.lat, lng: next.lon });
+          map.setZoom(DEFAULT_ZOOM);
         }
       },
       (error) => {
@@ -262,7 +165,86 @@ const LocationMapSection = () => {
 
         <div className="relative z-10 overflow-hidden rounded-[19px] border border-white/70 bg-white/85">
           <div className="relative h-[170px] w-full">
-            <div ref={mapElRef} className="h-full w-full pointer-events-auto" />
+            {!HAS_VALID_GOOGLE_MAPS_KEY && (
+              <div className="flex h-full w-full items-center justify-center px-5 text-center">
+                <div>
+                  <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-500">Add `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
+                </div>
+              </div>
+            )}
+
+            {HAS_VALID_GOOGLE_MAPS_KEY && loadError && (
+              <div className="flex h-full w-full items-center justify-center px-5 text-center">
+                <div>
+                  <p className="text-[12px] font-black text-slate-900">Map failed to load</p>
+                  <p className="mt-1 text-[11px] font-bold text-slate-500">Check your Google Maps browser key restrictions.</p>
+                </div>
+              </div>
+            )}
+
+            {HAS_VALID_GOOGLE_MAPS_KEY && !loadError && !isLoaded && (
+              <div className="flex h-full w-full items-center justify-center">
+                <div className="flex items-center gap-2 rounded-[16px] bg-white/90 px-4 py-3 shadow-sm">
+                  <LoaderCircle size={18} className="animate-spin text-slate-500" />
+                  <span className="text-[12px] font-black text-slate-700">Loading map</span>
+                </div>
+              </div>
+            )}
+
+            {HAS_VALID_GOOGLE_MAPS_KEY && !loadError && isLoaded && (
+              <GoogleMap
+                mapContainerStyle={MAP_CONTAINER_STYLE}
+                center={{ lat: centerCoords.lat, lng: centerCoords.lon }}
+                zoom={DEFAULT_ZOOM}
+                onLoad={(nextMap) => setMap(nextMap)}
+                onUnmount={() => setMap(null)}
+                onDragStart={() => {
+                  isDraggingRef.current = true;
+                  setIsDragging(true);
+                }}
+                onDragEnd={() => {
+                  isDraggingRef.current = false;
+                  setIsDragging(false);
+                  if (!map) {
+                    return;
+                  }
+
+                  const center = map.getCenter();
+                  if (!center) {
+                    return;
+                  }
+
+                  persistCoords({ lat: center.lat(), lon: center.lng() });
+                }}
+                onIdle={() => {
+                  if (!map) {
+                    return;
+                  }
+
+                  const center = map.getCenter();
+                  if (!center) {
+                    return;
+                  }
+
+                  const next = { lat: center.lat(), lon: center.lng() };
+                  setCenterCoords(next);
+
+                  if (!isDraggingRef.current && status === 'ready') {
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                  }
+                }}
+                options={{
+                  disableDefaultUI: true,
+                  zoomControl: true,
+                  clickableIcons: false,
+                  streetViewControl: false,
+                  fullscreenControl: false,
+                  mapTypeControl: false,
+                  gestureHandling: 'greedy',
+                }}
+              />
+            )}
 
             <motion.div
               aria-hidden="true"
@@ -299,7 +281,7 @@ const LocationMapSection = () => {
       </div>
 
       <p className="mt-2 text-[10px] font-bold text-slate-400">
-        {centerCoords.lat.toFixed(5)}, {centerCoords.lon.toFixed(5)} · © OpenStreetMap contributors
+        {centerCoords.lat.toFixed(5)}, {centerCoords.lon.toFixed(5)} · Google Maps
       </p>
     </motion.section>
   );

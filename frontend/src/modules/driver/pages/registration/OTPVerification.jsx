@@ -11,6 +11,8 @@ import {
     verifyDriverOtp,
 } from '../../services/registrationService';
 
+const unwrap = (response) => response?.data?.data || response?.data || response;
+
 const OTPVerification = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -74,8 +76,9 @@ const OTPVerification = () => {
                     phone,
                     otp: otp.join(''),
                 });
+                const payload = unwrap(response);
 
-                const token = response?.data?.token;
+                const token = payload?.token;
                 if (token) {
                     localStorage.setItem('token', token);
                     localStorage.setItem('driverToken', token);
@@ -92,6 +95,7 @@ const OTPVerification = () => {
                 phone,
                 otp: otp.join(''),
             });
+            const payload = unwrap(response);
 
             const nextState = saveDriverRegistrationSession({
                 ...session,
@@ -99,7 +103,7 @@ const OTPVerification = () => {
                 phone,
                 role,
                 otpVerified: true,
-                otpSession: response?.data?.session || null,
+                otpSession: payload?.session || null,
             });
 
             navigate('/taxi/driver/step-personal', { state: nextState });
@@ -122,7 +126,8 @@ const OTPVerification = () => {
             const response = isLoginFlow
                 ? await sendDriverLoginOtp({ phone })
                 : await sendDriverOtp({ phone, role });
-            const nextSession = response?.data?.session || {};
+            const payload = unwrap(response);
+            const nextSession = payload?.session || {};
 
             saveDriverRegistrationSession({
                 ...session,

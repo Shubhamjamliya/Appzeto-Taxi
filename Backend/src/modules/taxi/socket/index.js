@@ -20,22 +20,11 @@ import {
   startDispatchFlow,
 } from '../services/dispatchService.js';
 import { findZoneByPickup } from '../services/matchingService.js';
-import { acceptRideAssignment, createRideRecord } from '../services/rideService.js';
-import { verifyAccessToken } from '../services/tokenService.js';
-
-const getIdentityFromSocket = (socket) => {
-  const token = socket.handshake.auth?.token;
-
-  if (!token) {
-    return null;
-  }
-
-  try {
-    return verifyAccessToken(token);
-  } catch (_error) {
-    return null;
-  }
-};
+import { acceptRideAssignment, createRideRecord, getRideRoom } from '../services/rideService.js';
+import { SOCKET_EVENTS } from './events.js';
+import { registerRideSocketHandlers } from './handlers/rideSocketHandler.js';
+import { authorizeRideRoomAccess } from './middleware/rideRoomAuth.js';
+import { attachSocketAuth } from './middleware/socketAuth.js';
 
 const onAsync = (socket, handler) => async (payload = {}) => {
   try {
@@ -55,17 +44,12 @@ export const configureTaxiSocketServer = (httpServer) => {
     },
   });
 
+  attachSocketAuth(io);
   setSocketServer(io);
   setSupportChatServer(io);
 
   io.on('connection', async (socket) => {
-    const identity = getIdentityFromSocket(socket);
-
-    if (!identity) {
-      socket.emit('errorMessage', { message: 'Unauthorized socket connection' });
-      socket.disconnect();
-      return;
-    }
+    const identity = socket.auth;
 
     addSocketSubscriptions(socket, { role: identity.role, entityId: identity.sub });
 
@@ -131,11 +115,19 @@ export const configureTaxiSocketServer = (httpServer) => {
       }),
     );
 
-    socket.on('joinRide', ({ rideId }) => {
-      if (rideId) {
+    socket.on(
+      'joinRide',
+      onAsync(socket, async ({ rideId }) => {
+        if (!rideId) {
+          return;
+        }
+
+        await authorizeRideRoomAccess({ socket, rideId });
         joinRideRoom(socket, rideId);
-      }
-    });
+      }),
+    );
+
+    registerRideSocketHandlers({ io, socket, onAsync });
 
     socket.on(
       'locationUpdate',
@@ -178,7 +170,13 @@ export const configureTaxiSocketServer = (httpServer) => {
 
         socket.emit('rideCreated', {
           rideId: String(ride._id),
+          room: getRideRoom(ride._id),
           status: ride.status,
+        });
+
+        socket.emit(SOCKET_EVENTS.RIDE_JOINED, {
+          rideId: String(ride._id),
+          room: getRideRoom(ride._id),
         });
       }),
     );
@@ -194,6 +192,11 @@ export const configureTaxiSocketServer = (httpServer) => {
         const ride = await acceptRideAssignment({ rideId, driverId: identity.sub });
         joinRideRoom(socket, ride._id);
         await notifyRideAccepted(ride);
+
+        socket.emit(SOCKET_EVENTS.RIDE_JOINED, {
+          rideId: String(ride._id),
+          room: getRideRoom(ride._id),
+        });
       }),
     );
 
@@ -202,7 +205,7 @@ export const configureTaxiSocketServer = (httpServer) => {
         return;
       }
 
-      socket.to(`ride:${rideId}`).emit('driverRejectedRide', {
+      socket.to(getRideRoom(rideId)).emit('driverRejectedRide', {
         rideId,
         driverId: identity.sub,
       });

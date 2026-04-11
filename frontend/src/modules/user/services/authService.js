@@ -12,4 +12,6 @@ export const userAuthService = {
   getWallet: () => api.get('/users/wallet'),
   topupWallet: (amount) => api.post('/users/wallet/topup', { amount }),
   transferWallet: (phone, amount) => api.post('/users/wallet/transfer', { phone, amount }),
+  createWalletTopupOrder: (amount) => api.post('/users/wallet/razorpay/order', { amount }),
+  verifyWalletTopup: (payload) => api.post('/users/wallet/razorpay/verify', payload),
 };

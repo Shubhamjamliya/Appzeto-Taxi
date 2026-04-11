@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
+  createRazorpayWalletTopupOrder,
   getUserWallet,
   getCurrentUser,
   loginUser,
@@ -12,6 +13,7 @@ import {
   transferUserWallet,
   updateCurrentUser,
   uploadUserProfileImage,
+  verifyRazorpayWalletTopup,
   verifyUserOtpRequest,
   verifyUserPhoneForOtpLogin,
 } from '../controllers/userController.js';
@@ -30,3 +32,5 @@ userRouter.patch('/me', authenticate(['user']), asyncHandler(updateCurrentUser))
 userRouter.get('/wallet', authenticate(['user']), asyncHandler(getUserWallet));
 userRouter.post('/wallet/topup', authenticate(['user']), asyncHandler(topupUserWallet));
 userRouter.post('/wallet/transfer', authenticate(['user']), asyncHandler(transferUserWallet));
+userRouter.post('/wallet/razorpay/order', authenticate(['user']), asyncHandler(createRazorpayWalletTopupOrder));
+userRouter.post('/wallet/razorpay/verify', authenticate(['user']), asyncHandler(verifyRazorpayWalletTopup));

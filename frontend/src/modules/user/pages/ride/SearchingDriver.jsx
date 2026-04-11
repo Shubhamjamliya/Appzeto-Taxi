@@ -2,6 +2,7 @@ import React, { useEffect, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star } from 'lucide-react';
+import { socketService } from '../../../../shared/api/socket';
 
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
 const MOCK_DRIVERS = [
@@ -10,6 +11,15 @@ const MOCK_DRIVERS = [
   { name: 'Sunil Sharma',   rating: '4.8', vehicle: 'Blue Activa 6G',   plate: 'MP09 CD 9876', phone: '+919876543212', eta: 2 },
 ];
 const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted', COMPLETING: 'completing' };
+
+const normalizeDriver = (driver = {}) => ({
+  name: driver.name || 'Captain',
+  rating: driver.rating || '4.9',
+  vehicle: driver.vehicleType || 'Taxi',
+  plate: driver.vehicleNumber || 'Assigned',
+  phone: driver.phone || '',
+  eta: driver.eta || 2,
+});
 
 const ActionBtn = ({ icon: Icon, label, onClick }) => (
   <motion.button whileTap={{ scale: 0.94 }} onClick={onClick}
@@ -54,24 +64,92 @@ const SearchingDriver = () => {
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otp] = useState(generateOTP);
-  const [driver] = useState(() => MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)]);
+  const [driver, setDriver] = useState(() => MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)]);
+  const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
   const timerRef = useRef(null);
+  const requestStartedRef = useRef(false);
+  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
   useEffect(() => {
-    timerRef.current = setTimeout(() => {
-      setStage(STAGES.ASSIGNED);
+    if (requestStartedRef.current) {
+      return undefined;
+    }
+
+    const socket = socketService.connect({ role: 'user' });
+
+    if (!socket) {
+      setSearchStatus('User session missing. Please login again.');
+      return undefined;
+    }
+
+    requestStartedRef.current = true;
+
+    const onRideCreated = ({ rideId }) => {
+      socketService.emit('joinRide', { rideId });
+      setSearchStatus('Booking created. Searching nearby drivers...');
+    };
+
+    const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
+      const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
+      setSearchStatus(
+        matchedDrivers > 0
+          ? `${matchedDrivers} captain${matchedDrivers > 1 ? 's' : ''} found within ${radiusKm} km`
+          : `Searching within ${radiusKm} km`,
+      );
+    };
+
+    const onRideAccepted = ({ driver: acceptedDriver }) => {
+      const nextDriver = normalizeDriver(acceptedDriver);
+      setDriver(nextDriver);
+      setStage(STAGES.ACCEPTED);
+      setSearchStatus('Captain accepted your ride.');
       timerRef.current = setTimeout(() => {
-        setStage(STAGES.ACCEPTED);
-        timerRef.current = setTimeout(() => {
-          setStage(STAGES.COMPLETING);
-          setTimeout(() => navigate('/ride/complete', { state: { ...routeState, otp, driver, fare: routeState.fare || routeState.vehicle?.price || 22, paymentMethod: routeState.paymentMethod || 'Cash' } }), 800);
-        }, 5000);
-      }, 5000);
-    }, 5000);
-    return () => clearTimeout(timerRef.current);
+        navigate(`${routePrefix}/ride/tracking`, {
+          state: {
+            ...routeState,
+            otp,
+            driver: nextDriver,
+            fare: routeState.fare || routeState.vehicle?.price || 22,
+            paymentMethod: routeState.paymentMethod || 'Cash',
+          },
+        });
+      }, 1800);
+    };
+
+    const onRideCancelled = ({ reason }) => {
+      setSearchStatus(reason || 'No drivers accepted the ride request.');
+      setStage(STAGES.SEARCHING);
+    };
+
+    const onError = ({ message }) => {
+      setSearchStatus(message || 'Could not request ride.');
+    };
+
+    socketService.on('rideCreated', onRideCreated);
+    socketService.on('rideSearchUpdate', onRideSearchUpdate);
+    socketService.on('rideAccepted', onRideAccepted);
+    socketService.on('rideCancelled', onRideCancelled);
+    socketService.on('errorMessage', onError);
+
+    socketService.emit('requestRide', {
+      pickup: routeState.pickupCoords || [75.9048, 22.7039],
+      drop: routeState.dropCoords || [75.8937, 22.7533],
+      fare: routeState.fare || routeState.vehicle?.price || 22,
+      vehicleTypeId: routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId,
+      vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
+    });
+
+    return () => {
+      clearTimeout(timerRef.current);
+      socketService.off('rideCreated', onRideCreated);
+      socketService.off('rideSearchUpdate', onRideSearchUpdate);
+      socketService.off('rideAccepted', onRideAccepted);
+      socketService.off('rideCancelled', onRideCancelled);
+      socketService.off('errorMessage', onError);
+    };
   }, []);
 
-  const handleCancel = () => { clearTimeout(timerRef.current); navigate('/'); };
+  const handleCancel = () => { clearTimeout(timerRef.current); navigate(routePrefix || '/'); };
   const isSearching = stage === STAGES.SEARCHING;
   const isAssigned  = stage === STAGES.ASSIGNED;
   const isAccepted  = stage === STAGES.ACCEPTED || stage === STAGES.COMPLETING;
@@ -126,7 +204,7 @@ const SearchingDriver = () => {
               className="rounded-[20px] border border-white/80 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.14)] px-5 py-4 space-y-3">
               <div className="text-center space-y-0.5">
                 <h1 className="text-[17px] font-black text-slate-900 tracking-tight">Finding your captain...</h1>
-                <p className="text-[11px] font-bold text-slate-400">Connecting with drivers nearby</p>
+                <p className="text-[11px] font-bold text-slate-400">{searchStatus}</p>
               </div>
               <div className="flex justify-center gap-1.5">
                 {[0,1,2,3].map(i => (

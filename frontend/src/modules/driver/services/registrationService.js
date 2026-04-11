@@ -47,6 +47,10 @@ export const completeDriverOnboarding = (payload) => api.post('/drivers/onboardi
 
 export const getCurrentDriver = () => api.get('/drivers/me');
 
+export const updateDriverVehicle = (payload) => api.patch('/drivers/vehicle', payload);
+
+export const getDriverVehicleTypes = () => api.get('/admin/types/vehicle-types');
+
 export const getDriverApprovalStatus = () =>
   api.get('/drivers/approval-status', {
     params: {

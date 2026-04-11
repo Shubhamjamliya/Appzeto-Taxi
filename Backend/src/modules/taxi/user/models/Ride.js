@@ -13,6 +13,16 @@ const rideSchema = new mongoose.Schema(
       ref: 'Driver',
       default: null,
     },
+    vehicleTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle',
+      default: null,
+    },
+    vehicleIconType: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     status: {
       type: String,
       enum: Object.values(RIDE_STATUS),

@@ -6,7 +6,7 @@ import { Driver } from '../driver/models/Driver.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 
-export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare }) => {
+export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare, vehicleTypeId, vehicleIconType }) => {
   const user = await User.findById(userId);
 
   if (!user) {
@@ -23,8 +23,14 @@ export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare 
     throw new ApiError(400, 'fare must be a positive number or zero');
   }
 
+  if (vehicleTypeId && !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
+    throw new ApiError(400, 'vehicleTypeId is invalid');
+  }
+
   const ride = await Ride.create({
     userId,
+    vehicleTypeId: vehicleTypeId || null,
+    vehicleIconType: vehicleIconType || '',
     pickupLocation: toPoint(pickupCoords, 'pickup'),
     dropLocation: toPoint(dropCoords, 'drop'),
     fare: safeFare,
@@ -40,7 +46,7 @@ export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare 
 export const getRideDetails = async (rideId) => {
   const ride = await Ride.findById(rideId)
     .populate('userId', 'name phone')
-    .populate('driverId', 'name phone vehicleType rating');
+    .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
 
   if (!ride) {
     throw new ApiError(404, 'Ride not found');
@@ -69,6 +75,7 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
       _id: driverId,
       isOnline: true,
       isOnRide: false,
+      ...(ride.vehicleTypeId ? { vehicleTypeId: ride.vehicleTypeId } : {}),
     }).session(session);
 
     if (!driver) {

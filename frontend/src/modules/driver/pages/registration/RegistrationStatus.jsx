@@ -9,10 +9,28 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
-import { getDriverApprovalStatus } from '../../services/registrationService';
+import { clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
 
 let lastPollingBootAt = 0;
 const APPROVAL_POLL_MS = 2500;
+
+const unwrapDriver = (response) => response?.data?.data || response?.data || response;
+
+const isDriverApproved = (driver) => {
+    if (!driver) {
+        return false;
+    }
+
+    const approval = String(driver.approve ?? '').toLowerCase();
+    const status = String(driver.status || '').toLowerCase();
+
+    return (
+        driver.approve === true ||
+        driver.approve === 1 ||
+        ['true', '1', 'yes', 'approved'].includes(approval) ||
+        ['approved', 'active', 'verified'].includes(status)
+    );
+};
 
 const RegistrationStatus = () => {
     const navigate = useNavigate();
@@ -50,7 +68,7 @@ const RegistrationStatus = () => {
             }
 
             requestInFlightRef.current = true;
-            const token = localStorage.getItem('token');
+            const token = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
                 if (!token) {
                     if (mountedRef.current) {
@@ -64,14 +82,15 @@ const RegistrationStatus = () => {
 
             try {
                 const response = await getDriverApprovalStatus();
-                const driver = response?.data;
-                const isApproved = driver && (driver.approve === true || ['approved', 'active'].includes(String(driver.status || '').toLowerCase()));
+                const driver = unwrapDriver(response);
+                const isApproved = isDriverApproved(driver);
 
                 if (!mountedRef.current) {
                     return;
                 }
 
                 if (isApproved) {
+                    clearDriverRegistrationSession();
                     navigate('/taxi/driver/home', { replace: true });
                     requestInFlightRef.current = false;
                     return;

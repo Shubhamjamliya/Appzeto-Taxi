@@ -1,6 +1,7 @@
 import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
+import { Vehicle } from '../../admin/models/Vehicle.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { findZoneByPickup } from '../services/locationService.js';
 import { listDriverServiceLocations } from '../services/serviceLocationService.js';
@@ -143,6 +144,10 @@ export const getCurrentDriver = async (req, res) => {
       email: driver.email,
       gender: driver.gender,
       vehicleType: driver.vehicleType,
+      vehicleTypeId: driver.vehicleTypeId,
+      vehicleIconType: driver.vehicleIconType,
+      vehicleMake: driver.vehicleMake,
+      vehicleModel: driver.vehicleModel,
       registerFor: driver.registerFor,
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
@@ -154,6 +159,82 @@ export const getCurrentDriver = async (req, res) => {
       isOnRide: driver.isOnRide,
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+const getGenericVehicleType = (vehicle = {}) => {
+  const value = String(vehicle.icon_types || vehicle.name || '').toLowerCase();
+
+  if (value.includes('bike')) {
+    return 'bike';
+  }
+
+  if (value.includes('auto')) {
+    return 'auto';
+  }
+
+  return 'car';
+};
+
+export const updateDriverVehicle = async (req, res) => {
+  const { vehicleTypeId, vehicleNumber, vehicleColor, vehicleMake, vehicleModel } = req.body;
+
+  let selectedVehicle = null;
+
+  if (vehicleTypeId) {
+    selectedVehicle = await Vehicle.findById(vehicleTypeId);
+
+    if (!selectedVehicle || selectedVehicle.active === false || Number(selectedVehicle.status) === 0) {
+      throw new ApiError(404, 'Active vehicle type not found');
+    }
+  }
+
+  const update = {};
+
+  if (selectedVehicle) {
+    update.vehicleTypeId = selectedVehicle._id;
+    update.vehicleType = getGenericVehicleType(selectedVehicle);
+    update.vehicleIconType = selectedVehicle.icon_types || update.vehicleType;
+  }
+
+  if (vehicleNumber !== undefined) {
+    update.vehicleNumber = String(vehicleNumber || '').trim().toUpperCase();
+  }
+  if (vehicleColor !== undefined) {
+    update.vehicleColor = String(vehicleColor || '').trim();
+  }
+  if (vehicleMake !== undefined) {
+    update.vehicleMake = String(vehicleMake || '').trim();
+  }
+  if (vehicleModel !== undefined) {
+    update.vehicleModel = String(vehicleModel || '').trim();
+  }
+
+  const driver = await Driver.findByIdAndUpdate(req.auth.sub, update, { new: true });
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      vehicleType: driver.vehicleType,
+      vehicleTypeId: driver.vehicleTypeId,
+      vehicleIconType: driver.vehicleIconType,
+      vehicleMake: driver.vehicleMake,
+      vehicleModel: driver.vehicleModel,
+      vehicleNumber: driver.vehicleNumber,
+      vehicleColor: driver.vehicleColor,
+      registerFor: driver.registerFor,
+      approve: driver.approve,
+      status: driver.status,
+      isOnline: driver.isOnline,
+      isOnRide: driver.isOnRide,
     },
   });
 };

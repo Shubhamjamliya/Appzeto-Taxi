@@ -4,6 +4,7 @@ import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { AdminPanelState } from '../models/AdminPanelState.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
+import { AppModule } from '../models/AppModule.js';
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
@@ -2178,6 +2179,36 @@ export const ensureAppSettings = async () => {
   return settings;
 };
 
+export const ensureAppModules = async () => {
+  const existingCount = await AppModule.countDocuments();
+  if (existingCount > 0) {
+    return;
+  }
+
+  const settings = await ensureAppSettings();
+  const legacyModules =
+    settings.app_modules?.length > 0
+      ? settings.app_modules
+      : createDefaultAppSettings().app_modules || [];
+
+  if (legacyModules.length === 0) {
+    return;
+  }
+
+  await AppModule.insertMany(
+    legacyModules.map((item) => ({
+      name: item.name,
+      transport_type: item.transport_type,
+      service_type: item.service_type,
+      order_by: Number(item.order_by || 0),
+      short_description: item.short_description || '',
+      description: item.description || '',
+      active: normalizeBoolean(item.active ?? true),
+      mobile_menu_icon: item.mobile_menu_icon || '',
+    })),
+  );
+};
+
 export const getGeneralSettings = async (category) => {
   const bizSettings = await ensureBusinessSettings();
   const appSettings = await ensureAppSettings();
@@ -2240,17 +2271,36 @@ export const updateGeneralSettings = async (category, payload) => {
 };
 
 export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  const settings = await ensureAppSettings();
-  const items = [...(settings.app_modules || [])].sort(
-    (a, b) => Number(a.order_by || 0) - Number(b.order_by || 0),
-  );
-  return buildPaginator(items, page, limit);
+  await ensureAppModules();
+
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.max(1, Number(limit) || 20);
+  const skip = (safePage - 1) * safeLimit;
+
+  const [results, total] = await Promise.all([
+    AppModule.find({})
+      .sort({ order_by: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean(),
+    AppModule.countDocuments(),
+  ]);
+
+  return {
+    results,
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
 };
 
 export const createAppModule = async (payload) => {
-  const settings = await ensureAppSettings();
-  const moduleItem = {
-    _id: nextId(),
+  await ensureAppModules();
+
+  const moduleItem = await AppModule.create({
     name: payload.name,
     transport_type: payload.transport_type,
     service_type: payload.service_type,
@@ -2263,35 +2313,34 @@ export const createAppModule = async (payload) => {
       (payload.transport_type === 'delivery'
         ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
         : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
-  };
-  settings.app_modules.unshift(moduleItem);
-  settings.markModified('app_modules');
-  await settings.save();
-  return moduleItem;
+  });
+
+  return moduleItem.toObject();
 };
 
 export const updateAppModule = async (id, payload) => {
-  const settings = await ensureAppSettings();
-  const index = settings.app_modules.findIndex((m) => String(m._id) === String(id));
-  if (index === -1) throw new ApiError(404, 'App module not found');
+  await ensureAppModules();
 
-  const moduleItem = settings.app_modules[index];
+  const moduleItem = await AppModule.findById(id);
+  if (!moduleItem) throw new ApiError(404, 'App module not found');
+
   Object.assign(moduleItem, payload, {
     order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
     active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
   });
 
-  settings.app_modules[index] = moduleItem;
-  settings.markModified('app_modules');
-  await settings.save();
-  return moduleItem;
+  await moduleItem.save();
+  return moduleItem.toObject();
 };
 
 export const deleteAppModule = async (id) => {
-  const settings = await ensureAppSettings();
-  settings.app_modules = settings.app_modules.filter((m) => String(m._id) === String(id));
-  settings.markModified('app_modules');
-  await settings.save();
+  await ensureAppModules();
+
+  const deleted = await AppModule.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'App module not found');
+  }
+
   return true;
 };
 

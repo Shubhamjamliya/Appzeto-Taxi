@@ -47,6 +47,26 @@ const driverSchema = new mongoose.Schema(
       enum: VEHICLE_TYPES,
       required: true,
     },
+    vehicleTypeId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Vehicle',
+      default: null,
+    },
+    vehicleIconType: {
+      type: String,
+      default: 'car',
+      trim: true,
+    },
+    vehicleMake: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    vehicleModel: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     registerFor: {
       type: String,
       default: 'taxi',

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Bell, 
@@ -18,28 +18,91 @@ import {
     User
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { GoogleMap, Marker, Polyline } from '@react-google-maps/api';
+import { GoogleMap, Marker } from '@react-google-maps/api';
 
 import MapGrid from '@/assets/premium_grid_map.png';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
 import IncomingRideRequest from './IncomingRideRequest';
+import api from '../../../shared/api/axiosInstance';
 
 // Vehicle Icons for Map
 import BikeIcon from '@/assets/icons/bike.png';
 import CarIcon from '@/assets/icons/car.png';
+import AutoIcon from '@/assets/icons/auto.png';
+import TruckIcon from '@/assets/icons/truck.png';
+import EhcvIcon from '@/assets/icons/ehcv.png';
+import HcvIcon from '@/assets/icons/hcv.png';
+import LcvIcon from '@/assets/icons/LCV.png';
+import McvIcon from '@/assets/icons/mcv.png';
+import LuxuryIcon from '@/assets/icons/Luxury.png';
+import PremiumIcon from '@/assets/icons/Premium.png';
+import SuvIcon from '@/assets/icons/SUV.png';
 
 import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
+import { getCurrentDriver } from '../services/registrationService';
 
 const containerStyle = {
     width: '100%',
     height: '100%'
 };
 
-const center = {
+const DEFAULT_MAP_CENTER = {
     lat: 22.7196,
     lng: 75.8577 
+};
+
+const DEFAULT_MAP_COORDS = [75.8577, 22.7196];
+
+const getCurrentCoords = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+        reject(new Error('Location is not available on this device.'));
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (pos) => resolve([pos.coords.longitude, pos.coords.latitude]),
+        () => reject(new Error('Please allow location permission to go online.')),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+    );
+});
+
+const toLatLng = (coordinates) => {
+    const [lng, lat] = coordinates || [];
+
+    if (!Number.isFinite(Number(lat)) || !Number.isFinite(Number(lng))) {
+        return DEFAULT_MAP_CENTER;
+    }
+
+    return { lat: Number(lat), lng: Number(lng) };
+};
+
+const getMapIconForVehicle = (iconType = '') => {
+    const value = String(iconType).toLowerCase();
+
+    if (value.includes('bike')) return BikeIcon;
+    if (value.includes('auto')) return AutoIcon;
+    if (value.includes('ehc')) return EhcvIcon;
+    if (value.includes('hcv')) return HcvIcon;
+    if (value.includes('lcv')) return LcvIcon;
+    if (value.includes('mcv')) return McvIcon;
+    if (value.includes('truck')) return TruckIcon;
+    if (value.includes('lux')) return LuxuryIcon;
+    if (value.includes('premium')) return PremiumIcon;
+    if (value.includes('suv')) return SuvIcon;
+
+    return CarIcon;
+};
+
+const formatPoint = (point, fallback) => {
+    const [lng, lat] = point?.coordinates || [];
+
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+        return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+    }
+
+    return fallback;
 };
 
 const mapStyles = [
@@ -71,6 +134,15 @@ const DriverHome = () => {
     const [completedRides, setCompletedRides] = useState(0);
     const [dutySeconds, setDutySeconds] = useState(0);
     const [map, setMap] = useState(null);
+    const [driverCoords, setDriverCoords] = useState(null);
+    const [statusMessage, setStatusMessage] = useState('');
+    const [vehicleIconType, setVehicleIconType] = useState('car');
+    const driverCoordsRef = useRef(null);
+    const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
+    const mapVehicleIcon = useMemo(
+        () => getMapIconForVehicle(vehicleIconType),
+        [vehicleIconType],
+    );
 
     const { isLoaded } = useAppGoogleMapsLoader();
 
@@ -89,67 +161,143 @@ const DriverHome = () => {
         clickableIcons: false
     }), []);
 
-    // Dummy Request Logic on Online
-    useEffect(() => {
-        let dummyTimer;
-        if (isOnline && !showRequest) {
-            dummyTimer = setTimeout(() => {
-                setCurrentRequest({
-                    type: 'ride',
-                    title: 'Bike Taxi',
-                    fare: '₹145',
-                    payment: 'Cash',
-                    pickup: 'Crystal IT Park, Indore',
-                    drop: 'Vijay Nagar Square',
-                    distance: '1.2 km away',
-                    requestId: 'dummy_123'
-                });
-                setShowRequest(true);
-            }, 3000);
+    const updateDriverLocation = useCallback(async ({ quiet = false } = {}) => {
+        try {
+            const coordinates = await getCurrentCoords();
+            driverCoordsRef.current = coordinates;
+            setDriverCoords(coordinates);
+            map?.panTo(toLatLng(coordinates));
+            if (!quiet) {
+                setStatusMessage('Current location updated.');
+            }
+            return coordinates;
+        } catch (error) {
+            if (!quiet) {
+                setStatusMessage(error.message || 'Could not fetch current location.');
+            }
+            throw error;
         }
-        return () => clearTimeout(dummyTimer);
-    }, [isOnline, showRequest]);
+    }, [map]);
+
+    useEffect(() => {
+        updateDriverLocation({ quiet: true }).catch(() => {});
+    }, [updateDriverLocation]);
+
+    useEffect(() => {
+        let active = true;
+
+        getCurrentDriver()
+            .then((response) => {
+                if (!active) {
+                    return;
+                }
+
+                const driver = response?.data?.data || response?.data || response;
+                setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
+            })
+            .catch(() => {});
+
+        return () => {
+            active = false;
+        };
+    }, []);
+
+    useEffect(() => {
+        if (map && driverCoords) {
+            map.panTo(toLatLng(driverCoords));
+        }
+    }, [map, driverCoords]);
+
+    const goOnline = useCallback(async () => {
+        try {
+            const coordinates = await updateDriverLocation({ quiet: true });
+            await api.patch('/drivers/online', { location: coordinates });
+            setIsOnline(true);
+            setStatusMessage('You are online. Waiting for nearby bookings.');
+        } catch (error) {
+            setStatusMessage(error.message || 'Could not go online.');
+        }
+    }, [updateDriverLocation]);
+
+    const goOffline = useCallback(async () => {
+        try {
+            await api.patch('/drivers/offline');
+        } catch (_error) {
+            // Local disconnect still stops live requests if the server call fails.
+        } finally {
+            setIsOnline(false);
+            setShowRequest(false);
+            setCurrentRequest(null);
+            setStatusMessage('You are offline.');
+            socketService.disconnect();
+        }
+    }, []);
 
     // Socket Integration
     useEffect(() => {
         if (isOnline) {
-            socketService.connect({ role: 'driver' });
+            const socket = socketService.connect({ role: 'driver' });
+
+            if (!socket) {
+                setStatusMessage('Driver session missing. Please login again.');
+                setIsOnline(false);
+                return undefined;
+            }
+
+            if (driverCoordsRef.current) {
+                socketService.emit('locationUpdate', { coordinates: driverCoordsRef.current });
+            }
             
-            socketService.on('new_request', (data) => {
-                setCurrentRequest({
-                    type: data.type || 'ride',
-                    title: data.type === 'parcel' ? 'Parcel Delivery' : 'Bike Taxi',
-                    fare: `₹${data.amount || 0}`,
-                    payment: data.payment_type || 'Online',
-                    pickup: data.pickup_address || 'Pickup Location',
-                    drop: data.drop_address || 'Drop Location',
-                    distance: `${data.distance || 0} km away`,
-                    requestId: data._id
-                });
+            socketService.on('rideRequest', (data) => {
+                const request = {
+                    type: 'ride',
+                    title: 'Taxi Ride',
+                    fare: `₹${data.fare || 0}`,
+                    payment: 'Cash',
+                    pickup: formatPoint(data.pickupLocation, 'Pickup Location'),
+                    drop: formatPoint(data.dropLocation, 'Drop Location'),
+                    distance: data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
+                    requestId: data.rideId,
+                    rideId: data.rideId,
+                    raw: data,
+                };
+                setCurrentRequest(request);
                 setShowRequest(true);
+                setStatusMessage('New booking received.');
             });
 
-            socketService.on('request_accepted_elsewhere', () => setShowRequest(false));
+            socketService.on('rideRequestClosed', ({ rideId }) => {
+                if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
+                    setShowRequest(false);
+                }
+            });
+
+            socketService.on('errorMessage', ({ message }) => {
+                setStatusMessage(message || 'Socket error.');
+            });
 
             const locationInterval = setInterval(() => {
-                if (navigator.geolocation) {
-                    navigator.geolocation.getCurrentPosition((pos) => {
-                        socketService.emit('update_location', {
-                            lat: pos.coords.latitude,
-                            lng: pos.coords.longitude
-                        });
+                getCurrentCoords()
+                    .then((coordinates) => {
+                        driverCoordsRef.current = coordinates;
+                        setDriverCoords(coordinates);
+                        socketService.emit('locationUpdate', { coordinates });
+                    })
+                    .catch((error) => {
+                        setStatusMessage(error.message || 'Could not update live location.');
                     });
-                }
             }, 10000);
 
             return () => {
-                socketService.off('new_request');
-                socketService.off('request_accepted_elsewhere');
+                socketService.off('rideRequest');
+                socketService.off('rideRequestClosed');
+                socketService.off('errorMessage');
                 clearInterval(locationInterval);
             };
         } else {
             socketService.disconnect();
         }
+        return undefined;
     }, [isOnline]);
     
     useEffect(() => {
@@ -166,24 +314,28 @@ const DriverHome = () => {
     const dutyMins = Math.floor((dutySeconds % 3600) / 60);
 
     const handleAccept = () => {
+        if (currentRequest?.rideId) {
+            socketService.emit('acceptRide', { rideId: currentRequest.rideId });
+        }
         setShowRequest(false);
         setCompletedRides(prev => prev + 1);
-        navigate('/taxi/driver/active-trip', { state: { type: currentRequest?.type || 'ride' } });
+        navigate('/taxi/driver/active-trip', { state: { type: currentRequest?.type || 'ride', request: currentRequest } });
     };
 
-    const path = [
-        { lat: 22.7210, lng: 75.8570 },
-        { lat: 22.7300, lng: 75.8650 },
-        { lat: 22.7400, lng: 75.8800 }
-    ];
+    const handleDecline = () => {
+        if (currentRequest?.rideId) {
+            socketService.emit('rejectRide', { rideId: currentRequest.rideId });
+        }
+        setShowRequest(false);
+    };
 
     return (
         <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-hidden relative pb-20 text-slate-900">
             <IncomingRideRequest 
-                visible={showRequest} 
+                visible={showRequest && Boolean(currentRequest)}
                 requestData={currentRequest}
                 onAccept={handleAccept} 
-                onDecline={() => setShowRequest(false)} 
+                onDecline={handleDecline}
             />
 
             <header className="fixed top-0 left-0 right-0 px-6 pt-6 pb-2.5 flex items-center justify-between z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-md">
@@ -210,13 +362,12 @@ const DriverHome = () => {
 
             <div className="absolute inset-0 z-0 h-full bg-[#E5E7EB] overflow-hidden">
                 {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-                    <GoogleMap mapContainerStyle={containerStyle} center={center} zoom={14} onLoad={onLoad} onUnmount={onUnmount} options={mapOptions}>
-                        <Marker position={center} icon={{ url: isOnline ? BikeIcon : CarIcon, scaledSize: new window.google.maps.Size(40, 40), anchor: new window.google.maps.Point(20, 20)}} />
-                        {isOnline && <Polyline path={path} options={{ strokeColor: '#000000', strokeOpacity: 0.8, strokeWeight: 4 }} />}
+                    <GoogleMap mapContainerStyle={containerStyle} center={driverPosition} zoom={15} onLoad={onLoad} onUnmount={onUnmount} options={mapOptions}>
+                        <Marker position={driverPosition} icon={{ url: mapVehicleIcon, scaledSize: new window.google.maps.Size(40, 40), anchor: new window.google.maps.Point(20, 20)}} />
                     </GoogleMap>
                 ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-black uppercase text-[10px] tracking-widest">Map unavailable until Google Maps key is configured</div>}
                 <div className="absolute right-5 top-28 flex flex-col gap-2 z-20">
-                    <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Target size={16} /></button>
+                    <button onClick={() => updateDriverLocation()} className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Target size={16} /></button>
                     <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Layers size={16} /></button>
                 </div>
             </div>
@@ -243,7 +394,10 @@ const DriverHome = () => {
                              <div className="leading-tight text-right"><h5 className="text-[11px] font-black text-slate-800 leading-none">4.95</h5><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Rating</p></div>
                          </div>
                     </div>
-                    <motion.button whileTap={{ scale: 0.98 }} onClick={() => setIsOnline(!isOnline)} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'}`}>
+                    {statusMessage && (
+                        <p className="px-2 pb-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">{statusMessage}</p>
+                    )}
+                    <motion.button whileTap={{ scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'}`}>
                          <Power size={16} strokeWidth={3} className={isOnline ? 'animate-pulse' : ''} />{isOnline ? 'End Your Duty' : 'Go Online'}
                     </motion.button>
                 </motion.div>

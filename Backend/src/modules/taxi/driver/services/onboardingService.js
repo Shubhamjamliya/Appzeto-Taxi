@@ -5,6 +5,7 @@ import { uploadDataUrlToCloudinary } from '../../../../utils/cloudinaryUpload.js
 import { Driver } from '../models/Driver.js';
 import { DriverRegistrationSession } from '../models/DriverRegistrationSession.js';
 import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
+import { Vehicle } from '../../admin/models/Vehicle.js';
 import { hashPassword, signAccessToken } from './authService.js';
 import { findZoneByPickup } from './locationService.js';
 
@@ -33,6 +34,20 @@ const hashOtp = (otp) => crypto.createHash('sha256').update(String(otp)).digest(
 const getVehicleType = (vehicleTypeId, registerFor = '') => {
   const type = VEHICLE_TYPE_MAP[String(vehicleTypeId || registerFor || '').trim().toLowerCase()];
   return type || 'car';
+};
+
+const getGenericVehicleTypeFromCatalog = (vehicle = {}) => {
+  const value = String(vehicle.icon_types || vehicle.name || '').trim().toLowerCase();
+
+  if (value.includes('bike')) {
+    return 'bike';
+  }
+
+  if (value.includes('auto')) {
+    return 'auto';
+  }
+
+  return 'car';
 };
 
 const getServiceLocationName = (serviceLocation = {}) =>
@@ -436,7 +451,13 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
   }
 
   const zone = await findZoneByPickup(serviceLocationCoordinates);
-  const vehicleType = getVehicleType(session.vehicle.vehicleTypeId, session.vehicle.registerFor);
+  const selectedVehicle =
+    session.vehicle.vehicleTypeId && /^[a-f\d]{24}$/i.test(String(session.vehicle.vehicleTypeId))
+      ? await Vehicle.findById(session.vehicle.vehicleTypeId).lean()
+      : null;
+  const vehicleType = selectedVehicle
+    ? getGenericVehicleTypeFromCatalog(selectedVehicle)
+    : getVehicleType(session.vehicle.vehicleTypeId, session.vehicle.registerFor);
   const driver = await Driver.create({
     name: session.personal.fullName,
     phone: session.phone,
@@ -444,6 +465,8 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
     gender: session.personal.gender,
     password: session.personal.passwordHash,
     vehicleType,
+    vehicleTypeId: selectedVehicle?._id || null,
+    vehicleIconType: selectedVehicle?.icon_types || vehicleType,
     registerFor: session.vehicle.registerFor,
     vehicleNumber: session.vehicle.number,
     vehicleColor: session.vehicle.color,

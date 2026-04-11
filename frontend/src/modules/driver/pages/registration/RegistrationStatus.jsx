@@ -60,6 +60,17 @@ const RegistrationStatus = () => {
             localStorage.setItem('role', location.state.role);
         }
 
+        const onboardingToken =
+            location.state?.completedRegistration?.token ||
+            location.state?.token ||
+            '';
+
+        if (onboardingToken) {
+            localStorage.setItem('token', onboardingToken);
+            localStorage.setItem('driverToken', onboardingToken);
+            localStorage.setItem('role', 'driver');
+        }
+
         mountedRef.current = true;
 
         const checkApproval = async () => {

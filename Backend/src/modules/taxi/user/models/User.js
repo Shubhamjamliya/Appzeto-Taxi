@@ -150,41 +150,6 @@ const userSchema = new mongoose.Schema(
       default: 'USER',
       trim: true,
     },
-    walletBalance: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    walletTransactions: {
-      type: [
-        new mongoose.Schema(
-          {
-            kind: {
-              type: String,
-              enum: ['credit', 'debit'],
-              required: true,
-            },
-            amount: {
-              type: Number,
-              required: true,
-              min: 0,
-            },
-            title: {
-              type: String,
-              default: '',
-              trim: true,
-            },
-            counterpartyPhone: {
-              type: String,
-              default: '',
-              trim: true,
-            },
-          },
-          { _id: true, timestamps: true },
-        ),
-      ],
-      default: [],
-    },
     addresses: {
       type: [userAddressSchema],
       default: [],

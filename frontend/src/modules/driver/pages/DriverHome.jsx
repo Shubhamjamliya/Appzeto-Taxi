@@ -136,6 +136,7 @@ const DriverHome = () => {
     const [map, setMap] = useState(null);
     const [driverCoords, setDriverCoords] = useState(null);
     const [statusMessage, setStatusMessage] = useState('');
+    const [isHydratingDriver, setIsHydratingDriver] = useState(true);
     const [vehicleIconType, setVehicleIconType] = useState('car');
     const driverCoordsRef = useRef(null);
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
@@ -183,24 +184,43 @@ const DriverHome = () => {
         updateDriverLocation({ quiet: true }).catch(() => {});
     }, [updateDriverLocation]);
 
+    const hydrateDriverState = useCallback(async () => {
+        const response = await getCurrentDriver();
+        const driver = response?.data?.data || response?.data || response;
+        const savedCoords = driver?.location?.coordinates;
+
+        setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
+        setIsOnline(Boolean(driver?.isOnline));
+
+        if (Array.isArray(savedCoords) && savedCoords.length === 2) {
+            driverCoordsRef.current = savedCoords;
+            setDriverCoords(savedCoords);
+        }
+
+        return driver;
+    }, []);
+
     useEffect(() => {
         let active = true;
 
-        getCurrentDriver()
-            .then((response) => {
-                if (!active) {
-                    return;
-                }
+        setIsHydratingDriver(true);
 
-                const driver = response?.data?.data || response?.data || response;
-                setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
+        hydrateDriverState()
+            .catch(() => {
+                if (active) {
+                    setStatusMessage('Could not restore driver status.');
+                }
             })
-            .catch(() => {});
+            .finally(() => {
+                if (active) {
+                    setIsHydratingDriver(false);
+                }
+            });
 
         return () => {
             active = false;
         };
-    }, []);
+    }, [hydrateDriverState]);
 
     useEffect(() => {
         if (map && driverCoords) {
@@ -210,35 +230,64 @@ const DriverHome = () => {
 
     const goOnline = useCallback(async () => {
         try {
+            console.info('[driver-home] goOnline requested');
             const coordinates = await updateDriverLocation({ quiet: true });
-            await api.patch('/drivers/online', { location: coordinates });
-            setIsOnline(true);
+            console.info('[driver-home] current coordinates resolved', coordinates);
+            const socket = socketService.connect({ role: 'driver' });
+
+            if (!socket) {
+                console.warn('[driver-home] socket connect skipped because token was missing');
+                setStatusMessage('Driver session missing. Please login again.');
+                return;
+            }
+
+            const response = await api.patch('/drivers/online', { location: coordinates });
+            const driver = response?.data?.data || response?.data || response;
+            console.info('[driver-home] online API response', {
+                isOnline: driver?.isOnline,
+                zoneId: driver?.zoneId || null,
+                vehicleTypeId: driver?.vehicleTypeId || null,
+            });
+            setIsOnline(Boolean(driver?.isOnline));
+            if (Array.isArray(driver?.location?.coordinates) && driver.location.coordinates.length === 2) {
+                driverCoordsRef.current = driver.location.coordinates;
+                setDriverCoords(driver.location.coordinates);
+                socketService.emit('locationUpdate', { coordinates: driver.location.coordinates });
+                console.info('[driver-home] emitted locationUpdate with saved coords', driver.location.coordinates);
+            } else {
+                socketService.emit('locationUpdate', { coordinates });
+                console.info('[driver-home] emitted locationUpdate with fresh coords', coordinates);
+            }
             setStatusMessage('You are online. Waiting for nearby bookings.');
         } catch (error) {
+            console.error('[driver-home] goOnline failed', error);
             setStatusMessage(error.message || 'Could not go online.');
         }
     }, [updateDriverLocation]);
 
     const goOffline = useCallback(async () => {
         try {
-            await api.patch('/drivers/offline');
-        } catch (_error) {
-            // Local disconnect still stops live requests if the server call fails.
-        } finally {
+            const response = await api.patch('/drivers/offline');
+            const driver = response?.data?.data || response?.data || response;
+            setIsOnline(Boolean(driver?.isOnline));
             setIsOnline(false);
             setShowRequest(false);
             setCurrentRequest(null);
             setStatusMessage('You are offline.');
             socketService.disconnect();
+        } catch (error) {
+            setStatusMessage(error.message || 'Could not go offline.');
         }
     }, []);
 
     // Socket Integration
     useEffect(() => {
         if (isOnline) {
+            console.info('[driver-home] socket effect starting for online driver');
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
+                console.warn('[driver-home] socket effect could not get a socket');
                 setStatusMessage('Driver session missing. Please login again.');
                 setIsOnline(false);
                 return undefined;
@@ -246,9 +295,11 @@ const DriverHome = () => {
 
             if (driverCoordsRef.current) {
                 socketService.emit('locationUpdate', { coordinates: driverCoordsRef.current });
+                console.info('[driver-home] emitted initial locationUpdate from effect', driverCoordsRef.current);
             }
-            
-            socketService.on('rideRequest', (data) => {
+
+            const onRideRequest = (data) => {
+                console.info('[driver-home] rideRequest received', data);
                 const request = {
                     type: 'ride',
                     title: 'Taxi Ride',
@@ -264,17 +315,24 @@ const DriverHome = () => {
                 setCurrentRequest(request);
                 setShowRequest(true);
                 setStatusMessage('New booking received.');
-            });
+            };
 
-            socketService.on('rideRequestClosed', ({ rideId }) => {
+            const onRideRequestClosed = ({ rideId }) => {
+                console.info('[driver-home] rideRequestClosed received', { rideId });
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
                 }
-            });
+            };
 
-            socketService.on('errorMessage', ({ message }) => {
+            const onSocketError = ({ message }) => {
+                console.error('[driver-home] socket errorMessage received', message);
                 setStatusMessage(message || 'Socket error.');
-            });
+            };
+
+            socketService.on('rideRequest', onRideRequest);
+            socketService.on('rideRequestClosed', onRideRequestClosed);
+            socketService.on('errorMessage', onSocketError);
+            console.info('[driver-home] socket listeners registered');
 
             const locationInterval = setInterval(() => {
                 getCurrentCoords()
@@ -282,23 +340,27 @@ const DriverHome = () => {
                         driverCoordsRef.current = coordinates;
                         setDriverCoords(coordinates);
                         socketService.emit('locationUpdate', { coordinates });
+                        console.info('[driver-home] periodic locationUpdate emitted', coordinates);
                     })
                     .catch((error) => {
+                        console.error('[driver-home] periodic location update failed', error);
                         setStatusMessage(error.message || 'Could not update live location.');
                     });
             }, 10000);
 
             return () => {
-                socketService.off('rideRequest');
-                socketService.off('rideRequestClosed');
-                socketService.off('errorMessage');
+                console.info('[driver-home] cleaning up socket listeners');
+                socketService.off('rideRequest', onRideRequest);
+                socketService.off('rideRequestClosed', onRideRequestClosed);
+                socketService.off('errorMessage', onSocketError);
                 clearInterval(locationInterval);
             };
         } else {
+            console.info('[driver-home] driver offline, disconnecting socket');
             socketService.disconnect();
         }
         return undefined;
-    }, [isOnline]);
+    }, [currentRequest?.rideId, isOnline]);
     
     useEffect(() => {
         let interval;
@@ -343,9 +405,9 @@ const DriverHome = () => {
                     <img src={Rydon24Logo} alt="Rydon24" className="h-7 drop-shadow-sm" />
                     <div className="h-5 w-px bg-slate-200" />
                     <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full shadow-sm ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {isOnline ? 'Online' : 'Offline'}
+                        <div className={`w-2 h-2 rounded-full shadow-sm ${isHydratingDriver ? 'bg-amber-400 animate-pulse' : isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
+                        <span className={`text-[10px] font-black uppercase tracking-widest ${isHydratingDriver ? 'text-amber-500' : isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
+                            {isHydratingDriver ? 'Syncing' : isOnline ? 'Online' : 'Offline'}
                         </span>
                     </div>
                 </div>
@@ -397,8 +459,8 @@ const DriverHome = () => {
                     {statusMessage && (
                         <p className="px-2 pb-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">{statusMessage}</p>
                     )}
-                    <motion.button whileTap={{ scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'}`}>
-                         <Power size={16} strokeWidth={3} className={isOnline ? 'animate-pulse' : ''} />{isOnline ? 'End Your Duty' : 'Go Online'}
+                    <motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
+                         <Power size={16} strokeWidth={3} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status' : isOnline ? 'End Your Duty' : 'Go Online'}
                     </motion.button>
                 </motion.div>
             </div>

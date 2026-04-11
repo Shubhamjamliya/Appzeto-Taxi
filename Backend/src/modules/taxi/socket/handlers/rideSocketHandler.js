@@ -10,6 +10,7 @@ import {
 } from '../../services/rideService.js';
 import { authorizeRideRoomAccess } from '../middleware/rideRoomAuth.js';
 import { SOCKET_EVENTS } from '../events.js';
+import { clearDriverRoute, updateDriverRoute } from '../services/driverRouteService.js';
 
 const driverLifecycleStatuses = new Set([
   RIDE_LIVE_STATUS.ARRIVING,
@@ -93,6 +94,13 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
       });
 
       io.to(getRideRoom(rideId)).emit(SOCKET_EVENTS.RIDE_DRIVER_LOCATION_UPDATED, locationUpdate);
+
+      updateDriverRoute({
+        io,
+        rideId,
+        driverId: socket.auth.sub,
+        coordinates: locationUpdate.coordinates,
+      });
     }),
   );
 
@@ -126,6 +134,10 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
 
       io.to(getRideRoom(rideId)).emit(SOCKET_EVENTS.RIDE_STATUS_UPDATED, payload);
       emitRideState(ride);
+
+      if (status === RIDE_LIVE_STATUS.COMPLETED) {
+        clearDriverRoute(socket.auth.sub);
+      }
     }),
   );
 

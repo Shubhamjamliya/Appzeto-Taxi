@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 } from 'lucide-react';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
+import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
@@ -32,16 +33,21 @@ const RideTracking = () => {
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
+  const fittedRouteKeyRef = useRef('');
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state || {};
+  const storedRide = useMemo(() => getCurrentRide(), []);
+  const state = useMemo(() => location.state || storedRide || {}, [location.state, storedRide]);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
   const rideId = state.rideId || '';
   const otp = state.otp || '1234';
   const fare = state.fare || 22;
   const paymentMethod = state.paymentMethod || 'Cash';
-  const fallbackDriver = state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '' };
+  const fallbackDriver = useMemo(
+    () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '' },
+    [state.driver],
+  );
   const pickupLabel = rideRealtime?.pickup?.address || state.pickup || 'Pipaliyahana, Indore';
   const dropLabel = rideRealtime?.drop?.address || state.drop || 'Vijay Nagar, Indore';
   const pickupPosition = useMemo(
@@ -57,7 +63,10 @@ const RideTracking = () => {
     [pickupPosition, rideRealtime?.driverLocation?.coordinates],
   );
   const tripStatus = String(rideRealtime?.status || 'accepted').toLowerCase();
-  const activeDestination = tripStatus === 'started' ? dropPosition : pickupPosition;
+  const activeDestination = useMemo(
+    () => (tripStatus === 'started' ? dropPosition : pickupPosition),
+    [dropPosition, pickupPosition, tripStatus],
+  );
   const driver = rideRealtime?.driver || fallbackDriver;
 
   useEffect(() => {
@@ -111,9 +120,21 @@ const RideTracking = () => {
         return;
       }
 
+      const nextStatus = payload.liveStatus || payload.status || 'accepted';
+      if (['completed', 'cancelled'].includes(String(nextStatus).toLowerCase())) {
+        clearCurrentRide();
+      } else {
+        saveCurrentRide({
+          ...state,
+          rideId,
+          driver,
+          status: nextStatus,
+        });
+      }
+
       setRideRealtime((prev) => ({
         ...(prev || {}),
-        status: payload.liveStatus || payload.status || prev?.status || 'accepted',
+        status: nextStatus,
       }));
     };
 
@@ -127,7 +148,7 @@ const RideTracking = () => {
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
     };
-  }, [fallbackDriver, rideId, state.drop, state.pickup]);
+  }, [fallbackDriver, rideId, state, state.drop, state.pickup]);
 
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.DirectionsService) {
@@ -184,15 +205,25 @@ const RideTracking = () => {
     }
 
     if (routePath.length > 1) {
+      const fitKey = `${tripStatus}:${activeDestination.lat.toFixed(5)},${activeDestination.lng.toFixed(5)}`;
+      if (fittedRouteKeyRef.current === fitKey) {
+        map.panTo(driverPosition);
+        return;
+      }
+
       const bounds = new window.google.maps.LatLngBounds();
       routePath.forEach((point) => bounds.extend(point));
-      map.fitBounds(bounds, 72);
+      map.fitBounds(bounds, { top: 120, right: 48, bottom: 300, left: 48 });
+      fittedRouteKeyRef.current = fitKey;
       return;
     }
 
-    map.setCenter(driverPosition);
-    map.setZoom(15);
-  }, [driverPosition, map, routePath]);
+    map.panTo(driverPosition);
+    if (!fittedRouteKeyRef.current) {
+      map.setZoom(15);
+      fittedRouteKeyRef.current = `${tripStatus}:single-point`;
+    }
+  }, [activeDestination, driverPosition, map, routePath, tripStatus]);
 
   const handleShare = () => {
     const text = `I'm riding with Rydon24!\nDriver: ${driver.name} (${driver.plate || driver.vehicleNumber || 'Assigned'})\nFrom: ${pickupLabel}\nTo: ${dropLabel}`;
@@ -250,7 +281,7 @@ const RideTracking = () => {
         ) : isLoaded ? (
           <GoogleMap
             mapContainerStyle={MAP_CONTAINER_STYLE}
-            center={pickupPosition}
+            center={driverPosition}
             zoom={14}
             onLoad={setMap}
             onUnmount={() => setMap(null)}
@@ -420,7 +451,10 @@ const RideTracking = () => {
               <div className="space-y-2.5">
                 <motion.button
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => navigate('/taxi/user')}
+                  onClick={() => {
+                    clearCurrentRide();
+                    navigate('/taxi/user');
+                  }}
                   className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest"
                 >
                   Yes, Cancel

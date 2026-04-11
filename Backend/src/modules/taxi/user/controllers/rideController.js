@@ -9,6 +9,7 @@ import {
   getActiveRideForIdentity,
   getRideDetails,
   getRideRoom,
+  listRideHistoryForIdentity,
   serializeRideRealtime,
   updateRideLifecycle,
 } from '../../services/rideService.js';
@@ -68,6 +69,22 @@ export const getMyActiveRide = async (req, res) => {
   res.json({
     success: true,
     data: ride ? serializeRideRealtime(ride) : null,
+  });
+};
+
+export const listMyRides = async (req, res) => {
+  const rides = await listRideHistoryForIdentity({
+    role: req.auth.role,
+    entityId: req.auth.sub,
+    limit: req.query.limit,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      results: rides,
+      total: rides.length,
+    },
   });
 };
 

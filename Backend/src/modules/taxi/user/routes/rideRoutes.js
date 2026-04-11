@@ -5,6 +5,7 @@ import {
   createRide,
   getMyActiveRide,
   getRideById,
+  listMyRides,
   listAvailableDrivers,
   updateRideStatus,
 } from '../controllers/rideController.js';
@@ -12,6 +13,7 @@ import {
 export const rideRouter = Router();
 
 rideRouter.post('/', authenticateOrResolveUser(['user']), asyncHandler(createRide));
+rideRouter.get('/', authenticateOrResolveUser(['user']), asyncHandler(listMyRides));
 rideRouter.get('/available-drivers', asyncHandler(listAvailableDrivers));
 rideRouter.get('/active/me', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.get('/:rideId', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getRideById));

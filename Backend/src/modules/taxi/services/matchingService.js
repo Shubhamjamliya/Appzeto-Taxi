@@ -7,7 +7,7 @@ import { Zone } from '../driver/models/Zone.js';
 const buildDriverMatchFilters = ({ zoneId, vehicleTypeId }) => ({
   isOnline: true,
   isOnRide: false,
-  zoneId,
+  ...(zoneId ? { zoneId } : {}),
   ...(vehicleTypeId ? { vehicleTypeId } : {}),
 });
 
@@ -37,10 +37,6 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
 
   const zone = await findZoneByPickup(coordinates);
 
-  if (!zone) {
-    throw new ApiError(404, 'No service zone found for pickup location');
-  }
-
   // MongoDB handles both distance filtering and nearest-first sorting via $near.
   const locationFilter = {
     location: {
@@ -54,15 +50,27 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     },
   };
 
-  const drivers = await Driver.find({
+  let drivers = await Driver.find({
     ...buildDriverMatchFilters({
-      zoneId: zone._id,
+      zoneId: zone?._id || null,
       vehicleTypeId,
     }),
     ...locationFilter,
   })
     .limit(limit)
     .select('name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location zoneId isOnline isOnRide');
+
+  if (drivers.length === 0 && zone?._id) {
+    drivers = await Driver.find({
+      ...buildDriverMatchFilters({
+        zoneId: null,
+        vehicleTypeId,
+      }),
+      ...locationFilter,
+    })
+      .limit(limit)
+      .select('name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location zoneId isOnline isOnRide');
+  }
 
   return { zone, drivers };
 };

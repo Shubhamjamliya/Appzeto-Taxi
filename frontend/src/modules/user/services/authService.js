@@ -1,7 +1,36 @@
 import api from '../../../shared/api/axiosInstance';
 
+const decodeBase64Url = (value) => {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + '='.repeat(padding);
+};
+
+const getTokenPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  try {
+    const payload = token.split('.')[1];
+
+    if (!payload) {
+      return null;
+    }
+
+    return JSON.parse(atob(decodeBase64Url(payload)));
+  } catch {
+    return null;
+  }
+};
+
 const readLocalUserToken = () =>
-  localStorage.getItem('userToken') || localStorage.getItem('token') || '';
+  [
+    localStorage.getItem('userToken'),
+    localStorage.getItem('token'),
+  ].filter(Boolean).find((token) => getTokenPayload(token)?.role === 'user') || '';
+
+export const getLocalUserToken = readLocalUserToken;
 
 export const withUserAuth = (config = {}) => {
   const token = readLocalUserToken();

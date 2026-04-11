@@ -38,4 +38,9 @@ export const env = {
     apiSecret: process.env.CLOUDINARY_API_SECRET || '',
     folder: process.env.CLOUDINARY_FOLDER || 'appzeto-taxi',
   },
+  firebase: {
+    databaseURL: process.env.FIREBASE_DATABASE_URL || '',
+    serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
+    serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
+  },
 };

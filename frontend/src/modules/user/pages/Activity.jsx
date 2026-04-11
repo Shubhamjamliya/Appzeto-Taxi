@@ -1,10 +1,79 @@
-import React, { useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Calendar, ChevronRight, Clock, Headset } from 'lucide-react';
+import { AlertCircle, ArrowLeft, Calendar, ChevronRight, Clock, Headset, Loader2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
+import api from '../../../shared/api/axiosInstance';
 
 const TABS = ['All', 'Rides', 'Parcels', 'Support'];
+
+const unwrap = (response) => response?.data || response;
+
+const formatRideDate = (value) => {
+  if (!value) {
+    return '--';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
+  return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+};
+
+const formatRideTime = (value) => {
+  if (!value) {
+    return '--';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return '--';
+  }
+
+  return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const formatStatus = (status) => {
+  const normalized = String(status || 'searching').toLowerCase();
+  return normalized.charAt(0).toUpperCase() + normalized.slice(1);
+};
+
+const getRideTimeSource = (ride) => ride.completedAt || ride.startedAt || ride.acceptedAt || ride.createdAt || ride.updatedAt;
+
+const coordLabel = (location, fallback) => {
+  const coords = location?.coordinates || [];
+  const [lng, lat] = coords;
+
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+  }
+
+  return fallback;
+};
+
+const normalizeRide = (ride) => {
+  const timeSource = getRideTimeSource(ride);
+  const driverName = ride.driver?.name || 'Captain';
+  const vehicle = ride.driver?.vehicleType || ride.vehicleIconType || 'Ride';
+  const status = formatStatus(ride.status || ride.liveStatus);
+  const pickup = coordLabel(ride.pickupLocation, 'Pickup');
+  const drop = coordLabel(ride.dropLocation, 'Drop');
+
+  return {
+    id: ride.rideId || ride._id || ride.id,
+    type: 'ride',
+    title: status === 'Searching' ? 'Ride request' : `Ride with ${driverName}`,
+    address: `${pickup} to ${drop}`,
+    date: formatRideDate(timeSource),
+    time: formatRideTime(timeSource),
+    status,
+    price: Number(ride.fare || 0).toFixed(0),
+    ride,
+    vehicle,
+  };
+};
 
 const ActivityItem = ({ type, title, address, date, time, status, price, onClick }) => (
   <motion.button
@@ -46,7 +115,9 @@ const ActivityItem = ({ type, title, address, date, time, status, price, onClick
           className={`ml-auto text-[9px] font-black px-2 py-1 rounded-full leading-none border ${
             status === 'Completed'
               ? 'bg-emerald-50 text-emerald-700 border-emerald-100'
-              : 'bg-rose-50 text-rose-700 border-rose-100'
+              : status === 'Cancelled'
+                ? 'bg-rose-50 text-rose-700 border-rose-100'
+                : 'bg-amber-50 text-amber-700 border-amber-100'
           }`}
         >
           {status.toUpperCase()}
@@ -62,40 +133,50 @@ const ActivityItem = ({ type, title, address, date, time, status, price, onClick
 
 const Activity = () => {
   const [activeTab, setActiveTab] = useState('All');
+  const [activities, setActivities] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
+  const location = useLocation();
+  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
-  const activities = [
-    {
-      id: '8231',
-      type: 'ride',
-      title: 'Ride with Kishan Kumawat',
-      address: 'Vijay Nagar, Indore',
-      date: '29 Mar',
-      time: '12:45 PM',
-      status: 'Completed',
-      price: '22',
-    },
-    {
-      id: '4492',
-      type: 'parcel',
-      title: 'Gift for Rahul',
-      address: 'Bhawarkua, Indore',
-      date: '28 Mar',
-      time: '11:20 AM',
-      status: 'Completed',
-      price: '45',
-    },
-    {
-      id: '1105',
-      type: 'ride',
-      title: 'Ride with Rajesh',
-      address: 'LIG Colony, Indore',
-      date: '28 Mar',
-      time: '09:12 AM',
-      status: 'Cancelled',
-      price: '0',
-    },
-  ];
+  useEffect(() => {
+    let active = true;
+
+    const loadRideHistory = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const response = await api.get('/rides?limit=100');
+        const payload = unwrap(response);
+        const rides = payload?.results || payload?.data?.results || [];
+
+        if (!active) {
+          return;
+        }
+
+        setActivities(rides.map(normalizeRide).filter((ride) => ride.id));
+      } catch (loadError) {
+        if (!active) {
+          return;
+        }
+
+        setError(loadError?.message || 'Could not load your ride history.');
+        setActivities([]);
+      } finally {
+        if (active) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadRideHistory();
+
+    return () => {
+      active = false;
+    };
+  }, []);
 
   const filtered = useMemo(() => {
     return activities.filter((activity) => {
@@ -108,9 +189,9 @@ const Activity = () => {
 
   const handleItemClick = (item) => {
     if (item.type === 'parcel') {
-      navigate(`/parcel/detail/${item.id}`);
+      navigate(`${routePrefix}/parcel/detail/${item.id}`);
     } else {
-      navigate(`/ride/detail/${item.id}`);
+      navigate(`${routePrefix}/ride/detail/${item.id}`, { state: { ride: item.ride } });
     }
   };
 
@@ -178,6 +259,35 @@ const Activity = () => {
               className="mt-2 bg-slate-900 text-white px-7 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.18em] shadow-[0_16px_34px_rgba(15,23,42,0.18)] active:scale-95 transition-all"
             >
               Contact Us
+            </button>
+          </motion.div>
+        ) : loading ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-center gap-3"
+          >
+            <div className="w-14 h-14 rounded-3xl bg-white/80 border border-white/80 shadow-sm flex items-center justify-center">
+              <Loader2 size={24} className="animate-spin text-orange-500" strokeWidth={3} />
+            </div>
+            <p className="text-[15px] font-black text-slate-500">Loading your trips</p>
+          </motion.div>
+        ) : error ? (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            className="flex flex-col items-center justify-center py-20 text-center gap-3"
+          >
+            <div className="w-14 h-14 rounded-3xl bg-white/80 border border-white/80 shadow-sm flex items-center justify-center">
+              <AlertCircle size={24} className="text-rose-500" strokeWidth={3} />
+            </div>
+            <p className="text-[15px] font-black text-slate-700">{error}</p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="mt-2 bg-slate-900 text-white px-6 py-3 rounded-full text-[12px] font-black uppercase tracking-[0.18em] shadow-sm active:scale-95 transition-all"
+            >
+              Retry
             </button>
           </motion.div>
         ) : filtered.length === 0 ? (

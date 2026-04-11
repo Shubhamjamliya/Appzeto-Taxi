@@ -6,6 +6,62 @@ import { Driver } from '../driver/models/Driver.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 
+const clearUserActiveRideIfPresent = async (user) => {
+  if (!user?.currentRideId) {
+    return;
+  }
+
+  const activeRide = await Ride.findById(user.currentRideId);
+
+  if (!activeRide) {
+    user.currentRideId = null;
+    await user.save();
+    return;
+  }
+
+  if ([RIDE_STATUS.COMPLETED, RIDE_STATUS.CANCELLED].includes(activeRide.status)) {
+    user.currentRideId = null;
+    await user.save();
+    return;
+  }
+
+  activeRide.status = RIDE_STATUS.CANCELLED;
+  activeRide.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
+  await activeRide.save();
+
+  await Promise.all([
+    activeRide.driverId ? Driver.findByIdAndUpdate(activeRide.driverId, { isOnRide: false }) : Promise.resolve(),
+    User.findByIdAndUpdate(activeRide.userId, { currentRideId: null }),
+  ]);
+
+  user.currentRideId = null;
+};
+
+export const clearDriverActiveRideIfStale = async (driverOrId) => {
+  const driver =
+    typeof driverOrId === 'object' && driverOrId?._id
+      ? driverOrId
+      : await Driver.findById(driverOrId);
+
+  if (!driver?.isOnRide) {
+    return driver;
+  }
+
+  const activeRide = await Ride.findOne({
+    driverId: driver._id,
+    status: { $in: activeRideStatuses },
+  }).select('_id status liveStatus');
+
+  if (activeRide) {
+    return driver;
+  }
+
+  driver.isOnRide = false;
+  await driver.save();
+
+  return driver;
+};
+
 export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare, vehicleTypeId, vehicleIconType }) => {
   const user = await User.findById(userId);
 
@@ -13,9 +69,7 @@ export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare,
     throw new ApiError(404, 'User not found');
   }
 
-  if (user.currentRideId) {
-    throw new ApiError(409, 'User already has an active ride');
-  }
+  await clearUserActiveRideIfPresent(user);
 
   const safeFare = Number(fare);
 
@@ -136,6 +190,36 @@ export const getActiveRideForIdentity = async ({ role, entityId }) => {
   }
 
   return null;
+};
+
+export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 }) => {
+  if (role !== 'user') {
+    throw new ApiError(403, 'Only riders can access ride history');
+  }
+
+  const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+
+  const rides = await Ride.find({ userId: entityId })
+    .sort({ createdAt: -1 })
+    .limit(safeLimit)
+    .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating')
+    .lean();
+
+  return rides.map((ride) => ({
+    rideId: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+    fare: ride.fare,
+    vehicleIconType: ride.vehicleIconType,
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    acceptedAt: ride.acceptedAt,
+    startedAt: ride.startedAt,
+    completedAt: ride.completedAt,
+    createdAt: ride.createdAt,
+    updatedAt: ride.updatedAt,
+    driver: ride.driverId || null,
+  }));
 };
 
 export const acceptRideAssignment = async ({ rideId, driverId }) => {

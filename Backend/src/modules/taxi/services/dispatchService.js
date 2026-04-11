@@ -187,7 +187,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
         radius,
-        zoneId: String(zone._id),
+        zoneId: zone?._id ? String(zone._id) : null,
       });
     }
 
@@ -247,6 +247,29 @@ export const notifyRideAccepted = async (ride) => {
     room: getRideRoom(populatedRide._id),
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
+    driver: populatedRide.driverId,
+  });
+
+  emitToRoom(getUserRoom(populatedRide.userId), SOCKET_EVENTS.RIDE_STATE, {
+    rideId: String(populatedRide._id),
+    room: getRideRoom(populatedRide._id),
+    status: populatedRide.status,
+    liveStatus: populatedRide.liveStatus,
+    fare: populatedRide.fare,
+    pickupLocation: populatedRide.pickupLocation,
+    dropLocation: populatedRide.dropLocation,
+    acceptedAt: populatedRide.acceptedAt,
+    startedAt: populatedRide.startedAt,
+    completedAt: populatedRide.completedAt,
+    lastDriverLocation: populatedRide.lastDriverLocation?.coordinates?.length
+      ? {
+          type: populatedRide.lastDriverLocation.type,
+          coordinates: populatedRide.lastDriverLocation.coordinates,
+          heading: populatedRide.lastDriverLocation.heading,
+          speed: populatedRide.lastDriverLocation.speed,
+          updatedAt: populatedRide.lastDriverLocation.updatedAt,
+        }
+      : null,
     driver: populatedRide.driverId,
   });
 

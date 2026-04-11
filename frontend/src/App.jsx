@@ -582,6 +582,8 @@ function App() {
               <Route path="settings/app/tip" element={<AdminTipSettings />} />
               <Route path="settings/app/country" element={<AdminCountryManagement />} />
               <Route path="settings/app/modules" element={<AdminAppModules />} />
+              <Route path="settings/app/modules/create" element={<AdminAppModules mode="create" />} />
+              <Route path="settings/app/modules/edit/:id" element={<AdminAppModules mode="edit" />} />
               <Route path="settings/app/onboard" element={<AdminOnboardingScreens />} />
               
               <Route path="settings/business/*" element={<AdminGeneralSettings />} />

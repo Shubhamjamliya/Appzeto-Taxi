@@ -15,9 +15,11 @@ import {
   verifyUserOtpRequest,
   verifyUserPhoneForOtpLogin,
 } from '../controllers/userController.js';
+import { getAppModules } from '../../admin/controllers/adminController.js';
 
 export const userRouter = Router();
 
+userRouter.get('/app-modules', asyncHandler(getAppModules));
 userRouter.post('/register', asyncHandler(registerUser));
 userRouter.post('/signup', asyncHandler(signupUser));
 userRouter.post('/login', asyncHandler(loginUser));

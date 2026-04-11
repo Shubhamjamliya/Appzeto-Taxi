@@ -140,6 +140,7 @@ adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
 
 adminRouter.get('/countries', getCountries);
+adminRouter.get('/admin/countries', getCountries);
 adminRouter.get('/admin/service-locations', getServiceLocations);
 adminRouter.get('/admin/service-locations/nearby', getNearbyServiceLocations);
 adminRouter.post('/admin/service-locations', createServiceLocation);

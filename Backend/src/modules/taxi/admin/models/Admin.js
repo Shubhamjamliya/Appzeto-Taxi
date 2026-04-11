@@ -7,17 +7,25 @@ const adminSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    email: {
+      type: String,
+      lowercase: true,
+      trim: true,
+      unique: true,
+    },
     phone: {
       type: String,
-      required: true,
-      unique: true,
       trim: true,
     },
     password: {
       type: String,
       required: true,
-      minlength: 6,
+      minlength: 5,
       select: false,
+    },
+    role: {
+      type: String,
+      default: 'admin',
     },
     permissions: {
       type: [String],

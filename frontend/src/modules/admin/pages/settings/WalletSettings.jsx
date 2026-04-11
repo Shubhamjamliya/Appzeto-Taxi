@@ -10,32 +10,46 @@ import {
   CheckCircle2,
   Bell,
   Zap,
-  ArrowRight
+  ArrowRight,
+  ArrowLeft,
+  ShieldCheck,
+  CreditCard,
+  PlusCircle,
+  Gem
 } from 'lucide-react';
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
 
-const SectionHeader = ({ title }) => (
-  <div className="bg-slate-50 border-l-4 border-indigo-600 p-4 mb-8 rounded-r-lg shadow-sm">
-    <h3 className="text-[14px] font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
+const SectionHeader = ({ title, icon: Icon, description }) => (
+  <div className="flex items-center gap-4 mb-8 pb-4 border-b border-gray-100">
+    <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600">
+      <Icon size={20} />
+    </div>
+    <div>
+      <h3 className="text-sm font-bold text-gray-900 uppercase tracking-tight">{title}</h3>
+      <p className="text-xs text-gray-400 font-medium">{description}</p>
+    </div>
   </div>
 );
 
-const InputField = ({ label, name, value, onChange, placeholder, type = "text", required }) => (
-  <div className="space-y-1.5 w-full">
-    <label className="text-[13px] font-bold text-slate-700 block ml-0.5 whitespace-nowrap">
-      {label} {required && <span className="text-red-500">*</span>}
-    </label>
-    <input
-      type={type}
-      name={name}
-      value={value || ''}
-      onChange={(e) => onChange(name, e.target.value)}
-      placeholder={placeholder}
-      className={`w-full bg-white border border-slate-200 rounded-lg py-3 px-4 text-[14px] text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-all shadow-sm`}
-    />
-  </div>
-);
+const InputField = ({ label, name, value, onChange, placeholder, type = "text", required }) => {
+  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors shadow-sm";
+  const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
+  
+  return (
+    <div className="space-y-1 w-full">
+      <label className={labelClass}>{label} {required && <span className="text-red-600">*</span>}</label>
+      <input
+        type={type}
+        name={name}
+        value={value || ''}
+        onChange={(e) => onChange(name, e.target.value)}
+        placeholder={placeholder}
+        className={inputClass}
+      />
+    </div>
+  );
+};
 
 const WalletSettings = () => {
   const [loading, setLoading] = useState(true);
@@ -65,7 +79,7 @@ const WalletSettings = () => {
       await api.patch('/admin/general-settings/wallet', { settings });
       toast.success('Wallet configurations synchronized successfully!', {
          icon: <Wallet className="text-emerald-500" />,
-         style: { borderRadius: '16px', background: '#1e293b', color: '#fff' }
+         style: { borderRadius: '16px', background: '#1e293b', color: '#fff', fontSize: '13px', fontWeight: 'bold' }
       });
     } catch (err) {
       console.error('Update error:', err);
@@ -81,127 +95,145 @@ const WalletSettings = () => {
 
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-slate-50">
-        <div className="flex flex-col items-center gap-4">
-          <div className="w-12 h-12 border-4 border-indigo-600/20 border-t-indigo-600 rounded-full animate-spin"></div>
-          <p className="text-xs font-black text-slate-400 uppercase tracking-[3px] italic">Accessing Ledger Core...</p>
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-gray-50">
+        <Loader2 className="w-10 h-10 text-indigo-600 animate-spin" />
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
-      <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-700 pb-40">
-        
-        {/* Header Breadcrumb */}
-        <div className="flex items-center justify-between mb-2">
-           <h1 className="text-2xl font-black text-slate-800 uppercase tracking-tight">Wallet Settings</h1>
-           <div className="flex items-center gap-1.5 text-[12px] font-semibold text-slate-400">
-             <span>Wallet Settings</span>
-             <ChevronRight size={14} />
-             <span className="text-indigo-600">Global Ledger Config</span>
-           </div>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
+      
+      {/* Header Block */}
+      <div className="mb-8">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Settings</span>
+          <ChevronRight size={12} />
+          <span>General</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Wallet Configuration</span>
         </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-gray-900">Global Wallet Ledger</h1>
+          <button onClick={() => window.history.back()} className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm">
+            <ArrowLeft size={16} /> Back
+          </button>
+        </div>
+      </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 items-start">
-           
-           {/* Form Section */}
-           <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 p-8 space-y-8">
-              <InputField label="Minimum Wallet Amount For Transfer" name="minimum_wallet_amount_for_transfer" value={settings.minimum_wallet_amount_for_transfer} onChange={handleChange} type="number" required />
-              <InputField label="Driver Wallet Minimum Amount To Get An Order" name="driver_wallet_minimum_amount_to_get_an_order" value={settings.driver_wallet_minimum_amount_to_get_an_order} onChange={handleChange} type="number" required />
-              <InputField label="Owner Wallet Minimum Amount To Get An Order" name="owner_wallet_minimum_amount_to_get_an_order" value={settings.owner_wallet_minimum_amount_to_get_an_order} onChange={handleChange} type="number" required />
-              <InputField label="Minimum amount added to wallet" name="minimum_amount_added_to_wallet" value={settings.minimum_amount_added_to_wallet} onChange={handleChange} type="number" required />
+      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 items-start pb-32">
+         
+         {/* Form Section */}
+         <div className="lg:col-span-7 bg-white rounded-2xl border border-gray-200 shadow-sm p-8 space-y-10">
+            <div>
+               <SectionHeader title="Threshold Parameters" description="Define minimum balances required for platform operations" icon={ShieldCheck} />
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <InputField label="Min Transfer Amount" name="minimum_wallet_amount_for_transfer" value={settings.minimum_wallet_amount_for_transfer} onChange={handleChange} type="number" required />
+                  <InputField label="Min Top-up Amount" name="minimum_amount_added_to_wallet" value={settings.minimum_amount_added_to_wallet} onChange={handleChange} type="number" required />
+                  <InputField label="Min Driver Balance (Orders)" name="driver_wallet_minimum_amount_to_get_an_order" value={settings.driver_wallet_minimum_amount_to_get_an_order} onChange={handleChange} type="number" required />
+                  <InputField label="Min Owner Balance (Orders)" name="owner_wallet_minimum_amount_to_get_an_order" value={settings.owner_wallet_minimum_amount_to_get_an_order} onChange={handleChange} type="number" required />
+               </div>
+            </div>
+
+            <div className="pt-4">
+              <SectionHeader title="Acquisition Rewards" description="Configure sign-up bonuses for various user segments" icon={Gem} />
               
-              <div className="flex items-center justify-between p-5 bg-slate-50/50 border border-slate-100 rounded-2xl group transition-all hover:bg-slate-50">
-                <div className="flex items-center gap-3">
-                   <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center font-bold text-xs tracking-tighter">
-                      BONUS
-                   </div>
-                   <span className="text-[14px] font-bold text-slate-700">Enable Joining Bonus</span>
+              <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-6 mb-6">
+                 <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                       <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-[10px] tracking-widest">
+                          PROMO
+                       </div>
+                       <div>
+                          <span className="text-sm font-bold text-gray-900 block">Enable Registration Bonus</span>
+                          <p className="text-[11px] text-gray-400">Apply automatic credits to new wallets</p>
+                       </div>
+                    </div>
+                    <button
+                      onClick={() => handleChange('enable_joining_bonus', settings.enable_joining_bonus === "1" ? "0" : "1")}
+                      className={`w-11 h-6 rounded-full relative transition-all duration-300 ${
+                        settings.enable_joining_bonus === "1" ? 'bg-indigo-600' : 'bg-gray-200'
+                      }`}
+                    >
+                      <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-[5px] transition-all duration-300 ${settings.enable_joining_bonus === "1" ? 'right-[5px]' : 'left-[5px]'}`} />
+                    </button>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-100 transition-opacity">
+                 <InputField label="User Welcome Amount" name="joining_bonus_for_user" value={settings.joining_bonus_for_user} onChange={handleChange} type="number" />
+                 <InputField label="Driver Welcome Amount" name="joining_bonus_for_driver" value={settings.joining_bonus_for_driver} onChange={handleChange} type="number" />
+              </div>
+            </div>
+
+            <div className="pt-6 border-t border-gray-100 flex justify-end">
+               <button 
+                onClick={handleUpdate}
+                disabled={saving}
+                className="w-full md:w-auto bg-indigo-600 text-white px-12 py-4 rounded-xl text-sm font-bold shadow-xl shadow-indigo-100 flex items-center justify-center gap-3 hover:bg-indigo-700 transition-all active:scale-95 disabled:opacity-50"
+               >
+                 {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                 {saving ? "SYNCHRONIZING..." : "SAVE CONFIGURATIONS"}
+               </button>
+            </div>
+         </div>
+
+         {/* Visual Preview / Tips Block */}
+         <div className="lg:col-span-5 space-y-8">
+            <div className="bg-indigo-600 rounded-3xl p-8 text-white shadow-2xl shadow-indigo-100 relative overflow-hidden group">
+               <div className="relative z-10">
+                  <h4 className="text-lg font-bold mb-2">Ledger Integrity</h4>
+                  <p className="text-indigo-100 text-sm leading-relaxed mb-6">
+                     Wallet thresholds prevent balance depletion and ensure service continuity. Minimum balances enforce credit-first operations for non-cash bookings.
+                  </p>
+                  <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest bg-white/20 w-fit px-3 py-1.5 rounded-full">
+                     <ShieldCheck size={12} /> Compliance Ready
+                  </div>
+               </div>
+               <div className="absolute top-0 right-0 w-40 h-40 bg-white/10 rounded-full -translate-y-16 translate-x-16 group-hover:scale-110 transition-transform duration-500"></div>
+            </div>
+
+            {/* Simulated UI Card */}
+            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm p-8 flex flex-col items-center">
+                <div className="w-full text-center mb-6">
+                   <h5 className="text-[10px] font-black text-gray-300 uppercase tracking-[.25em]">Mobile App Preview</h5>
                 </div>
-                <button
-                  onClick={() => handleChange('enable_joining_bonus', settings.enable_joining_bonus === "1" ? "0" : "1")}
-                  className={`w-11 h-6 rounded-full relative transition-all duration-300 ${
-                    settings.enable_joining_bonus === "1" ? 'bg-indigo-600 shadow-lg shadow-indigo-600/30' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`w-4 h-4 bg-white rounded-full absolute top-1 transition-all duration-300 ${settings.enable_joining_bonus === "1" ? 'right-1' : 'left-1'}`} />
-                </button>
-              </div>
+                
+                <div className="w-64 h-[440px] bg-white rounded-[40px] shadow-[0_40px_80px_-20px_rgba(0,0,0,0.1)] border border-gray-100 p-5 flex flex-col scale-100 hover:scale-[1.02] transition-transform duration-500">
+                   <div className="flex items-center gap-2 mb-6">
+                      <div className="w-6 h-6 rounded-full bg-gray-50 flex items-center justify-center text-gray-400"><ArrowLeft size={14} /></div>
+                      <span className="text-xs font-bold text-gray-900">Wallet</span>
+                   </div>
 
-              <InputField label="Joining Bonus for User" name="joining_bonus_for_user" value={settings.joining_bonus_for_user} onChange={handleChange} type="number" />
-              <InputField label="Joining Bonus for Driver" name="joining_bonus_for_driver" value={settings.joining_bonus_for_driver} onChange={handleChange} type="number" />
+                   <div className="bg-indigo-600 rounded-2xl p-5 text-white mb-6">
+                      <p className="text-[8px] opacity-60 font-bold mb-1 uppercase">Available Balance</p>
+                      <h6 className="text-2xl font-black">₹ 140.00</h6>
+                   </div>
 
-              <div className="pt-4 flex justify-end">
-                 <button 
-                  onClick={handleUpdate}
-                  disabled={saving}
-                  className="bg-[#2563EB] text-white px-10 py-3.5 rounded-xl text-[14px] font-black shadow-xl shadow-blue-500/20 flex items-center gap-3 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50"
-                 >
-                   {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-                   {saving ? "SAVING..." : "COMMIT CHANGES"}
-                 </button>
-              </div>
-           </div>
+                   <div className="flex gap-2 mb-6">
+                      {['Add', 'Sent', 'History'].map(btn => (
+                        <div key={btn} className="flex-1 text-[8px] font-bold text-indigo-600 bg-indigo-50/50 py-2 rounded-lg text-center">{btn}</div>
+                      ))}
+                   </div>
 
-           {/* Mobile Preview Section */}
-           <div className="bg-white rounded-[32px] border border-slate-200 shadow-xl shadow-slate-200/50 p-8 flex flex-col items-center">
-              <div className="w-full flex items-center justify-between mb-8 opacity-40">
-                 <h4 className="text-[14px] font-black text-slate-800 uppercase tracking-widest">Mobile Preview</h4>
-                 <div className="flex gap-2">
-                    <div className="w-2 h-2 rounded-full bg-slate-200"></div>
-                    <div className="w-2 h-2 rounded-full bg-slate-400"></div>
-                 </div>
-              </div>
-              
-              <div className="w-[300px] h-[600px] bg-slate-900 rounded-[50px] border-[10px] border-slate-800 shadow-2xl relative overflow-hidden group">
-                 <div className="absolute top-0 inset-x-0 h-6 flex items-center justify-center">
-                    <div className="w-20 h-1 bg-slate-800 rounded-full mt-1"></div>
-                 </div>
-                 
-                 <div className="h-full bg-slate-50 px-6 pt-10">
-                    <div className="flex items-center gap-3 mb-8">
-                       <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-slate-600 shadow-sm"><ChevronLeft size={20} /></div>
-                       <span className="text-[16px] font-black text-slate-800">Wallet</span>
-                    </div>
-
-                    <div className="bg-indigo-600 rounded-2xl p-6 text-white shadow-xl shadow-indigo-600/30 mb-8 overflow-hidden relative group-hover:scale-[1.02] transition-transform duration-500">
-                       <span className="text-[12px] font-bold opacity-60 block mb-2 uppercase tracking-widest">Wallet Balance</span>
-                       <div className="text-3xl font-black">₹ -47.55</div>
-                       <div className="absolute top-0 right-0 w-32 h-32 bg-white/5 rounded-full -translate-y-12 translate-x-12"></div>
-                    </div>
-
-                    <div className="flex items-center gap-2 mb-8">
-                       <div className="flex-1 bg-white border border-slate-100 rounded-xl py-3 text-center text-[11px] font-black text-indigo-600 shadow-sm">Add Money</div>
-                       <div className="flex-1 bg-white border border-slate-100 rounded-xl py-3 text-center text-[11px] font-black text-indigo-600 shadow-sm">Withdraw</div>
-                       <div className="flex-1 bg-white border border-slate-200 rounded-xl py-3 text-center text-[11px] font-black text-slate-400">Transfer</div>
-                    </div>
-
-                    <div className="space-y-4">
-                       <div className="text-[12px] font-black text-slate-400 uppercase tracking-widest ml-1">SAVED CARDS</div>
-                       <button className="w-full bg-[#111827] text-white py-4 rounded-xl text-[13px] font-black shadow-lg">Add a card</button>
-                    </div>
-
-                    <div className="absolute bottom-0 inset-x-0 bg-white rounded-t-[40px] p-6 shadow-[0_-20px_50px_rgba(0,0,0,0.05)] border-t border-slate-100">
-                       <div className="relative mb-6">
-                         <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold">$</span>
-                         <input type="text" value="50" readOnly className="w-full bg-slate-50 border border-slate-100 rounded-xl py-4 flex items-center justify-center pl-10 text-xl font-black text-slate-800" />
-                       </div>
-                       <div className="flex items-center gap-3 mb-8">
-                          {['50', '100', '150'].map(val => (
-                            <div key={val} className="flex-1 bg-white border border-slate-200 rounded-xl py-3 text-center text-[14px] font-black text-slate-700">$ {val}</div>
-                          ))}
-                       </div>
-                       <div className="flex gap-4">
-                          <button className="flex-1 bg-slate-100 text-slate-600 py-3 rounded-xl font-black text-[12px]">CANCEL</button>
-                          <button className="flex-2 bg-indigo-600 text-white py-3 rounded-xl font-black text-[12px] shadow-lg shadow-indigo-600/30 px-6">ADD MONEY</button>
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           </div>
-        </div>
+                   <div className="space-y-3">
+                      <p className="text-[8px] font-bold text-gray-300 uppercase tracking-widest">Recent Activity</p>
+                      {[1, 2].map(i => (
+                        <div key={i} className="flex items-center justify-between p-3 bg-gray-50 rounded-xl">
+                           <div className="flex items-center gap-2">
+                              <div className="w-6 h-6 rounded-lg bg-green-100 text-green-600 flex items-center justify-center"><PlusCircle size={10} /></div>
+                              <div className="flex flex-col">
+                                 <span className="text-[7px] font-bold text-gray-900">Wallet Refill</span>
+                                 <span className="text-[6px] text-gray-400">10 Apr 2026</span>
+                              </div>
+                           </div>
+                           <span className="text-[8px] font-black text-green-600">+₹500</span>
+                        </div>
+                      ))}
+                   </div>
+                </div>
+            </div>
+         </div>
       </div>
 
       <button

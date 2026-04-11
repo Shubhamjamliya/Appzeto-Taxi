@@ -2,7 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
-import { AdminPanelState } from '../models/AdminPanelState.js';
+import { User } from '../../user/models/User.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
@@ -19,7 +19,16 @@ import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { Ride } from '../../user/models/Ride.js';
-import { User } from '../../user/models/User.js';
+import { AppLanguage } from '../models/AppLanguage.js';
+import { RideModule } from '../models/RideModule.js';
+import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
+import { NotificationChannel } from '../models/NotificationChannel.js';
+import { AppModule } from '../models/AppModule.js';
+import { UserPreference } from '../models/UserPreference.js';
+import { AdminRole } from '../models/AdminRole.js';
+import { PaymentGateway } from '../models/PaymentGateway.js';
+import { OnboardingScreen } from '../models/OnboardingScreen.js';
+import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
 
 const deepMerge = (target, source) => {
@@ -411,77 +420,94 @@ const syncDefaultAdminRecord = async () => {
   );
 };
 
-export const ensureAdminState = async () => {
-  let state = await AdminPanelState.findOne({ scope: 'default' });
+const seedInitialData = async () => {
+  const defaults = createDefaultAdminState();
 
-  if (!state) {
-    state = await AdminPanelState.create(createDefaultAdminState());
+  // Seed Users
+  if (await User.countDocuments() === 0) {
+    await User.insertMany(defaults.users.map(u => ({ ...u, phone: u.mobile, password: 'password123' })));
   }
 
-  const hasLegacySeededZones =
-    Array.isArray(state.zones) &&
-    state.zones.length === 2 &&
-    state.zones.every((zone) => ['Vijay Nagar Prime', 'Connaught Place Core'].includes(zone?.name));
-
-  const hasLegacySeededServiceLocations =
-    Array.isArray(state.serviceLocations) &&
-    state.serviceLocations.length === 2 &&
-    state.serviceLocations.every((location) => ['Indore', 'New Delhi'].includes(location?.name));
-
-  if (hasLegacySeededZones || hasLegacySeededServiceLocations) {
-    if (hasLegacySeededZones) {
-      state.zones = [];
-    }
-
-    if (hasLegacySeededServiceLocations) {
-      state.serviceLocations = [];
-    }
-
-    await state.save();
+  // Seed Drivers
+  if (await Driver.countDocuments() === 0) {
+    await Driver.insertMany(defaults.drivers.map(d => ({ ...d, phone: d.mobile })));
   }
 
-  if (!Array.isArray(state.deletedUsers)) {
-    state.deletedUsers = [];
-    await state.save();
+  // Seed Languages
+  if (await AppLanguage.countDocuments() === 0) {
+    await AppLanguage.insertMany(defaults.languages);
+  }
   }
 
-  const defaultAdmin = state.admins?.find(
-    (item) => item.email?.toLowerCase() === 'admin@gmail.com',
-  );
-
-  if (defaultAdmin && defaultAdmin.password !== '12345') {
-    defaultAdmin.password = '12345';
-    await state.save();
+  // Seed Ride Modules
+  if (await RideModule.countDocuments() === 0) {
+    await RideModule.insertMany(defaults.rideModules);
   }
 
-  await syncDefaultAdminRecord();
+  // Seed App Modules
+  if (await AppModule.countDocuments() === 0) {
+    await AppModule.insertMany(defaults.appModules);
+  }
 
-  return state;
+  // Seed Notification Channels
+  if (await NotificationChannel.countDocuments() === 0) {
+    await NotificationChannel.insertMany(defaults.notificationChannels);
+  }
+
+  // Seed Subscription Plans
+  if (await SubscriptionPlan.countDocuments() === 0) {
+    await SubscriptionPlan.insertMany(defaults.subscriptionPlans);
+  }
+
+  // Seed Preferences
+  if (await UserPreference.countDocuments() === 0) {
+    await UserPreference.insertMany(defaults.preferences);
+  }
+
+  // Seed Admin Roles
+  if (await AdminRole.countDocuments() === 0) {
+    await AdminRole.insertMany(defaults.roles);
+  }
+
+  // Seed Payment Gateways
+  if (await PaymentGateway.countDocuments() === 0) {
+    await PaymentGateway.insertMany(defaults.paymentGateways);
+  }
+
+  // Seed Onboarding Screens
+  if (await OnboardingScreen.countDocuments() === 0) {
+    await OnboardingScreen.insertMany(defaults.onboardingScreens);
+  }
 };
 
-const ensureServiceLocationsSeeded = async () => {
-  const existingCount = await ServiceLocation.countDocuments();
-  if (existingCount > 0) {
-    return;
-  }
+export const ensureAdminState = async () => {
+  await syncDefaultAdminRecord();
+  await seedInitialData();
+  return { ready: true };
 };
 
 export const getAdminModuleInfo = async () => {
-  const state = await ensureAdminState();
-  const [userCount, deletedUserCount] = await Promise.all([
+  const [
+    userCount,
+    deletedUserCount,
+    driverCount,
+    ownerCount,
+    zoneCount
+  ] = await Promise.all([
     User.countDocuments({ deletedAt: null }),
     User.countDocuments({ deletedAt: { $ne: null } }),
+    Driver.countDocuments(),
+    Owner.countDocuments(),
+    Zone.countDocuments(),
   ]);
-  const ownerCount = await Owner.countDocuments();
-  const zoneCount = await Zone.countDocuments();
   return {
     module: 'admin',
     ready: true,
-    message: 'Admin module is wired and seeded',
+    message: 'Admin module is wired with independent collections',
     snapshot: {
       users: userCount,
       deleted_users: deletedUserCount,
-      drivers: state.drivers.length,
+      drivers: driverCount,
       owners: ownerCount,
       zones: zoneCount,
     },
@@ -489,27 +515,18 @@ export const getAdminModuleInfo = async () => {
 };
 
 export const loginAdmin = async ({ email, password }) => {
-  const state = await ensureAdminState();
-  const admin = state.admins.find(
-    (item) => item.email?.toLowerCase() === email?.trim().toLowerCase() && item.password === password,
-  );
+  const admin = await Admin.findOne({ email: email?.trim().toLowerCase() }).select('+password');
 
-  if (!admin) {
+  if (!admin || admin.password !== password) {
     throw new ApiError(401, 'Invalid admin credentials');
   }
 
-  const dbAdmin = await Admin.findOne({ phone: '9999999999' }).select('_id name phone email');
-
-  if (!dbAdmin) {
-    throw new ApiError(500, 'Unable to resolve admin account');
-  }
-
   return {
-    token: signAccessToken({ sub: String(dbAdmin._id), role: 'admin' }),
+    token: signAccessToken({ sub: String(admin._id), role: 'admin' }),
     admin: {
-      id: String(dbAdmin._id),
-      name: dbAdmin.name || admin.name,
-      email: dbAdmin.email || admin.email,
+      id: String(admin._id),
+      name: admin.name,
+      email: admin.email,
       role: admin.role,
     },
   };
@@ -607,7 +624,6 @@ export const deleteUser = async (id) => {
   if (!user) {
     throw new ApiError(404, 'User not found');
   }
-
   return true;
 };
 
@@ -797,20 +813,16 @@ export const getDriverById = async (id) => {
   return serializeDriver(driver);
 };
 
-export const listSubscriptionPlans = async () => (await ensureAdminState()).subscriptionPlans;
+export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id service_location_id').lean();
 
 export const createSubscriptionPlan = async (payload) => {
-  const state = await ensureAdminState();
-  const plan = {
-    _id: nextId(),
+  const plan = await SubscriptionPlan.create({
     ...payload,
     amount: Number(payload.amount || 0),
     duration: Number(payload.duration || 0),
     active: true,
-  };
-  state.subscriptionPlans.unshift(plan);
-  await state.save();
-  return plan;
+  });
+  return plan.toObject();
 };
 
 export const listServiceLocations = async () => {
@@ -949,15 +961,13 @@ export const listNearbyServiceLocations = async ({ latitude, longitude, maxDista
     .lean();
 };
 
-export const listRideModules = async () => (await ensureAdminState()).rideModules;
+export const listRideModules = async () => RideModule.find().sort({ createdAt: -1 }).lean();
 
 export const listVehicleTypes = async (locationId, transportType) => {
-  const state = await ensureAdminState();
-  return state.vehicleTypes.filter((item) => {
-    const sameLocation = !locationId || String(item.location_id) === String(locationId);
-    const sameTransport = !transportType || item.transport_type === transportType;
-    return sameLocation && sameTransport;
-  });
+  const query = {};
+  if (locationId) query.location_id = locationId;
+  if (transportType) query.transport_type = transportType;
+  return Vehicle.find(query).sort({ createdAt: -1 }).lean();
 };
 
 export const listVehicleCatalog = async () => {
@@ -1305,15 +1315,43 @@ export const deleteOwnerBooking = async (id) => {
   return true;
 };
 
-export const getDashboardData = async () => (await ensureAdminState()).dashboard;
+export const getDashboardData = async () => {
+  const [totalUsers, totalDrivers, totalOwners] = await Promise.all([
+    User.countDocuments(),
+    Driver.countDocuments(),
+    Owner.countDocuments(),
+  ]);
 
-export const getOverallEarnings = async () => (await ensureAdminState()).dashboard.overallEarnings;
+  const approvedDrivers = await Driver.countDocuments({ approve: true });
 
-export const getTodayEarnings = async () => (await ensureAdminState()).dashboard.todayEarnings;
+  // Dummy aggregation for now, until real transaction models are connected
+  return {
+    totalUsers,
+    totalDrivers: {
+      total: totalDrivers,
+      approved: approvedDrivers,
+      declined: totalDrivers - approvedDrivers
+    },
+    total_earnings: 124500,
+    payment_success_rate: 99.4,
+    todayEarnings: 1450,
+    overallEarnings: {
+      today: 1450,
+      by_cash: 950,
+      by_wallet: 200,
+      by_card: 300,
+      admin_commission: 195,
+      driver_earnings: 1255,
+    },
+    cancelChart: { total: 7, byUser: 3, byDriver: 3, noDriver: 1 },
+  };
+};
 
-export const getCancelChart = async () => (await ensureAdminState()).dashboard.cancelChart;
+export const getOverallEarnings = async () => (await getDashboardData()).overallEarnings;
+export const getTodayEarnings = async () => (await getDashboardData()).todayEarnings;
+export const getCancelChart = async () => (await getDashboardData()).cancelChart;
 
-export const listWithdrawals = async () => (await ensureAdminState()).withdrawals;
+export const listWithdrawals = async () => WithdrawalRequest.find().populate('driver_id owner_id').sort({ createdAt: -1 }).lean();
 
 export const listZones = async () => {
   const zones = await Zone.find()
@@ -1901,108 +1939,78 @@ export const deleteOwnerNeededDocument = async (id) => {
   return true;
 };
 
-export const listLanguages = async () => (await ensureAdminState()).languages;
+export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
 
 export const updateLanguageStatus = async (id, payload) => {
-  const state = await ensureAdminState();
-  const language = findById(state.languages, id);
+  const language = await AppLanguage.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
   if (!language) throw new ApiError(404, 'Language not found');
-  language.active = Number(payload.active ?? language.active);
-  await state.save();
-  return language;
+  return language.toObject();
 };
 
 export const deleteLanguage = async (id) => {
-  const state = await ensureAdminState();
-  state.languages = removeById(state.languages, id);
-  await state.save();
+  const deleted = await AppLanguage.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Language not found');
   return true;
 };
 
-export const listPreferences = async () => (await ensureAdminState()).preferences;
+export const listPreferences = async () => UserPreference.find().sort({ createdAt: -1 }).lean();
 
 export const createPreference = async (payload) => {
-  const state = await ensureAdminState();
   const firstLetter = (payload.name || 'P').trim().charAt(0).toUpperCase() || 'P';
-  const preference = {
-    _id: nextId(),
+  const preference = await UserPreference.create({
     name: payload.name,
-    icon:
-      payload.icon ||
-      `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23E0E7FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">${firstLetter}</text></svg>`,
+    icon: payload.icon || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23E0E7FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">${firstLetter}</text></svg>`,
     active: 1,
-  };
-  state.preferences.unshift(preference);
-  await state.save();
-  return preference;
+  });
+  return preference.toObject();
 };
 
 export const updatePreferenceStatus = async (id, payload) => {
-  const state = await ensureAdminState();
-  const preference = findById(state.preferences, id);
+  const preference = await UserPreference.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
   if (!preference) throw new ApiError(404, 'Preference not found');
-  preference.active = Number(payload.active ?? preference.active);
-  await state.save();
-  return preference;
+  return preference.toObject();
 };
 
 export const deletePreference = async (id) => {
-  const state = await ensureAdminState();
-  state.preferences = removeById(state.preferences, id);
-  await state.save();
+  const deleted = await UserPreference.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Preference not found');
   return true;
 };
 
-export const listRoles = async () => (await ensureAdminState()).roles;
+export const listRoles = async () => AdminRole.find().sort({ createdAt: -1 }).lean();
 
 export const createRole = async (payload) => {
-  const state = await ensureAdminState();
-  const role = {
-    _id: nextId(),
+  const role = await AdminRole.create({
     name: payload.name,
     description: payload.description || '',
     slug: payload.name?.trim().toLowerCase().replace(/\s+/g, '-') || `role-${Date.now()}`,
-  };
-  state.roles.unshift(role);
-  await state.save();
-  return role;
+  });
+  return role.toObject();
 };
 
 export const deleteRole = async (id) => {
-  const state = await ensureAdminState();
-  state.roles = removeById(state.roles, id);
-  await state.save();
+  const deleted = await AdminRole.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Role not found');
   return true;
 };
 
 
 
-export const listNotificationChannels = async () =>
-  (await ensureThirdPartySettings()).notification_channels;
+export const listNotificationChannels = async () => NotificationChannel.find().sort({ createdAt: 1 }).lean();
 
 export const toggleChannelPush = async (id, status) => {
-  const settings = await ensureThirdPartySettings();
-  const index = settings.notification_channels.findIndex((c) => String(c._id) === String(id));
-  if (index === -1) throw new ApiError(404, 'Channel not found');
-
-  settings.notification_channels[index].push_notification = !!status;
-  settings.markModified('notification_channels');
-  await settings.save();
-  return settings.notification_channels[index];
+  const channel = await NotificationChannel.findByIdAndUpdate(id, { push_notification: !!status }, { new: true });
+  if (!channel) throw new ApiError(404, 'Channel not found');
+  return channel.toObject();
 };
 
 export const toggleChannelMail = async (id, status) => {
-  const settings = await ensureThirdPartySettings();
-  const index = settings.notification_channels.findIndex((c) => String(c._id) === String(id));
-  if (index === -1) throw new ApiError(404, 'Channel not found');
-
-  settings.notification_channels[index].mail = !!status;
-  settings.markModified('notification_channels');
-  await settings.save();
-  return settings.notification_channels[index];
+  const channel = await NotificationChannel.findByIdAndUpdate(id, { mail: !!status }, { new: true });
+  if (!channel) throw new ApiError(404, 'Channel not found');
+  return channel.toObject();
 };
 
-export const listPaymentGateways = async () => []; // Legacy or static list if needed
+export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
 
 export const getPaymentSettings = async () => {
   const settings = await ensureThirdPartySettings();
@@ -2076,6 +2084,7 @@ export const updateMailSettings = async (payload) => {
 
 
 export const buildUserReport = async () => {
+<<<<<<< HEAD
   const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
   return csvFromRows(
     ['name', 'email', 'mobile', 'active'],
@@ -2085,22 +2094,28 @@ export const buildUserReport = async () => {
       mobile: item.phone || item.mobile || '',
       active: item.active !== false && !item.deletedAt,
     })),
+=======
+  const items = await User.find().lean();
+  return csvFromRows(
+    ['name', 'email', 'mobile', 'active'],
+    items.map((item) => ({ name: item.name, email: item.email, mobile: item.mobile, active: item.active })),
+>>>>>>> 4d325b1 (shubham : admin panel ui fixed and backend)
   );
 };
 
 export const buildDriverReport = async () => {
-  const state = await ensureAdminState();
+  const items = await Driver.find().lean();
   return csvFromRows(
     ['name', 'mobile', 'city', 'status'],
-    state.drivers.map((item) => ({ name: item.name, mobile: item.mobile, city: item.city, status: item.status })),
+    items.map((item) => ({ name: item.name, mobile: item.phone, city: item.city, status: item.status })),
   );
 };
 
 export const buildDriverDutyReport = async () => {
-  const state = await ensureAdminState();
+  const items = await Driver.find().lean();
   return csvFromRows(
     ['driver', 'city', 'status', 'rating'],
-    state.drivers.map((item) => ({ driver: item.name, city: item.city, status: item.status, rating: item.rating })),
+    items.map((item) => ({ driver: item.name, city: item.city, status: item.status, rating: item.rating })),
   );
 };
 
@@ -2119,10 +2134,10 @@ export const buildOwnerReport = async () => {
 };
 
 export const buildFinanceReport = async () => {
-  const state = await ensureAdminState();
+  const items = await WithdrawalRequest.find().populate('driver_id').lean();
   return csvFromRows(
     ['transactionId', 'driver', 'amount', 'payment_method', 'status'],
-    state.withdrawals.map((item) => ({
+    items.map((item) => ({
       transactionId: item.transactionId,
       driver: item.driver_id?.name,
       amount: item.amount,
@@ -2240,17 +2255,28 @@ export const updateGeneralSettings = async (category, payload) => {
 };
 
 export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  const settings = await ensureAppSettings();
-  const items = [...(settings.app_modules || [])].sort(
-    (a, b) => Number(a.order_by || 0) - Number(b.order_by || 0),
-  );
-  return buildPaginator(items, page, limit);
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 20;
+  const start = (safePage - 1) * safeLimit;
+
+  const [items, total] = await Promise.all([
+    AppModule.find().sort({ order_by: 1 }).skip(start).limit(safeLimit).lean(),
+    AppModule.countDocuments(),
+  ]);
+
+  return {
+    results: items,
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
 };
 
 export const createAppModule = async (payload) => {
-  const settings = await ensureAppSettings();
-  const moduleItem = {
-    _id: nextId(),
+  const moduleItem = await AppModule.create({
     name: payload.name,
     transport_type: payload.transport_type,
     service_type: payload.service_type,
@@ -2258,46 +2284,27 @@ export const createAppModule = async (payload) => {
     short_description: payload.short_description || '',
     description: payload.description || '',
     active: normalizeBoolean(payload.active ?? true),
-    mobile_menu_icon:
-      payload.mobile_menu_icon ||
-      (payload.transport_type === 'delivery'
-        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
-        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
-  };
-  settings.app_modules.unshift(moduleItem);
-  settings.markModified('app_modules');
-  await settings.save();
-  return moduleItem;
+    mobile_menu_icon: payload.mobile_menu_icon || (payload.transport_type === 'delivery' ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg' : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
+  });
+  return moduleItem.toObject();
 };
 
 export const updateAppModule = async (id, payload) => {
-  const settings = await ensureAppSettings();
-  const index = settings.app_modules.findIndex((m) => String(m._id) === String(id));
-  if (index === -1) throw new ApiError(404, 'App module not found');
-
-  const moduleItem = settings.app_modules[index];
-  Object.assign(moduleItem, payload, {
-    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
-  });
-
-  settings.app_modules[index] = moduleItem;
-  settings.markModified('app_modules');
-  await settings.save();
-  return moduleItem;
+  const moduleItem = await AppModule.findByIdAndUpdate(id, payload, { new: true });
+  if (!moduleItem) throw new ApiError(404, 'App module not found');
+  return moduleItem.toObject();
 };
 
 export const deleteAppModule = async (id) => {
-  const settings = await ensureAppSettings();
-  settings.app_modules = settings.app_modules.filter((m) => String(m._id) === String(id));
-  settings.markModified('app_modules');
-  await settings.save();
+  const deleted = await AppModule.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'App module not found');
   return true;
 };
 
 export const listOnboardingScreens = async (audience) => {
-  const settings = await ensureAppSettings();
-  return (settings.onboarding_screens || []).filter(
-    (screen) => screen.audience === audience || screen.screen === audience,
-  );
+  const query = {};
+  if (audience) {
+    query.$or = [{ audience: audience }, { screen: audience }];
+  }
+  return OnboardingScreen.find(query).sort({ order: 1 }).lean();
 };

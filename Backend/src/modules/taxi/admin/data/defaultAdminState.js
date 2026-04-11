@@ -2,15 +2,6 @@ import mongoose from 'mongoose';
 
 const objectId = () => new mongoose.Types.ObjectId().toString();
 
-const makeSettingRows = (entries, module) =>
-  Object.entries(entries).map(([key, value]) => ({
-    _id: objectId(),
-    key,
-    value: String(value),
-    module,
-    is_active: key.startsWith('enable_') ? value === '1' : true,
-  }));
-
 export const createDefaultAdminState = () => {
   const indoreId = objectId();
   const delhiId = objectId();
@@ -26,79 +17,7 @@ export const createDefaultAdminState = () => {
   const driverThreeId = objectId();
   const ownerOneId = objectId();
 
-  const paymentSettingMap = {
-    enable_razor_pay: '1',
-    razor_pay_environment: 'test',
-    razor_pay_test_api_key: 'rzp_test_demo_key',
-    razor_pay_test_secrect_key: 'rzp_test_demo_secret',
-    razor_pay_live_api_key: '',
-    razor_pay_secrect_key: '',
-    enable_cashfree: '0',
-    cash_free_environment: 'test',
-    cash_free_secret_key: '',
-    cash_free_production_secret_key: '',
-    cash_free_app_id: '',
-    cash_free_production_app_id: '',
-    enable_stripe: '1',
-    stripe_environment: 'test',
-    stripe_test_secret_key: 'sk_test_demo',
-    stripe_test_publishable_key: 'pk_test_demo',
-    stripe_live_secret_key: '',
-    stripe_live_publishable_key: '',
-    enable_paypal: '0',
-    paypal_environment: 'sandbox',
-    paypal_sandbox_client_id: '',
-    paypal_sandbox_client_secret: '',
-    paypal_client_id: '',
-    paypal_client_secret: '',
-  };
-
-  const smsSettingMap = {
-    enable_firebase_otp: '1',
-    enable_twilio: '1',
-    twilio_sid: 'ACxxxxxxxxdemo',
-    twilio_token: 'twilio-token-demo',
-    twilio_from_number: '+919999999999',
-    enable_sms_ala: '0',
-    smsala_api_key: '',
-    smsala_secrect_key: '',
-    smsala_token: '',
-    smsala_from_number: '',
-    enable_sms_india_hub: '0',
-    sms_india_hub_api_key: '',
-    sms_india_hub_sid: '',
-    enable_kudi_sms_api_key: '0',
-    kudi_sms_api_key: '',
-    kudi_sms_sender_id: '',
-  };
-
   return {
-    scope: 'default',
-    dashboard: {
-      totalUsers: 3,
-      totalDrivers: { total: 3, approved: 2, declined: 1 },
-      total_earnings: 124500,
-      payment_success_rate: 99.4,
-      todayEarnings: 1450,
-      overallEarnings: {
-        today: 1450,
-        by_cash: 950,
-        by_wallet: 200,
-        by_card: 300,
-        admin_commission: 195,
-        driver_earnings: 1255,
-      },
-      cancelChart: { total: 7, byUser: 3, byDriver: 3, noDriver: 1 },
-    },
-    admins: [
-      {
-        _id: objectId(),
-        name: 'Super Admin',
-        email: 'admin@gmail.com',
-        password: '12345',
-        role: 'super-admin',
-      },
-    ],
     users: [
       {
         _id: userOneId,
@@ -170,117 +89,18 @@ export const createDefaultAdminState = () => {
         createdAt: new Date('2026-03-01T09:15:00.000Z'),
       },
     ],
-    owners: [
-      {
-        _id: ownerOneId,
-        company_name: 'Metro Fleet Co',
-        name: 'Ritika Bansal',
-        mobile: '9811100001',
-        email: 'ritika@metrofleet.com',
-        service_location_id: indoreId,
-        transport_type: 'taxi',
-        active: true,
-        approve: true,
-        createdAt: new Date('2026-02-04T09:00:00.000Z'),
-      },
-      {
-        _id: objectId(),
-        company_name: 'Cargo Wheels',
-        name: 'Imran Khan',
-        mobile: '9811100002',
-        email: 'imran@cargowheels.com',
-        service_location_id: delhiId,
-        transport_type: 'delivery',
-        active: false,
-        approve: false,
-        createdAt: new Date('2026-03-12T09:00:00.000Z'),
-      },
-    ],
-    withdrawals: [
-      {
-        _id: objectId(),
-        transactionId: '#WTH1001',
-        driver_id: { _id: driverOneId, name: 'Suresh Yadav' },
-        amount: 1500,
-        payment_method: 'Bank Transfer',
-        status: 'completed',
-        createdAt: new Date('2026-04-06T10:00:00.000Z'),
-      },
-      {
-        _id: objectId(),
-        transactionId: '#WTH1002',
-        driver_id: { _id: driverTwoId, name: 'Mohit Singh' },
-        amount: 2200,
-        payment_method: 'UPI',
-        status: 'pending',
-        createdAt: new Date('2026-04-08T12:30:00.000Z'),
-      },
-    ],
-    serviceLocations: [],
-    rideModules: [
-      { _id: objectId(), transport_type: 'taxi' },
-      { _id: objectId(), transport_type: 'delivery' },
-      { _id: objectId(), transport_type: 'intercity' },
-    ],
-    vehicleTypes: [
-      { _id: sedanId, location_id: indoreId, transport_type: 'taxi', name: 'Sedan', active: true },
-      { _id: suvId, location_id: delhiId, transport_type: 'taxi', name: 'SUV', active: true },
-      { _id: bikeId, location_id: indoreId, transport_type: 'taxi', name: 'Bike', active: true },
-      { _id: miniTruckId, location_id: delhiId, transport_type: 'delivery', name: 'Mini Truck', active: true },
-    ],
-    zones: [],
-    subscriptionPlans: [
-      {
-        _id: objectId(),
-        name: 'Daily Sedan Booster',
-        description: 'Best for active city cab drivers.',
-        amount: 149,
-        duration: 1,
-        transport_type: 'taxi',
-        vehicle_type_id: sedanId,
-        service_location_id: indoreId,
-        how_it_works: 'Pay once per day and unlock lower commission.',
-        active: true,
-      },
-      {
-        _id: objectId(),
-        name: 'Weekly Delivery Pro',
-        description: 'Built for mini-truck logistics partners.',
-        amount: 699,
-        duration: 7,
-        transport_type: 'delivery',
-        vehicle_type_id: miniTruckId,
-        service_location_id: delhiId,
-        how_it_works: 'Flat weekly pass for delivery operations.',
-        active: true,
-      },
-    ],
     languages: [
-      { _id: objectId(), name: 'English', code: 'en', active: 1, default_status: 1 },
-      { _id: objectId(), name: 'Hindi', code: 'hi', active: 1, default_status: 0 },
-      { _id: objectId(), name: 'Arabic', code: 'ar', active: 0, default_status: 0 },
+      { name: 'English', code: 'en', active: 1, default_status: 1 },
+      { name: 'Hindi', code: 'hi', active: 1, default_status: 0 },
+      { name: 'Arabic', code: 'ar', active: 0, default_status: 0 },
     ],
-    preferences: [
-      {
-        _id: objectId(),
-        name: 'Pet Friendly',
-        icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23EEF2FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">P</text></svg>',
-        active: 1,
-      },
-      {
-        _id: objectId(),
-        name: 'Extra Luggage',
-        icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23FEF3C7"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">L</text></svg>',
-        active: 1,
-      },
-    ],
-    roles: [
-      { _id: objectId(), name: 'Operations Manager', slug: 'operations-manager', description: 'Runs day to day dispatch and support.' },
-      { _id: objectId(), name: 'Finance Analyst', slug: 'finance-analyst', description: 'Monitors payouts and reconciliations.' },
+    rideModules: [
+      { transport_type: 'taxi' },
+      { transport_type: 'delivery' },
+      { transport_type: 'intercity' },
     ],
     appModules: [
       {
-        _id: objectId(),
         name: 'Taxi Service',
         transport_type: 'taxi',
         service_type: 'normal',
@@ -291,7 +111,6 @@ export const createDefaultAdminState = () => {
         mobile_menu_icon: 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg',
       },
       {
-        _id: objectId(),
         name: 'Parcel Delivery',
         transport_type: 'delivery',
         service_type: 'normal',
@@ -304,7 +123,6 @@ export const createDefaultAdminState = () => {
     ],
     notificationChannels: [
       {
-        _id: objectId(),
         name: 'Ride Assigned',
         topic_name: 'Ride Assigned',
         description: 'Notify when a ride gets assigned.',
@@ -313,7 +131,6 @@ export const createDefaultAdminState = () => {
         for_user: true,
       },
       {
-        _id: objectId(),
         name: 'Payout Settled',
         topic_name: 'Payout Settled',
         description: 'Notify driver after settlement.',
@@ -322,41 +139,53 @@ export const createDefaultAdminState = () => {
         for_user: false,
       },
     ],
-    paymentGateways: [
-      { _id: objectId(), name: 'Razorpay', slug: 'razorpay', active: true },
-      { _id: objectId(), name: 'Stripe', slug: 'stripe', active: true },
-      { _id: objectId(), name: 'PayPal', slug: 'paypal', active: false },
+    subscriptionPlans: [
+      {
+        name: 'Daily Sedan Booster',
+        description: 'Best for active city cab drivers.',
+        amount: 149,
+        duration: 1,
+        transport_type: 'taxi',
+        vehicle_type_id: sedanId,
+        service_location_id: indoreId,
+        how_it_works: 'Pay once per day and unlock lower commission.',
+        active: true,
+      },
+      {
+        name: 'Weekly Delivery Pro',
+        description: 'Built for mini-truck logistics partners.',
+        amount: 699,
+        duration: 7,
+        transport_type: 'delivery',
+        vehicle_type_id: miniTruckId,
+        service_location_id: delhiId,
+        how_it_works: 'Flat weekly pass for delivery operations.',
+        active: true,
+      },
     ],
-    paymentSettings: makeSettingRows(paymentSettingMap, 'payment'),
-    smsSettings: makeSettingRows(smsSettingMap, 'sms'),
-    firebaseSettings: {
-      firebase_database_url: 'https://appzeto-demo.firebaseio.com',
-      firebase_api_key: 'firebase-api-key-demo',
-      firebase_auth_domain: 'appzeto-demo.firebaseapp.com',
-      firebase_project_id: 'appzeto-demo',
-      firebase_storage_bucket: 'appzeto-demo.appspot.com',
-      firebase_messaging_sender_id: '123456789',
-      firebase_app_id: '1:123456789:web:demo',
-      firebase_json_name: 'firebase-admin-demo.json',
-    },
-    mapSettings: {
-      map_type: 'google_map',
-      google_map_key_for_web_apps: 'google-web-demo-key',
-      google_map_key_for_distance_matrix: 'google-distance-demo-key',
-    },
-    mailSettings: {
-      mail_driver: 'smtp',
-      mail_host: 'smtp.gmail.com',
-      mail_port: '587',
-      mail_username: 'noreply@appzeto.com',
-      mail_password: 'mail-password-demo',
-      mail_encryption: 'tls',
-      mail_from_address: 'noreply@appzeto.com',
-      mail_from_name: 'Appzeto Taxi',
-    },
+    preferences: [
+      {
+        name: 'Pet Friendly',
+        icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23EEF2FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">P</text></svg>',
+        active: 1,
+      },
+      {
+        name: 'Extra Luggage',
+        icon: 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23FEF3C7"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">L</text></svg>',
+        active: 1,
+      },
+    ],
+    roles: [
+      { name: 'Operations Manager', slug: 'operations-manager', description: 'Runs day to day dispatch and support.' },
+      { name: 'Finance Analyst', slug: 'finance-analyst', description: 'Monitors payouts and reconciliations.' },
+    ],
+    paymentGateways: [
+      { name: 'Razorpay', slug: 'razorpay', active: true },
+      { name: 'Stripe', slug: 'stripe', active: true },
+      { name: 'PayPal', slug: 'paypal', active: false },
+    ],
     onboardingScreens: [
       {
-        _id: objectId(),
         audience: 'user',
         screen: 'user',
         order: 1,
@@ -365,7 +194,6 @@ export const createDefaultAdminState = () => {
         active: true,
       },
       {
-        _id: objectId(),
         audience: 'driver',
         screen: 'driver',
         order: 1,
@@ -374,7 +202,6 @@ export const createDefaultAdminState = () => {
         active: true,
       },
       {
-        _id: objectId(),
         audience: 'owner',
         screen: 'owner',
         order: 1,

@@ -1,7 +1,8 @@
-﻿import React from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion as Motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Plus, Download, History, CreditCard, Gift, Send, QrCode } from 'lucide-react';
+import { userAuthService } from '../services/authService';
 
 const Wallet = () => {
   const navigate = useNavigate();
@@ -16,34 +17,102 @@ const Wallet = () => {
   const [isSending, setIsSending] = React.useState(false);
   const [isSuccess, setIsSuccess] = React.useState(false);
   const [isSendSuccess, setIsSendSuccess] = React.useState(false);
+  const [walletLoading, setWalletLoading] = React.useState(true);
+  const [walletError, setWalletError] = React.useState('');
+  const [wallet, setWallet] = React.useState({ balance: 0, currency: 'INR', recentTransactions: [] });
+
+  const basePath = useMemo(() => (window.location.pathname.startsWith('/taxi/user') ? '/taxi/user' : ''), []);
+
+  const formatInr = (value) => {
+    const amountValue = Number(value || 0);
+    const fixed = Math.round(amountValue * 100) / 100;
+    return fixed.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
+  const splitMoney = (formatted) => {
+    const [whole, decimals = '00'] = String(formatted).split('.');
+    return { whole, decimals: (decimals || '00').padEnd(2, '0').slice(0, 2) };
+  };
+
+  const balanceText = useMemo(() => splitMoney(formatInr(wallet.balance)), [wallet.balance]);
+
+  const refreshWallet = async () => {
+    setWalletError('');
+    setWalletLoading(true);
+    try {
+      const response = await userAuthService.getWallet();
+      const data = response?.data || {};
+      setWallet({
+        balance: Number(data.balance || 0),
+        currency: data.currency || 'INR',
+        recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+      });
+    } catch (err) {
+      setWalletError(err?.message || 'Failed to load wallet');
+    } finally {
+      setWalletLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshWallet();
+  }, []);
 
   const handleAddMoney = () => {
     if (!amount) return;
     setIsAdding(true);
-    setTimeout(() => {
-        setIsAdding(false);
+    setWalletError('');
+    userAuthService
+      .topupWallet(Number(amount))
+      .then((response) => {
+        const data = response?.data || {};
+        setWallet({
+          balance: Number(data.balance || 0),
+          currency: data.currency || 'INR',
+          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+        });
         setIsSuccess(true);
         setTimeout(() => {
-            setIsSuccess(false);
-            setShowAddMoney(false);
-            setAmount('');
-        }, 2000);
-    }, 1500);
+          setIsSuccess(false);
+          setShowAddMoney(false);
+          setAmount('');
+        }, 1400);
+      })
+      .catch((err) => {
+        setWalletError(err?.message || 'Topup failed');
+      })
+      .finally(() => {
+        setIsAdding(false);
+      });
   };
 
   const handleSend = () => {
     if (!sendAmount || !sendPhone) return;
     setIsSending(true);
-    setTimeout(() => {
-      setIsSending(false);
-      setIsSendSuccess(true);
-      setTimeout(() => {
-        setIsSendSuccess(false);
-        setShowSend(false);
-        setSendAmount('');
-        setSendPhone('');
-      }, 2000);
-    }, 1500);
+    setWalletError('');
+    userAuthService
+      .transferWallet(sendPhone, Number(sendAmount))
+      .then((response) => {
+        const data = response?.data || {};
+        setWallet({
+          balance: Number(data.balance || 0),
+          currency: data.currency || 'INR',
+          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+        });
+        setIsSendSuccess(true);
+        setTimeout(() => {
+          setIsSendSuccess(false);
+          setShowSend(false);
+          setSendAmount('');
+          setSendPhone('');
+        }, 1400);
+      })
+      .catch((err) => {
+        setWalletError(err?.message || 'Transfer failed');
+      })
+      .finally(() => {
+        setIsSending(false);
+      });
   };
 
   return (
@@ -55,7 +124,7 @@ const Wallet = () => {
       <AnimatePresence>
         {showAddMoney && (
           <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div 
+            <Motion.div 
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -74,7 +143,7 @@ const Wallet = () => {
               </div>
 
               {isSuccess ? (
-                <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center py-8 gap-4">
+                <Motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center py-8 gap-4">
                   <div className="w-20 h-20 bg-green-50 text-green-500 rounded-full flex items-center justify-center shadow-inner">
                     <History size={40} strokeWidth={3} />
                   </div>
@@ -82,11 +151,11 @@ const Wallet = () => {
                     <p className="text-lg font-black text-gray-900 leading-none">Wallet Refilled!</p>
                     <p className="text-[11px] font-bold text-gray-400 mt-2 uppercase tracking-widest">Balance updated successfully</p>
                   </div>
-                </motion.div>
+                </Motion.div>
               ) : (
                 <div className="space-y-8">
                   <div className="relative group">
-                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400 group-focus-within:text-orange-500 transition-colors">â‚¹</span>
+                    <span className="absolute left-6 top-1/2 -translate-y-1/2 text-2xl font-black text-gray-400 group-focus-within:text-orange-500 transition-colors">₹</span>
                     <input 
                        type="number"
                        value={amount}
@@ -105,7 +174,7 @@ const Wallet = () => {
                           amount === val ? 'bg-orange-500 border-orange-500 text-white shadow-lg shadow-orange-200' : 'bg-white border-gray-100 text-gray-500'
                         }`}
                       >
-                        +â‚¹{val}
+                        +₹{val}
                       </button>
                     ))}
                   </div>
@@ -123,7 +192,7 @@ const Wallet = () => {
                   </button>
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -132,7 +201,7 @@ const Wallet = () => {
       <AnimatePresence>
         {showSend && (
           <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div
+            <Motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -146,7 +215,7 @@ const Wallet = () => {
                 <p className="text-[12px] font-bold text-gray-400 tracking-widest uppercase">Transfer to a phone number</p>
               </div>
               {isSendSuccess ? (
-                <motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center py-8 gap-4">
+                <Motion.div initial={{ scale: 0.8 }} animate={{ scale: 1 }} className="flex flex-col items-center py-8 gap-4">
                   <div className="w-20 h-20 bg-blue-50 text-blue-500 rounded-full flex items-center justify-center shadow-inner">
                     <Send size={36} strokeWidth={2.5} />
                   </div>
@@ -154,7 +223,7 @@ const Wallet = () => {
                     <p className="text-lg font-black text-gray-900 leading-none">Money Sent!</p>
                     <p className="text-[11px] font-bold text-gray-400 mt-2 uppercase tracking-widest">Transfer successful</p>
                   </div>
-                </motion.div>
+                </Motion.div>
               ) : (
                 <div className="space-y-5">
                   <input
@@ -185,7 +254,7 @@ const Wallet = () => {
                   </button>
                 </div>
               )}
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -194,7 +263,7 @@ const Wallet = () => {
       <AnimatePresence>
         {showReceive && (
           <div className="fixed inset-0 z-[100] flex items-end justify-center bg-black/60 backdrop-blur-sm p-4">
-            <motion.div
+            <Motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
@@ -221,7 +290,7 @@ const Wallet = () => {
                   </button>
                 </div>
               </div>
-            </motion.div>
+            </Motion.div>
           </div>
         )}
       </AnimatePresence>
@@ -243,14 +312,14 @@ const Wallet = () => {
 
       {/* BALANCE CARD */}
       <div className="px-5 mt-4">
-        <motion.div 
+        <Motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
           whileHover={{ y: -2 }}
           transition={{ duration: 0.22, ease: 'easeOut' }}
           className="bg-gradient-to-br from-gray-900 to-gray-800 rounded-[36px] p-8 text-white shadow-2xl relative overflow-hidden group"
         >
-          <motion.div
+          <Motion.div
             aria-hidden="true"
             className="absolute inset-0 bg-[radial-gradient(260px_180px_at_20%_25%,rgba(249,115,22,0.18),transparent_60%)]"
             animate={{ opacity: [0.1, 0.22, 0.1], x: [0, 10, 0], y: [0, -6, 0] }}
@@ -261,18 +330,23 @@ const Wallet = () => {
           <div className="relative z-10 flex flex-col gap-8">
             <div className="space-y-1">
               <p className="text-white/30 font-black uppercase tracking-[0.2em] text-[8px]">Current Liquidity</p>
-              <motion.h2
+              <Motion.h2
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.35, ease: 'easeOut', delay: 0.05 }}
                 className="text-4xl font-black tracking-tighter"
               >
-                ₹1,250<span className="text-white/20 text-2xl">.00</span>
-              </motion.h2>
+                {walletLoading ? (
+                  <>₹0<span className="text-white/20 text-2xl">.00</span></>
+                ) : (
+                  <>₹{balanceText.whole}<span className="text-white/20 text-2xl">.{balanceText.decimals}</span></>
+                )}
+              </Motion.h2>
+              {walletError && <p className="text-[11px] font-bold text-red-300 mt-2">{walletError}</p>}
             </div>
             
             <div className="flex items-center gap-3">
-              <motion.button
+              <Motion.button
                 type="button"
                 onClick={() => setShowAddMoney(true)}
                 whileHover={{ scale: 1.01 }}
@@ -280,32 +354,32 @@ const Wallet = () => {
                 className="group/cta relative flex-1 bg-white/10 text-white h-14 rounded-2xl font-black text-[13px] uppercase tracking-widest flex items-center justify-center gap-2 border border-white/15 shadow-lg shadow-orange-500/10 overflow-hidden backdrop-blur-md"
               >
                 <span aria-hidden="true" className="absolute inset-0 bg-orange-500/55" />
-                <motion.span
+                <Motion.span
                   aria-hidden="true"
                   className="absolute -left-16 top-0 h-full w-24 bg-[linear-gradient(90deg,transparent,rgba(255,255,255,0.55),transparent)] opacity-60"
                   animate={{ x: [0, 320] }}
                   transition={{ duration: 2.8, repeat: Infinity, ease: 'easeInOut', repeatDelay: 1.2 }}
                 />
-                <motion.span aria-hidden="true" className="relative z-10" whileHover={{ y: -1 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
+                <Motion.span aria-hidden="true" className="relative z-10" whileHover={{ y: -1 }} transition={{ duration: 0.18, ease: 'easeOut' }}>
                   <Plus size={16} strokeWidth={3} />
-                </motion.span>
+                </Motion.span>
                 <span className="relative z-10">Refill</span>
-              </motion.button>
+              </Motion.button>
 
-              <motion.button
+              <Motion.button
                 type="button"
-                onClick={() => navigate('/activity')}
+                onClick={() => navigate(`${basePath}/activity`)}
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.96 }}
                 className="w-14 h-14 bg-white/10 border border-white/15 rounded-2xl flex items-center justify-center text-white shadow-sm backdrop-blur-md"
               >
-                <motion.span aria-hidden="true" whileHover={{ rotate: -12 }} transition={{ duration: 0.2, ease: 'easeOut' }}>
+                <Motion.span aria-hidden="true" whileHover={{ rotate: -12 }} transition={{ duration: 0.2, ease: 'easeOut' }}>
                   <History size={20} strokeWidth={2.5} />
-                </motion.span>
-              </motion.button>
+                </Motion.span>
+              </Motion.button>
             </div>
           </div>
-        </motion.div>
+        </Motion.div>
       </div>
 
       {/* QUICK ACTIONS */}
@@ -323,7 +397,7 @@ const Wallet = () => {
             <span className="text-[11px] font-black text-gray-700 uppercase tracking-widest">Receive</span>
          </div>
          <div 
-            onClick={() => navigate('/profile/payments')}
+            onClick={() => navigate(`${basePath}/profile/payments`)}
             className="bg-white border border-gray-100 rounded-[28px] p-5 flex flex-col items-center justify-center gap-3 shadow-sm cursor-pointer active:scale-95 transition-all hover:border-purple-100 group"
          >
             <div className="w-12 h-12 bg-purple-50 text-purple-600 rounded-2xl flex items-center justify-center group-hover:bg-purple-600 group-hover:text-white transition-colors shadow-sm">
@@ -336,14 +410,14 @@ const Wallet = () => {
       {/* PROMO */}
       <div className="px-5 mt-8">
          <div 
-            onClick={() => navigate('/referral')}
+            onClick={() => navigate(`${basePath}/referral`)}
             className="bg-gradient-to-r from-orange-50 to-white border border-orange-100 rounded-[32px] p-6 flex items-center gap-5 cursor-pointer active:scale-98 transition-all shadow-sm group"
          >
             <div className="w-14 h-14 bg-white rounded-2xl flex items-center justify-center text-orange-500 shadow-xl shadow-orange-100 group-hover:bg-orange-500 group-hover:text-white transition-all shrink-0 border border-orange-50">
                <Gift size={24} strokeWidth={2.5} />
             </div>
             <div className="flex-1">
-               <h4 className="text-[15px] font-black text-gray-900 tracking-tight">Refer & Earn â‚¹50</h4>
+               <h4 className="text-[15px] font-black text-gray-900 tracking-tight">Refer & Earn ₹50</h4>
                <p className="text-[11px] font-bold text-gray-400 mt-0.5 uppercase tracking-wider">Invite friends to Rydon24</p>
             </div>
             <ArrowLeft size={20} className="text-orange-200 rotate-180 group-hover:text-orange-500 transition-colors" />
@@ -354,45 +428,48 @@ const Wallet = () => {
       <div className="px-5 mt-10">
          <div className="flex items-center justify-between mb-6 px-1">
             <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest leading-none">History Log</h3>
-            <button onClick={() => navigate('/activity')} className="text-[10px] font-black text-orange-500 uppercase tracking-wider">View All</button>
+            <button onClick={() => navigate(`${basePath}/activity`)} className="text-[10px] font-black text-orange-500 uppercase tracking-wider">View All</button>
          </div>
          <div className="bg-white rounded-[36px] border border-gray-50 shadow-sm p-3 flex flex-col gap-2">
-            <div 
-                onClick={() => navigate('/ride/detail/8231')}
-                className="flex items-center gap-4 p-4 rounded-[28px] hover:bg-gray-50 cursor-pointer transition-all active:scale-[0.99] group"
-            >
-               <div className="w-12 h-12 rounded-2xl bg-red-50 text-red-500 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                  <ArrowLeft size={20} strokeWidth={3} className="rotate-45" />
-               </div>
-               <div className="flex-1 min-w-0">
-                  <h4 className="text-[15px] font-black text-gray-900 truncate tracking-tight">Ride to Airport</h4>
-                  <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Today, 10:24 AM</p>
-               </div>
-               <div className="text-right shrink-0">
-                  <h4 className="text-[16px] font-black text-gray-900 tracking-tight">-â‚¹450</h4>
-                  <div className="flex items-center gap-1 justify-end mt-0.5">
-                     <span className="text-[8px] font-black text-red-400 uppercase tracking-widest">Debit</span>
-                     <div className="w-1.5 h-1.5 bg-red-400 rounded-full"></div>
+            {walletLoading ? (
+              <div className="p-6 text-center text-[12px] font-bold text-gray-400">Loading...</div>
+            ) : wallet.recentTransactions?.length ? (
+              wallet.recentTransactions.map((tx) => {
+                const isDebit = tx.kind === 'debit';
+                const title = tx.title || (isDebit ? 'Debit' : 'Credit');
+                const sign = isDebit ? '-' : '+';
+                const amountText = formatInr(tx.amount);
+                const whenText = tx.createdAt ? new Date(tx.createdAt).toLocaleString('en-IN') : '';
+                return (
+                  <div key={tx.id} className="flex items-center gap-4 p-4 rounded-[28px] hover:bg-gray-50 transition-all active:scale-[0.99] group">
+                    <div
+                      className={`w-12 h-12 rounded-2xl flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform ${
+                        isDebit ? 'bg-red-50 text-red-500' : 'bg-emerald-50 text-emerald-500'
+                      }`}
+                    >
+                      {isDebit ? <ArrowLeft size={20} strokeWidth={3} className="rotate-45" /> : <Plus size={20} strokeWidth={3} />}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-[15px] font-black text-gray-900 truncate tracking-tight">{title}</h4>
+                      <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">{whenText}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <h4 className={`text-[16px] font-black tracking-tight ${isDebit ? 'text-gray-900' : 'text-emerald-600'}`}>
+                        {sign}₹{amountText}
+                      </h4>
+                      <div className="flex items-center gap-1 justify-end mt-0.5">
+                        <span className={`text-[8px] font-black uppercase tracking-widest ${isDebit ? 'text-red-400' : 'text-emerald-400'}`}>
+                          {isDebit ? 'Debit' : 'Credit'}
+                        </span>
+                        <div className={`w-1.5 h-1.5 rounded-full ${isDebit ? 'bg-red-400' : 'bg-emerald-400'}`}></div>
+                      </div>
+                    </div>
                   </div>
-               </div>
-            </div>
-
-            <div className="flex items-center gap-4 p-4 rounded-[28px] hover:bg-gray-50 cursor-pointer transition-all active:scale-[0.99] group">
-               <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-500 flex items-center justify-center shrink-0 shadow-sm group-hover:scale-105 transition-transform">
-                  <Plus size={20} strokeWidth={3} />
-               </div>
-               <div className="flex-1 min-w-0">
-                  <h4 className="text-[15px] font-black text-gray-900 truncate tracking-tight">Wallet Refilled</h4>
-                  <p className="text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Yesterday, 04:12 PM</p>
-               </div>
-               <div className="text-right shrink-0">
-                  <h4 className="text-[16px] font-black text-emerald-600 tracking-tight">+â‚¹1,000</h4>
-                  <div className="flex items-center gap-1 justify-end mt-0.5">
-                     <span className="text-[8px] font-black text-emerald-400 uppercase tracking-widest">Credit</span>
-                     <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full"></div>
-                  </div>
-               </div>
-            </div>
+                );
+              })
+            ) : (
+              <div className="p-6 text-center text-[12px] font-bold text-gray-400">No transactions yet</div>
+            )}
          </div>
       </div>
     </div>

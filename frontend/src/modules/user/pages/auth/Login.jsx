@@ -3,12 +3,12 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import AuthLayout from '../../components/AuthLayout';
 import { ChevronDown, Phone } from 'lucide-react';
-
-const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
+import { userAuthService } from '../../services/authService';
 
 const Login = () => {
   const [phoneNumber, setPhoneNumber] = useState('');
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
   const navigate = useNavigate();
 
   const isValidPhone = phoneNumber.length === 10 && /^\d+$/.test(phoneNumber);
@@ -18,15 +18,22 @@ const Login = () => {
     if (!isValidPhone) return;
 
     setLoading(true);
-    setTimeout(() => {
+    setError('');
+
+    try {
+      const response = await userAuthService.startOtp(phoneNumber);
+      const payload = response?.data || {};
       setLoading(false);
       navigate('/taxi/user/verify-otp', {
         state: {
           phone: phoneNumber,
-          otp: generateOtp(),
+          debugOtp: payload.session?.debugOtp || '',
         },
       });
-    }, 1500);
+    } catch (err) {
+      setError(err?.message || 'Unable to send OTP. Please try again.');
+      setLoading(false);
+    }
   };
 
   return (
@@ -79,6 +86,10 @@ const Login = () => {
             <span>Continue</span>
           )}
         </motion.button>
+
+        {error && (
+          <p className="text-sm font-bold text-red-500 text-center">{error}</p>
+        )}
 
         <p className="text-[12px] text-gray-400 font-bold text-center leading-relaxed px-2 mt-8">
            By continuing, you agree to our 

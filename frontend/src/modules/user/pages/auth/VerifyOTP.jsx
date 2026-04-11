@@ -5,20 +5,23 @@ import AuthLayout from '../../components/AuthLayout';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { userAuthService } from '../../services/authService';
 
-const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 const unwrap = (response) => response?.data?.data || response?.data || response;
 
 const VerifyOTP = () => {
   const location = useLocation();
   const phone = location.state?.phone || '88XXXXXX88';
-  const [generatedOtp] = useState(() => String(location.state?.otp || generateOtp()));
-  const [otp, setOtp] = useState(() => generatedOtp.split(''));
+  const [debugOtp, setDebugOtp] = useState(() => String(location.state?.debugOtp || ''));
+  const [otp, setOtp] = useState(() => {
+    const initialOtp = String(location.state?.debugOtp || '');
+    return /^\d{4}$/.test(initialOtp) ? initialOtp.split('') : ['', '', '', ''];
+  });
   const [timer, setTimer] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const inputs = useRef([]);
-  
+
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -37,17 +40,17 @@ const VerifyOTP = () => {
     newOtp[index] = value.substring(value.length - 1);
     setOtp(newOtp);
 
-    // Auto move to next input
     if (value && index < 3) {
-      inputs.current[index + 1].focus();
+      inputs.current[index + 1]?.focus();
     }
-    
+
     setError(false);
+    setErrorMessage('');
   };
 
   const handleKeyDown = (index, e) => {
     if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      inputs.current[index - 1].focus();
+      inputs.current[index - 1]?.focus();
     }
   };
 
@@ -55,14 +58,14 @@ const VerifyOTP = () => {
     e.preventDefault();
     const data = e.clipboardData.getData('text').slice(0, 4);
     if (!/^\d+$/.test(data)) return;
-    
+
     const newOtp = [...otp];
     data.split('').forEach((char, i) => {
       newOtp[i] = char;
       if (inputs.current[i]) inputs.current[i].value = char;
     });
     setOtp(newOtp);
-    if (data.length === 4) inputs.current[3].focus();
+    if (data.length === 4) inputs.current[3]?.focus();
   };
 
   const handleVerify = async () => {
@@ -70,45 +73,74 @@ const VerifyOTP = () => {
     if (fullOtp.length < 4) return;
 
     setLoading(true);
-    setTimeout(async () => {
-      if (fullOtp !== generatedOtp) {
-        setLoading(false);
-        setError(true);
-        setOtp(generatedOtp.split(''));
-        inputs.current[0]?.focus();
+    setError(false);
+    setErrorMessage('');
+
+    try {
+      const response = await userAuthService.verifyOtp(phone, fullOtp);
+      const payload = unwrap(response);
+
+      setSuccess(true);
+
+      if (payload.exists) {
+        localStorage.setItem('token', payload.token || '');
+        localStorage.setItem('userToken', payload.token || '');
+        localStorage.setItem('role', 'user');
+        localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
+        setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
         return;
       }
 
-      try {
-        const response = await userAuthService.verifyOtpLogin(phone);
-        const payload = unwrap(response);
+      const loginResponse = await userAuthService.verifyOtpLogin(phone);
+      const loginPayload = unwrap(loginResponse);
 
-        setSuccess(true);
-
-        if (payload.exists) {
-          localStorage.setItem('token', payload.token || '');
-          localStorage.setItem('userToken', payload.token || '');
-          localStorage.setItem('role', 'user');
-          localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
-          setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
-        } else {
-          setTimeout(() => navigate('/taxi/user/signup', { state: { phone } }), 1200);
-        }
-      } catch (err) {
-        setError(true);
-        setOtp(generatedOtp.split(''));
-        inputs.current[0]?.focus();
-      } finally {
-        setLoading(false);
+      if (loginPayload.exists && loginPayload.token) {
+        localStorage.setItem('token', loginPayload.token || '');
+        localStorage.setItem('userToken', loginPayload.token || '');
+        localStorage.setItem('role', 'user');
+        localStorage.setItem('userInfo', JSON.stringify(loginPayload.user || {}));
+        setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
+        return;
       }
-    }, 900);
+
+      setTimeout(() => navigate('/taxi/user/signup', { state: { phone, otpVerified: true } }), 1200);
+    } catch (err) {
+      setError(true);
+      setErrorMessage(err?.message || 'The OTP you entered is incorrect. Please try again.');
+      setOtp(debugOtp && /^\d{4}$/.test(debugOtp) ? debugOtp.split('') : ['', '', '', '']);
+      inputs.current[0]?.focus();
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const isFilled = otp.every(digit => digit !== '');
+  const handleResend = async () => {
+    if (timer > 0 || loading) return;
+
+    setLoading(true);
+    setError(false);
+    setErrorMessage('');
+
+    try {
+      const response = await userAuthService.startOtp(phone);
+      const payload = unwrap(response);
+      const nextDebugOtp = String(payload.session?.debugOtp || '');
+      setDebugOtp(nextDebugOtp);
+      setOtp(/^\d{4}$/.test(nextDebugOtp) ? nextDebugOtp.split('') : ['', '', '', '']);
+      setTimer(30);
+    } catch (err) {
+      setError(true);
+      setErrorMessage(err?.message || 'Unable to resend OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const isFilled = otp.every((digit) => digit !== '');
 
   return (
-    <AuthLayout 
-      title="Verify your number" 
+    <AuthLayout
+      title="Verify your number"
       subtitle={`Enter the 4-digit code sent to +91 ${phone}`}
     >
       <div className="absolute top-8 left-8 md:top-10 md:left-10 lg:hidden">
@@ -122,7 +154,9 @@ const VerifyOTP = () => {
           {otp.map((digit, index) => (
             <motion.input
               key={index}
-              ref={el => inputs.current[index] = el}
+              ref={(el) => {
+                inputs.current[index] = el;
+              }}
               type="tel"
               maxLength={1}
               value={digit}
@@ -144,8 +178,8 @@ const VerifyOTP = () => {
               Resend OTP in <span className="text-primary">{timer}s</span>
             </p>
           ) : (
-            <button 
-              onClick={() => setTimer(30)}
+            <button
+              onClick={handleResend}
               className="text-primary text-sm font-black hover:text-orange-700 underline underline-offset-4 decoration-2 tracking-widest uppercase transition-all"
             >
               Resend OTP
@@ -155,34 +189,35 @@ const VerifyOTP = () => {
 
         <AnimatePresence>
           {error && (
-            <motion.p 
+            <motion.p
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0 }}
               className="text-red-500 text-center font-bold text-sm"
             >
-              The OTP you entered is incorrect. Please try again. (Hint: 1234)
+              {errorMessage || 'The OTP you entered is incorrect. Please try again.'}
             </motion.p>
           )}
         </AnimatePresence>
 
-        <motion.button 
+        <motion.button
           whileTap={{ scale: 0.98 }}
           onClick={handleVerify}
           disabled={!isFilled || loading || success}
           className={`w-full py-4 rounded-full text-lg font-black shadow-lg transition-all flex items-center justify-center gap-3 ${
             isFilled && !loading && !success
-            ? 'bg-gradient-to-r from-[#E85D04] to-[#F48C06] text-white' 
-            : success ? 'bg-green-500 text-white shadow-green-100'
-            : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+              ? 'bg-gradient-to-r from-[#E85D04] to-[#F48C06] text-white'
+              : success
+                ? 'bg-green-500 text-white shadow-green-100'
+                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
           }`}
         >
           {loading ? (
             <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span>
           ) : success ? (
             <div className="flex items-center gap-2">
-               <CheckCircle2 size={24} />
-               <span>Verified Successfully</span>
+              <CheckCircle2 size={24} />
+              <span>Verified Successfully</span>
             </div>
           ) : (
             <span>Verify & Proceed</span>

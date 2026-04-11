@@ -22,6 +22,7 @@ const Profile = () => {
   const [profile, setProfile] = useState({
     name: '',
     phone: '',
+    profileImage: '',
   });
 
   useEffect(() => {
@@ -34,6 +35,7 @@ const Profile = () => {
     setProfile({
       name: stored?.name || '',
       phone: stored?.phone || '',
+      profileImage: stored?.profileImage || '',
     });
 
     const loadProfile = async () => {
@@ -43,6 +45,7 @@ const Profile = () => {
         setProfile({
           name: user.name || stored?.name || '',
           phone: user.phone || stored?.phone || '',
+          profileImage: user.profileImage || stored?.profileImage || '',
         });
         localStorage.setItem('userInfo', JSON.stringify(user));
       } catch (error) {
@@ -88,7 +91,11 @@ const Profile = () => {
           className="rounded-[22px] border border-white/80 bg-white/90 shadow-[0_8px_24px_rgba(15,23,42,0.06)] px-4 py-4 flex items-center gap-4">
           <div className="relative shrink-0">
             <div className="w-14 h-14 rounded-[18px] bg-orange-500 flex items-center justify-center shadow-[0_6px_16px_rgba(249,115,22,0.25)]">
-              <span className="text-[18px] font-black text-white">{initials || 'U'}</span>
+              {profile.profileImage ? (
+                <img src={profile.profileImage} alt="User" className="w-full h-full object-cover rounded-[18px]" />
+              ) : (
+                <span className="text-[18px] font-black text-white">{initials || 'U'}</span>
+              )}
             </div>
             <div className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 bg-emerald-500 rounded-full border-2 border-white" />
           </div>

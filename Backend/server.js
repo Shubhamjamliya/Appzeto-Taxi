@@ -3,11 +3,11 @@ import { createApp } from './src/app.js';
 import { connectDatabase } from './src/config/database.js';
 import { env } from './src/config/env.js';
 import { configureTaxiSocketServer } from './src/modules/taxi/socket/index.js';
-import { ensureDefaultUserSeeded } from './src/modules/taxi/user/services/userSeedService.js';
+import { User } from './src/modules/taxi/user/models/User.js';
 
 const bootstrap = async () => {
   await connectDatabase();
-  await ensureDefaultUserSeeded();
+  await User.deleteOne({ phone: '9998887776', name: 'Demo User' });
 
   const app = createApp();
   const httpServer = createServer(app);

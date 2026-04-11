@@ -5,16 +5,18 @@ import AuthLayout from '../../components/AuthLayout';
 import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { userAuthService } from '../../services/authService';
 
-const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
-
 const VerifyOTP = () => {
   const location = useLocation();
   const phone = location.state?.phone || '88XXXXXX88';
-  const [generatedOtp] = useState(() => String(location.state?.otp || generateOtp()));
-  const [otp, setOtp] = useState(() => generatedOtp.split(''));
+  const [debugOtp, setDebugOtp] = useState(() => String(location.state?.debugOtp || ''));
+  const [otp, setOtp] = useState(() => {
+    const initialOtp = String(location.state?.debugOtp || '');
+    return /^\d{4}$/.test(initialOtp) ? initialOtp.split('') : ['', '', '', ''];
+  });
   const [timer, setTimer] = useState(30);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
   const [success, setSuccess] = useState(false);
   const inputs = useRef([]);
   
@@ -42,6 +44,7 @@ const VerifyOTP = () => {
     }
     
     setError(false);
+    setErrorMessage('');
   };
 
   const handleKeyDown = (index, e) => {
@@ -69,38 +72,54 @@ const VerifyOTP = () => {
     if (fullOtp.length < 4) return;
 
     setLoading(true);
-    setTimeout(async () => {
-      if (fullOtp !== generatedOtp) {
-        setLoading(false);
-        setError(true);
-        setOtp(generatedOtp.split(''));
-        inputs.current[0]?.focus();
-        return;
+    setError(false);
+    setErrorMessage('');
+
+    try {
+      const response = await userAuthService.verifyOtp(phone, fullOtp);
+      const payload = response?.data || {};
+
+      setSuccess(true);
+
+      if (payload.exists) {
+        localStorage.setItem('token', payload.token || '');
+        localStorage.setItem('userToken', payload.token || '');
+        localStorage.setItem('role', 'user');
+        localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
+        setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
+      } else {
+        setTimeout(() => navigate('/taxi/user/signup', { state: { phone, otpVerified: true } }), 1200);
       }
+    } catch (err) {
+      setError(true);
+      setErrorMessage(err?.message || 'The OTP you entered is incorrect. Please try again.');
+      setOtp(debugOtp && /^\d{4}$/.test(debugOtp) ? debugOtp.split('') : ['', '', '', '']);
+      inputs.current[0]?.focus();
+    } finally {
+      setLoading(false);
+    }
+  };
 
-      try {
-        const response = await userAuthService.verifyOtpLogin(phone);
-        const payload = response?.data || {};
+  const handleResend = async () => {
+    if (timer > 0 || loading) return;
 
-        setSuccess(true);
+    setLoading(true);
+    setError(false);
+    setErrorMessage('');
 
-        if (payload.exists) {
-          localStorage.setItem('token', payload.token || '');
-          localStorage.setItem('userToken', payload.token || '');
-          localStorage.setItem('role', 'user');
-          localStorage.setItem('userInfo', JSON.stringify(payload.user || {}));
-          setTimeout(() => navigate('/taxi/user', { replace: true }), 1200);
-        } else {
-          setTimeout(() => navigate('/taxi/user/signup', { state: { phone } }), 1200);
-        }
-      } catch (err) {
-        setError(true);
-        setOtp(generatedOtp.split(''));
-        inputs.current[0]?.focus();
-      } finally {
-        setLoading(false);
-      }
-    }, 900);
+    try {
+      const response = await userAuthService.startOtp(phone);
+      const payload = response?.data || {};
+      const nextDebugOtp = String(payload.session?.debugOtp || '');
+      setDebugOtp(nextDebugOtp);
+      setOtp(/^\d{4}$/.test(nextDebugOtp) ? nextDebugOtp.split('') : ['', '', '', '']);
+      setTimer(30);
+    } catch (err) {
+      setError(true);
+      setErrorMessage(err?.message || 'Unable to resend OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const isFilled = otp.every(digit => digit !== '');
@@ -144,7 +163,7 @@ const VerifyOTP = () => {
             </p>
           ) : (
             <button 
-              onClick={() => setTimer(30)}
+              onClick={handleResend}
               className="text-primary text-sm font-black hover:text-orange-700 underline underline-offset-4 decoration-2 tracking-widest uppercase transition-all"
             >
               Resend OTP
@@ -160,7 +179,7 @@ const VerifyOTP = () => {
               exit={{ opacity: 0 }}
               className="text-red-500 text-center font-bold text-sm"
             >
-              The OTP you entered is incorrect. Please try again. (Hint: 1234)
+              {errorMessage || 'The OTP you entered is incorrect. Please try again.'}
             </motion.p>
           )}
         </AnimatePresence>

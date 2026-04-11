@@ -57,6 +57,7 @@ import {
   getOwners,
   getOwnerOnboarding,
   getOwnerBookings,
+  getOwnerDashboardData,
   getOwnerNeededDocuments,
   getPaymentGateways,
   getPaymentSettings,
@@ -175,6 +176,7 @@ adminRouter.post('/admin/owner-management/manage-owners', createOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
+adminRouter.get('/admin/owner-management/dashboard', getOwnerDashboardData);
 adminRouter.get('/admin/owner-management/bookings', getOwnerBookings);
 adminRouter.post('/admin/owner-management/bookings', createOwnerBooking);
 adminRouter.patch('/admin/owner-management/bookings/:id', updateOwnerBooking);

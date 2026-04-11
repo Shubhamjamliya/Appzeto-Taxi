@@ -166,6 +166,9 @@ export const deleteOwnerBooking = asyncHandler(async (req, res) => {
 export const getDashboardData = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getDashboardData()),
 );
+export const getOwnerDashboardData = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.getOwnerDashboardData()),
+);
 export const getOverallEarnings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getOverallEarnings()),
 );

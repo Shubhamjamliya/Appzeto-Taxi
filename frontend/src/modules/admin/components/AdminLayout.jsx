@@ -88,7 +88,7 @@ const SidebarItem = ({ icon, label, path, isCollapsed }) => (
     }
   >
     {React.createElement(icon, { size: 18, className: 'shrink-0' })}
-    {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
+    {!isCollapsed && <span className="text-[14px] font-bold tracking-tight">{label}</span>}
   </NavLink>
 );
 
@@ -111,7 +111,7 @@ const SidebarGroup = ({ icon, label, subItems, isCollapsed, pathname, forceOpen 
             size: 18,
             className: `shrink-0 ${isActive || isExpanded ? 'text-indigo-400' : ''}`,
           })}
-          {!isCollapsed && <span className="text-[13px] font-medium tracking-tight">{label}</span>}
+          {!isCollapsed && <span className="text-[14px] font-bold tracking-tight">{label}</span>}
         </div>
         {!isCollapsed && (
           <ChevronRight size={14} className={`transition-transform duration-200 ${isExpanded ? 'rotate-90' : ''}`} />
@@ -578,18 +578,23 @@ const AdminLayout = () => {
             <button
               type="button"
               onClick={() => setCollapsed((current) => !current)}
-              className="absolute -right-4 top-10 z-50 hidden h-8 w-8 items-center justify-center rounded-full border border-white/10 bg-[#2563EB] text-white shadow-lg shadow-blue-900/30 ring-4 ring-[#0F172A] transition-all hover:scale-110 active:scale-95 lg:flex"
+              className="absolute -right-3 top-9 z-[60] hidden h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-800 shadow-lg ring-4 ring-[#0F172A] transition-all hover:bg-indigo-600 hover:text-white hover:border-indigo-500 hover:scale-110 active:scale-90 lg:flex group/collapse"
             >
-              {isCollapsed ? <ChevronRight size={14} strokeWidth={3} /> : <ChevronLeft size={14} strokeWidth={3} />}
+              {isCollapsed ? (
+                <ChevronRight size={12} strokeWidth={3.5} className="transition-transform group-hover/collapse:translate-x-0.5" />
+              ) : (
+                <ChevronLeft size={12} strokeWidth={3.5} className="transition-transform group-hover/collapse:-translate-x-0.5" />
+              )}
             </button>
           </div>
 
-          <nav className="no-scrollbar mt-6 flex-1 space-y-8 overflow-y-auto px-4 pb-12 scroll-smooth">
+          <nav className="no-scrollbar mt-0 flex-1 space-y-8 overflow-y-auto px-4 pb-12 scroll-smooth">
             {sidebarSections.map((section) => (
               <div key={section.title} className="space-y-1">
                 {!isCollapsed && (
-                  <div className="px-4 mb-2">
-                    <span className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
+                  <div className="px-4 mb-4 flex items-center gap-2">
+                    <div className="h-3 w-1 rounded-full bg-white" />
+                    <span className="text-[12px] font-black uppercase tracking-widest text-white/90">
                       {section.title}
                     </span>
                   </div>

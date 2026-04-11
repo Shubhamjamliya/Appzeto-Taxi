@@ -87,11 +87,12 @@ const userSchema = new mongoose.Schema(
       type: String,
       default: '',
       trim: true,
+      lowercase: true,
     },
     password: {
       type: String,
       required: true,
-      minlength: 6,
+      minlength: 5,
       select: false,
     },
     profileImage: {

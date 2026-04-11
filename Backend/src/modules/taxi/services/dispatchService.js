@@ -1,5 +1,6 @@
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
+import { Driver } from '../driver/models/Driver.js';
 import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
@@ -13,8 +14,8 @@ import { SOCKET_EVENTS } from '../socket/events.js';
 const activeDispatches = new Map();
 let ioInstance = null;
 
-const getUserRoom = (userId) => `user:${userId}`;
-const getDriverRoom = (driverId) => `driver:${driverId}`;
+export const getUserRoom = (userId) => `user:${userId}`;
+export const getDriverRoom = (driverId) => `driver:${driverId}`;
 
 export const setSocketServer = (io) => {
   ioInstance = io;
@@ -95,6 +96,51 @@ const closeRideAsUnmatched = async (rideId) => {
     status: ride.status,
     liveStatus: ride.liveStatus,
   });
+};
+
+export const cancelRideByAdmin = async (rideId) => {
+  stopDispatchFlow(rideId);
+
+  const ride = await Ride.findById(rideId);
+
+  if (!ride) {
+    return null;
+  }
+
+  ride.status = RIDE_STATUS.CANCELLED;
+  ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
+  await ride.save();
+
+  await Promise.all([
+    User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
+    ride.driverId ? Driver.findByIdAndUpdate(ride.driverId, { isOnRide: false }) : Promise.resolve(),
+  ]);
+
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+    rideId: String(ride._id),
+    room: getRideRoom(ride._id),
+    reason: 'Ride was deleted by admin',
+  });
+
+  if (ride.driverId) {
+    emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
+      rideId: String(ride._id),
+      reason: 'deleted-by-admin',
+    });
+  }
+
+  emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
+    rideId: String(ride._id),
+    reason: 'deleted-by-admin',
+  });
+
+  emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
+    rideId: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+  });
+
+  return ride;
 };
 
 const scheduleNextAttempt = (rideId, nextRadiusIndex) => {

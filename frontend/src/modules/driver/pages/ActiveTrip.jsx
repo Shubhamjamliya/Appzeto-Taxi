@@ -23,6 +23,7 @@ import {
 import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
+import { socketService } from '../../../shared/api/socket';
 
 const MAP_CONTAINER_STYLE = {
     width: '100%',
@@ -73,6 +74,21 @@ const formatAddressFromPoint = (point, fallback) => {
     return fallback;
 };
 
+const buildFallbackRoute = (origin, destination) => [origin, destination];
+
+const getCurrentCoords = () => new Promise((resolve, reject) => {
+    if (!navigator.geolocation) {
+        reject(new Error('Location is not available on this device.'));
+        return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+        (pos) => resolve({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+        () => reject(new Error('Please allow location permission to continue tracking.')),
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+    );
+});
+
 const ActiveTrip = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -81,6 +97,7 @@ const ActiveTrip = () => {
     const isParcel = tripType === 'parcel';
     const liveRequest = location.state?.request || {};
     const liveRaw = liveRequest.raw || {};
+    const rideId = liveRequest?.rideId || location.state?.rideId || '';
 
     const pickupCoords = liveRaw.pickupLocation?.coordinates || location.state?.pickupCoords || DEFAULT_DRIVER_COORDS;
     const dropCoords = liveRaw.dropLocation?.coordinates || location.state?.dropCoords || [75.8937, 22.7533];
@@ -105,12 +122,11 @@ const ActiveTrip = () => {
     const [selectedPaymentMode, setSelectedPaymentMode] = useState('');
     const [map, setMap] = useState(null);
     const [driverPosition, setDriverPosition] = useState(initialDriverPosition);
-    const { isLoaded } = useAppGoogleMapsLoader();
+    const [routePath, setRoutePath] = useState([]);
+    const [routeError, setRouteError] = useState('');
+    const { isLoaded, loadError } = useAppGoogleMapsLoader();
 
     const activeDestination = phase === 'to_pickup' || phase === 'otp_verification' ? pickupPosition : dropPosition;
-    const routePath = phase === 'to_pickup' || phase === 'otp_verification'
-        ? [driverPosition, pickupPosition]
-        : [driverPosition, dropPosition];
 
     const tripData = isParcel ? {
         sender: { name: 'Hritik Raghuwanshi', rating: '5.0', phone: '+91 96913 2XXXX' },
@@ -129,9 +145,133 @@ const ActiveTrip = () => {
 
     const displayFare = liveRequest?.fare || tripData.fare;
 
+    const publishRideStatus = (nextStatus) => {
+        if (!rideId) {
+            return;
+        }
+
+        socketService.emit('ride:status:update', { rideId, status: nextStatus });
+    };
+
     useEffect(() => {
         setDriverPosition(initialDriverPosition);
     }, [initialDriverPosition]);
+
+    useEffect(() => {
+        let watchId = null;
+        let cancelled = false;
+        const socket = socketService.connect({ role: 'driver' });
+
+        if (socket && rideId) {
+            socketService.emit('ride:join', { rideId });
+        }
+
+        getCurrentCoords()
+            .then((position) => {
+                if (!cancelled) {
+                    setDriverPosition(position);
+                    if (rideId) {
+                        socketService.emit('ride:driver-location:update', {
+                            rideId,
+                            coordinates: [position.lng, position.lat],
+                        });
+                    }
+                }
+            })
+            .catch(() => {});
+
+        if (!navigator.geolocation) {
+            return () => {
+                cancelled = true;
+            };
+        }
+
+        watchId = navigator.geolocation.watchPosition(
+            (pos) => {
+                if (cancelled) {
+                    return;
+                }
+
+                const nextPosition = {
+                    lat: pos.coords.latitude,
+                    lng: pos.coords.longitude,
+                };
+
+                setDriverPosition(nextPosition);
+
+                if (rideId) {
+                    socketService.emit('ride:driver-location:update', {
+                        rideId,
+                        coordinates: [nextPosition.lng, nextPosition.lat],
+                        heading: pos.coords.heading,
+                        speed: pos.coords.speed,
+                    });
+                }
+            },
+            () => {},
+            {
+                enableHighAccuracy: true,
+                maximumAge: 5000,
+                timeout: 15000,
+            },
+        );
+
+        return () => {
+            cancelled = true;
+            if (watchId !== null) {
+                navigator.geolocation.clearWatch(watchId);
+            }
+        };
+    }, [rideId]);
+
+    useEffect(() => {
+        if (!isLoaded || !window.google?.maps?.DirectionsService) {
+            setRoutePath(buildFallbackRoute(driverPosition, activeDestination));
+            setRouteError('');
+            return;
+        }
+
+        if (arePositionsNearlyEqual(driverPosition, activeDestination)) {
+            setRoutePath([driverPosition]);
+            setRouteError('');
+            return;
+        }
+
+        let active = true;
+        const directionsService = new window.google.maps.DirectionsService();
+
+        directionsService.route(
+            {
+                origin: driverPosition,
+                destination: activeDestination,
+                travelMode: window.google.maps.TravelMode.DRIVING,
+                provideRouteAlternatives: false,
+            },
+            (result, status) => {
+                if (!active) {
+                    return;
+                }
+
+                if (status === 'OK' && result?.routes?.[0]?.overview_path?.length) {
+                    setRoutePath(
+                        result.routes[0].overview_path.map((point) => ({
+                            lat: point.lat(),
+                            lng: point.lng(),
+                        })),
+                    );
+                    setRouteError('');
+                    return;
+                }
+
+                setRoutePath(buildFallbackRoute(driverPosition, activeDestination));
+                setRouteError(status || 'Directions unavailable');
+            },
+        );
+
+        return () => {
+            active = false;
+        };
+    }, [activeDestination, driverPosition, isLoaded]);
 
     useEffect(() => {
         if (!map || !window.google?.maps) {
@@ -145,10 +285,17 @@ const ActiveTrip = () => {
         }
 
         const bounds = new window.google.maps.LatLngBounds();
+
+        if (routePath.length > 1) {
+            routePath.forEach((point) => bounds.extend(point));
+            map.fitBounds(bounds, 72);
+            return;
+        }
+
         bounds.extend(driverPosition);
         bounds.extend(activeDestination);
         map.fitBounds(bounds, 80);
-    }, [activeDestination, driverPosition, map]);
+    }, [activeDestination, driverPosition, map, routePath]);
 
     const handleOTPChange = (index, value) => {
         if (!/^\d*$/.test(value)) return;
@@ -167,6 +314,7 @@ const ActiveTrip = () => {
             setTimeout(() => {
                 setPhase('in_trip');
                 setDriverPosition(dropPosition);
+                publishRideStatus('started');
             }, 500);
         }
     };
@@ -174,17 +322,32 @@ const ActiveTrip = () => {
     const mapOptions = useMemo(() => ({
         styles: mapStyles,
         disableDefaultUI: true,
-        zoomControl: false,
+        zoomControl: true,
         clickableIcons: false,
         streetViewControl: false,
         fullscreenControl: false,
+        mapTypeControl: false,
         gestureHandling: 'greedy',
     }), []);
 
     return (
         <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-hidden relative">
-            <div className="absolute inset-0 z-0 h-[60vh] overflow-hidden">
-                {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+            <div className="absolute inset-0 z-0 h-[62vh] overflow-hidden bg-slate-200">
+                {!HAS_VALID_GOOGLE_MAPS_KEY ? (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
+                        <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
+                            <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+                            <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
+                        </div>
+                    </div>
+                ) : loadError ? (
+                    <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
+                        <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
+                            <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+                            <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
+                        </div>
+                    </div>
+                ) : isLoaded ? (
                     <GoogleMap
                         mapContainerStyle={MAP_CONTAINER_STYLE}
                         center={pickupPosition}
@@ -193,14 +356,16 @@ const ActiveTrip = () => {
                         onUnmount={() => setMap(null)}
                         options={mapOptions}
                     >
-                        <PolylineF
-                            path={routePath}
-                            options={{
-                                strokeColor: '#0f172a',
-                                strokeOpacity: 0.9,
-                                strokeWeight: 4,
-                            }}
-                        />
+                        {routePath.length > 1 && (
+                            <PolylineF
+                                path={routePath}
+                                options={{
+                                    strokeColor: '#111827',
+                                    strokeOpacity: 0.9,
+                                    strokeWeight: 5,
+                                }}
+                            />
+                        )}
                         <MarkerF
                             position={driverPosition}
                             title="Driver"
@@ -227,12 +392,14 @@ const ActiveTrip = () => {
                         />
                     </GoogleMap>
                 ) : (
-                    <div className="flex h-full w-full items-center justify-center bg-slate-100 text-slate-400 text-[10px] font-black uppercase tracking-widest">
-                        Map unavailable until Google Maps key is configured
+                    <div className="flex h-full w-full items-center justify-center bg-slate-200">
+                        <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-black text-slate-700">
+                            Loading map
+                        </div>
                     </div>
                 )}
 
-                <div className="absolute inset-0 bg-gradient-to-t from-[#F8F9FA] via-transparent to-black/10 pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/35 to-transparent pointer-events-none" />
 
                 <button
                     onClick={() => navigate(-1)}
@@ -246,12 +413,12 @@ const ActiveTrip = () => {
                         {isParcel ? <Package size={20} strokeWidth={2.5} /> : <Navigation size={20} fill="currentColor" strokeWidth={2.5} className="-rotate-45" />}
                     </div>
                     <div className="flex-1 space-y-0.5 overflow-hidden">
-                        <h4 className={`text-[9px] font-black uppercase tracking-widest leading-none flex items-center gap-2 ${phase === 'to_pickup' || phase === 'otp_verification' ? 'text-emerald-400' : 'text-rose-400'}`}>
-                            {phase === 'to_pickup' || phase === 'otp_verification' ? 'Pickup' : 'Drop-off'}
+                        <h4 className="text-[9px] font-black uppercase tracking-widest leading-none flex items-center gap-2 text-amber-300">
+                            Driver Live
                             <ArrowUpRight size={12} strokeWidth={3} />
                         </h4>
                         <p className="text-[13px] font-black text-white leading-tight truncate uppercase">
-                            {phase === 'to_pickup' || phase === 'otp_verification' ? tripData.pickup : tripData.drop}
+                            {driverPosition.lat.toFixed(4)}, {driverPosition.lng.toFixed(4)}
                         </p>
                     </div>
                 </div>
@@ -279,6 +446,13 @@ const ActiveTrip = () => {
                         <p className="text-[11px] font-black text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
                     </div>
                 </div>
+
+                {routeError && (
+                    <div className="absolute top-44 right-4 z-40 rounded-2xl bg-white/92 border border-amber-100 shadow-lg px-3 py-2 min-w-[148px]">
+                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-amber-500">Route</p>
+                        <p className="mt-1 text-[10px] font-black text-slate-700">Using fallback path while directions load.</p>
+                    </div>
+                )}
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 z-40">
@@ -315,7 +489,10 @@ const ActiveTrip = () => {
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.98 }}
-                                onClick={() => setPhase('otp_verification')}
+                                onClick={() => {
+                                    setPhase('otp_verification');
+                                    publishRideStatus('arriving');
+                                }}
                                 className="w-full h-15 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/20"
                             >
                                 {isParcel ? 'Arrived at Sender' : 'I Have Arrived'} <CheckCircle2 size={18} strokeWidth={3} />
@@ -351,7 +528,10 @@ const ActiveTrip = () => {
                                 ))}
                             </div>
                             <div className="flex gap-3">
-                                <button onClick={() => setPhase('to_pickup')} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">Go Back</button>
+                                <button onClick={() => {
+                                    setPhase('to_pickup');
+                                    publishRideStatus('accepted');
+                                }} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">Go Back</button>
                                 <button className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">Support</button>
                             </div>
                         </motion.div>
@@ -386,7 +566,9 @@ const ActiveTrip = () => {
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.96 }}
-                                onClick={() => setPhase('payment_confirm')}
+                                onClick={() => {
+                                    setPhase('payment_confirm');
+                                }}
                                 className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl"
                             >
                                 {isParcel ? 'Deliver Parcel' : 'Arrived at Destination'} <ChevronRight size={18} strokeWidth={3} />
@@ -478,7 +660,10 @@ const ActiveTrip = () => {
                                     ))}
                                 </div>
                             </div>
-                            <button onClick={() => navigate('/taxi/driver/home')} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
+                            <button onClick={() => {
+                                publishRideStatus('completed');
+                                navigate('/taxi/driver/home');
+                            }} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
                         </motion.div>
                     )}
                 </AnimatePresence>

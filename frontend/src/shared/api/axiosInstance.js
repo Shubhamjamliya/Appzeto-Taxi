@@ -42,6 +42,29 @@ const getStoredTokenByRole = (role) => {
   return entries.find((token) => getTokenPayload(token)?.role === role) || null;
 };
 
+const clearStaleAuthState = (role = '') => {
+  const normalizedRole = String(role || '').toLowerCase();
+
+  localStorage.removeItem('token');
+
+  if (!normalizedRole || normalizedRole === 'user') {
+    localStorage.removeItem('userToken');
+    localStorage.removeItem('userInfo');
+  }
+
+  if (!normalizedRole || normalizedRole === 'driver') {
+    localStorage.removeItem('driverToken');
+    localStorage.removeItem('driverInfo');
+  }
+
+  if (!normalizedRole || normalizedRole === 'admin') {
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('adminInfo');
+  }
+
+  localStorage.removeItem('chatRole');
+};
+
 // Request Interceptor: Attach Auth Token automatically
 api.interceptors.request.use(
   (config) => {
@@ -107,7 +130,15 @@ api.interceptors.response.use(
       // Global error handling: e.g. 401 logout
       if (error.response.status === 401) {
         console.warn('Unauthorized! Logging out...');
-        // Optional: localStorage.clear(); window.location.href = '/login';
+        const serverMessage = String(error.response.data?.message || '');
+        const authHeader = error.config?.headers?.Authorization || error.config?.headers?.authorization || '';
+        const token = String(authHeader).startsWith('Bearer ') ? String(authHeader).slice(7) : '';
+        const tokenRole = getTokenPayload(token)?.role || '';
+
+        if (serverMessage === 'Authenticated account no longer exists') {
+          clearStaleAuthState(tokenRole);
+          window.dispatchEvent(new CustomEvent('app:auth-stale', { detail: { role: tokenRole || null } }));
+        }
       }
       return Promise.reject({ ...error.response.data, status: error.response.status });
     }

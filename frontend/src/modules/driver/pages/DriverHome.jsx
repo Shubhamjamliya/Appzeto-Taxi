@@ -381,7 +381,13 @@ const DriverHome = () => {
         }
         setShowRequest(false);
         setCompletedRides(prev => prev + 1);
-        navigate('/taxi/driver/active-trip', { state: { type: currentRequest?.type || 'ride', request: currentRequest } });
+        navigate('/taxi/driver/active-trip', {
+            state: {
+                type: currentRequest?.type || 'ride',
+                request: currentRequest,
+                currentDriverCoords: driverCoordsRef.current || driverCoords || null,
+            },
+        });
     };
 
     const handleDecline = () => {

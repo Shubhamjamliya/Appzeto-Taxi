@@ -20,6 +20,7 @@ import {
   deleteGoodsType,
   deleteRentalPackageType,
   deleteLanguage,
+  deleteOngoingRide,
   deleteOwner,
   deleteOwnerBooking,
   deleteOwnerNeededDocument,
@@ -53,6 +54,7 @@ import {
   getMapSettings,
   getNearbyServiceLocations,
   getNotificationChannels,
+  getOngoingRides,
   getOverallEarnings,
   getOwners,
   getOwnerOnboarding,
@@ -190,6 +192,8 @@ adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
+adminRouter.get('/admin/ongoing-rides', getOngoingRides);
+adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);
 

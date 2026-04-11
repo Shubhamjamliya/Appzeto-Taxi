@@ -73,6 +73,7 @@ const SearchingDriver = () => {
   const requestStartedRef = useRef(false);
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const selectedVehicleTypeId = routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId;
+  const activeRideIdRef = useRef('');
 
   useEffect(() => {
     if (requestStartedRef.current) {
@@ -98,15 +99,18 @@ const SearchingDriver = () => {
       );
     };
 
-    const onRideAccepted = ({ driver: acceptedDriver }) => {
+    const onRideAccepted = async ({ driver: acceptedDriver, rideId }) => {
       const nextDriver = normalizeDriver(acceptedDriver);
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
       setSearchStatus('Captain accepted your ride.');
+      activeRideIdRef.current = String(rideId || activeRideIdRef.current || '');
+
       timerRef.current = setTimeout(() => {
         navigate(`${routePrefix}/ride/tracking`, {
           state: {
             ...routeState,
+            rideId: activeRideIdRef.current,
             otp,
             driver: nextDriver,
             fare: routeState.fare || routeState.vehicle?.price || 22,
@@ -163,10 +167,13 @@ const SearchingDriver = () => {
         const payload = response?.data || response;
         const ride = payload?.ride || payload;
         const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
+        const normalizedRideId = String(rideId || '');
+        activeRideIdRef.current = normalizedRideId;
         const socket = socketService.connect({ role: 'user', token: userToken });
 
         if (socket && rideId) {
           socketService.emit('joinRide', { rideId });
+          socketService.emit('ride:join', { rideId });
         }
 
         setSearchStatus('Booking created. Searching nearby drivers...');

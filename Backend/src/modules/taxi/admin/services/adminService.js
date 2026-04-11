@@ -30,6 +30,8 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
+import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+import { cancelRideByAdmin } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
   const result = { ...target };
@@ -1018,6 +1020,116 @@ export const listNearbyServiceLocations = async ({ latitude, longitude, maxDista
 };
 
 export const listRideModules = async () => RideModule.find().sort({ createdAt: -1 }).lean();
+
+const formatRidePointLabel = (point, fallback = 'Unknown') => {
+  const [lng, lat] = point?.coordinates || [];
+
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+  }
+
+  return fallback;
+};
+
+const toAdminRideRow = (ride) => {
+  const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
+  const tripStatus = liveStatus === RIDE_LIVE_STATUS.STARTED
+    ? 'ONGOING'
+    : liveStatus === RIDE_LIVE_STATUS.ARRIVING || liveStatus === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED
+      ? 'ACCEPTED'
+      : 'UPCOMING';
+
+  return {
+    id: String(ride._id),
+    requestId: requestCode,
+    date: ride.createdAt,
+    userName: ride.userId?.name || 'Unknown User',
+    driverName: ride.driverId?.name || 'Unassigned',
+    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi',
+    tripStatus,
+    rideStatus: ride.status,
+    liveStatus: ride.liveStatus,
+    paymentOption: 'CASH',
+    fare: Number(ride.fare || 0),
+    pickupLabel: formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+    dropLabel: formatRidePointLabel(ride.dropLocation, 'Drop'),
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    lastDriverLocation: ride.lastDriverLocation || null,
+    user: ride.userId ? {
+      id: String(ride.userId._id),
+      name: ride.userId.name || '',
+      phone: ride.userId.phone || '',
+    } : null,
+    driver: ride.driverId ? {
+      id: String(ride.driverId._id),
+      name: ride.driverId.name || '',
+      phone: ride.driverId.phone || '',
+      vehicleType: ride.driverId.vehicleType || '',
+      vehicleNumber: ride.driverId.vehicleNumber || '',
+    } : null,
+  };
+};
+
+export const listOngoingRides = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const rides = await Ride.find({
+    status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+  })
+    .sort({ createdAt: -1 })
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = rides.map(toAdminRideRow);
+
+  if (tab === 'accepted') {
+    rows = rows.filter((row) => row.tripStatus === 'ACCEPTED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'ongoing') {
+    rows = rows.filter((row) => row.tripStatus === 'ONGOING');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.pickupLabel,
+        row.dropLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
+export const deleteOngoingRide = async (rideId) => {
+  if (!mongoose.Types.ObjectId.isValid(String(rideId))) {
+    throw new ApiError(400, 'Invalid ride id');
+  }
+
+  const deletedRide = await cancelRideByAdmin(rideId);
+
+  if (!deletedRide) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  return {
+    id: String(deletedRide._id),
+    deleted: true,
+    status: deletedRide.status,
+    liveStatus: deletedRide.liveStatus,
+  };
+};
 
 export const listVehicleTypes = async (locationId, transportType) => {
   const query = {};

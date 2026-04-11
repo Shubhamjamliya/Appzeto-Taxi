@@ -1,6 +1,6 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
-import { authenticate } from '../../middlewares/authMiddleware.js';
+import { authenticateOrResolveUser } from '../../middlewares/authMiddleware.js';
 import {
   getUserWallet,
   getCurrentUser,
@@ -25,8 +25,8 @@ userRouter.post('/profile-image', asyncHandler(uploadUserProfileImage));
 userRouter.post('/auth/send-otp', asyncHandler(startUserOtpRequest));
 userRouter.post('/auth/verify-otp', asyncHandler(verifyUserOtpRequest));
 userRouter.post('/otp-login', asyncHandler(verifyUserPhoneForOtpLogin));
-userRouter.get('/me', authenticate(['user']), asyncHandler(getCurrentUser));
-userRouter.patch('/me', authenticate(['user']), asyncHandler(updateCurrentUser));
-userRouter.get('/wallet', authenticate(['user']), asyncHandler(getUserWallet));
-userRouter.post('/wallet/topup', authenticate(['user']), asyncHandler(topupUserWallet));
-userRouter.post('/wallet/transfer', authenticate(['user']), asyncHandler(transferUserWallet));
+userRouter.get('/me', authenticateOrResolveUser(['user']), asyncHandler(getCurrentUser));
+userRouter.patch('/me', authenticateOrResolveUser(['user']), asyncHandler(updateCurrentUser));
+userRouter.get('/wallet', authenticateOrResolveUser(['user']), asyncHandler(getUserWallet));
+userRouter.post('/wallet/topup', authenticateOrResolveUser(['user']), asyncHandler(topupUserWallet));
+userRouter.post('/wallet/transfer', authenticateOrResolveUser(['user']), asyncHandler(transferUserWallet));

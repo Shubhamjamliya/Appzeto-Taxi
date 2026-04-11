@@ -106,6 +106,12 @@ export const getNearbyServiceLocations = asyncHandler(async (req, res) =>
 export const getRideModules = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listRideModules()),
 );
+export const getOngoingRides = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listOngoingRides(req.query)),
+);
+export const deleteOngoingRide = asyncHandler(async (req, res) =>
+  ok(res, await adminService.deleteOngoingRide(req.params.id)),
+);
 export const getVehicleTypes = asyncHandler(async (req, res) =>
   ok(
     res,

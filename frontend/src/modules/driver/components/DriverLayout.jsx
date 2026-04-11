@@ -2,6 +2,24 @@ import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { getCurrentDriver } from '../services/registrationService';
 
+const unwrapDriver = (response) => response?.data?.data || response?.data || response;
+
+const isDriverApproved = (driver) => {
+    if (!driver) {
+        return false;
+    }
+
+    const approval = String(driver.approve ?? '').toLowerCase();
+    const status = String(driver.status || '').toLowerCase();
+
+    return (
+        driver.approve === true ||
+        driver.approve === 1 ||
+        ['true', '1', 'yes', 'approved'].includes(approval) ||
+        ['approved', 'active', 'verified'].includes(status)
+    );
+};
+
 const onboardingRoutes = new Set([
     '/taxi/driver/lang-select',
     '/taxi/driver/welcome',
@@ -31,7 +49,7 @@ const DriverLayout = () => {
             return;
         }
 
-        const token = localStorage.getItem('token');
+        const token = localStorage.getItem('driverToken') || localStorage.getItem('token');
 
         if (!token) {
             setIsAllowed(false);
@@ -46,8 +64,8 @@ const DriverLayout = () => {
 
             try {
                 const response = await getCurrentDriver();
-                const driver = response?.data;
-                const isApproved = driver && (driver.approve === true || ['approved', 'active'].includes(String(driver.status || '').toLowerCase()));
+                const driver = unwrapDriver(response);
+                const isApproved = isDriverApproved(driver);
 
                 if (!active) {
                     return;

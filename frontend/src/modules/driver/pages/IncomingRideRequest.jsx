@@ -22,17 +22,7 @@ import {
 const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
     const [timer, setTimer] = useState(15);
 
-    const data = requestData || {
-        type: 'ride',
-        title: 'Bike Taxi',
-        fare: '₹145',
-        payment: 'Cash',
-        pickup: 'Crystal IT Park, Indore',
-        drop: 'Vijay Nagar Square',
-        distance: '1.2 km away'
-    };
-
-    const isParcel = data.type === 'parcel';
+    const data = requestData;
 
     useEffect(() => {
         let interval;
@@ -51,7 +41,9 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
         return () => clearInterval(interval);
     }, [visible, onDecline]);
 
-    if (!visible) return null;
+    if (!visible || !data) return null;
+
+    const isParcel = data.type === 'parcel';
 
     const radius = 35;
     const circumference = 2 * Math.PI * radius;

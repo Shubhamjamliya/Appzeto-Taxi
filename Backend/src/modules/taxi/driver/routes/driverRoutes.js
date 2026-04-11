@@ -17,6 +17,7 @@ import {
   saveOnboardingVehicle,
   registerDriver,
   startOnboarding,
+  updateDriverVehicle,
   verifyOnboardingOtp,
   verifyDriverLoginOtpRequest,
 } from '../controllers/driverController.js';
@@ -28,6 +29,7 @@ driverRouter.post('/login', asyncHandler(loginDriver));
 driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
 driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
+driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));

@@ -4,6 +4,7 @@ import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { User } from '../../user/models/User.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
+import { AppModule } from '../models/AppModule.js';
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
@@ -23,7 +24,6 @@ import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
 import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
 import { NotificationChannel } from '../models/NotificationChannel.js';
-import { AppModule } from '../models/AppModule.js';
 import { UserPreference } from '../models/UserPreference.js';
 import { AdminRole } from '../models/AdminRole.js';
 import { PaymentGateway } from '../models/PaymentGateway.js';
@@ -2140,7 +2140,6 @@ export const updateMailSettings = async (payload) => {
 
 
 export const buildUserReport = async () => {
-<<<<<<< HEAD
   const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
   return csvFromRows(
     ['name', 'email', 'mobile', 'active'],
@@ -2150,12 +2149,6 @@ export const buildUserReport = async () => {
       mobile: item.phone || item.mobile || '',
       active: item.active !== false && !item.deletedAt,
     })),
-=======
-  const items = await User.find().lean();
-  return csvFromRows(
-    ['name', 'email', 'mobile', 'active'],
-    items.map((item) => ({ name: item.name, email: item.email, mobile: item.mobile, active: item.active })),
->>>>>>> 4d325b1 (shubham : admin panel ui fixed and backend)
   );
 };
 
@@ -2249,6 +2242,36 @@ export const ensureAppSettings = async () => {
   return settings;
 };
 
+export const ensureAppModules = async () => {
+  const existingCount = await AppModule.countDocuments();
+  if (existingCount > 0) {
+    return;
+  }
+
+  const settings = await ensureAppSettings();
+  const legacyModules =
+    settings.app_modules?.length > 0
+      ? settings.app_modules
+      : createDefaultAppSettings().app_modules || [];
+
+  if (legacyModules.length === 0) {
+    return;
+  }
+
+  await AppModule.insertMany(
+    legacyModules.map((item) => ({
+      name: item.name,
+      transport_type: item.transport_type,
+      service_type: item.service_type,
+      order_by: Number(item.order_by || 0),
+      short_description: item.short_description || '',
+      description: item.description || '',
+      active: normalizeBoolean(item.active ?? true),
+      mobile_menu_icon: item.mobile_menu_icon || '',
+    })),
+  );
+};
+
 export const getGeneralSettings = async (category) => {
   const bizSettings = await ensureBusinessSettings();
   const appSettings = await ensureAppSettings();
@@ -2311,17 +2334,23 @@ export const updateGeneralSettings = async (category, payload) => {
 };
 
 export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  const safePage = Number(page) || 1;
-  const safeLimit = Number(limit) || 20;
-  const start = (safePage - 1) * safeLimit;
+  await ensureAppModules();
 
-  const [items, total] = await Promise.all([
-    AppModule.find().sort({ order_by: 1 }).skip(start).limit(safeLimit).lean(),
+  const safePage = Math.max(1, Number(page) || 1);
+  const safeLimit = Math.max(1, Number(limit) || 20);
+  const skip = (safePage - 1) * safeLimit;
+
+  const [results, total] = await Promise.all([
+    AppModule.find({})
+      .sort({ order_by: 1, createdAt: -1 })
+      .skip(skip)
+      .limit(safeLimit)
+      .lean(),
     AppModule.countDocuments(),
   ]);
 
   return {
-    results: items,
+    results,
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -2332,6 +2361,8 @@ export const listAppModules = async ({ page = 1, limit = 20 }) => {
 };
 
 export const createAppModule = async (payload) => {
+  await ensureAppModules();
+
   const moduleItem = await AppModule.create({
     name: payload.name,
     transport_type: payload.transport_type,
@@ -2340,20 +2371,39 @@ export const createAppModule = async (payload) => {
     short_description: payload.short_description || '',
     description: payload.description || '',
     active: normalizeBoolean(payload.active ?? true),
-    mobile_menu_icon: payload.mobile_menu_icon || (payload.transport_type === 'delivery' ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg' : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
+    mobile_menu_icon:
+      payload.mobile_menu_icon ||
+      (payload.transport_type === 'delivery'
+        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
+        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
   });
+
   return moduleItem.toObject();
 };
 
 export const updateAppModule = async (id, payload) => {
-  const moduleItem = await AppModule.findByIdAndUpdate(id, payload, { new: true });
+  await ensureAppModules();
+
+  const moduleItem = await AppModule.findById(id);
   if (!moduleItem) throw new ApiError(404, 'App module not found');
+
+  Object.assign(moduleItem, payload, {
+    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
+  });
+
+  await moduleItem.save();
   return moduleItem.toObject();
 };
 
 export const deleteAppModule = async (id) => {
+  await ensureAppModules();
+
   const deleted = await AppModule.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'App module not found');
+  if (!deleted) {
+    throw new ApiError(404, 'App module not found');
+  }
+
   return true;
 };
 

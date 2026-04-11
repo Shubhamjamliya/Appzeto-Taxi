@@ -99,6 +99,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
     const radius = DISPATCH_RADII[radiusIndex];
     const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
+      vehicleTypeId: ride.vehicleTypeId,
     });
 
     // Only drivers with live sockets can receive real-time ride requests.
@@ -117,6 +118,8 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
         dropLocation: ride.dropLocation,
+        vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
+        vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
         radius,
         zoneId: String(zone._id),
@@ -168,7 +171,7 @@ export const notifyRideAccepted = async (ride) => {
   // Once one driver wins the race, the rider is updated and the rest are told to stop.
   const populatedRide = await Ride.findById(ride._id).populate(
     'driverId',
-    'name phone vehicleType rating',
+    'name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating',
   );
 
   if (!populatedRide) {

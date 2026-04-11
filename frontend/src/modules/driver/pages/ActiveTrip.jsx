@@ -33,6 +33,7 @@ const ActiveTrip = () => {
     
     const tripType = location.state?.type || 'ride';
     const isParcel = tripType === 'parcel';
+    const liveRequest = location.state?.request;
 
     const [phase, setPhase] = useState('to_pickup'); // to_pickup, otp_verification, in_trip, payment_confirm, review
     const [otp, setOtp] = useState(['', '', '', '']);
@@ -50,11 +51,12 @@ const ActiveTrip = () => {
         payment: location.state?.paymentMethod || 'Online'
     } : {
         user: { name: 'Vinay Kumar', rating: '4.8', phone: '+91 98765 43210' },
-        pickup: 'Swamclose Apartments, JP nagar',
-        drop: 'Tea Villa Cafe, HSR Layout',
+        pickup: liveRequest?.pickup || 'Swamclose Apartments, JP nagar',
+        drop: liveRequest?.drop || 'Tea Villa Cafe, HSR Layout',
         fare: '₹120',
-        payment: location.state?.paymentMethod || 'Online'
+        payment: liveRequest?.payment || location.state?.paymentMethod || 'Online'
     };
+    const displayFare = liveRequest?.fare || tripData.fare;
 
     const handleOTPChange = (index, value) => {
         if (!/^\d*$/.test(value)) return;
@@ -213,7 +215,7 @@ const ActiveTrip = () => {
                                     {driverPaymentStatus === 'success' ? 'Payment Success!' : 'Collect Amount'}
                                 </h2>
                                 <p className="text-[12px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                                    Fare: <span className="text-slate-900 font-black text-lg ml-1">{tripData.fare}</span>
+                                    Fare: <span className="text-slate-900 font-black text-lg ml-1">{displayFare}</span>
                                 </p>
                             </div>
                             {driverPaymentStatus === 'pending' && (
@@ -238,7 +240,7 @@ const ActiveTrip = () => {
                                         <QrCode size={90} className="text-slate-900 opacity-90" />
                                         <motion.div animate={{ top: ['0%', '100%', '0%'] }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }} className="absolute left-0 w-full h-0.5 bg-slate-200" />
                                     </div>
-                                    <p className="text-white font-black text-sm uppercase tracking-widest mb-4">Scan Code - {tripData.fare}</p>
+                                    <p className="text-white font-black text-sm uppercase tracking-widest mb-4">Scan Code - {displayFare}</p>
                                     <button onClick={() => setDriverPaymentStatus('success')} className="w-full py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5">Confirm Received</button>
                                 </motion.div>
                             )}

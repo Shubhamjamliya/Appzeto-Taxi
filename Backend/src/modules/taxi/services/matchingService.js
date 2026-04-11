@@ -22,7 +22,7 @@ export const findZoneByPickup = async (pickupCoords) => {
 
 export const matchDrivers = async (pickupCoords, options = {}) => {
   const coordinates = normalizePoint(pickupCoords, 'pickupCoords');
-  const { maxDistance = 3000, limit = DISPATCH_TOP_DRIVERS } = options;
+  const { maxDistance = 3000, limit = DISPATCH_TOP_DRIVERS, vehicleTypeId } = options;
 
   const zone = await findZoneByPickup(coordinates);
 
@@ -35,6 +35,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     isOnline: true,
     isOnRide: false,
     zoneId: zone._id,
+    ...(vehicleTypeId ? { vehicleTypeId } : {}),
     location: {
       $near: {
         $geometry: {
@@ -46,7 +47,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
     },
   })
     .limit(limit)
-    .select('name phone socketId vehicleType rating location zoneId isOnline isOnRide');
+    .select('name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location zoneId isOnline isOnRide');
 
   return { zone, drivers };
 };

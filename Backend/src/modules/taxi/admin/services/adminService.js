@@ -428,6 +428,11 @@ const seedInitialData = async () => {
     await User.insertMany(defaults.users.map(u => ({ ...u, phone: u.mobile, password: 'password123' })));
   }
 
+  // Seed Service Locations
+  if (await ServiceLocation.countDocuments() === 0) {
+    await ServiceLocation.insertMany(defaults.serviceLocations);
+  }
+
   // Seed Drivers
   if (await Driver.countDocuments() === 0) {
     await Driver.insertMany(defaults.drivers.map(d => ({ ...d, phone: d.mobile })));
@@ -436,7 +441,6 @@ const seedInitialData = async () => {
   // Seed Languages
   if (await AppLanguage.countDocuments() === 0) {
     await AppLanguage.insertMany(defaults.languages);
-  }
   }
 
   // Seed Ride Modules
@@ -477,6 +481,13 @@ const seedInitialData = async () => {
   // Seed Onboarding Screens
   if (await OnboardingScreen.countDocuments() === 0) {
     await OnboardingScreen.insertMany(defaults.onboardingScreens);
+  }
+};
+
+export const ensureServiceLocationsSeeded = async () => {
+  if (await ServiceLocation.countDocuments() === 0) {
+    const defaults = createDefaultAdminState();
+    await ServiceLocation.insertMany(defaults.serviceLocations);
   }
 };
 
@@ -582,6 +593,51 @@ export const createUser = async (payload) => {
   });
 
   return serializeUser(user.toObject());
+};
+
+export const getOwnerDashboardData = async () => {
+  const [
+    totalOwners,
+    approvedOwners,
+    totalDrivers,
+    approvedDrivers,
+    todayRides,
+  ] = await Promise.all([
+    Owner.countDocuments(),
+    Owner.countDocuments({ approve: true }),
+    Driver.countDocuments(),
+    Driver.countDocuments({ approve: true }),
+    Ride.countDocuments({
+      createdAt: {
+        $gte: new Date(new Date().setHours(0, 0, 0, 0)),
+        $lt: new Date(new Date().setHours(23, 59, 59, 999)),
+      },
+    }),
+  ]);
+
+  return {
+    total_owners: totalOwners,
+    approved_owners: approvedOwners,
+    pending_owners: totalOwners - approvedOwners,
+    total_drivers: totalDrivers,
+    approved_drivers: approvedDrivers,
+    pending_drivers: totalDrivers - approvedDrivers,
+    total_fleets: 0, // Placeholder
+    approved_fleets: 0,
+    pending_fleets: 0,
+    today_earnings: 0,
+    today_cash: 0,
+    today_wallet: 0,
+    today_online: 0,
+    admin_commission: 0,
+    driver_earnings: 0,
+    overall_earnings: 0,
+    overall_cash: 0,
+    overall_wallet: 0,
+    overall_online: 0,
+    overall_admin_comm: 0,
+    overall_owner_earnings: 0,
+  };
 };
 
 export const updateUser = async (id, payload) => {

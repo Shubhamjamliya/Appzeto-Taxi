@@ -1,9 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Users, X, Banknote, CreditCard, ChevronDown, ChevronRight, LoaderCircle } from 'lucide-react';
-import L from 'leaflet';
-import 'leaflet/dist/leaflet.css';
 import api from '../../../../shared/api/axiosInstance';
 
 const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
@@ -18,101 +16,39 @@ const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
 
 const getDriverPosition = (driver) => toLatLng(driver?.location?.coordinates, null);
 
-const toLeafletPoint = (point) => [point.lat, point.lng];
+const getMarkerPosition = (driver, index, center) => {
+  const position = getDriverPosition(driver);
 
-const makeVehicleMarker = (iconUrl) => L.divIcon({
-  className: 'ride-driver-marker',
-  html: `<div style="width:38px;height:38px;border-radius:999px;background:white;border:1px solid #e5e7eb;box-shadow:0 10px 24px rgba(15,23,42,.18);display:flex;align-items:center;justify-content:center;"><img src="${iconUrl || '/4_Taxi.png'}" style="width:28px;height:28px;object-fit:contain;" /></div>`,
-  iconSize: [38, 38],
-  iconAnchor: [19, 19],
-});
-
-const pickupMarker = L.divIcon({
-  className: 'ride-pickup-marker',
-  html: '<div style="width:34px;height:34px;border-radius:999px;background:#f8e001;border:4px solid white;box-shadow:0 10px 24px rgba(15,23,42,.18);display:flex;align-items:center;justify-content:center;font:900 12px system-ui;color:#111827;">P</div>',
-  iconSize: [34, 34],
-  iconAnchor: [17, 17],
-});
-
-const LeafletVehicleMap = ({ center, drivers, selectedVehicle }) => {
-  const containerRef = useRef(null);
-  const mapRef = useRef(null);
-  const markerLayerRef = useRef(null);
-
-  useEffect(() => {
-    if (!containerRef.current || mapRef.current) {
-      return undefined;
-    }
-
-    const map = L.map(containerRef.current, {
-      center: toLeafletPoint(center),
-      zoom: 14,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-      maxZoom: 19,
-    }).addTo(map);
-
-    markerLayerRef.current = L.layerGroup().addTo(map);
-    mapRef.current = map;
-
-    const refreshMapSize = () => map.invalidateSize();
-    map.whenReady(refreshMapSize);
-    setTimeout(refreshMapSize, 0);
-    setTimeout(refreshMapSize, 250);
-    window.addEventListener('resize', refreshMapSize);
-
-    return () => {
-      window.removeEventListener('resize', refreshMapSize);
-      map.remove();
-      mapRef.current = null;
-      markerLayerRef.current = null;
+  if (!position) {
+    return {
+      left: `${18 + ((index * 23) % 62)}%`,
+      top: `${18 + ((index * 17) % 46)}%`,
     };
-  }, []);
+  }
 
-  useEffect(() => {
-    if (!mapRef.current || !markerLayerRef.current) {
-      return;
-    }
+  const latDelta = (position.lat - center.lat) * 460;
+  const lngDelta = (position.lng - center.lng) * 460;
+  const left = Math.max(10, Math.min(88, 50 + lngDelta));
+  const top = Math.max(10, Math.min(82, 50 - latDelta));
 
-    const map = mapRef.current;
-    const markerLayer = markerLayerRef.current;
-    markerLayer.clearLayers();
+  return {
+    left: `${left}%`,
+    top: `${top}%`,
+  };
+};
 
-    L.marker(toLeafletPoint(center), { icon: pickupMarker }).addTo(markerLayer);
-
-    drivers.forEach((driver) => {
-      const position = getDriverPosition(driver);
-
-      if (!position) {
-        return;
-      }
-
-      L.marker(toLeafletPoint(position), { icon: makeVehicleMarker(selectedVehicle?.icon) })
-        .bindTooltip(`${driver.name || 'Driver'} - ${driver.vehicleNumber || selectedVehicle?.name || 'Vehicle'}`)
-        .addTo(markerLayer);
-    });
-
-    const points = [
-      toLeafletPoint(center),
-      ...drivers.map(getDriverPosition).filter(Boolean),
-    ].map((point) => (Array.isArray(point) ? point : toLeafletPoint(point)));
-
-    if (points.length > 1) {
-      map.fitBounds(L.latLngBounds(points), { padding: [42, 42], maxZoom: 15 });
-    } else {
-      map.setView(toLeafletPoint(center), 14);
-    }
-
-    setTimeout(() => map.invalidateSize(), 0);
-  }, [center, drivers, selectedVehicle]);
-
+const VehicleMapPreview = ({ center, drivers, selectedVehicle }) => {
   return (
-    <div className="relative h-full w-full overflow-hidden bg-[linear-gradient(135deg,#dbeafe_0%,#f8fafc_44%,#e0f2fe_100%)]">
-      <div className="absolute inset-0 opacity-60 bg-[linear-gradient(31deg,transparent_0_46%,rgba(255,255,255,.9)_46%_50%,transparent_50%),linear-gradient(119deg,transparent_0_48%,rgba(255,255,255,.75)_48%_52%,transparent_52%),linear-gradient(0deg,transparent_0_49%,rgba(148,163,184,.25)_49%_51%,transparent_51%)] bg-[length:180px_180px,150px_150px,64px_64px]" />
-      <div ref={containerRef} className="relative z-10 h-full w-full !bg-transparent" style={{ background: 'transparent' }} />
+    <div className="relative h-full w-full overflow-hidden bg-[#dfe8ef]">
+      <div className="absolute inset-0 bg-[linear-gradient(90deg,rgba(255,255,255,.4)_1px,transparent_1px),linear-gradient(0deg,rgba(255,255,255,.38)_1px,transparent_1px)] bg-[length:52px_52px]" />
+      <div className="absolute -left-10 top-[25%] h-9 w-[120%] -rotate-[8deg] rounded-full bg-white/95 shadow-[0_0_0_1px_rgba(148,163,184,.22)]" />
+      <div className="absolute left-[8%] top-[13%] h-8 w-[112%] rotate-[4deg] rounded-full bg-white/90 shadow-[0_0_0_1px_rgba(148,163,184,.18)]" />
+      <div className="absolute left-[46%] top-[-12%] h-[120%] w-9 rotate-[18deg] rounded-full bg-white/95 shadow-[0_0_0_1px_rgba(148,163,184,.22)]" />
+      <div className="absolute left-[17%] top-[-18%] h-[125%] w-7 -rotate-[2deg] rounded-full bg-white/80" />
+      <div className="absolute right-[9%] top-0 h-full w-8 rotate-[1deg] rounded-full bg-white/75" />
+      <div className="absolute left-[12%] top-[54%] h-20 w-24 rounded-[12px] bg-emerald-200/50" />
+      <div className="absolute right-[15%] top-[18%] h-24 w-28 rounded-[14px] bg-sky-200/45" />
+      <div className="absolute left-[43%] top-[34%] h-14 w-20 rounded-[10px] bg-amber-200/60" />
       <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 flex h-9 w-9 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full border-4 border-white bg-[#f8e001] text-[12px] font-black text-slate-950 shadow-[0_10px_24px_rgba(15,23,42,0.18)]">
         P
       </div>
@@ -120,15 +56,16 @@ const LeafletVehicleMap = ({ center, drivers, selectedVehicle }) => {
         <div
           key={driver.id || index}
           className="pointer-events-none absolute z-20 flex h-9 w-9 items-center justify-center rounded-full border border-slate-100 bg-white shadow-[0_10px_24px_rgba(15,23,42,0.18)]"
-          style={{
-            left: `${18 + ((index * 23) % 62)}%`,
-            top: `${18 + ((index * 17) % 46)}%`,
-          }}
+          style={getMarkerPosition(driver, index, center)}
           title={`${driver.name || 'Driver'} - ${driver.vehicleNumber || selectedVehicle?.name || 'Vehicle'}`}
         >
           <img src={selectedVehicle?.icon || '/4_Taxi.png'} alt="" className="h-7 w-7 object-contain" />
         </div>
       ))}
+      <div className="absolute bottom-24 left-4 rounded-[12px] border border-white/70 bg-white/85 px-3 py-2 shadow-sm">
+        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
+        <p className="text-[11px] font-black text-slate-800">{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</p>
+      </div>
     </div>
   );
 };
@@ -359,7 +296,7 @@ const SelectVehicle = () => {
   return (
     <div className="min-h-screen bg-gray-100 max-w-lg mx-auto relative font-sans overflow-hidden">
       <div className="h-[44%] w-full relative bg-gray-200">
-        <LeafletVehicleMap
+        <VehicleMapPreview
           center={pickupPosition}
           drivers={onlineDrivers}
           selectedVehicle={selectedVehicle}

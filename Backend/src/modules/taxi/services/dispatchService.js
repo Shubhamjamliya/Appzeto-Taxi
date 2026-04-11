@@ -2,16 +2,19 @@ import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 import { matchDrivers } from './matchingService.js';
 import {
+  RIDE_LIVE_STATUS,
   DISPATCH_RADII,
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
+import { getRideRoom } from './rideService.js';
+import { SOCKET_EVENTS } from '../socket/events.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;
 
-const getRideRoom = (rideId) => `ride:${rideId}`;
 const getUserRoom = (userId) => `user:${userId}`;
+const getDriverRoom = (driverId) => `driver:${driverId}`;
 
 export const setSocketServer = (io) => {
   ioInstance = io;
@@ -24,6 +27,11 @@ export const joinRideRoom = (socket, rideId) => {
 export const addSocketSubscriptions = (socket, { role, entityId }) => {
   if (role === 'user') {
     socket.join(getUserRoom(entityId));
+    return;
+  }
+
+  if (role === 'driver') {
+    socket.join(getDriverRoom(entityId));
   }
 };
 
@@ -36,6 +44,12 @@ const emitToSocket = (socketId, event, payload) => {
 const emitToRoom = (room, event, payload) => {
   if (ioInstance) {
     ioInstance.to(room).emit(event, payload);
+  }
+};
+
+const emitToDriver = (driverId, event, payload) => {
+  if (driverId) {
+    emitToRoom(getDriverRoom(driverId), event, payload);
   }
 };
 
@@ -55,7 +69,7 @@ export const stopDispatchFlow = (rideId) => {
 const closeRideAsUnmatched = async (rideId) => {
   const ride = await Ride.findOneAndUpdate(
     { _id: rideId, status: RIDE_STATUS.SEARCHING },
-    { status: RIDE_STATUS.CANCELLED },
+    { status: RIDE_STATUS.CANCELLED, liveStatus: RIDE_LIVE_STATUS.CANCELLED },
     { new: true },
   );
 
@@ -67,12 +81,19 @@ const closeRideAsUnmatched = async (rideId) => {
 
   emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
     rideId: String(ride._id),
+    room: getRideRoom(ride._id),
     reason: 'No drivers accepted the ride request',
   });
 
   emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
     rideId: String(ride._id),
     reason: 'unmatched',
+  });
+
+  emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
+    rideId: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
   });
 };
 
@@ -102,18 +123,16 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       vehicleTypeId: ride.vehicleTypeId,
     });
 
-    // Only drivers with live sockets can receive real-time ride requests.
-    const targetDrivers = drivers.filter((driver) => Boolean(driver.socketId));
+    const targetDrivers = drivers;
 
     activeDispatches.set(String(rideId), {
       radiusIndex,
       driverIds: targetDrivers.map((driver) => String(driver._id)),
-      driverSocketIds: targetDrivers.map((driver) => driver.socketId),
       timer: null,
     });
 
     for (const driver of targetDrivers) {
-      emitToSocket(driver.socketId, 'rideRequest', {
+      emitToDriver(driver._id, 'rideRequest', {
         rideId: String(ride._id),
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
@@ -144,7 +163,6 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       activeDispatches.set(String(rideId), {
         radiusIndex,
         driverIds: targetDrivers.map((driver) => String(driver._id)),
-        driverSocketIds: targetDrivers.map((driver) => driver.socketId),
         timer,
       });
 
@@ -180,8 +198,17 @@ export const notifyRideAccepted = async (ride) => {
 
   emitToRoom(getUserRoom(populatedRide.userId), 'rideAccepted', {
     rideId: String(populatedRide._id),
+    room: getRideRoom(populatedRide._id),
     status: populatedRide.status,
+    liveStatus: populatedRide.liveStatus,
     driver: populatedRide.driverId,
+  });
+
+  emitToRoom(getRideRoom(populatedRide._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
+    rideId: String(populatedRide._id),
+    status: populatedRide.status,
+    liveStatus: populatedRide.liveStatus,
+    acceptedAt: populatedRide.acceptedAt,
   });
 
   emitToRoom(getRideRoom(populatedRide._id), 'rideRequestClosed', {
@@ -191,8 +218,8 @@ export const notifyRideAccepted = async (ride) => {
     reason: 'accepted-by-another-driver',
   });
 
-  for (const socketId of state?.driverSocketIds || []) {
-    emitToSocket(socketId, 'rideRequestClosed', {
+  for (const driverId of state?.driverIds || []) {
+    emitToDriver(driverId, 'rideRequestClosed', {
       rideId: String(populatedRide._id),
       acceptedDriverId: String(populatedRide.driverId._id),
       reason: 'accepted-by-another-driver',

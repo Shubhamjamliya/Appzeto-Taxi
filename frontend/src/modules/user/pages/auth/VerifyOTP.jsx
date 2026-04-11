@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2 } from 'lucide-react';
 import { userAuthService } from '../../services/authService';
 
 const generateOtp = () => String(Math.floor(1000 + Math.random() * 9000));
+const unwrap = (response) => response?.data?.data || response?.data || response;
 
 const VerifyOTP = () => {
   const location = useLocation();
@@ -80,7 +81,7 @@ const VerifyOTP = () => {
 
       try {
         const response = await userAuthService.verifyOtpLogin(phone);
-        const payload = response?.data || {};
+        const payload = unwrap(response);
 
         setSuccess(true);
 

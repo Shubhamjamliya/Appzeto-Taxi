@@ -4,8 +4,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star } from 'lucide-react';
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
+import { userAuthService, withUserAuth } from '../../services/authService';
 
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
+const unwrap = (response) => response?.data?.data || response?.data || response;
 const MOCK_DRIVERS = [
   { name: 'Kishan Kumawat', rating: '4.9', vehicle: 'Grey Honda Shine', plate: 'MP09 CL 5308', phone: '+919876543210', eta: 2 },
   { name: 'Rajesh Patel',   rating: '4.7', vehicle: 'Black Royal Enfield', plate: 'MP09 AB 1234', phone: '+919876543211', eta: 3 },
@@ -82,17 +84,13 @@ const SearchingDriver = () => {
       return undefined;
     }
 
-    const socket = socketService.connect({ role: 'user' });
-
-    if (!socket) {
-      setSearchStatus('User session missing. Please login again.');
-      return undefined;
-    }
-
     requestStartedRef.current = true;
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
       const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
+      if (matchedDrivers > 0) {
+        setStage(STAGES.ASSIGNED);
+      }
       setSearchStatus(
         matchedDrivers > 0
           ? `${matchedDrivers} captain${matchedDrivers > 1 ? 's' : ''} found within ${radiusKm} km`
@@ -132,26 +130,50 @@ const SearchingDriver = () => {
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
-    api.post('/rides', {
-      pickup: routeState.pickupCoords || [75.9048, 22.7039],
-      drop: routeState.dropCoords || [75.8937, 22.7533],
-      fare: routeState.fare || routeState.vehicle?.price || 22,
-      vehicleTypeId: selectedVehicleTypeId,
-      vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
-    })
-      .then((response) => {
-        const ride = response?.data || response;
-        const rideId = ride?._id || ride?.id;
+    (async () => {
+      try {
+        let userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
 
-        if (rideId) {
+        if (!userToken) {
+          const loginResponse = await userAuthService.loginDemoUser();
+          const loginPayload = unwrap(loginResponse);
+
+          if (loginPayload?.token) {
+            userToken = loginPayload.token;
+            localStorage.setItem('token', userToken);
+            localStorage.setItem('userToken', userToken);
+            localStorage.setItem('role', 'user');
+            localStorage.setItem('userInfo', JSON.stringify(loginPayload.user || {}));
+          }
+        }
+
+        if (!userToken) {
+          setSearchStatus('User session missing. Please login again.');
+          return;
+        }
+
+        const response = await api.post('/rides', {
+          pickup: routeState.pickupCoords || [75.9048, 22.7039],
+          drop: routeState.dropCoords || [75.8937, 22.7533],
+          fare: routeState.fare || routeState.vehicle?.price || 22,
+          vehicleTypeId: selectedVehicleTypeId,
+          vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
+        }, withUserAuth());
+
+        const payload = response?.data || response;
+        const ride = payload?.ride || payload;
+        const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
+        const socket = socketService.connect({ role: 'user', token: userToken });
+
+        if (socket && rideId) {
           socketService.emit('joinRide', { rideId });
         }
 
         setSearchStatus('Booking created. Searching nearby drivers...');
-      })
-      .catch((error) => {
+      } catch (error) {
         setSearchStatus(error?.message || 'Could not create ride request.');
-      });
+      }
+    })();
 
     return () => {
       clearTimeout(timerRef.current);

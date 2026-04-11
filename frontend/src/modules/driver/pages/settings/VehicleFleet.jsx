@@ -190,6 +190,13 @@ const VehicleFleet = () => {
                             </button>
                         </div>
 
+                        <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Dispatch Matching</p>
+                            <p className="text-[11px] font-bold text-slate-600 mt-1 leading-relaxed">
+                                Update the primary vehicle here if ride requests are not reaching this driver. Dispatch now uses this selected vehicle type and icon.
+                            </p>
+                        </div>
+
                         <div className="bg-white p-5 rounded-2xl border border-white shadow-sm flex items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
                                 <div className="w-11 h-11 rounded-xl flex items-center justify-center border bg-emerald-50 text-emerald-500 shadow-sm border-emerald-500/5 shrink-0">

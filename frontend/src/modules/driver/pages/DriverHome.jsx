@@ -230,16 +230,37 @@ const DriverHome = () => {
 
     const goOnline = useCallback(async () => {
         try {
+            console.info('[driver-home] goOnline requested');
             const coordinates = await updateDriverLocation({ quiet: true });
+            console.info('[driver-home] current coordinates resolved', coordinates);
+            const socket = socketService.connect({ role: 'driver' });
+
+            if (!socket) {
+                console.warn('[driver-home] socket connect skipped because token was missing');
+                setStatusMessage('Driver session missing. Please login again.');
+                return;
+            }
+
             const response = await api.patch('/drivers/online', { location: coordinates });
             const driver = response?.data?.data || response?.data || response;
+            console.info('[driver-home] online API response', {
+                isOnline: driver?.isOnline,
+                zoneId: driver?.zoneId || null,
+                vehicleTypeId: driver?.vehicleTypeId || null,
+            });
             setIsOnline(Boolean(driver?.isOnline));
             if (Array.isArray(driver?.location?.coordinates) && driver.location.coordinates.length === 2) {
                 driverCoordsRef.current = driver.location.coordinates;
                 setDriverCoords(driver.location.coordinates);
+                socketService.emit('locationUpdate', { coordinates: driver.location.coordinates });
+                console.info('[driver-home] emitted locationUpdate with saved coords', driver.location.coordinates);
+            } else {
+                socketService.emit('locationUpdate', { coordinates });
+                console.info('[driver-home] emitted locationUpdate with fresh coords', coordinates);
             }
             setStatusMessage('You are online. Waiting for nearby bookings.');
         } catch (error) {
+            console.error('[driver-home] goOnline failed', error);
             setStatusMessage(error.message || 'Could not go online.');
         }
     }, [updateDriverLocation]);
@@ -262,9 +283,11 @@ const DriverHome = () => {
     // Socket Integration
     useEffect(() => {
         if (isOnline) {
+            console.info('[driver-home] socket effect starting for online driver');
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
+                console.warn('[driver-home] socket effect could not get a socket');
                 setStatusMessage('Driver session missing. Please login again.');
                 setIsOnline(false);
                 return undefined;
@@ -272,9 +295,11 @@ const DriverHome = () => {
 
             if (driverCoordsRef.current) {
                 socketService.emit('locationUpdate', { coordinates: driverCoordsRef.current });
+                console.info('[driver-home] emitted initial locationUpdate from effect', driverCoordsRef.current);
             }
-            
-            socketService.on('rideRequest', (data) => {
+
+            const onRideRequest = (data) => {
+                console.info('[driver-home] rideRequest received', data);
                 const request = {
                     type: 'ride',
                     title: 'Taxi Ride',
@@ -290,17 +315,24 @@ const DriverHome = () => {
                 setCurrentRequest(request);
                 setShowRequest(true);
                 setStatusMessage('New booking received.');
-            });
+            };
 
-            socketService.on('rideRequestClosed', ({ rideId }) => {
+            const onRideRequestClosed = ({ rideId }) => {
+                console.info('[driver-home] rideRequestClosed received', { rideId });
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
                 }
-            });
+            };
 
-            socketService.on('errorMessage', ({ message }) => {
+            const onSocketError = ({ message }) => {
+                console.error('[driver-home] socket errorMessage received', message);
                 setStatusMessage(message || 'Socket error.');
-            });
+            };
+
+            socketService.on('rideRequest', onRideRequest);
+            socketService.on('rideRequestClosed', onRideRequestClosed);
+            socketService.on('errorMessage', onSocketError);
+            console.info('[driver-home] socket listeners registered');
 
             const locationInterval = setInterval(() => {
                 getCurrentCoords()
@@ -308,19 +340,23 @@ const DriverHome = () => {
                         driverCoordsRef.current = coordinates;
                         setDriverCoords(coordinates);
                         socketService.emit('locationUpdate', { coordinates });
+                        console.info('[driver-home] periodic locationUpdate emitted', coordinates);
                     })
                     .catch((error) => {
+                        console.error('[driver-home] periodic location update failed', error);
                         setStatusMessage(error.message || 'Could not update live location.');
                     });
             }, 10000);
 
             return () => {
-                socketService.off('rideRequest');
-                socketService.off('rideRequestClosed');
-                socketService.off('errorMessage');
+                console.info('[driver-home] cleaning up socket listeners');
+                socketService.off('rideRequest', onRideRequest);
+                socketService.off('rideRequestClosed', onRideRequestClosed);
+                socketService.off('errorMessage', onSocketError);
                 clearInterval(locationInterval);
             };
         } else {
+            console.info('[driver-home] driver offline, disconnecting socket');
             socketService.disconnect();
         }
         return undefined;

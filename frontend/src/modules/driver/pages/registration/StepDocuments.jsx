@@ -9,6 +9,8 @@ import {
     saveDriverRegistrationSession,
 } from '../../services/registrationService';
 
+const unwrap = (response) => response?.data?.data || response?.data || response;
+
 const DOCUMENTS = [
     { key: 'aadharFront', label: 'Front Side', icon: Smartphone, group: 'Aadhar Card Verification' },
     { key: 'aadharBack', label: 'Back Side', icon: FileText, group: 'Aadhar Card Verification' },
@@ -110,8 +112,9 @@ const StepDocuments = () => {
                     },
                 },
             });
+            const payload = unwrap(response);
 
-            const uploadedDoc = response?.data?.documents?.[key] || response?.data?.session?.documents?.[key];
+            const uploadedDoc = payload?.documents?.[key] || payload?.session?.documents?.[key];
             const nextDoc = normalizeDocument(uploadedDoc) || {
                 previewUrl: tempPreviewUrl,
                 secureUrl: tempPreviewUrl,
@@ -165,8 +168,9 @@ const StepDocuments = () => {
                 phone: session.phone,
                 documents: submittedDocuments,
             });
+            const payload = unwrap(completeResponse);
 
-            const token = completeResponse?.data?.token;
+            const token = payload?.token;
             if (token) {
                 localStorage.setItem('token', token);
                 localStorage.setItem('driverToken', token);
@@ -176,7 +180,7 @@ const StepDocuments = () => {
             saveDriverRegistrationSession({
                 ...session,
                 documents: docs,
-                completedRegistration: completeResponse?.data || null,
+                completedRegistration: payload || null,
             });
             clearDriverRegistrationSession();
 
@@ -184,7 +188,7 @@ const StepDocuments = () => {
                 state: {
                     ...session,
                     documents: docs,
-                    completedRegistration: completeResponse?.data || null,
+                    completedRegistration: payload || null,
                 },
             });
         } catch (submitError) {

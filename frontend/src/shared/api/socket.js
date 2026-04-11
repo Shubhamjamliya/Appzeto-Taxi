@@ -67,14 +67,21 @@ class SocketService {
     const token = options.token || resolveTokenForRole(options.role);
 
     if (!token) {
+      console.warn('[socket] missing token for role', options.role || 'unknown');
       return null;
     }
 
     if (this.socket && this.currentToken === token) {
+      console.info('[socket] reusing existing connection', {
+        role: options.role || 'unknown',
+        socketId: this.socket.id || null,
+        connected: this.socket.connected,
+      });
       return this.socket;
     }
 
     if (this.socket) {
+      console.info('[socket] disconnecting previous socket before reconnect');
       this.socket.disconnect();
     }
 
@@ -84,6 +91,27 @@ class SocketService {
       transports: ['websocket'],
       withCredentials: true,
       reconnection: true,
+    });
+
+    this.socket.on('connect', () => {
+      console.info('[socket] connected', {
+        role: options.role || 'unknown',
+        socketId: this.socket?.id || null,
+      });
+    });
+
+    this.socket.on('connect_error', (error) => {
+      console.error('[socket] connect_error', {
+        role: options.role || 'unknown',
+        message: error?.message || 'unknown error',
+      });
+    });
+
+    this.socket.on('disconnect', (reason) => {
+      console.warn('[socket] disconnected', {
+        role: options.role || 'unknown',
+        reason,
+      });
     });
 
     return this.socket;

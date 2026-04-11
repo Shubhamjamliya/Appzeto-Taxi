@@ -1,5 +1,30 @@
 import mongoose from 'mongoose';
-import { RIDE_STATUS } from '../../constants/index.js';
+import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+
+const rideMessageSchema = new mongoose.Schema(
+  {
+    senderRole: {
+      type: String,
+      enum: ['user', 'driver'],
+      required: true,
+    },
+    senderId: {
+      type: mongoose.Schema.Types.ObjectId,
+      required: true,
+    },
+    message: {
+      type: String,
+      required: true,
+      trim: true,
+      maxlength: 1000,
+    },
+    sentAt: {
+      type: Date,
+      default: Date.now,
+    },
+  },
+  { _id: true },
+);
 
 const rideSchema = new mongoose.Schema(
   {
@@ -28,6 +53,11 @@ const rideSchema = new mongoose.Schema(
       enum: Object.values(RIDE_STATUS),
       default: RIDE_STATUS.SEARCHING,
     },
+    liveStatus: {
+      type: String,
+      enum: Object.values(RIDE_LIVE_STATUS),
+      default: RIDE_LIVE_STATUS.SEARCHING,
+    },
     pickupLocation: {
       type: {
         type: String,
@@ -54,6 +84,45 @@ const rideSchema = new mongoose.Schema(
       type: Number,
       required: true,
       min: 0,
+    },
+    lastDriverLocation: {
+      type: {
+        type: String,
+        enum: ['Point'],
+        default: 'Point',
+      },
+      coordinates: {
+        type: [Number],
+        default: undefined,
+      },
+      heading: {
+        type: Number,
+        default: null,
+      },
+      speed: {
+        type: Number,
+        default: null,
+      },
+      updatedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    messages: {
+      type: [rideMessageSchema],
+      default: [],
+    },
+    acceptedAt: {
+      type: Date,
+      default: null,
+    },
+    startedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true },

@@ -4,6 +4,13 @@ import { DISPATCH_TOP_DRIVERS } from '../constants/index.js';
 import { Driver } from '../driver/models/Driver.js';
 import { Zone } from '../driver/models/Zone.js';
 
+const buildDriverMatchFilters = ({ zoneId, vehicleTypeId }) => ({
+  isOnline: true,
+  isOnRide: false,
+  zoneId,
+  ...(vehicleTypeId ? { vehicleTypeId } : {}),
+});
+
 export const findZoneByPickup = async (pickupCoords) => {
   const coordinates = normalizePoint(pickupCoords, 'pickupCoords');
 
@@ -22,7 +29,11 @@ export const findZoneByPickup = async (pickupCoords) => {
 
 export const matchDrivers = async (pickupCoords, options = {}) => {
   const coordinates = normalizePoint(pickupCoords, 'pickupCoords');
-  const { maxDistance = 3000, limit = DISPATCH_TOP_DRIVERS, vehicleTypeId } = options;
+  const {
+    maxDistance = 3000,
+    limit = DISPATCH_TOP_DRIVERS,
+    vehicleTypeId,
+  } = options;
 
   const zone = await findZoneByPickup(coordinates);
 
@@ -31,11 +42,7 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
   }
 
   // MongoDB handles both distance filtering and nearest-first sorting via $near.
-  const drivers = await Driver.find({
-    isOnline: true,
-    isOnRide: false,
-    zoneId: zone._id,
-    ...(vehicleTypeId ? { vehicleTypeId } : {}),
+  const locationFilter = {
     location: {
       $near: {
         $geometry: {
@@ -45,6 +52,14 @@ export const matchDrivers = async (pickupCoords, options = {}) => {
         $maxDistance: maxDistance,
       },
     },
+  };
+
+  const drivers = await Driver.find({
+    ...buildDriverMatchFilters({
+      zoneId: zone._id,
+      vehicleTypeId,
+    }),
+    ...locationFilter,
   })
     .limit(limit)
     .select('name phone socketId vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location zoneId isOnline isOnRide');

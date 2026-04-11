@@ -363,6 +363,7 @@ const SelectVehicle = () => {
         const response = await api.get('/rides/available-drivers', {
           params: {
             vehicleTypeId: selectedVehicle.vehicleTypeId,
+            vehicleIconType: selectedVehicle.iconType,
             lng: pickupCoords[0],
             lat: pickupCoords[1],
           },

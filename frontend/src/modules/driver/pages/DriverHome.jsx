@@ -412,7 +412,7 @@ const DriverHome = () => {
                     <div className="h-5 w-px bg-slate-200" />
                     <div className="flex items-center gap-1.5">
                         <div className={`w-2 h-2 rounded-full shadow-sm ${isHydratingDriver ? 'bg-amber-400 animate-pulse' : isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                        <span className={`text-[10px] font-black uppercase tracking-widest ${isHydratingDriver ? 'text-amber-500' : isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
+                        <span className={`text-[11px] font-semibold tracking-wide ${isHydratingDriver ? 'text-amber-500' : isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
                             {isHydratingDriver ? 'Syncing' : isOnline ? 'Online' : 'Offline'}
                         </span>
                     </div>
@@ -433,7 +433,7 @@ const DriverHome = () => {
                     <GoogleMap mapContainerStyle={containerStyle} center={driverPosition} zoom={15} onLoad={onLoad} onUnmount={onUnmount} options={mapOptions}>
                         <Marker position={driverPosition} icon={{ url: mapVehicleIcon, scaledSize: new window.google.maps.Size(40, 40), anchor: new window.google.maps.Point(20, 20)}} />
                     </GoogleMap>
-                ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-black uppercase text-[10px] tracking-widest">Map unavailable until Google Maps key is configured</div>}
+                ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-medium text-xs">Map unavailable until Google Maps key is configured</div>}
                 <div className="absolute right-5 top-28 flex flex-col gap-2 z-20">
                     <button onClick={() => updateDriverLocation()} className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Target size={16} /></button>
                     <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Layers size={16} /></button>
@@ -444,29 +444,29 @@ const DriverHome = () => {
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
-                             <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[8px] font-black uppercase tracking-wider">Earnings</span></div>
-                             <p className="text-xl font-black text-slate-900 tracking-tight leading-none">₹0.00</p>
+                             <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Earnings</span></div>
+                             <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">₹0.00</p>
                         </div>
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
-                             <div className="flex items-center gap-1 opacity-60"><Clock size={10} className="text-blue-500" /><span className="text-[8px] font-black uppercase tracking-wider">Duty</span></div>
-                             <p className="text-xl font-black text-slate-900 tracking-tight leading-none">{dutyHours}h {dutyMins}m</p>
+                             <div className="flex items-center gap-1 opacity-60"><Clock size={10} className="text-blue-500" /><span className="text-[10px] font-medium text-slate-500">Duty Time</span></div>
+                             <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">{dutyHours}h {dutyMins}m</p>
                         </div>
                     </div>
                     <div className="flex items-center justify-between px-2 mb-4">
-                         <div className="flex items-center gap-2">
-                             <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500"><Bike size={14} /></div>
-                             <div className="leading-tight"><h5 className="text-[11px] font-black text-slate-800 leading-none">{completedRides} Trips</h5><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Today</p></div>
-                         </div>
-                         <div className="flex items-center gap-2">
-                             <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500"><Star size={14} /></div>
-                             <div className="leading-tight text-right"><h5 className="text-[11px] font-black text-slate-800 leading-none">4.95</h5><p className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Rating</p></div>
-                         </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500"><Bike size={14} /></div>
+                              <div className="leading-tight"><h5 className="text-[13px] font-bold text-slate-800 leading-none">{completedRides} Trips</h5><p className="text-[10px] font-medium text-slate-400 mt-0.5">Completed Today</p></div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500"><Star size={14} /></div>
+                              <div className="leading-tight text-right"><h5 className="text-[13px] font-bold text-slate-800 leading-none">4.95</h5><p className="text-[10px] font-medium text-slate-400 mt-0.5">Avg. Rating</p></div>
+                          </div>
                     </div>
                     {statusMessage && (
-                        <p className="px-2 pb-3 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">{statusMessage}</p>
+                        <p className="px-2 pb-3 text-[11px] font-medium text-slate-400 text-center">{statusMessage}</p>
                     )}
-                    <motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
-                         <Power size={16} strokeWidth={3} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status' : isOnline ? 'End Your Duty' : 'Go Online'}
+                    <motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
+                         <Power size={18} strokeWidth={2.5} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status...' : isOnline ? 'End Your Duty' : 'Go Online Now'}
                     </motion.button>
                 </motion.div>
             </div>

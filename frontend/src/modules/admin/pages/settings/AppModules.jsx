@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import toast from 'react-hot-toast';
 
 const AppModules = ({ mode }) => {
@@ -97,6 +98,16 @@ const AppModules = ({ mode }) => {
       [name]: type === 'checkbox' ? checked : value
     }));
   };
+
+  const { 
+    uploading: imageUploading, 
+    preview: imagePreview, 
+    handleFileChange: onImageFileChange,
+    setPreview: setImagePreview
+  } = useImageUpload({
+    folder: 'app-modules',
+    onSuccess: (url) => setFormData(prev => ({ ...prev, mobile_menu_icon: url }))
+  });
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -180,7 +191,7 @@ const AppModules = ({ mode }) => {
                 </select>
               </div>
 
-              {/* Transport Type */}
+              {/* Transport Type moved to take full width of one cell or handled by removal of Icon Type */}
               <div className="space-y-2">
                 <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Transport Type *</label>
                 <select 
@@ -191,15 +202,6 @@ const AppModules = ({ mode }) => {
                 >
                   <option value="taxi">Taxi</option>
                   <option value="delivery">Delivery</option>
-                </select>
-              </div>
-
-              {/* Icon Type (Placeholder for parity) */}
-              <div className="space-y-2">
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Icon Type</label>
-                <select className="w-full bg-gray-50 border border-transparent rounded-2xl px-6 py-4 text-sm font-bold text-gray-900 focus:bg-white focus:border-indigo-500/20 focus:ring-4 focus:ring-indigo-500/5 transition-all outline-none appearance-none">
-                  <option value="image">Image</option>
-                  <option value="lucide">Lucide Icon</option>
                 </select>
               </div>
 
@@ -241,31 +243,64 @@ const AppModules = ({ mode }) => {
                 />
               </div>
 
-              {/* Thumbnail / Image Upload */}
+              {/* Module Icon Image Upload */}
               <div className="md:col-span-2 space-y-4">
-                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Thumbnail (512px x 512px) *</label>
-                <div className="flex flex-col items-center justify-center border-4 border-dashed border-gray-50 rounded-[40px] p-12 transition-all hover:bg-gray-50/50 hover:border-indigo-500/20 group cursor-pointer relative bg-white h-64">
-                    {formData.mobile_menu_icon ? (
-                      <div className="flex flex-col items-center gap-4">
-                        <img src={formData.mobile_menu_icon} className="w-24 h-24 object-contain rounded-2xl" alt="" />
-                        <button type="button" onClick={() => setFormData({...formData, mobile_menu_icon: ''})} className="text-[10px] font-black text-red-500 uppercase">Remove</button>
+                <label className="text-[11px] font-black text-gray-400 uppercase tracking-widest pl-1">Module Branding Image (Icon) *</label>
+                <div className="flex flex-col items-center justify-center border-4 border-dashed border-gray-50 rounded-[40px] p-12 transition-all hover:bg-gray-50/50 hover:border-indigo-500/20 group cursor-pointer relative bg-white min-h-[300px]">
+                    {(formData.mobile_menu_icon || imagePreview) ? (
+                      <div className="flex flex-col items-center gap-6 animate-in zoom-in-75 duration-300">
+                        <div className="relative group/img">
+                          <img 
+                            src={imagePreview || formData.mobile_menu_icon} 
+                            className={`w-40 h-40 object-contain rounded-3xl shadow-2xl bg-white p-4 border border-gray-100 ${imageUploading ? 'opacity-50 animate-pulse' : ''}`} 
+                            alt="Module Icon" 
+                          />
+                          {!imageUploading && (
+                            <button 
+                              type="button" 
+                              onClick={(e) => { 
+                                e.stopPropagation(); 
+                                setFormData({...formData, mobile_menu_icon: ''});
+                                setImagePreview(null);
+                              }} 
+                              className="absolute -top-3 -right-3 w-10 h-10 bg-white shadow-xl rounded-full flex items-center justify-center text-red-500 border border-gray-50 opacity-0 group-hover/img:opacity-100 transition-all hover:scale-110"
+                            >
+                              <X size={20} />
+                            </button>
+                          )}
+                          {imageUploading && (
+                            <div className="absolute inset-0 flex items-center justify-center">
+                              <Loader2 size={32} className="animate-spin text-indigo-600" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="text-center">
+                          <p className="text-[13px] font-bold text-gray-900">
+                            {imageUploading ? 'Uploading to Cloudinary...' : 'Custom Branding Applied'}
+                          </p>
+                          <p className="text-[11px] text-gray-400 font-medium">
+                            {imageUploading ? 'Optimizing for WebP' : 'Click above or drag to change image'}
+                          </p>
+                        </div>
                       </div>
                     ) : (
                       <>
-                        <div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-white group-hover:text-indigo-600 group-hover:scale-110 transition-all duration-500 mb-6 group-hover:shadow-2xl group-hover:shadow-indigo-500/10">
-                           <Upload size={32} strokeWidth={1.5} />
+                        <div className="w-24 h-24 rounded-[32px] bg-gray-50 flex items-center justify-center text-gray-300 group-hover:bg-indigo-50 group-hover:text-indigo-600 group-hover:scale-110 transition-all duration-500 mb-6 group-hover:shadow-2xl group-hover:shadow-indigo-500/10">
+                           <Upload size={40} strokeWidth={1.5} />
                         </div>
-                        <p className="text-[12px] font-black text-gray-900 uppercase tracking-widest">Upload Image</p>
+                        <div className="text-center">
+                          <p className="text-[14px] font-black text-gray-900 uppercase tracking-tight">Drop branding image</p>
+                          <p className="mt-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">Recommended: 512x512 PNG/WebP (Converted to WebP)</p>
+                        </div>
                       </>
                     )}
-                    <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={(e) => {
-                      const file = e.target.files[0];
-                      if(file) {
-                        toast.success('Image selected');
-                        // Simulation of setting a URL
-                        setFormData({...formData, mobile_menu_icon: 'https://cdn-icons-png.flaticon.com/512/3063/3063823.png'});
-                      }
-                    }} />
+                    <input 
+                      type="file" 
+                      accept="image/*"
+                      disabled={imageUploading}
+                      className="absolute inset-0 opacity-0 cursor-pointer" 
+                      onChange={onImageFileChange}
+                    />
                 </div>
               </div>
             </div>

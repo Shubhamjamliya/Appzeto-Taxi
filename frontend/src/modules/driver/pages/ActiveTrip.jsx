@@ -336,14 +336,14 @@ const ActiveTrip = () => {
                 {!HAS_VALID_GOOGLE_MAPS_KEY ? (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
                         <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-                            <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+                            <p className="text-[12px] font-semibold text-slate-900">Google Maps key missing</p>
                             <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
                         </div>
                     </div>
                 ) : loadError ? (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
                         <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-                            <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+                            <p className="text-[12px] font-semibold text-slate-900">Google Maps failed to load</p>
                             <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
                         </div>
                     </div>
@@ -393,7 +393,7 @@ const ActiveTrip = () => {
                     </GoogleMap>
                 ) : (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200">
-                        <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-black text-slate-700">
+                        <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-semibold text-slate-700">
                             Loading map
                         </div>
                     </div>
@@ -413,11 +413,11 @@ const ActiveTrip = () => {
                         {isParcel ? <Package size={20} strokeWidth={2.5} /> : <Navigation size={20} fill="currentColor" strokeWidth={2.5} className="-rotate-45" />}
                     </div>
                     <div className="flex-1 space-y-0.5 overflow-hidden">
-                        <h4 className="text-[9px] font-black uppercase tracking-widest leading-none flex items-center gap-2 text-amber-300">
+                        <h4 className="text-[9px] font-semibold uppercase tracking-wide leading-none flex items-center gap-2 text-amber-300">
                             Driver Live
                             <ArrowUpRight size={12} strokeWidth={3} />
                         </h4>
-                        <p className="text-[13px] font-black text-white leading-tight truncate uppercase">
+                        <p className="text-[13px] font-semibold text-white leading-tight truncate uppercase">
                             {driverPosition.lat.toFixed(4)}, {driverPosition.lng.toFixed(4)}
                         </p>
                     </div>
@@ -425,32 +425,32 @@ const ActiveTrip = () => {
 
                 <div className="absolute top-28 left-4 z-40 flex gap-2">
                     <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
-                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
-                        <p className="text-[11px] font-black text-slate-900 mt-1">
+                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
+                        <p className="text-[11px] font-semibold text-slate-900 mt-1">
                             {phase === 'to_pickup' ? 'Heading To Pickup' : phase === 'otp_verification' ? 'Verify OTP' : phase === 'in_trip' ? 'On Trip' : phase === 'payment_confirm' ? 'Collect Payment' : 'Complete'}
                         </p>
                     </div>
                     <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
-                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">ETA</p>
+                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">ETA</p>
                         <div className="flex items-center gap-1.5 mt-1">
                             <Clock3 size={12} className="text-orange-500" />
-                            <p className="text-[11px] font-black text-slate-900">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
+                            <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
                         </div>
                     </div>
                 </div>
 
                 <div className="absolute top-28 right-4 z-40 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2 min-w-[116px]">
-                    <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Route</p>
+                    <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">Route</p>
                     <div className="flex items-center gap-1.5 mt-1">
                         <MapPinned size={12} className="text-slate-500" />
-                        <p className="text-[11px] font-black text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
+                        <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
                     </div>
                 </div>
 
                 {routeError && (
                     <div className="absolute top-44 right-4 z-40 rounded-2xl bg-white/92 border border-amber-100 shadow-lg px-3 py-2 min-w-[148px]">
-                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-amber-500">Route</p>
-                        <p className="mt-1 text-[10px] font-black text-slate-700">Using fallback path while directions load.</p>
+                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-amber-500">Route</p>
+                        <p className="mt-1 text-[10px] font-semibold text-slate-700">Using fallback path while directions load.</p>
                     </div>
                 )}
             </div>
@@ -471,12 +471,12 @@ const ActiveTrip = () => {
                                         {isParcel ? <Package size={22} className="text-slate-900" /> : <User size={22} className="text-slate-400" />}
                                     </div>
                                     <div className="space-y-0.5">
-                                        <h4 className="text-[15px] font-black text-slate-900 tracking-tight uppercase">
+                                        <h4 className="text-[15px] font-semibold text-slate-900 tracking-tight uppercase">
                                             {isParcel ? tripData.sender.name : tripData.user.name}
                                         </h4>
                                         <div className="flex items-center gap-1.5 opacity-60">
                                             <Star size={10} fill="#f0c419" className="text-yellow-500" />
-                                            <p className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                                            <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
                                                 {isParcel ? tripData.sender.rating : tripData.user.rating} • 1.2 KM
                                             </p>
                                         </div>
@@ -493,7 +493,7 @@ const ActiveTrip = () => {
                                     setPhase('otp_verification');
                                     publishRideStatus('arriving');
                                 }}
-                                className="w-full h-15 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-lg shadow-slate-900/20"
+                                className="w-full h-15 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-lg shadow-slate-900/20"
                             >
                                 {isParcel ? 'Arrived at Sender' : 'I Have Arrived'} <CheckCircle2 size={18} strokeWidth={3} />
                             </motion.button>
@@ -509,8 +509,8 @@ const ActiveTrip = () => {
                             className="bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border-t border-slate-100"
                         >
                             <div className="text-center mb-6">
-                                <h3 className="text-xl font-black text-slate-900 tracking-tight uppercase leading-none">Security Pin</h3>
-                                <p className="text-[10px] font-bold text-slate-400 tracking-widest uppercase mt-2">
+                                <h3 className="text-xl font-semibold text-slate-900 tracking-tight uppercase leading-none">Security Pin</h3>
+                                <p className="text-[10px] font-bold text-slate-400 tracking-wide uppercase mt-2">
                                     Ask <span className="text-slate-900">{isParcel ? 'Sender' : 'Passenger'}</span> for Start PIN
                                 </p>
                             </div>
@@ -523,7 +523,7 @@ const ActiveTrip = () => {
                                         maxLength={1}
                                         value={digit}
                                         onChange={(e) => handleOTPChange(index, e.target.value)}
-                                        className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-black text-slate-900 focus:outline-none focus:border-slate-900 transition-all shadow-inner"
+                                        className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-semibold text-slate-900 focus:outline-none focus:border-slate-900 transition-all shadow-inner"
                                     />
                                 ))}
                             </div>
@@ -531,8 +531,8 @@ const ActiveTrip = () => {
                                 <button onClick={() => {
                                     setPhase('to_pickup');
                                     publishRideStatus('accepted');
-                                }} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">Go Back</button>
-                                <button className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-black uppercase tracking-widest active:scale-95 transition-all">Support</button>
+                                }} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Go Back</button>
+                                <button className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Support</button>
                             </div>
                         </motion.div>
                     )}
@@ -547,8 +547,8 @@ const ActiveTrip = () => {
                         >
                             <div className="flex items-center justify-between mb-6">
                                 <div className="space-y-0.5 flex-1 pr-4">
-                                    <h4 className="text-[9px] font-black text-rose-500 uppercase tracking-[0.2em] leading-none mb-1">Destination</h4>
-                                    <p className="text-[16px] font-black text-slate-900 tracking-tight uppercase truncate">{tripData.drop}</p>
+                                    <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.2em] leading-none mb-1">Destination</h4>
+                                    <p className="text-[16px] font-semibold text-slate-900 tracking-tight uppercase truncate">{tripData.drop}</p>
                                 </div>
                                 <button className="w-11 h-11 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center active:scale-90 transition-transform"><ShieldAlert size={22} strokeWidth={2.5} /></button>
                             </div>
@@ -558,8 +558,8 @@ const ActiveTrip = () => {
                                         {isParcel ? <Package size={18} className="text-white" /> : <User size={18} className="text-white opacity-40" />}
                                     </div>
                                     <div className="space-y-0.5">
-                                        <p className="text-[13px] font-black text-slate-900 leading-none uppercase">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
-                                        <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest">{isParcel ? 'Receiver' : 'Passenger'}</p>
+                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
+                                        <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
                                 <button className="w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
@@ -569,7 +569,7 @@ const ActiveTrip = () => {
                                 onClick={() => {
                                     setPhase('payment_confirm');
                                 }}
-                                className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl"
+                                className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl"
                             >
                                 {isParcel ? 'Deliver Parcel' : 'Arrived at Destination'} <ChevronRight size={18} strokeWidth={3} />
                             </motion.button>
@@ -588,11 +588,11 @@ const ActiveTrip = () => {
                                 <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg transition-all duration-500 ${driverPaymentStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
                                     {driverPaymentStatus === 'success' ? <Check size={32} strokeWidth={4} /> : <QrCode size={32} strokeWidth={2} />}
                                 </div>
-                                <h2 className="text-2xl font-black text-slate-900 uppercase">
+                                <h2 className="text-2xl font-semibold text-slate-900 uppercase">
                                     {driverPaymentStatus === 'success' ? 'Payment Success!' : 'Collect Amount'}
                                 </h2>
-                                <p className="text-[12px] font-bold text-slate-400 mt-1 uppercase tracking-widest">
-                                    Fare: <span className="text-slate-900 font-black text-lg ml-1">{displayFare}</span>
+                                <p className="text-[12px] font-bold text-slate-400 mt-1 uppercase tracking-wide">
+                                    Fare: <span className="text-slate-900 font-semibold text-lg ml-1">{displayFare}</span>
                                 </p>
                             </div>
                             {driverPaymentStatus === 'pending' && (
@@ -611,7 +611,7 @@ const ActiveTrip = () => {
                                             className={`flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all ${selectedPaymentMode === mode.id ? 'border-slate-900 bg-slate-50' : 'border-slate-50 bg-slate-50/50'}`}
                                         >
                                             <mode.icon size={22} className={selectedPaymentMode === mode.id ? 'text-slate-900' : 'text-slate-400'} strokeWidth={2.5} />
-                                            <span className="text-[9px] font-black text-slate-900 uppercase tracking-widest mt-2">{mode.label}</span>
+                                            <span className="text-[9px] font-semibold text-slate-900 uppercase tracking-wide mt-2">{mode.label}</span>
                                         </button>
                                     ))}
                                 </div>
@@ -622,15 +622,15 @@ const ActiveTrip = () => {
                                         <QrCode size={90} className="text-slate-900 opacity-90" />
                                         <motion.div animate={{ top: ['0%', '100%', '0%'] }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }} className="absolute left-0 w-full h-0.5 bg-slate-200" />
                                     </div>
-                                    <p className="text-white font-black text-sm uppercase tracking-widest mb-4">Scan Code - {displayFare}</p>
-                                    <button onClick={() => setDriverPaymentStatus('success')} className="w-full py-3 bg-white/10 text-white rounded-xl text-[10px] font-black uppercase tracking-widest border border-white/5">Confirm Received</button>
+                                    <p className="text-white font-semibold text-sm uppercase tracking-wide mb-4">Scan Code - {displayFare}</p>
+                                    <button onClick={() => setDriverPaymentStatus('success')} className="w-full py-3 bg-white/10 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wide border border-white/5">Confirm Received</button>
                                 </motion.div>
                             )}
                             <motion.button
                                 whileTap={{ scale: 0.96 }}
                                 disabled={driverPaymentStatus !== 'success'}
                                 onClick={() => setPhase('review')}
-                                className={`w-full h-15 rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl transition-all ${driverPaymentStatus === 'success' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300 pointer-events-none'}`}
+                                className={`w-full h-15 rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl transition-all ${driverPaymentStatus === 'success' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300 pointer-events-none'}`}
                             >
                                 {driverPaymentStatus === 'success' ? 'Finalize Earnings' : 'Waiting...'} <ChevronRight size={18} strokeWidth={3} />
                             </motion.button>
@@ -646,7 +646,7 @@ const ActiveTrip = () => {
                         >
                             <div className="mb-8 space-y-4">
                                 <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center mx-auto shadow-lg"><User size={24} className="text-white" /></div>
-                                <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Rate Experience</h3>
+                                <h3 className="text-xl font-semibold text-slate-900 uppercase tracking-tight">Rate Experience</h3>
                                 <div className="flex justify-center gap-2">
                                     {[1, 2, 3, 4, 5].map((score) => (
                                         <Star
@@ -663,7 +663,7 @@ const ActiveTrip = () => {
                             <button onClick={() => {
                                 publishRideStatus('completed');
                                 navigate('/taxi/driver/home');
-                            }} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
+                            }} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
                         </motion.div>
                     )}
                 </AnimatePresence>

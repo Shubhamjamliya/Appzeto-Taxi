@@ -51,6 +51,7 @@ export const uploadDataUrlToCloudinary = async ({
   const signature = buildSignature(
     {
       folder,
+      format: 'webp',
       public_id: publicId,
       timestamp,
     },
@@ -63,6 +64,7 @@ export const uploadDataUrlToCloudinary = async ({
   formData.append('timestamp', timestamp);
   formData.append('folder', folder);
   formData.append('public_id', publicId);
+  formData.append('format', 'webp');
   formData.append('signature', signature);
 
   const response = await fetch(`https://api.cloudinary.com/v1_1/${env.cloudinary.cloudName}/image/upload`, {

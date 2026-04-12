@@ -1,4 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { AnimatePresence, motion } from 'framer-motion';
+import { ChevronRight, MapPin } from 'lucide-react';
 import HeaderGreeting from '../components/HeaderGreeting';
 import ServiceGrid from '../components/ServiceGrid';
 import LocationMapSection from '../components/LocationMapSection';
@@ -6,8 +9,87 @@ import ActionsSection from '../components/ActionsSection';
 import PromoBanners from '../components/PromoBanners';
 import ExplorerSection from '../components/ExplorerSection';
 import BottomNavbar from '../components/BottomNavbar';
+import carIcon from '../../../assets/icons/car.png';
+import api from '../../../shared/api/axiosInstance';
+import {
+  CURRENT_RIDE_UPDATED_EVENT,
+  getCurrentRide,
+  isActiveCurrentRide,
+  saveCurrentRide,
+} from '../services/currentRideService';
+
+const normalizeActiveRide = (ride) => {
+  if (!ride?.rideId) {
+    return null;
+  }
+
+  return {
+    rideId: ride.rideId,
+    status: ride.status || ride.liveStatus || 'accepted',
+    driver: ride.driver || null,
+    fare: ride.fare || 22,
+    pickupCoords: ride.pickupLocation?.coordinates,
+    dropCoords: ride.dropLocation?.coordinates,
+    pickup: 'Pickup location',
+    drop: 'Drop location',
+    paymentMethod: 'Cash',
+  };
+};
 
 const Home = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [currentRide, setCurrentRide] = useState(() => {
+    const ride = getCurrentRide();
+    return isActiveCurrentRide(ride) ? ride : null;
+  });
+
+  useEffect(() => {
+    const refreshCurrentRide = () => {
+      const ride = getCurrentRide();
+      setCurrentRide(isActiveCurrentRide(ride) ? ride : null);
+    };
+
+    refreshCurrentRide();
+    window.addEventListener('storage', refreshCurrentRide);
+    window.addEventListener(CURRENT_RIDE_UPDATED_EVENT, refreshCurrentRide);
+
+    return () => {
+      window.removeEventListener('storage', refreshCurrentRide);
+      window.removeEventListener(CURRENT_RIDE_UPDATED_EVENT, refreshCurrentRide);
+    };
+  }, []);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadActiveRide = async () => {
+      try {
+        const response = await api.get('/rides/active/me');
+        const ride = normalizeActiveRide(response?.data || response);
+
+        if (!active || !isActiveCurrentRide(ride)) {
+          return;
+        }
+
+        saveCurrentRide(ride);
+        setCurrentRide(ride);
+      } catch (_error) {
+        // Local storage remains the fallback; missing auth should not break the home page.
+      }
+    };
+
+    loadActiveRide();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
+  const driverName = currentRide?.driver?.name || 'Captain';
+  const vehicleLabel = currentRide?.driver?.vehicle || currentRide?.driver?.vehicleType || 'Taxi';
+
   const footerIllustrationBg = {
     backgroundImage: 'url(/home_footer_gemini.png)',
     backgroundRepeat: 'no-repeat',
@@ -107,6 +189,42 @@ const Home = () => {
           className="w-full h-full object-cover object-bottom mix-blend-multiply contrast-125"
         />
       </div>
+
+      <AnimatePresence>
+        {currentRide && (
+          <motion.button
+            type="button"
+            initial={{ y: 24, opacity: 0, scale: 0.96 }}
+            animate={{ y: 0, opacity: 1, scale: 1 }}
+            exit={{ y: 18, opacity: 0, scale: 0.96 }}
+            whileTap={{ scale: 0.98 }}
+            onClick={() => navigate(`${routePrefix}/ride/tracking`, { state: currentRide })}
+            className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[18px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+          >
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900">
+              <img src={carIcon} alt="Taxi" className="h-8 w-8 object-contain" draggable={false} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-500" />
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-600">
+                  Current Ride
+                </p>
+              </div>
+              <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
+                {driverName} is on the way
+              </p>
+              <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <MapPin size={12} className="shrink-0 text-orange-500" strokeWidth={2.5} />
+                <span className="truncate">{currentRide.pickup || vehicleLabel}</span>
+              </div>
+            </div>
+            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-orange-500 text-white">
+              <ChevronRight size={18} strokeWidth={3} />
+            </div>
+          </motion.button>
+        )}
+      </AnimatePresence>
 
       <BottomNavbar />
     </div>

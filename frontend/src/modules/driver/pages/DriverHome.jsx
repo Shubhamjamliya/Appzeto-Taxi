@@ -136,9 +136,11 @@ const DriverHome = () => {
     const [map, setMap] = useState(null);
     const [driverCoords, setDriverCoords] = useState(null);
     const [statusMessage, setStatusMessage] = useState('');
+    const [acceptingRideId, setAcceptingRideId] = useState('');
     const [isHydratingDriver, setIsHydratingDriver] = useState(true);
     const [vehicleIconType, setVehicleIconType] = useState('car');
     const driverCoordsRef = useRef(null);
+    const acceptingRideIdRef = useRef('');
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
     const mapVehicleIcon = useMemo(
         () => getMapIconForVehicle(vehicleIconType),
@@ -319,6 +321,9 @@ const DriverHome = () => {
 
             const onRideRequestClosed = ({ rideId }) => {
                 console.info('[driver-home] rideRequestClosed received', { rideId });
+                if (acceptingRideIdRef.current && acceptingRideIdRef.current === rideId) {
+                    return;
+                }
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
                 }
@@ -327,11 +332,42 @@ const DriverHome = () => {
             const onSocketError = ({ message }) => {
                 console.error('[driver-home] socket errorMessage received', message);
                 setStatusMessage(message || 'Socket error.');
+                acceptingRideIdRef.current = '';
+                setAcceptingRideId('');
+            };
+
+            const openAcceptedRide = (payload) => {
+                if (!payload?.rideId || payload.rideId !== acceptingRideIdRef.current) {
+                    return;
+                }
+
+                setShowRequest(false);
+                acceptingRideIdRef.current = '';
+                setAcceptingRideId('');
+                setCompletedRides(prev => prev + 1);
+                navigate('/taxi/driver/active-trip', {
+                    state: {
+                        type: currentRequest?.type || 'ride',
+                        rideId: payload.rideId,
+                        request: {
+                            ...currentRequest,
+                            rideId: payload.rideId,
+                            raw: {
+                                ...(currentRequest?.raw || {}),
+                                status: payload.status,
+                                liveStatus: payload.liveStatus,
+                                acceptedAt: payload.acceptedAt,
+                            },
+                        },
+                        currentDriverCoords: driverCoordsRef.current || driverCoords || null,
+                    },
+                });
             };
 
             socketService.on('rideRequest', onRideRequest);
             socketService.on('rideRequestClosed', onRideRequestClosed);
             socketService.on('errorMessage', onSocketError);
+            socketService.on('rideAccepted', openAcceptedRide);
             console.info('[driver-home] socket listeners registered');
 
             const locationInterval = setInterval(() => {
@@ -353,6 +389,7 @@ const DriverHome = () => {
                 socketService.off('rideRequest', onRideRequest);
                 socketService.off('rideRequestClosed', onRideRequestClosed);
                 socketService.off('errorMessage', onSocketError);
+                socketService.off('rideAccepted', openAcceptedRide);
                 clearInterval(locationInterval);
             };
         } else {
@@ -360,7 +397,7 @@ const DriverHome = () => {
             socketService.disconnect();
         }
         return undefined;
-    }, [currentRequest?.rideId, isOnline]);
+    }, [currentRequest, driverCoords, isOnline, navigate]);
     
     useEffect(() => {
         let interval;
@@ -376,18 +413,14 @@ const DriverHome = () => {
     const dutyMins = Math.floor((dutySeconds % 3600) / 60);
 
     const handleAccept = () => {
-        if (currentRequest?.rideId) {
-            socketService.emit('acceptRide', { rideId: currentRequest.rideId });
+        if (!currentRequest?.rideId || acceptingRideId) {
+            return;
         }
-        setShowRequest(false);
-        setCompletedRides(prev => prev + 1);
-        navigate('/taxi/driver/active-trip', {
-            state: {
-                type: currentRequest?.type || 'ride',
-                request: currentRequest,
-                currentDriverCoords: driverCoordsRef.current || driverCoords || null,
-            },
-        });
+
+        acceptingRideIdRef.current = currentRequest.rideId;
+        setAcceptingRideId(currentRequest.rideId);
+        setStatusMessage('Accepting ride...');
+        socketService.emit('acceptRide', { rideId: currentRequest.rideId });
     };
 
     const handleDecline = () => {
@@ -402,6 +435,7 @@ const DriverHome = () => {
             <IncomingRideRequest 
                 visible={showRequest && Boolean(currentRequest)}
                 requestData={currentRequest}
+                isAccepting={Boolean(acceptingRideId)}
                 onAccept={handleAccept} 
                 onDecline={handleDecline}
             />

@@ -25,6 +25,7 @@ import { SOCKET_EVENTS } from './events.js';
 import { registerRideSocketHandlers } from './handlers/rideSocketHandler.js';
 import { authorizeRideRoomAccess } from './middleware/rideRoomAuth.js';
 import { attachSocketAuth } from './middleware/socketAuth.js';
+import { clearDriverRoute } from './services/driverRouteService.js';
 
 const onAsync = (socket, handler) => async (payload = {}) => {
   try {
@@ -193,6 +194,16 @@ export const configureTaxiSocketServer = (httpServer) => {
         joinRideRoom(socket, ride._id);
         await notifyRideAccepted(ride);
 
+        const acceptedPayload = {
+          rideId: String(ride._id),
+          room: getRideRoom(ride._id),
+          status: ride.status,
+          liveStatus: ride.liveStatus,
+          acceptedAt: ride.acceptedAt,
+        };
+
+        socket.emit('rideAccepted', acceptedPayload);
+        socket.emit(SOCKET_EVENTS.RIDE_STATE, acceptedPayload);
         socket.emit(SOCKET_EVENTS.RIDE_JOINED, {
           rideId: String(ride._id),
           room: getRideRoom(ride._id),
@@ -213,6 +224,7 @@ export const configureTaxiSocketServer = (httpServer) => {
 
     socket.on('disconnect', async () => {
       if (identity.role === 'driver') {
+        clearDriverRoute(identity.sub);
         await Driver.findByIdAndUpdate(identity.sub, { socketId: null });
       }
     });

@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
-    Navigation,
     MessageSquare,
     Phone,
     ShieldAlert,
@@ -24,6 +23,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
+import carIcon from '../../../assets/icons/car.png';
 
 const MAP_CONTAINER_STYLE = {
     width: '100%',
@@ -76,6 +76,12 @@ const formatAddressFromPoint = (point, fallback) => {
 
 const buildFallbackRoute = (origin, destination) => [origin, destination];
 
+const createTaxiMarkerIcon = () => ({
+    url: carIcon,
+    scaledSize: new window.google.maps.Size(44, 44),
+    anchor: new window.google.maps.Point(22, 22),
+});
+
 const getCurrentCoords = () => new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
         reject(new Error('Location is not available on this device.'));
@@ -117,6 +123,7 @@ const ActiveTrip = () => {
 
     const [phase, setPhase] = useState('to_pickup');
     const [otp, setOtp] = useState(['', '', '', '']);
+    const [otpError, setOtpError] = useState('');
     const [selectedRating, setSelectedRating] = useState(0);
     const [driverPaymentStatus, setDriverPaymentStatus] = useState('pending');
     const [selectedPaymentMode, setSelectedPaymentMode] = useState('');
@@ -144,6 +151,7 @@ const ActiveTrip = () => {
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
+    const expectedOtp = String(liveRequest?.otp || location.state?.otp || '1234');
 
     const publishRideStatus = (nextStatus) => {
         if (!rideId) {
@@ -151,6 +159,23 @@ const ActiveTrip = () => {
         }
 
         socketService.emit('ride:status:update', { rideId, status: nextStatus });
+    };
+
+    const startTripAfterOtp = (enteredOtp) => {
+        if (String(enteredOtp).length !== 4) {
+            setOtpError('Enter the full 4 digit PIN.');
+            return;
+        }
+
+        if (String(enteredOtp) !== expectedOtp) {
+            setOtpError('Wrong PIN. Ask the passenger again.');
+            return;
+        }
+
+        setOtpError('');
+        setPhase('in_trip');
+        setDriverPosition(dropPosition);
+        publishRideStatus('started');
     };
 
     useEffect(() => {
@@ -310,12 +335,10 @@ const ActiveTrip = () => {
             }
         }
 
-        if (nextOtp.join('').length === 4 && nextOtp.join('') === '1234') {
-            setTimeout(() => {
-                setPhase('in_trip');
-                setDriverPosition(dropPosition);
-                publishRideStatus('started');
-            }, 500);
+        setOtpError('');
+
+        if (nextOtp.join('').length === 4 && nextOtp.join('') === expectedOtp) {
+            setTimeout(() => startTripAfterOtp(nextOtp.join('')), 250);
         }
     };
 
@@ -331,8 +354,8 @@ const ActiveTrip = () => {
     }), []);
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-hidden relative">
-            <div className="absolute inset-0 z-0 h-[62vh] overflow-hidden bg-slate-200">
+        <div className="relative mx-auto min-h-[100dvh] max-w-lg overflow-hidden bg-slate-200 font-sans select-none">
+            <div className="absolute inset-0 z-0 overflow-hidden bg-slate-200">
                 {!HAS_VALID_GOOGLE_MAPS_KEY ? (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
                         <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
@@ -369,14 +392,7 @@ const ActiveTrip = () => {
                         <MarkerF
                             position={driverPosition}
                             title="Driver"
-                            icon={{
-                                path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                                fillColor: '#f59e0b',
-                                fillOpacity: 1,
-                                strokeColor: '#ffffff',
-                                strokeWeight: 2,
-                                scale: 6,
-                            }}
+                            icon={createTaxiMarkerIcon()}
                         />
                         <MarkerF
                             position={activeDestination}
@@ -399,7 +415,7 @@ const ActiveTrip = () => {
                     </div>
                 )}
 
-                <div className="absolute inset-x-0 bottom-0 h-12 bg-gradient-to-t from-white/35 to-transparent pointer-events-none" />
+                <div className="absolute inset-x-0 bottom-0 h-44 bg-gradient-to-t from-white/70 via-white/25 to-transparent pointer-events-none" />
 
                 <button
                     onClick={() => navigate(-1)}
@@ -410,7 +426,7 @@ const ActiveTrip = () => {
 
                 <div className="absolute top-8 left-16 right-4 z-50 flex items-center gap-3 bg-slate-900/92 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
                     <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-slate-900 shadow-xl ${isParcel ? 'bg-orange-500' : 'bg-white'}`}>
-                        {isParcel ? <Package size={20} strokeWidth={2.5} /> : <Navigation size={20} fill="currentColor" strokeWidth={2.5} className="-rotate-45" />}
+                        {isParcel ? <Package size={20} strokeWidth={2.5} /> : <img src={carIcon} alt="Taxi" className="h-7 w-7 object-contain" />}
                     </div>
                     <div className="flex-1 space-y-0.5 overflow-hidden">
                         <h4 className="text-[9px] font-semibold uppercase tracking-wide leading-none flex items-center gap-2 text-amber-300">
@@ -427,14 +443,21 @@ const ActiveTrip = () => {
                     <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
                         <p className="text-[11px] font-semibold text-slate-900 mt-1">
+                <div className="absolute top-28 left-4 right-4 z-40 grid grid-cols-[minmax(0,1.25fr)_minmax(72px,0.75fr)_minmax(104px,1fr)] gap-2">
+                    <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
+                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
+                        <p className="text-[11px] font-black text-slate-900 mt-1 truncate">
                             {phase === 'to_pickup' ? 'Heading To Pickup' : phase === 'otp_verification' ? 'Verify OTP' : phase === 'in_trip' ? 'On Trip' : phase === 'payment_confirm' ? 'Collect Payment' : 'Complete'}
                         </p>
                     </div>
                     <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">ETA</p>
+                    <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
+                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">ETA</p>
                         <div className="flex items-center gap-1.5 mt-1">
                             <Clock3 size={12} className="text-orange-500" />
                             <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
+                            <p className="text-[11px] font-black text-slate-900 truncate">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
                         </div>
                     </div>
                 </div>
@@ -444,6 +467,12 @@ const ActiveTrip = () => {
                     <div className="flex items-center gap-1.5 mt-1">
                         <MapPinned size={12} className="text-slate-500" />
                         <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
+                    <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
+                        <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Route</p>
+                        <div className="flex items-center gap-1.5 mt-1">
+                            <MapPinned size={12} className="shrink-0 text-slate-500" />
+                            <p className="truncate text-[11px] font-black text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
+                        </div>
                     </div>
                 </div>
 
@@ -527,6 +556,17 @@ const ActiveTrip = () => {
                                     />
                                 ))}
                             </div>
+                            {otpError && (
+                                <p className="-mt-5 mb-5 text-center text-[11px] font-black text-red-500 uppercase tracking-wider">
+                                    {otpError}
+                                </p>
+                            )}
+                            <button
+                                onClick={() => startTripAfterOtp(otp.join(''))}
+                                className="mb-3 h-13 w-full rounded-xl bg-slate-900 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/15 active:scale-95 transition-all"
+                            >
+                                Submit PIN
+                            </button>
                             <div className="flex gap-3">
                                 <button onClick={() => {
                                     setPhase('to_pickup');

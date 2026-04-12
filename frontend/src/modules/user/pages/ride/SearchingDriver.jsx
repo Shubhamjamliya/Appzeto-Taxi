@@ -4,15 +4,16 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star } from 'lucide-react';
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
-import { userAuthService, withUserAuth } from '../../services/authService';
+import { getLocalUserToken, userAuthService } from '../../services/authService';
+import { saveCurrentRide } from '../../services/currentRideService';
 
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
 const unwrap = (response) => response?.data?.data || response?.data || response;
-const MOCK_DRIVERS = [
-  { name: 'Kishan Kumawat', rating: '4.9', vehicle: 'Grey Honda Shine', plate: 'MP09 CL 5308', phone: '+919876543210', eta: 2 },
-  { name: 'Rajesh Patel',   rating: '4.7', vehicle: 'Black Royal Enfield', plate: 'MP09 AB 1234', phone: '+919876543211', eta: 3 },
-  { name: 'Sunil Sharma',   rating: '4.8', vehicle: 'Blue Activa 6G',   plate: 'MP09 CD 9876', phone: '+919876543212', eta: 2 },
-];
+const unwrapLoginPayload = (response) => {
+  const payload = unwrap(response);
+  return payload?.token ? payload : payload?.data || {};
+};
+const DRIVER_PLACEHOLDER = { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted', COMPLETING: 'completing' };
 
 const normalizeDriver = (driver = {}) => ({
@@ -67,13 +68,20 @@ const SearchingDriver = () => {
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otp] = useState(generateOTP);
-  const [driver, setDriver] = useState(() => MOCK_DRIVERS[Math.floor(Math.random() * MOCK_DRIVERS.length)]);
+  const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
   const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
   const timerRef = useRef(null);
+  const activeRidePollRef = useRef(null);
   const requestStartedRef = useRef(false);
+  const trackingStartedRef = useRef(false);
+  const driverRef = useRef(driver);
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const selectedVehicleTypeId = routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId;
   const activeRideIdRef = useRef('');
+
+  useEffect(() => {
+    driverRef.current = driver;
+  }, [driver]);
 
   useEffect(() => {
     if (requestStartedRef.current) {
@@ -99,25 +107,86 @@ const SearchingDriver = () => {
       );
     };
 
-    const onRideAccepted = async ({ driver: acceptedDriver, rideId }) => {
+    const moveToTracking = ({ acceptedDriver, rideId, rideSnapshot }) => {
+      if (trackingStartedRef.current) {
+        return;
+      }
+
       const nextDriver = normalizeDriver(acceptedDriver);
+      driverRef.current = nextDriver;
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
       setSearchStatus('Captain accepted your ride.');
       activeRideIdRef.current = String(rideId || activeRideIdRef.current || '');
+      trackingStartedRef.current = true;
+      saveCurrentRide({
+        ...routeState,
+        pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
+        dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
+        rideId: activeRideIdRef.current,
+        otp,
+        driver: nextDriver,
+        fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
+        paymentMethod: routeState.paymentMethod || 'Cash',
+        status: 'accepted',
+      });
 
+      clearTimeout(timerRef.current);
+      clearInterval(activeRidePollRef.current);
       timerRef.current = setTimeout(() => {
         navigate(`${routePrefix}/ride/tracking`, {
           state: {
             ...routeState,
+            pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
+            dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
             rideId: activeRideIdRef.current,
             otp,
             driver: nextDriver,
-            fare: routeState.fare || routeState.vehicle?.price || 22,
+            fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
             paymentMethod: routeState.paymentMethod || 'Cash',
           },
         });
       }, 1800);
+    };
+
+    const onRideAccepted = ({ driver: acceptedDriver, rideId }) => {
+      moveToTracking({ acceptedDriver, rideId });
+    };
+
+    const onRideState = (payload) => {
+      if (!payload || String(payload.rideId || '') !== String(activeRideIdRef.current || '')) {
+        return;
+      }
+
+      if (payload.status === 'accepted' || payload.liveStatus === 'accepted') {
+        moveToTracking({ acceptedDriver: payload.driver, rideId: payload.rideId, rideSnapshot: payload });
+      }
+    };
+
+    const hydrateAcceptedRide = async () => {
+      const activeResponse = await api.get('/rides/active/me');
+      const activeRide = activeResponse?.data || activeResponse;
+
+      if (!activeRide?.rideId) {
+        return null;
+      }
+
+      return activeRide;
+    };
+
+    const onRideStatusUpdated = async (payload) => {
+      if (!payload || String(payload.rideId || '') !== String(activeRideIdRef.current || '')) {
+        return;
+      }
+
+      if (payload.status === 'accepted' || payload.liveStatus === 'accepted') {
+        const activeRide = await hydrateAcceptedRide().catch(() => null);
+        moveToTracking({
+          acceptedDriver: activeRide?.driver || driverRef.current,
+          rideId: payload.rideId,
+          rideSnapshot: activeRide || payload,
+        });
+      }
     };
 
     const onRideCancelled = ({ reason }) => {
@@ -131,16 +200,18 @@ const SearchingDriver = () => {
 
     socketService.on('rideSearchUpdate', onRideSearchUpdate);
     socketService.on('rideAccepted', onRideAccepted);
+    socketService.on('ride:state', onRideState);
+    socketService.on('ride:status:updated', onRideStatusUpdated);
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
     (async () => {
       try {
-        let userToken = localStorage.getItem('userToken') || localStorage.getItem('token');
+        let userToken = getLocalUserToken();
 
         if (!userToken) {
           const loginResponse = await userAuthService.loginDemoUser();
-          const loginPayload = unwrap(loginResponse);
+          const loginPayload = unwrapLoginPayload(loginResponse);
 
           if (loginPayload?.token) {
             userToken = loginPayload.token;
@@ -151,10 +222,13 @@ const SearchingDriver = () => {
           }
         }
 
-        if (!userToken) {
-          setSearchStatus('User session missing. Please login again.');
-          return;
-        }
+        const rideRequestConfig = userToken
+          ? {
+              headers: {
+                Authorization: `Bearer ${userToken}`,
+              },
+            }
+          : {};
 
         const response = await api.post('/rides', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
@@ -162,7 +236,7 @@ const SearchingDriver = () => {
           fare: routeState.fare || routeState.vehicle?.price || 22,
           vehicleTypeId: selectedVehicleTypeId,
           vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
-        }, withUserAuth());
+        }, rideRequestConfig);
 
         const payload = response?.data || response;
         const ride = payload?.ride || payload;
@@ -176,6 +250,33 @@ const SearchingDriver = () => {
           socketService.emit('ride:join', { rideId });
         }
 
+        const pollActiveRide = async () => {
+          try {
+            const activeRide = await hydrateAcceptedRide();
+
+            if (!activeRide?.rideId) {
+              return;
+            }
+
+            const isThisRide = String(activeRide.rideId || '') === normalizedRideId;
+            const isAcceptedRide = ['accepted', 'arriving', 'started', 'ongoing'].includes(String(activeRide.status || activeRide.liveStatus || '').toLowerCase());
+
+            if (isThisRide && isAcceptedRide) {
+              moveToTracking({
+                acceptedDriver: activeRide.driver || driverRef.current,
+                rideId: activeRide.rideId,
+                rideSnapshot: activeRide,
+              });
+            }
+          } catch (_error) {
+            // Socket remains the primary path; polling is only a race-condition fallback.
+          }
+        };
+
+        clearInterval(activeRidePollRef.current);
+        activeRidePollRef.current = setInterval(pollActiveRide, 1500);
+        pollActiveRide();
+
         setSearchStatus('Booking created. Searching nearby drivers...');
       } catch (error) {
         setSearchStatus(error?.message || 'Could not create ride request.');
@@ -184,8 +285,11 @@ const SearchingDriver = () => {
 
     return () => {
       clearTimeout(timerRef.current);
+      clearInterval(activeRidePollRef.current);
       socketService.off('rideSearchUpdate', onRideSearchUpdate);
       socketService.off('rideAccepted', onRideAccepted);
+      socketService.off('ride:state', onRideState);
+      socketService.off('ride:status:updated', onRideStatusUpdated);
       socketService.off('rideCancelled', onRideCancelled);
       socketService.off('errorMessage', onError);
     };

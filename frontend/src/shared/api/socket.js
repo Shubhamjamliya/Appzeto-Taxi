@@ -22,7 +22,7 @@ const getTokenPayload = (token) => {
     }
 
     return JSON.parse(atob(decodeBase64Url(payload)));
-  } catch (_error) {
+  } catch {
     return null;
   }
 };
@@ -61,6 +61,19 @@ class SocketService {
   constructor() {
     this.socket = null;
     this.currentToken = null;
+    this.listeners = new Map();
+  }
+
+  attachRegisteredListeners() {
+    if (!this.socket) {
+      return;
+    }
+
+    this.listeners.forEach((callbacks, event) => {
+      callbacks.forEach((callback) => {
+        this.socket.on(event, callback);
+      });
+    });
   }
 
   connect(options = {}) {
@@ -92,6 +105,7 @@ class SocketService {
       withCredentials: true,
       reconnection: true,
     });
+    this.attachRegisteredListeners();
 
     this.socket.on('connect', () => {
       console.info('[socket] connected', {
@@ -126,12 +140,35 @@ class SocketService {
   }
 
   on(event, callback) {
+    if (!event || typeof callback !== 'function') {
+      return;
+    }
+
+    const callbacks = this.listeners.get(event) || new Set();
+    callbacks.add(callback);
+    this.listeners.set(event, callbacks);
+
     if (this.socket) {
       this.socket.on(event, callback);
     }
   }
 
   off(event, callback) {
+    if (!event) {
+      return;
+    }
+
+    if (callback) {
+      const callbacks = this.listeners.get(event);
+      callbacks?.delete(callback);
+
+      if (callbacks?.size === 0) {
+        this.listeners.delete(event);
+      }
+    } else {
+      this.listeners.delete(event);
+    }
+
     if (this.socket) {
       if (callback) {
         this.socket.off(event, callback);

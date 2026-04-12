@@ -20,6 +20,27 @@ const toLatLng = (coords, fallback = { lat: 22.7196, lng: 75.8577 }) => {
 
 const getDriverPosition = (driver) => toLatLng(driver?.location?.coordinates, null);
 
+const buildFallbackRoute = (origin, destination) => {
+  if (!origin || !destination) {
+    return [];
+  }
+
+  const latDelta = destination.lat - origin.lat;
+  const lngDelta = destination.lng - origin.lng;
+  const bendScale = Math.abs(latDelta) > Math.abs(lngDelta) ? 0.28 : -0.28;
+  const latBend = latDelta * bendScale;
+  const lngBend = lngDelta * bendScale;
+
+  return [
+    origin,
+    { lat: origin.lat + latDelta * 0.18, lng: origin.lng + lngDelta * 0.08 },
+    { lat: origin.lat + latDelta * 0.36 + latBend, lng: origin.lng + lngDelta * 0.34 - lngBend },
+    { lat: origin.lat + latDelta * 0.62 - latBend, lng: origin.lng + lngDelta * 0.58 + lngBend },
+    { lat: origin.lat + latDelta * 0.84, lng: origin.lng + lngDelta * 0.9 },
+    destination,
+  ];
+};
+
 const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isLoaded, loadError }) => {
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
@@ -57,7 +78,7 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
           return;
         }
 
-        setRoutePath([center, dropPosition]);
+        setRoutePath(buildFallbackRoute(center, dropPosition));
         setRouteError(status || 'Directions unavailable');
       },
     );

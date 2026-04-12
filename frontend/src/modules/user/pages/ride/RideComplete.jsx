@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Star, CheckCircle2, ChevronRight, Share2, Info, Receipt } from 'lucide-react';
+import { clearCurrentRide } from '../../services/currentRideService';
 
 const TIP_OPTIONS = [10, 20, 50, 100];
 
@@ -27,6 +28,10 @@ const RideComplete = () => {
   const totalBill = fare + effectiveTip;
   const rideEndTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
   const rideDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+
+  useEffect(() => {
+    clearCurrentRide();
+  }, []);
 
   useEffect(() => {
     if (ratingSubmitted) {

@@ -33,7 +33,7 @@ const ownerSchema = new mongoose.Schema(
     },
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       default: null,
     },
     transport_type: {
@@ -61,4 +61,4 @@ const ownerSchema = new mongoose.Schema(
 ownerSchema.index({ company_name: 1 });
 ownerSchema.index({ service_location_id: 1 });
 
-export const Owner = mongoose.models.Owner || mongoose.model('Owner', ownerSchema);
+export const Owner = mongoose.models.TaxiOwner || mongoose.model('TaxiOwner', ownerSchema);

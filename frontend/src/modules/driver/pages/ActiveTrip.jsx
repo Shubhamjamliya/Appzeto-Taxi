@@ -439,10 +439,6 @@ const ActiveTrip = () => {
                     </div>
                 </div>
 
-                <div className="absolute top-28 left-4 z-40 flex gap-2">
-                    <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
-                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
-                        <p className="text-[11px] font-semibold text-slate-900 mt-1">
                 <div className="absolute top-28 left-4 right-4 z-40 grid grid-cols-[minmax(0,1.25fr)_minmax(72px,0.75fr)_minmax(104px,1fr)] gap-2">
                     <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Trip Stage</p>
@@ -450,23 +446,13 @@ const ActiveTrip = () => {
                             {phase === 'to_pickup' ? 'Heading To Pickup' : phase === 'otp_verification' ? 'Verify OTP' : phase === 'in_trip' ? 'On Trip' : phase === 'payment_confirm' ? 'Collect Payment' : 'Complete'}
                         </p>
                     </div>
-                    <div className="rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
-                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">ETA</p>
                     <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">ETA</p>
                         <div className="flex items-center gap-1.5 mt-1">
                             <Clock3 size={12} className="text-orange-500" />
-                            <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
                             <p className="text-[11px] font-black text-slate-900 truncate">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
                         </div>
                     </div>
-                </div>
-
-                <div className="absolute top-28 right-4 z-40 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2 min-w-[116px]">
-                    <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-slate-400">Route</p>
-                    <div className="flex items-center gap-1.5 mt-1">
-                        <MapPinned size={12} className="text-slate-500" />
-                        <p className="text-[11px] font-semibold text-slate-900">{phase === 'to_pickup' ? 'Pickup First' : 'To Destination'}</p>
                     <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Route</p>
                         <div className="flex items-center gap-1.5 mt-1">

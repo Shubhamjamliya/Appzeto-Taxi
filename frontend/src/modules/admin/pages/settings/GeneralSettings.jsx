@@ -180,7 +180,7 @@ const GeneralSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 font-sans p-6 lg:p-8">
+    <div className="min-h-screen font-sans">
       
       {/* Header Block */}
       <div className="mb-8">
@@ -257,20 +257,20 @@ const GeneralSettings = () => {
 
       </div>
 
-      {/* Floating Action Bar */}
-      <div className="fixed bottom-0 right-0 left-0 lg:left-0 bg-white/80 backdrop-blur-md border-t border-gray-200 px-10 py-5 flex items-center justify-between z-50">
+      {/* Floating Action Bar - Fixed layout to stay within content area */}
+      <div className="sticky bottom-0 -mb-4 lg:-mb-8 -mx-4 lg:-mx-8 bg-white/90 backdrop-blur-md border-t border-gray-200 px-10 py-6 flex items-center justify-between z-50 mt-12 shadow-[0_-10px_40px_rgba(0,0,0,0.04)]">
          <div className="flex items-center gap-4 text-xs font-bold text-gray-400 uppercase tracking-widest hidden md:flex">
-            <CheckCircle2 size={16} className="text-green-500" />
-            Active Version 2.3.1
+            <CheckCircle2 size={16} className="text-emerald-500" />
+            Configuration Layer 2.3.1 (Secured)
          </div>
          <div className="flex items-center gap-4 w-full md:w-auto">
             <button 
               onClick={handleUpdateAll}
               disabled={saving}
-              className="flex-1 md:flex-none flex items-center justify-center gap-3 bg-indigo-600 text-white px-10 py-3.5 rounded-xl text-sm font-bold shadow-xl hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 min-w-[240px]"
+              className="flex-1 md:flex-none flex items-center justify-center gap-3 bg-indigo-600 text-white px-10 py-3.5 rounded-xl text-sm font-bold shadow-xl shadow-indigo-600/20 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50 min-w-[280px]"
             >
               {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {saving ? "SAVING..." : "SAVE ALL CONFIGURATIONS"}
+              {saving ? "SYNCHRONIZING..." : "SAVE ALL CONFIGURATIONS"}
             </button>
          </div>
       </div>

@@ -73,7 +73,7 @@ const driverRegistrationSessionSchema = new mongoose.Schema(
     },
     finalDriverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       default: null,
     },
     completedAt: {
@@ -83,7 +83,6 @@ const driverRegistrationSessionSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
   },
   { timestamps: true },
@@ -92,5 +91,5 @@ const driverRegistrationSessionSchema = new mongoose.Schema(
 driverRegistrationSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const DriverRegistrationSession =
-  mongoose.models.DriverRegistrationSession ||
-  mongoose.model('DriverRegistrationSession', driverRegistrationSessionSchema);
+  mongoose.models.TaxiDriverRegistrationSession ||
+  mongoose.model('TaxiDriverRegistrationSession', driverRegistrationSessionSchema);

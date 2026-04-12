@@ -9,7 +9,7 @@ const zoneSchema = new mongoose.Schema(
     },
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       default: null,
     },
     unit: {
@@ -71,4 +71,4 @@ const zoneSchema = new mongoose.Schema(
 
 zoneSchema.index({ geometry: '2dsphere' });
 
-export const Zone = mongoose.models.Zone || mongoose.model('Zone', zoneSchema);
+export const Zone = mongoose.models.TaxiZone || mongoose.model('TaxiZone', zoneSchema);

@@ -4,7 +4,7 @@ const notificationSchema = new mongoose.Schema(
   {
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       required: true,
       index: true,
     },
@@ -53,4 +53,4 @@ const notificationSchema = new mongoose.Schema(
 notificationSchema.index({ service_location_id: 1, send_to: 1, createdAt: -1 });
 
 export const Notification =
-  mongoose.models.Notification || mongoose.model('Notification', notificationSchema);
+  mongoose.models.TaxiNotification || mongoose.model('TaxiNotification', notificationSchema);

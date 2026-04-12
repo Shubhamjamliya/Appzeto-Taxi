@@ -205,9 +205,10 @@ export const toggleZoneStatus = asyncHandler(async (req, res) =>
   ok(res, await adminService.toggleZoneStatus(req.params.id)),
 );
 
-export const getSetPrices = asyncHandler(async (_req, res) =>
-  ok(res, { set_prices: await adminService.listSetPrices() }),
-);
+export const getSetPrices = asyncHandler(async (_req, res) => {
+  const data = await adminService.listSetPrices();
+  res.json({ success: true, ...data });
+});
 export const createSetPrice = asyncHandler(async (req, res) =>
   ok(res, await adminService.createSetPrice(req.body)),
 );
@@ -234,7 +235,7 @@ export const deleteAirport = asyncHandler(async (req, res) => {
 });
 
 export const getGoodsTypes = asyncHandler(async (_req, res) =>
-  ok(res, { goods_types: await adminService.listGoodsTypes() }),
+  res.json(await adminService.listGoodsTypes()),
 );
 export const createGoodsType = asyncHandler(async (req, res) =>
   ok(res, await adminService.createGoodsType(req.body)),

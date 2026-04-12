@@ -30,17 +30,17 @@ const rideSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'TaxiUser',
       required: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       default: null,
     },
     vehicleTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
+      ref: 'TaxiVehicle',
       default: null,
     },
     vehicleIconType: {
@@ -128,4 +128,4 @@ const rideSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
-export const Ride = mongoose.models.Ride || mongoose.model('Ride', rideSchema);
+export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

@@ -38,11 +38,11 @@ const TopStatCard = ({ label, value, trend, icon: Icon, color, isLoading }) => (
       <>
         <div className="flex justify-between items-start mb-3">
            <div>
-             <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1.5">{label}</p>
-             <h4 className="text-2xl font-black text-gray-950 tracking-tight leading-none">{value}</h4>
+             <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider leading-none mb-1.5">{label}</p>
+             <h4 className="text-2xl font-semibold text-gray-950 tracking-tight leading-none">{value}</h4>
            </div>
            {trend !== undefined && (
-             <div className={`flex items-center gap-1 text-[10px] font-black ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+             <div className={`flex items-center gap-1 text-[10px] font-semibold ${trend > 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
                 {trend > 0 ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />} {Math.abs(trend)}%
              </div>
            )}
@@ -64,8 +64,8 @@ const MiniStat = ({ label, value, icon: Icon, color, isLoading }) => (
     ) : (
       <>
         <div>
-          <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">{label}</p>
-          <p className="text-[15px] font-black text-gray-950 tracking-tight leading-none">₹ {value}</p>
+          <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 leading-none">{label}</p>
+          <p className="text-[15px] font-semibold text-gray-950 tracking-tight leading-none">₹ {value}</p>
         </div>
         <div className={`w-8 h-8 rounded-lg bg-${color}-200/20 text-${color}-600 border border-${color}-200/50 flex items-center justify-center shadow-sm group-hover:scale-105 transition-transform`}>
            <Icon size={14} strokeWidth={2.5} />
@@ -101,8 +101,8 @@ const SimpleDonut = ({ data, colors }) => {
         })}
       </svg>
       <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Total</p>
-        <p className="text-xl font-black text-gray-950 tracking-tighter leading-none">{total}</p>
+        <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-wider mt-1">Total</p>
+        <p className="text-xl font-bold text-gray-950 tracking-tight leading-none">{total}</p>
       </div>
     </div>
   );
@@ -118,7 +118,7 @@ const SimpleBarChart = ({ data, colors }) => (
               className={`w-full bg-${colors[i]}-500/80 group-hover:bg-${colors[i]}-500 transition-all duration-500 rounded-t-sm`}
             />
           </div>
-          <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">
+          <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest">
             {['Jan','Feb','Mar','Apr'][i]}
           </span>
        </div>
@@ -168,7 +168,7 @@ const MainDashboard = () => {
       {/* ── HEADER (Compact) ── */}
       <div className="flex items-center justify-between">
          <div>
-            <h1 className="text-xl font-black tracking-tight text-gray-950 leading-none">DASHBOARD</h1>
+            <h1 className="text-xl font-semibold tracking-tight text-gray-900 leading-none uppercase">Dashboard</h1>
          </div>
          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
             Dashboard <ChevronRight size={12} className="mt-0.5" /> Dashboard
@@ -180,7 +180,7 @@ const MainDashboard = () => {
             <CircleAlert size={18} />
           </div>
           <div>
-            <p className="text-[11px] font-black text-amber-800 uppercase tracking-[0.2em]">Backend Offline</p>
+            <p className="text-[11px] font-semibold text-amber-800 uppercase tracking-wider">Backend Offline</p>
             <p className="text-sm font-semibold text-amber-900 mt-1">{dashboardError}</p>
           </div>
         </div>
@@ -224,18 +224,18 @@ const MainDashboard = () => {
 
       {/* ── SOS SECTION ── */}
       <div className="bg-white border border-gray-100 rounded-[28px] overflow-hidden shadow-sm p-8 text-center space-y-4">
-         <h3 className="text-left text-[14px] font-black text-gray-400 uppercase tracking-widest mb-4">Notified SOS</h3>
+         <h3 className="text-left text-[14px] font-semibold text-gray-400 uppercase tracking-wider mb-4">Notified SOS</h3>
          <div className="py-10 flex flex-col items-center">
             <div className="w-24 h-24 bg-blue-50/50 rounded-full flex items-center justify-center relative mb-4">
                <div className="absolute inset-0 border-2 border-dashed border-blue-200 rounded-full animate-[spin_10s_linear_infinite]"></div>
                <div className="bg-white p-4 rounded-2xl shadow-xl border border-blue-50 relative z-10">
                   <div className="relative">
                      <History size={32} className="text-blue-500" />
-                     <Search size={16} className="absolute -bottom-1 -right-1 text-gray-950 font-black p-0.5 bg-white rounded-full border border-gray-100" />
+                     <Search size={16} className="absolute -bottom-1 -right-1 text-gray-950 font-semibold p-0.5 bg-white rounded-full border border-gray-100" />
                   </div>
                </div>
             </div>
-            <p className="text-[16px] font-black text-gray-950 uppercase tracking-tight">No Data Found</p>
+            <p className="text-[16px] font-semibold text-gray-950 uppercase tracking-tight">No Data Found</p>
          </div>
       </div>
 
@@ -244,7 +244,7 @@ const MainDashboard = () => {
          
          {/* Today Trips Chart Section */}
          <div className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm flex flex-col">
-            <h3 className="text-[14px] font-black text-gray-400 uppercase tracking-widest mb-10">Today Trips</h3>
+            <h3 className="text-[14px] font-semibold text-gray-400 uppercase tracking-wider mb-10">Today Trips</h3>
             <div className="flex-1 flex flex-col md:flex-row items-center gap-10">
                <div className="flex-1">
                   <SimpleDonut data={[1, 0, 0]} colors={['#3B4687', '#EB5757', '#2D9CDB']} />
@@ -257,7 +257,7 @@ const MainDashboard = () => {
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-3">
                        <div className="w-3 h-3 rounded-sm" style={{backgroundColor: item.c}} />
-                       <span className="text-[12px] font-black text-gray-600 uppercase tracking-tight leading-none">{item.l}</span>
+                       <span className="text-[12px] font-semibold text-gray-600 uppercase tracking-tight leading-none">{item.l}</span>
                     </div>
                   ))}
                </div>
@@ -278,7 +278,7 @@ const MainDashboard = () => {
 
       {/* ── OVERALL PROGRESS GRID ── */}
       <div className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm w-full">
-          <h3 className="text-[14px] font-black text-gray-400 uppercase tracking-widest mb-10">Overall Trips</h3>
+          <h3 className="text-[14px] font-semibold text-gray-400 uppercase tracking-wider mb-10">Overall Trips</h3>
           <div className="flex flex-col md:flex-row items-center gap-10">
              <div className="flex justify-center w-full md:w-auto md:flex-1">
                 <SimpleDonut data={[1, 0, 0]} colors={['#2D9CDB', '#EB5757', '#27AE60']} />
@@ -291,7 +291,7 @@ const MainDashboard = () => {
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-3">
                      <div className="w-3 h-3 rounded-sm" style={{backgroundColor: item.c}} />
-                     <span className="text-[12px] font-black text-gray-600 uppercase tracking-tight leading-none">{item.l}</span>
+                     <span className="text-[12px] font-semibold text-gray-600 uppercase tracking-tight leading-none">{item.l}</span>
                   </div>
                 ))}
              </div>
@@ -302,7 +302,7 @@ const MainDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
          {/* Overall Earnings chart */}
          <div className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm flex flex-col">
-            <h3 className="text-[14px] font-black text-gray-400 uppercase tracking-widest mb-10">Overall Earnings</h3>
+            <h3 className="text-[14px] font-semibold text-gray-400 uppercase tracking-wider mb-10">Overall Earnings</h3>
             <div className="relative h-48 w-full mt-auto">
                <svg viewBox="0 0 400 100" className="w-full h-full">
                   <path 
@@ -323,7 +323,7 @@ const MainDashboard = () => {
                </svg>
                <div className="flex justify-between items-center px-2 mt-4">
                   {['Jan','Feb','Mar','Apr'].map((m,i) => (
-                     <span key={i} className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{m}</span>
+                     <span key={i} className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider">{m}</span>
                   ))}
                </div>
             </div>
@@ -344,7 +344,7 @@ const MainDashboard = () => {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
          {/* Cancellation Bar Chart */}
          <div className="bg-white border border-gray-100 rounded-[32px] p-8 shadow-sm flex flex-col">
-            <h3 className="text-[14px] font-black text-gray-400 uppercase tracking-widest mb-10">Cancellation Chart</h3>
+            <h3 className="text-[14px] font-semibold text-gray-400 uppercase tracking-wider mb-10">Cancellation Chart</h3>
             <div className="h-48 w-full mt-auto">
                <SimpleBarChart data={[0, 0, 0, 1]} colors={['emerald', 'amber', 'rose', 'emerald']} />
             </div>
@@ -356,7 +356,7 @@ const MainDashboard = () => {
                 ].map((item, i) => (
                   <div key={i} className="flex items-center gap-2">
                      <div className="w-2.5 h-2.5 rounded-full" style={{backgroundColor: item.c}} />
-                     <span className="text-[9px] font-black text-gray-400 uppercase tracking-tight">{item.l}</span>
+                     <span className="text-[9px] font-semibold text-gray-400 uppercase tracking-tight">{item.l}</span>
                   </div>
                 ))}
             </div>
@@ -366,8 +366,8 @@ const MainDashboard = () => {
          <div className="grid grid-cols-2 gap-4 h-full">
             <div className="bg-white p-6 rounded-[28px] border border-gray-50 shadow-sm flex items-center justify-between">
                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Total Request Cancelled</p>
-                  <p className="text-2xl font-black text-gray-950 tracking-tight leading-none">1</p>
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 leading-none">Total Request Cancelled</p>
+                  <p className="text-2xl font-semibold text-gray-950 tracking-tight leading-none">1</p>
                </div>
                <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-500 flex items-center justify-center">
                   <UserPlus size={18} />
@@ -375,8 +375,8 @@ const MainDashboard = () => {
             </div>
             <div className="bg-white p-6 rounded-[28px] border border-gray-50 shadow-sm flex items-center justify-between">
                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Cancelled By Users</p>
-                  <p className="text-2xl font-black text-gray-950 tracking-tight leading-none">0</p>
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mb-1 leading-none">Cancelled By Users</p>
+                  <p className="text-2xl font-semibold text-gray-950 tracking-tight leading-none">0</p>
                </div>
                <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-500 flex items-center justify-center">
                   <CircleAlert size={18} />
@@ -384,8 +384,8 @@ const MainDashboard = () => {
             </div>
             <div className="bg-white p-6 rounded-[28px] border border-gray-50 shadow-sm flex items-center justify-between">
                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Cancelled By Drivers</p>
-                  <p className="text-2xl font-black text-gray-950 tracking-tight leading-none">1</p>
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-widest mb-1 leading-none">Cancelled By Drivers</p>
+                  <p className="text-2xl font-semibold text-gray-950 tracking-tight leading-none">1</p>
                </div>
                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
                   <Car size={18} />
@@ -393,8 +393,8 @@ const MainDashboard = () => {
             </div>
             <div className="bg-white p-6 rounded-[28px] border border-gray-50 shadow-sm flex items-center justify-between">
                <div>
-                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1 leading-none">Dispatcher Cancelled</p>
-                  <p className="text-2xl font-black text-gray-950 tracking-tight leading-none">0</p>
+                  <p className="text-[9px] font-semibold text-gray-400 uppercase tracking-wider mb-1 leading-none">Dispatcher Cancelled</p>
+                  <p className="text-2xl font-semibold text-gray-950 tracking-tight leading-none">0</p>
                </div>
                <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-500 flex items-center justify-center">
                   <Zap size={18} />

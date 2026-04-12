@@ -4,7 +4,7 @@ const promoCodeSchema = new mongoose.Schema(
   {
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       required: true,
       index: true,
     },
@@ -85,4 +85,4 @@ const promoCodeSchema = new mongoose.Schema(
 
 promoCodeSchema.index({ service_location_id: 1, transport_type: 1, active: 1, createdAt: -1 });
 
-export const PromoCode = mongoose.models.PromoCode || mongoose.model('PromoCode', promoCodeSchema);
+export const PromoCode = mongoose.models.TaxiPromoCode || mongoose.model('TaxiPromoCode', promoCodeSchema);

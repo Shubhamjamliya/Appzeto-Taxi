@@ -22,4 +22,4 @@ const adminThirdPartySettingSchema = new mongoose.Schema(
 );
 
 export const AdminThirdPartySetting =
-  mongoose.models.AdminThirdPartySetting || mongoose.model('AdminThirdPartySetting', adminThirdPartySettingSchema);
+  mongoose.models.TaxiAdminThirdPartySetting || mongoose.model('TaxiAdminThirdPartySetting', adminThirdPartySettingSchema);

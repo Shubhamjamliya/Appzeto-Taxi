@@ -557,15 +557,23 @@ function App() {
               <Route path="pricing">
                 <Route index element={<Navigate to="service-location" />} />
                 <Route path="service-location" element={<AdminServiceLocation />} />
+                <Route path="service-location/add" element={<AdminServiceLocation mode="create" />} />
+                <Route path="service-location/edit/:id" element={<AdminServiceLocation mode="edit" />} />
                 <Route path="app-modules" element={<AdminAppModules />} />
                 <Route path="app-modules/create" element={<AdminAppModules mode="create" />} />
                 <Route path="app-modules/edit/:id" element={<AdminAppModules mode="edit" />} />
                 <Route path="zone" element={<AdminZoneManagement />} />
+                <Route path="zone/create" element={<AdminZoneManagement mode="create" />} />
+                <Route path="zone/edit/:id" element={<AdminZoneManagement mode="edit" />} />
                 <Route path="airport" element={<AdminAirportManagement />} />
+                <Route path="airport/create" element={<AdminAirportManagement mode="create" />} />
+                <Route path="airport/edit/:id" element={<AdminAirportManagement mode="edit" />} />
                 <Route path="vehicle-type" element={<AdminVehicleType />} />
                 <Route path="vehicle-type/create" element={<AdminVehicleType mode="create" />} />
                 <Route path="vehicle-type/edit/:id" element={<AdminVehicleType mode="edit" />} />
                 <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
+                <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
+                <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />

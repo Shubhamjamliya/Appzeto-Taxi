@@ -43,6 +43,8 @@ import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { getCurrentDriver, getLocalDriverToken } from '../services/registrationService';
 
+const Motion = motion;
+
 const containerStyle = {
     width: '100%',
     height: '100%'
@@ -103,6 +105,19 @@ const formatPoint = (point, fallback) => {
     }
 
     return fallback;
+};
+
+const normalizeJobType = (job = {}) => {
+    const value = String(job.type || job.serviceType || 'ride').toLowerCase();
+    if (value === 'parcel') return 'parcel';
+    if (value === 'intercity') return 'intercity';
+    return 'ride';
+};
+
+const getJobTitle = (type) => {
+    if (type === 'parcel') return 'Delivery';
+    if (type === 'intercity') return 'Intercity Ride';
+    return 'Taxi Ride';
 };
 
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
@@ -176,7 +191,7 @@ const DriverHome = () => {
         setMap(map);
     }, []);
 
-    const onUnmount = useCallback(function callback(map) {
+    const onUnmount = useCallback(function callback() {
         setMap(null);
     }, []);
 
@@ -258,9 +273,7 @@ const DriverHome = () => {
                         : null;
 
                 if (currentJob?.rideId) {
-                    const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
-                        ? 'parcel'
-                        : 'ride';
+                    const currentType = normalizeJobType(currentJob);
 
                     navigate('/taxi/driver/active-trip', {
                         replace: true,
@@ -269,11 +282,11 @@ const DriverHome = () => {
                             rideId: currentJob.rideId,
                             request: {
                                 type: currentType,
-                                title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                                title: getJobTitle(currentType),
                                 fare: `Rs ${currentJob.fare || 0}`,
                                 payment: currentJob.paymentMethod || 'Cash',
-                                pickup: formatPoint(currentJob.pickupLocation, 'Pickup Location'),
-                                drop: formatPoint(currentJob.dropLocation, 'Drop Location'),
+                                pickup: currentJob.pickupAddress || formatPoint(currentJob.pickupLocation, 'Pickup Location'),
+                                drop: currentJob.dropAddress || formatPoint(currentJob.dropLocation, 'Drop Location'),
                                 distance: 'active',
                                 requestId: currentJob.rideId,
                                 rideId: currentJob.rideId,
@@ -284,7 +297,7 @@ const DriverHome = () => {
                     });
                     return;
                 }
-            } catch (_error) {
+            } catch {
                 if (active) {
                     setStatusMessage('Could not restore driver status.');
                 }
@@ -378,15 +391,15 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
-                const requestType = String(data.type || data.serviceType || 'ride').toLowerCase() === 'parcel' ? 'parcel' : 'ride';
+                const requestType = normalizeJobType(data);
                 const request = {
                     type: requestType,
-                    title: requestType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                    title: getJobTitle(requestType),
                     fare: `Rs ${data.fare || 0}`,
                     payment: data.paymentMethod || 'Cash',
-                    pickup: formatPoint(data.pickupLocation, 'Pickup Location'),
-                    drop: formatPoint(data.dropLocation, 'Drop Location'),
-                    distance: data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
+                    pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
+                    drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
+                    distance: data.intercity?.distance ? `${data.intercity.distance} km` : data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
                     requestId: data.rideId,
                     rideId: data.rideId,
                     raw: data,
@@ -409,6 +422,10 @@ const DriverHome = () => {
             const onSocketError = ({ message }) => {
                 console.error('[driver-home] socket errorMessage received', message);
                 setStatusMessage(message || 'Socket error.');
+                if (String(message || '').toLowerCase().includes('no longer available')) {
+                    setShowRequest(false);
+                    setCurrentRequest(null);
+                }
                 acceptingRideIdRef.current = '';
                 setAcceptingRideId('');
             };
@@ -423,7 +440,7 @@ const DriverHome = () => {
 
                 try {
                     currentJob = await fetchActiveJob(nextType);
-                } catch (_error) {
+                } catch {
                     currentJob = null;
                 }
 
@@ -569,7 +586,7 @@ const DriverHome = () => {
             </div>
 
             <div className="absolute bottom-[5.5rem] left-0 right-0 px-4 z-30">
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
+                <Motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
                              <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Wallet</span></div>
@@ -595,10 +612,10 @@ const DriverHome = () => {
                     {statusMessage && (
                         <p className="px-2 pb-3 text-[11px] font-medium text-slate-400 text-center">{statusMessage}</p>
                     )}
-                    <motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
+                    <Motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
                          <Power size={18} strokeWidth={2.5} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status...' : isOnline ? 'End Your Duty' : 'Go Online Now'}
-                    </motion.button>
-                </motion.div>
+                    </Motion.button>
+                </Motion.div>
             </div>
 
             <DriverBottomNav />

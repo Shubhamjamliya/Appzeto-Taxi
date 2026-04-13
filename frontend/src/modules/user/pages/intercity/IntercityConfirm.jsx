@@ -1,27 +1,119 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { CheckCircle2, Share2, Home, MapPin, Calendar, Users, Car } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, Home, LoaderCircle, MapPin, Calendar, Users, Car, Share2 } from 'lucide-react';
+import api from '../../../../shared/api/axiosInstance';
+import { getLocalUserToken, userAuthService } from '../../services/authService';
 
 const generateBookingId = () => 'IC-' + Math.random().toString(36).toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6).padEnd(6, '0');
+const DEFAULT_VEHICLE = { name: 'Mini Cab' };
+const DEFAULT_PICKUP_COORDS = [75.8577, 22.7196];
+const DEFAULT_DROP_COORDS = [77.4126, 23.2599];
+const unwrap = (response) => response?.data?.data || response?.data || response;
+
+const unwrapLoginPayload = (response) => {
+  const payload = unwrap(response);
+  return payload?.token ? payload : payload?.user ? payload : payload?.data || payload;
+};
 
 const IntercityConfirm = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state || {};
+  const state = useMemo(() => location.state || {}, [location.state]);
 
   const [bookingId] = useState(() => state.bookingId || generateBookingId());
   const [shareToast, setShareToast] = useState(false);
+  const [bookingStatus, setBookingStatus] = useState('creating');
+  const [bookingError, setBookingError] = useState('');
+  const [rideId, setRideId] = useState('');
+  const requestStartedRef = useRef(false);
 
   const fromCity    = state.fromCity    || 'Indore';
   const toCity      = state.toCity      || 'Bhopal';
   const tripType    = state.tripType    || 'One Way';
   const date        = state.date        || 'Not specified';
   const passengers  = state.passengers  || 1;
-  const vehicle     = state.vehicle     || { name: 'Mini Cab' };
+  const vehicle     = useMemo(() => state.vehicle || DEFAULT_VEHICLE, [state.vehicle]);
   const fare        = state.fare        || state.estimatedFare || 0;
   const pickup      = state.pickup      || 'Not specified';
   const drop        = state.drop        || 'Not specified';
+  const pickupCoords = useMemo(() => state.pickupCoords || DEFAULT_PICKUP_COORDS, [state.pickupCoords]);
+  const dropCoords = useMemo(() => state.dropCoords || DEFAULT_DROP_COORDS, [state.dropCoords]);
+
+  useEffect(() => {
+    if (requestStartedRef.current) {
+      return;
+    }
+
+    requestStartedRef.current = true;
+
+    const createIntercityRide = async () => {
+      if (!state.pickup || !state.drop || !state.vehicle) {
+        setBookingStatus('error');
+        setBookingError('Missing intercity booking details. Please start again from Intercity Travel.');
+        return;
+      }
+
+      setBookingStatus('creating');
+      setBookingError('');
+
+      try {
+        let userToken = getLocalUserToken();
+
+        if (!userToken) {
+          const loginResponse = await userAuthService.loginDemoUser();
+          const loginPayload = unwrapLoginPayload(loginResponse);
+
+          if (loginPayload?.token) {
+            userToken = loginPayload.token;
+            localStorage.setItem('token', userToken);
+            localStorage.setItem('userToken', userToken);
+            localStorage.setItem('role', 'user');
+            localStorage.setItem('userInfo', JSON.stringify(loginPayload.user || {}));
+          }
+        }
+
+        const rideRequestConfig = userToken
+          ? { headers: { Authorization: `Bearer ${userToken}` } }
+          : {};
+
+        const response = await api.post('/rides', {
+          pickup: pickupCoords,
+          drop: dropCoords,
+          pickupAddress: pickup,
+          dropAddress: drop,
+          fare: Number(fare || 0),
+          vehicleTypeId: vehicle.vehicleTypeId || vehicle.id || '',
+          vehicleIconType: vehicle.iconType || vehicle.raw?.icon_types || vehicle.name || 'car',
+          paymentMethod: 'Cash',
+          serviceType: 'intercity',
+          transport_type: 'intercity',
+          intercity: {
+            bookingId,
+            fromCity,
+            toCity,
+            tripType,
+            travelDate: date,
+            passengers,
+            distance: state.distance || 0,
+            vehicleName: vehicle.name || vehicle.id || 'Intercity Cab',
+          },
+        }, rideRequestConfig);
+
+        const payload = unwrap(response);
+        const ride = payload?.ride || payload;
+        const nextRideId = ride?._id || ride?.id || payload?.realtime?.rideId;
+
+        setRideId(nextRideId ? String(nextRideId) : '');
+        setBookingStatus('created');
+      } catch (error) {
+        setBookingStatus('error');
+        setBookingError(error?.message || 'Could not send this booking to drivers.');
+      }
+    };
+
+    createIntercityRide();
+  }, [bookingId, date, drop, dropCoords, fare, fromCity, passengers, pickup, pickupCoords, state, toCity, tripType, vehicle]);
 
   const handleShare = async () => {
     const text = `Intercity booking confirmed!\nID: ${bookingId}\n${fromCity} → ${toCity}\nDate: ${date}\nVehicle: ${vehicle.name}\nPassengers: ${passengers}\nFare: ₹${fare.toLocaleString()}`;
@@ -61,13 +153,38 @@ const IntercityConfirm = () => {
         className="text-center mb-6">
         <p className="text-[11px] font-black text-white/40 uppercase tracking-[0.3em] mb-1">Booking Confirmed</p>
         <h1 className="text-[28px] font-black text-white leading-tight">You're all set!</h1>
-        <p className="text-[13px] font-bold text-white/50 mt-1">Your intercity cab has been booked</p>
+        <p className="text-[13px] font-bold text-white/50 mt-1">
+          {bookingStatus === 'created' ? 'Your intercity cab request is live for drivers' : 'Preparing your intercity cab request'}
+        </p>
       </motion.div>
 
       {/* Booking ID */}
       <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.35 }}
         className="bg-yellow-400 px-6 py-2.5 rounded-full mb-6 shadow-[0_4px_20px_rgba(250,204,21,0.3)]">
         <p className="text-[14px] font-black text-[#1C2833] tracking-[0.2em]">{bookingId}</p>
+      </motion.div>
+
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.38 }}
+        className={`w-full rounded-[18px] border px-4 py-3 mb-4 flex items-center gap-3 ${
+          bookingStatus === 'error'
+            ? 'bg-rose-500/10 border-rose-400/20 text-rose-100'
+            : 'bg-white/10 border-white/10 text-white'
+        }`}>
+        {bookingStatus === 'creating' ? (
+          <LoaderCircle size={18} className="animate-spin text-yellow-400 shrink-0" />
+        ) : bookingStatus === 'error' ? (
+          <AlertTriangle size={18} className="text-rose-300 shrink-0" />
+        ) : (
+          <CheckCircle2 size={18} className="text-emerald-300 shrink-0" />
+        )}
+        <div className="min-w-0">
+          <p className="text-[12px] font-black leading-tight">
+            {bookingStatus === 'creating' ? 'Sending request to drivers...' : bookingStatus === 'error' ? 'Driver request failed' : 'Driver request sent'}
+          </p>
+          <p className="text-[10px] font-bold opacity-60 mt-0.5 truncate">
+            {bookingStatus === 'error' ? bookingError : rideId ? `Ride ID: ${rideId}` : 'Drivers can accept this intercity trip from their home screen.'}
+          </p>
+        </div>
       </motion.div>
 
       {/* Details card */}

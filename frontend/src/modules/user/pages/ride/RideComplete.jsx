@@ -1,281 +1,356 @@
-import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { Star, CheckCircle2, ChevronRight, Share2, Info, Receipt } from 'lucide-react';
-import { clearCurrentRide } from '../../services/currentRideService';
+import { CheckCircle2, ChevronRight, MessageSquare, Receipt, Share2, Star } from 'lucide-react';
+import api from '../../../../shared/api/axiosInstance';
+import { clearCurrentRide, getCurrentRide } from '../../services/currentRideService';
+import carIcon from '../../../../assets/icons/car.png';
+import bikeIcon from '../../../../assets/icons/bike.png';
+import autoIcon from '../../../../assets/icons/auto.png';
+import deliveryIcon from '../../../../assets/icons/Delivery.png';
 
-const TIP_OPTIONS = [10, 20, 50, 100];
+const TIP_OPTIONS = [0, 20, 50, 100];
+
+const getInitials = (name = '') =>
+  String(name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'DR';
+
+const isLikelyVehiclePhoto = (value = '') => /^(https?:|data:image\/|blob:|\/uploads\/|\/images\/)/i.test(String(value || '').trim());
+
+const getVehicleIcon = (serviceType = 'ride', driver = {}) => {
+  const normalizedService = String(serviceType || '').toLowerCase();
+  const iconType = String(driver.vehicleIconType || driver.vehicleType || '').toLowerCase();
+
+  if (normalizedService === 'parcel') return deliveryIcon;
+  if (iconType.includes('bike')) return bikeIcon;
+  if (iconType.includes('auto')) return autoIcon;
+  return carIcon;
+};
 
 const RideComplete = () => {
-  const [rating, setRating] = useState(0);
-  const [selectedTip, setSelectedTip] = useState(null);
-  const [customTip, setCustomTip] = useState('');
-  const [showCustomTip, setShowCustomTip] = useState(false);
-  const [shareToast, setShareToast] = useState(false);
-  const [ratingSubmitted, setRatingSubmitted] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
-  const state = location.state || {};
+  const storedRide = useMemo(() => getCurrentRide(), []);
+  const state = useMemo(() => location.state || storedRide || {}, [location.state, storedRide]);
 
-  const fare = state.fare || 22;
+  const [rating, setRating] = useState(() => Number(state.feedback?.rating || 0));
+  const [comment, setComment] = useState(() => state.feedback?.comment || '');
+  const [selectedTip, setSelectedTip] = useState(() => Number(state.feedback?.tipAmount || 0));
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isSubmitted, setIsSubmitted] = useState(Boolean(state.feedback?.submittedAt));
+  const [shareToast, setShareToast] = useState(false);
+  const [error, setError] = useState('');
+  const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
+
+  const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
+  const rideId = state.rideId || '';
+  const fare = Number(state.fare || 22);
   const paymentMethod = state.paymentMethod || 'Cash';
-  const driver = state.driver || { name: 'Kishan Kumawat', vehicle: 'Grey Honda Shine', plate: 'MP09 CL 5308', rating: '4.9' };
-  const pickup = state.pickup || 'Pipaliyahana, Indore';
-  const drop = state.drop || 'Vijay Nagar, Indore';
-  const stops = state.stops || [];
+  const pickup = state.pickup || 'Pickup';
+  const drop = state.drop || 'Drop';
+  const serviceType = String(state.serviceType || state.type || 'ride').toLowerCase();
+  const driver = state.driver || {
+    name: 'Captain',
+    rating: '4.9',
+    vehicle: serviceType === 'parcel' ? 'Delivery' : 'Taxi',
+    plate: 'Assigned',
+    profileImage: '',
+    vehicleImage: '',
+  };
 
-  const effectiveTip = selectedTip ?? (showCustomTip ? parseInt(customTip || '0', 10) : 0);
-  const totalBill = fare + effectiveTip;
-  const rideEndTime = new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
-  const rideDate = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const driverImage = driver.profileImage || '';
+  const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Delivery' : 'Taxi');
+  const hasVehiclePhoto = isLikelyVehiclePhoto(driver.vehicleImage) && !vehicleImageBroken;
+  const vehicleVisual = hasVehiclePhoto ? driver.vehicleImage : getVehicleIcon(serviceType, driver);
+  const totalBill = fare + Number(selectedTip || 0);
+  const rideDate = new Date(state.completedAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
+  const rideTime = new Date(state.completedAt || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   useEffect(() => {
     clearCurrentRide();
   }, []);
 
   useEffect(() => {
-    if (ratingSubmitted) {
-      const t = setTimeout(() => navigate('/'), 1500);
-      return () => clearTimeout(t);
-    }
-  }, [ratingSubmitted, navigate]);
+    setVehicleImageBroken(false);
+  }, [driver.vehicleImage]);
 
-  const handleRating = (num) => {
-    setRating(num);
-    setTimeout(() => setRatingSubmitted(true), 400);
-  };
+  useEffect(() => {
+    if (!rideId && !isSubmitted) {
+      navigate(routeHome, { replace: true });
+    }
+  }, [isSubmitted, navigate, rideId, routeHome]);
 
   const handleShare = () => {
-    const text = `Rydon24 Trip Receipt\n${rideDate} · Total ₹${totalBill}\nPayment: ${paymentMethod}\nDriver: ${driver.name}`;
-    if (navigator.share) { navigator.share({ title: 'Rydon24 Trip Receipt', text }).catch(() => {}); }
-    else { navigator.clipboard?.writeText(text).then(() => { setShareToast(true); setTimeout(() => setShareToast(false), 2500); }); }
+    const text = `Rydon24 Receipt\n${rideDate} ${rideTime}\nDriver: ${driver.name}\nFrom: ${pickup}\nTo: ${drop}\nTotal: Rs ${totalBill}`;
+
+    if (navigator.share) {
+      navigator.share({ title: 'Rydon24 Receipt', text }).catch(() => {});
+      return;
+    }
+
+    navigator.clipboard?.writeText(text).then(() => {
+      setShareToast(true);
+      window.setTimeout(() => setShareToast(false), 2200);
+    });
+  };
+
+  const submitFeedback = async () => {
+    if (!rideId) {
+      navigate(routeHome, { replace: true });
+      return;
+    }
+
+    if (rating < 1) {
+      setError('Please rate your driver before finishing.');
+      return;
+    }
+
+    try {
+      setIsSubmitting(true);
+      setError('');
+      const response = await api.patch(`/rides/${rideId}/feedback`, {
+        rating,
+        comment,
+        tipAmount: selectedTip || 0,
+      });
+
+      const payload = response?.data?.data || response?.data || response;
+      if (payload?.feedback) {
+        setComment(payload.feedback.comment || comment);
+      }
+      setIsSubmitted(true);
+      window.setTimeout(() => {
+        navigate(routeHome, { replace: true });
+      }, 1200);
+    } catch (submitError) {
+      setError(submitError?.message || 'Could not submit feedback right now.');
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
-    <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans relative overflow-hidden">
-      <div className="absolute -top-16 right-[-40px] h-44 w-44 rounded-full bg-emerald-100/60 blur-3xl pointer-events-none" />
-      <div className="absolute bottom-28 left-[-40px] h-40 w-40 rounded-full bg-orange-100/40 blur-3xl pointer-events-none" />
-
-      {/* Toast */}
+    <div className="min-h-screen bg-[linear-gradient(180deg,#f8fafc_0%,#eef2f7_100%)] max-w-lg mx-auto relative overflow-hidden">
       <AnimatePresence>
         {shareToast && (
-          <motion.div initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -16 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-3 rounded-[14px] text-[12px] font-black shadow-xl whitespace-nowrap">
-            ✅ Receipt copied!
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            className="fixed top-4 left-1/2 z-50 -translate-x-1/2 rounded-[14px] bg-slate-900 px-5 py-3 text-[12px] font-black text-white shadow-xl"
+          >
+            Receipt copied
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Rating submitted overlay */}
       <AnimatePresence>
-        {ratingSubmitted && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-            className="fixed inset-0 bg-white/95 z-50 flex flex-col items-center justify-center gap-4 max-w-lg mx-auto">
-            <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }} transition={{ type: 'spring', stiffness: 300 }}
-              className="w-16 h-16 bg-emerald-500 rounded-full flex items-center justify-center">
-              <CheckCircle2 size={32} className="text-white" strokeWidth={2.5} />
-            </motion.div>
-            <h2 className="text-[18px] font-black text-slate-900">Thanks for your feedback!</h2>
-            <p className="text-[13px] font-bold text-slate-400">Taking you back to Home...</p>
+        {isSubmitted && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-4 bg-white/95 max-w-lg mx-auto"
+          >
+            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-emerald-500 shadow-[0_10px_25px_rgba(16,185,129,0.28)]">
+              <CheckCircle2 size={30} className="text-white" />
+            </div>
+            <p className="text-[20px] font-black text-slate-900">Thanks for rating your driver</p>
+            <p className="text-[13px] font-bold text-slate-500">Wrapping up your trip receipt...</p>
           </motion.div>
         )}
       </AnimatePresence>
 
-      <div className="px-4 pt-10 pb-8 space-y-3">
-
-        {/* Success hero */}
-        <motion.div initial={{ scale: 0.88, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-          className="flex items-center gap-3 pb-1">
-          <div className="w-11 h-11 bg-emerald-500 rounded-full flex items-center justify-center shadow-[0_6px_16px_rgba(16,185,129,0.25)] shrink-0">
-            <CheckCircle2 size={22} className="text-white" strokeWidth={2.5} />
+      <div className="px-4 pb-8 pt-10 space-y-4">
+        <div className="flex items-center gap-3">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-emerald-500 shadow-[0_8px_20px_rgba(16,185,129,0.28)]">
+            <CheckCircle2 size={24} className="text-white" />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Ride Completed</p>
-            <h1 className="text-[19px] font-black text-slate-900 tracking-tight leading-tight">You've Arrived!</h1>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+              {serviceType === 'parcel' ? 'Delivery Completed' : 'Ride Completed'}
+            </p>
+            <h1 className="text-[22px] font-black text-slate-900">
+              {serviceType === 'parcel' ? 'Package delivered' : 'You have arrived'}
+            </h1>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Invoice card */}
-        <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.08 }}
-          className="rounded-[20px] border border-white/80 bg-white/90 shadow-[0_6px_18px_rgba(15,23,42,0.07)] overflow-hidden">
-
-          {/* Invoice header */}
-          <div className="bg-slate-900 px-4 py-3 flex items-center justify-between">
+        <div className="overflow-hidden rounded-[22px] border border-white/80 bg-white/95 shadow-[0_12px_30px_rgba(15,23,42,0.08)]">
+          <div className="flex items-center justify-between bg-slate-900 px-4 py-3">
             <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-[8px] bg-orange-500/20 flex items-center justify-center">
-                <Receipt size={13} className="text-orange-400" strokeWidth={2} />
+              <div className="flex h-8 w-8 items-center justify-center rounded-[10px] bg-white/10">
+                <Receipt size={14} className="text-orange-300" />
               </div>
               <div>
-                <p className="text-white font-black text-[13px] leading-tight">Trip Invoice</p>
-                <p className="text-slate-400 text-[9px] font-bold">{rideDate} · {rideEndTime}</p>
+                <p className="text-[13px] font-black text-white">Trip Receipt</p>
+                <p className="text-[10px] font-bold text-slate-400">{rideDate} · {rideTime}</p>
               </div>
             </div>
-            <motion.button whileTap={{ scale: 0.95 }} onClick={handleShare}
-              className="flex items-center gap-1 bg-white/10 px-2.5 py-1 rounded-full">
-              <Share2 size={11} className="text-white" />
-              <span className="text-white text-[10px] font-black">Share</span>
-            </motion.button>
+            <button
+              type="button"
+              onClick={handleShare}
+              className="flex items-center gap-1 rounded-full bg-white/10 px-3 py-1.5 text-[10px] font-black text-white"
+            >
+              <Share2 size={12} />
+              Share
+            </button>
           </div>
 
-          {/* Route */}
-          <div className="px-4 py-3 border-b border-slate-50">
-            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400 mb-2">Route</p>
-            <div className="flex gap-2.5">
-              <div className="flex flex-col items-center pt-1 gap-0.5">
-                <div className="w-2 h-2 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
-                {stops.map((_, i) => (
-                  <React.Fragment key={i}>
-                    <div className="w-px h-3 border-l border-dashed border-slate-200" />
-                    <div className="w-2 h-2 rounded-full bg-blue-400 border-2 border-white shadow-sm" />
-                  </React.Fragment>
-                ))}
-                <div className="w-px h-3 border-l border-dashed border-slate-200" />
-                <div className="w-2 h-2 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
-              </div>
-              <div className="flex-1 space-y-1.5">
-                <div>
-                  <p className="text-[12px] font-black text-slate-900 leading-tight">{pickup}</p>
-                  <p className="text-[9px] font-bold text-slate-400">Pickup</p>
-                </div>
-                {stops.map((s, i) => (
-                  <div key={i}>
-                    <p className="text-[12px] font-black text-blue-600 leading-tight">{s}</p>
-                    <p className="text-[9px] font-bold text-slate-400">Stop {i + 1}</p>
+          <div className="space-y-4 px-4 py-4">
+            <div className="flex items-center gap-3 rounded-[18px] border border-slate-100 bg-slate-50/80 p-3">
+              <div className="relative h-14 w-14 shrink-0 overflow-hidden rounded-[16px] border border-slate-100 bg-slate-100">
+                {driverImage ? (
+                  <img src={driverImage} alt={driver.name} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-slate-900 text-[18px] font-black text-white">
+                    {getInitials(driver.name)}
                   </div>
-                ))}
-                <div>
-                  <p className="text-[12px] font-black text-slate-900 leading-tight">{drop}</p>
-                  <p className="text-[9px] font-bold text-slate-400">Drop</p>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-[16px] font-black text-slate-900">{driver.name}</p>
+                <p className="truncate text-[11px] font-bold text-slate-500">
+                  {driver.vehicleNumber || driver.plate || 'Assigned'} · {vehicleLabel}
+                </p>
+                <div className="mt-1 inline-flex items-center gap-1 rounded-full bg-yellow-50 px-2 py-0.5 text-[10px] font-black text-slate-800">
+                  <Star size={10} className="fill-yellow-500 text-yellow-500" />
+                  {driver.rating || '4.9'}
+                </div>
+              </div>
+              <div className="h-14 w-16 shrink-0 overflow-hidden rounded-[12px] border border-slate-100 bg-white">
+                <img
+                  src={vehicleVisual}
+                  alt={vehicleLabel}
+                  className={`h-full w-full ${hasVehiclePhoto ? 'object-contain bg-white' : 'object-cover'}`}
+                  onError={() => setVehicleImageBroken(true)}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-[18px] border border-slate-100 bg-white p-3">
+              <div className="flex gap-3">
+                <div className="flex flex-col items-center pt-1">
+                  <div className="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+                  <div className="h-10 border-l border-dashed border-slate-200" />
+                  <div className="h-2.5 w-2.5 rounded-full bg-orange-500" />
+                </div>
+                <div className="min-w-0 flex-1 space-y-3">
+                  <div>
+                    <p className="truncate text-[13px] font-black text-slate-900">{pickup}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Pickup</p>
+                  </div>
+                  <div>
+                    <p className="truncate text-[13px] font-black text-slate-900">{drop}</p>
+                    <p className="text-[10px] font-bold uppercase tracking-[0.14em] text-slate-400">Drop</p>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
 
-          {/* Driver */}
-          <div className="px-4 py-3 border-b border-slate-50 flex items-center gap-2.5">
-            <div className="w-9 h-9 rounded-[11px] bg-slate-100 overflow-hidden border border-slate-100 shrink-0">
-              <img src={`https://ui-avatars.com/api/?name=${driver.name.replace(' ', '+')}&background=f1f5f9&color=0f172a`}
-                className="w-full h-full object-cover" alt="Driver" />
-            </div>
-            <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-black text-slate-900 leading-tight">{driver.name}</p>
-              <p className="text-[10px] font-bold text-slate-400">{driver.vehicle} · {driver.plate}</p>
-            </div>
-            <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-100 rounded-full px-2 py-0.5 shrink-0">
-              <Star size={9} className="text-yellow-500 fill-yellow-500" />
-              <span className="text-[10px] font-black text-slate-800">{driver.rating || '4.9'}</span>
-            </div>
-          </div>
-
-          {/* Fare breakdown */}
-          <div className="px-4 py-3 space-y-1.5">
-            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400 mb-1.5">Fare Breakdown</p>
-            <div className="flex justify-between items-center">
-              <span className="text-[12px] font-bold text-slate-500">Base Fare</span>
-              <span className="text-[12px] font-black text-slate-900">₹{fare}.00</span>
-            </div>
-            {effectiveTip > 0 && (
-              <div className="flex justify-between items-center">
-                <span className="text-[12px] font-bold text-emerald-600">Tip 🙏</span>
-                <span className="text-[12px] font-black text-emerald-600">₹{effectiveTip}.00</span>
+            <div className="rounded-[18px] border border-slate-100 bg-white p-3">
+              <div className="flex items-center justify-between">
+                <span className="text-[12px] font-bold text-slate-500">Base fare</span>
+                <span className="text-[13px] font-black text-slate-900">Rs {fare.toFixed(2)}</span>
               </div>
-            )}
-            <div className="border-t border-slate-50 pt-1.5 flex justify-between items-center">
-              <span className="text-[14px] font-black text-slate-900">Total</span>
-              <span className="text-[17px] font-black text-slate-900 tracking-tight">₹{totalBill}.00</span>
-            </div>
-            <div className="flex justify-between items-center">
-              <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Payment</span>
-              <span className="text-[10px] font-black text-slate-700 bg-slate-100 px-2 py-0.5 rounded-full">{paymentMethod}</span>
+              <div className="mt-2 flex items-center justify-between">
+                <span className="text-[12px] font-bold text-slate-500">Tip</span>
+                <span className="text-[13px] font-black text-slate-900">Rs {Number(selectedTip || 0).toFixed(2)}</span>
+              </div>
+              <div className="mt-3 flex items-center justify-between border-t border-slate-100 pt-3">
+                <span className="text-[15px] font-black text-slate-900">Total</span>
+                <span className="text-[18px] font-black text-slate-900">Rs {totalBill.toFixed(2)}</span>
+              </div>
+              <div className="mt-2 text-right">
+                <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black uppercase tracking-[0.14em] text-slate-600">
+                  {paymentMethod}
+                </span>
+              </div>
             </div>
           </div>
-        </motion.div>
+        </div>
 
-        {/* Tip section */}
-        <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.18 }}
-          className="rounded-[18px] border border-white/80 bg-white/90 shadow-[0_4px_12px_rgba(15,23,42,0.05)] px-4 py-3 space-y-2.5">
-          <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400 text-center">Tip your captain 🙏</p>
-          <div className="flex gap-1.5 justify-center flex-wrap">
+        <div className="rounded-[20px] border border-white/80 bg-white/95 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+          <p className="text-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Tip your driver</p>
+          <div className="mt-3 flex flex-wrap justify-center gap-2">
             {TIP_OPTIONS.map((amount) => (
-              <motion.button key={amount} whileTap={{ scale: 0.93 }}
-                onClick={() => { setSelectedTip(selectedTip === amount ? null : amount); setShowCustomTip(false); setCustomTip(''); }}
-                className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all border ${
+              <button
+                key={amount}
+                type="button"
+                onClick={() => setSelectedTip(amount)}
+                className={`rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
                   selectedTip === amount
-                    ? 'bg-orange-500 text-white border-orange-500 shadow-[0_3px_8px_rgba(249,115,22,0.25)]'
-                    : 'bg-slate-50 text-slate-600 border-slate-100'
-                }`}>
-                ₹{amount}
-              </motion.button>
-            ))}
-            <motion.button whileTap={{ scale: 0.93 }}
-              onClick={() => { setShowCustomTip(!showCustomTip); setSelectedTip(null); }}
-              className={`px-3.5 py-1.5 rounded-full text-[11px] font-black transition-all border ${
-                showCustomTip ? 'bg-slate-900 text-white border-slate-900' : 'bg-slate-50 text-slate-600 border-slate-100'
-              }`}>
-              Custom
-            </motion.button>
-          </div>
-          <AnimatePresence>
-            {showCustomTip && (
-              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden">
-                <div className="flex items-center gap-2 bg-slate-50 rounded-[12px] px-3 py-2.5 border border-slate-100">
-                  <span className="text-[13px] font-black text-slate-400">₹</span>
-                  <input type="number" placeholder="Enter tip amount" value={customTip}
-                    onChange={(e) => setCustomTip(e.target.value)}
-                    className="flex-1 bg-transparent border-none text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-300" />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
-          {effectiveTip > 0 && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="text-center text-[10px] font-black text-emerald-600">
-              Includes ₹{effectiveTip} tip — Thank you! 🙏
-            </motion.p>
-          )}
-        </motion.div>
-
-        {/* Rating section */}
-        <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.26 }}
-          className="rounded-[18px] border border-white/80 bg-white/90 shadow-[0_4px_12px_rgba(15,23,42,0.05)] px-4 py-3 space-y-2.5 text-center">
-          <p className="text-[13px] font-black text-slate-900">How was your ride with {driver.name?.split(' ')[0]}?</p>
-          <div className="flex justify-center gap-1.5">
-            {[1, 2, 3, 4, 5].map((num) => (
-              <motion.button key={num} whileTap={{ scale: 0.9 }} onClick={() => handleRating(num)}
-                className={`w-10 h-10 rounded-[12px] flex items-center justify-center transition-all ${
-                  rating >= num ? 'bg-orange-500 shadow-[0_3px_10px_rgba(249,115,22,0.25)]' : 'bg-slate-100'
-                }`}>
-                <Star size={18} className={rating >= num ? 'text-white fill-white' : 'text-slate-300'} />
-              </motion.button>
+                    ? 'border-orange-500 bg-orange-500 text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)]'
+                    : 'border-slate-100 bg-slate-50 text-slate-600'
+                }`}
+              >
+                {amount === 0 ? 'No tip' : `Rs ${amount}`}
+              </button>
             ))}
           </div>
-          {rating > 0 && (
-            <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              className="text-[10px] font-black text-orange-500 uppercase tracking-wider">
-              {rating === 5 ? '⭐ Awesome Experience!' : rating >= 3 ? '👍 Thanks for rating!' : '📝 We will improve!'}
-            </motion.p>
-          )}
-        </motion.div>
+        </div>
 
-        {/* Bottom actions */}
-        <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.34 }}
-          className="space-y-2 pb-4">
-          <div className="flex gap-2">
-            <motion.button whileTap={{ scale: 0.97 }} onClick={handleShare}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-[14px] border border-white/80 bg-white/90 py-3 text-[11px] font-black text-slate-700 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-              <Share2 size={13} strokeWidth={2} /> Share Receipt
-            </motion.button>
-            <motion.button whileTap={{ scale: 0.97 }} onClick={() => navigate('/support')}
-              className="flex-1 flex items-center justify-center gap-1.5 rounded-[14px] border border-white/80 bg-white/90 py-3 text-[11px] font-black text-slate-700 shadow-[0_3px_10px_rgba(15,23,42,0.05)]">
-              <Info size={13} strokeWidth={2} /> Support
-            </motion.button>
+        <div className="rounded-[20px] border border-white/80 bg-white/95 px-4 py-4 text-center shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
+          <p className="text-[16px] font-black text-slate-900">How was your trip with {driver.name?.split(' ')[0] || 'your driver'}?</p>
+          <div className="mt-4 flex justify-center gap-2">
+            {[1, 2, 3, 4, 5].map((value) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => {
+                  setRating(value);
+                  setError('');
+                }}
+                className={`flex h-11 w-11 items-center justify-center rounded-[12px] transition-all ${
+                  rating >= value
+                    ? 'bg-orange-500 shadow-[0_10px_20px_rgba(249,115,22,0.24)]'
+                    : 'bg-slate-100'
+                }`}
+              >
+                <Star size={19} className={rating >= value ? 'fill-white text-white' : 'text-slate-300'} />
+              </button>
+            ))}
           </div>
-          <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate('/')}
-            className="w-full bg-slate-900 py-3.5 rounded-[16px] text-[14px] font-black text-white shadow-[0_6px_20px_rgba(15,23,42,0.18)] flex items-center justify-center gap-2">
-            Back to Home <ChevronRight size={15} strokeWidth={3} className="opacity-50" />
-          </motion.button>
-        </motion.div>
 
+          <div className="mt-4 rounded-[16px] border border-slate-100 bg-slate-50/80 px-3 py-3">
+            <div className="mb-2 flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.14em] text-slate-400">
+              <MessageSquare size={14} />
+              Add a note
+            </div>
+            <textarea
+              value={comment}
+              onChange={(event) => setComment(event.target.value)}
+              rows={3}
+              maxLength={500}
+              placeholder="Tell us about the trip"
+              className="w-full resize-none rounded-[12px] border border-slate-100 bg-white px-3 py-2 text-[13px] font-bold text-slate-900 outline-none placeholder:text-slate-300"
+            />
+          </div>
+
+          {error ? <p className="mt-3 text-[12px] font-black text-red-500">{error}</p> : null}
+
+          <button
+            type="button"
+            onClick={submitFeedback}
+            disabled={isSubmitting || isSubmitted}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-[16px] bg-slate-900 py-3.5 text-[14px] font-black text-white shadow-[0_12px_24px_rgba(15,23,42,0.18)] disabled:opacity-60"
+          >
+            {isSubmitting ? 'Saving your feedback...' : isSubmitted ? 'Feedback saved' : 'Submit rating'}
+            <ChevronRight size={16} />
+          </button>
+
+          <button
+            type="button"
+            onClick={() => navigate(routeHome, { replace: true })}
+            className="mt-3 text-[12px] font-black text-slate-500"
+          >
+            Skip and go home
+          </button>
+        </div>
       </div>
     </div>
   );

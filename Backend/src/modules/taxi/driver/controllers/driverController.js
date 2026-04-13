@@ -158,6 +158,7 @@ export const getCurrentDriver = async (req, res) => {
       name: driver.name,
       phone: driver.phone,
       email: driver.email,
+      profileImage: driver.profileImage || '',
       gender: driver.gender,
       vehicleType: driver.vehicleType,
       vehicleTypeId: driver.vehicleTypeId,
@@ -167,6 +168,7 @@ export const getCurrentDriver = async (req, res) => {
       registerFor: driver.registerFor,
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
+      vehicleImage: driver.vehicleImage || '',
       city: driver.city,
       approve: driver.approve,
       status: driver.status,
@@ -179,6 +181,39 @@ export const getCurrentDriver = async (req, res) => {
       zoneId: driver.zoneId,
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+export const updateCurrentDriver = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
+    driver.name = String(req.body.name || '').trim();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'email')) {
+    driver.email = String(req.body.email || '').trim().toLowerCase();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'profileImage')) {
+    driver.profileImage = String(req.body.profileImage || '').trim();
+  }
+
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      email: driver.email,
+      profileImage: driver.profileImage || '',
     },
   });
 };
@@ -248,7 +283,7 @@ const getGenericVehicleType = (vehicle = {}) => {
 };
 
 export const updateDriverVehicle = async (req, res) => {
-  const { vehicleTypeId, vehicleNumber, vehicleColor, vehicleMake, vehicleModel } = req.body;
+  const { vehicleTypeId, vehicleNumber, vehicleColor, vehicleMake, vehicleModel, vehicleImage } = req.body;
 
   let selectedVehicle = null;
 
@@ -280,6 +315,9 @@ export const updateDriverVehicle = async (req, res) => {
   if (vehicleModel !== undefined) {
     update.vehicleModel = String(vehicleModel || '').trim();
   }
+  if (vehicleImage !== undefined) {
+    update.vehicleImage = String(vehicleImage || '').trim();
+  }
 
   const driver = await Driver.findByIdAndUpdate(req.auth.sub, update, { new: true });
 
@@ -300,6 +338,7 @@ export const updateDriverVehicle = async (req, res) => {
       vehicleModel: driver.vehicleModel,
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
+      vehicleImage: driver.vehicleImage || '',
       registerFor: driver.registerFor,
       approve: driver.approve,
       status: driver.status,

@@ -43,10 +43,73 @@ const rideSchema = new mongoose.Schema(
       ref: 'TaxiVehicle',
       default: null,
     },
+    dispatchVehicleTypeIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'TaxiVehicle',
+        },
+      ],
+      default: [],
+    },
     vehicleIconType: {
       type: String,
       default: '',
       trim: true,
+    },
+    deliveryId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Delivery',
+      default: null,
+    },
+    serviceType: {
+      type: String,
+      enum: ['ride', 'parcel', 'intercity'],
+      default: 'ride',
+      lowercase: true,
+      trim: true,
+    },
+    intercity: {
+      bookingId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      fromCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      toCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      tripType: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      travelDate: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      passengers: {
+        type: Number,
+        default: 1,
+        min: 1,
+      },
+      distance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      vehicleName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
     },
     status: {
       type: String,
@@ -69,6 +132,11 @@ const rideSchema = new mongoose.Schema(
         required: true,
       },
     },
+    pickupAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     dropLocation: {
       type: {
         type: String,
@@ -80,10 +148,59 @@ const rideSchema = new mongoose.Schema(
         required: true,
       },
     },
+    dropAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     fare: {
       type: Number,
       required: true,
       min: 0,
+    },
+    paymentMethod: {
+      type: String,
+      enum: ['cash', 'online'],
+      default: 'cash',
+      lowercase: true,
+      trim: true,
+    },
+    parcel: {
+      category: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      weight: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      description: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      senderName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      senderMobile: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      receiverName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      receiverMobile: {
+        type: String,
+        default: '',
+        trim: true,
+      },
     },
     promo: {
       code: {
@@ -166,6 +283,29 @@ const rideSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
       default: null,
+    },
+    feedback: {
+      rating: {
+        type: Number,
+        default: null,
+        min: 1,
+        max: 5,
+      },
+      comment: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 500,
+      },
+      tipAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      submittedAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true },

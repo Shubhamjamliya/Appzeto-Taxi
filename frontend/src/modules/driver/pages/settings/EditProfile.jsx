@@ -3,8 +3,10 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, Camera, User, Phone, Mail, Check, CheckCircle2, Loader2, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
-import { getCurrentDriver, updateDriverProfile } from '../services/registrationService';
+import { getCurrentDriver, updateDriverProfile } from '../../services/registrationService';
 import toast from 'react-hot-toast';
+
+const Motion = motion;
 
 const EditProfile = () => {
     const navigate = useNavigate();
@@ -21,8 +23,7 @@ const EditProfile = () => {
     const { 
         uploading: imageUploading, 
         preview: imagePreview, 
-        handleFileChange: onImageFileChange,
-        setPreview: setImagePreview
+        handleFileChange: onImageFileChange
     } = useImageUpload({
         folder: 'driver-profiles',
         onSuccess: (url) => setDriver(prev => ({ ...prev, profileImage: url }))
@@ -39,7 +40,8 @@ const EditProfile = () => {
                     phone: data.phone || '',
                     email: data.email || ''
                 });
-            } catch (err) {
+            } catch (error) {
+                console.error('Failed to load profile:', error);
                 toast.error('Failed to load profile');
             } finally {
                 setLoading(false);
@@ -87,7 +89,7 @@ const EditProfile = () => {
 
             <AnimatePresence>
                 {showSuccess && (
-                    <motion.div 
+                    <Motion.div
                         initial={{ opacity: 0, y: -20, scale: 0.9 }}
                         animate={{ opacity: 1, y: 0, scale: 1 }}
                         exit={{ opacity: 0, scale: 0.9 }}
@@ -95,7 +97,7 @@ const EditProfile = () => {
                     >
                          <CheckCircle2 size={20} strokeWidth={3} />
                          <p className="text-[13px] font-bold tracking-wide">Profile Updated Successfully</p>
-                    </motion.div>
+                    </Motion.div>
                 )}
             </AnimatePresence>
 
@@ -160,7 +162,7 @@ const EditProfile = () => {
                 </div>
 
                 <div className="pt-6">
-                    <motion.button 
+                    <Motion.button
                         whileTap={{ scale: 0.98 }}
                         onClick={handleSave}
                         disabled={submitting || imageUploading}
@@ -169,7 +171,7 @@ const EditProfile = () => {
                         {submitting ? <Loader2 className="animate-spin" size={20} /> : (
                             <>Save Changes <Check size={18} strokeWidth={3} /></>
                         )}
-                    </motion.button>
+                    </Motion.button>
                 </div>
             </main>
         </div>

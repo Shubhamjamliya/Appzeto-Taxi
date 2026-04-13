@@ -28,7 +28,7 @@ const getTokenPayload = (token) => {
     }
 
     return JSON.parse(atob(decodeBase64Url(payload)));
-  } catch (_error) {
+  } catch {
     return null;
   }
 };
@@ -81,16 +81,22 @@ api.interceptors.request.use(
     const driverToken = getStoredTokenByRole('driver');
     const adminToken = getStoredTokenByRole('admin') || localStorage.getItem('adminToken');
 
+    const isPublicUserRoute =
+      /^\/users\/(app-modules|goods-types|vehicle-types|register|signup|login|profile-image|auth\/send-otp|auth\/verify-otp|otp-login)(\/|$)/.test(requestPath);
+    const isPublicDriverRoute =
+      /^\/drivers\/(register|login|auth\/send-otp|auth\/verify-otp|onboarding\/send-otp|onboarding\/verify-otp|onboarding\/personal|onboarding\/referral|onboarding\/vehicle|onboarding\/documents|onboarding\/complete|onboarding\/session\/|service-locations)(\/|$)/.test(requestPath);
     const isAdminRoute =
       /^\/admin(\/|$)/.test(requestPath) ||
       /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
     const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
-    const isUserRoute = /^\/rides(\/|$)/.test(requestPath);
+    const isUserRoute = /^\/(users|rides|deliveries|promos)(\/|$)/.test(requestPath);
     const isChatRoute = /^\/chats?(\/|$)/.test(requestPath);
 
     let token = null;
 
-    if (isChatRoute) {
+    if (isPublicUserRoute || isPublicDriverRoute) {
+      token = null;
+    } else if (isChatRoute) {
       if (normalizedChatRole === 'admin') {
         token = adminToken;
       } else if (normalizedChatRole === 'driver') {

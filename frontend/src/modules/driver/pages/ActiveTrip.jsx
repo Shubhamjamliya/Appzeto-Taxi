@@ -23,7 +23,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
+import api from '../../../shared/api/axiosInstance';
 import carIcon from '../../../assets/icons/car.png';
+import { getLocalDriverToken } from '../services/registrationService';
 
 const MAP_CONTAINER_STYLE = {
     width: '100%',
@@ -74,7 +76,30 @@ const formatAddressFromPoint = (point, fallback) => {
     return fallback;
 };
 
+const normalizeTripType = (job = {}) => {
+    const value = String(job.type || job.serviceType || 'ride').toLowerCase();
+    if (value === 'parcel') return 'parcel';
+    if (value === 'intercity') return 'intercity';
+    return 'ride';
+};
+
+const getTripTitle = (type) => {
+    if (type === 'parcel') return 'Delivery';
+    if (type === 'intercity') return 'Intercity Ride';
+    return 'Taxi Ride';
+};
+
 const buildFallbackRoute = (origin, destination) => [origin, destination];
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const withDriverAuthorization = (token) => (
+    token
+        ? {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+        : {}
+);
 
 const createTaxiMarkerIcon = () => ({
     url: carIcon,
@@ -98,20 +123,102 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
 const ActiveTrip = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const routeState = useMemo(() => location.state || {}, [location.state]);
+    const [hydratedTripState, setHydratedTripState] = useState(null);
+    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeState?.rideId && !routeState?.request?.rideId);
 
-    const tripType = location.state?.type || 'ride';
+    useEffect(() => {
+        let active = true;
+
+        if (routeState?.rideId || routeState?.request?.rideId) {
+            setIsHydratingTrip(false);
+            return () => {
+                active = false;
+            };
+        }
+
+        const hydrateTripState = async () => {
+            try {
+                const driverToken = getLocalDriverToken();
+                const [activeDelivery, activeRide] = await Promise.allSettled([
+                    api.get('/deliveries/active/me', withDriverAuthorization(driverToken)),
+                    api.get('/rides/active/me', withDriverAuthorization(driverToken)),
+                ]);
+
+                if (!active) {
+                    return;
+                }
+
+                const deliveryPayload =
+                    activeDelivery.status === 'fulfilled' ? unwrapApiPayload(activeDelivery.value) : null;
+                const ridePayload =
+                    activeRide.status === 'fulfilled' ? unwrapApiPayload(activeRide.value) : null;
+
+                const currentJob = deliveryPayload?.rideId
+                    ? deliveryPayload
+                    : ridePayload?.rideId
+                        ? ridePayload
+                        : null;
+
+                if (!currentJob?.rideId) {
+                    navigate('/taxi/driver/home', { replace: true });
+                    return;
+                }
+
+                const currentType = normalizeTripType(currentJob);
+
+                setHydratedTripState({
+                    type: currentType,
+                    rideId: currentJob.rideId,
+                    request: {
+                        type: currentType,
+                        title: getTripTitle(currentType),
+                        fare: `Rs ${currentJob.fare || 0}`,
+                        payment: currentJob.paymentMethod || 'Cash',
+                        pickup: currentJob.pickupAddress || formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
+                        drop: currentJob.dropAddress || formatAddressFromPoint(currentJob.dropLocation, 'Drop Location'),
+                        requestId: currentJob.rideId,
+                        rideId: currentJob.rideId,
+                        raw: currentJob,
+                    },
+                    currentDriverCoords: currentJob.lastDriverLocation?.coordinates || null,
+                });
+            } catch {
+                if (active) {
+                    navigate('/taxi/driver/home', { replace: true });
+                }
+            } finally {
+                if (active) {
+                    setIsHydratingTrip(false);
+                }
+            }
+        };
+
+        hydrateTripState();
+
+        return () => {
+            active = false;
+        };
+    }, [navigate, routeState]);
+
+    const effectiveState = hydratedTripState || routeState;
+
+    const tripType = effectiveState?.type || 'ride';
     const isParcel = tripType === 'parcel';
-    const liveRequest = location.state?.request || {};
+    const liveRequest = effectiveState?.request || {};
     const liveRaw = liveRequest.raw || {};
-    const rideId = liveRequest?.rideId || location.state?.rideId || '';
+    const rideId = liveRequest?.rideId || effectiveState?.rideId || '';
 
-    const pickupCoords = liveRaw.pickupLocation?.coordinates || location.state?.pickupCoords || DEFAULT_DRIVER_COORDS;
-    const dropCoords = liveRaw.dropLocation?.coordinates || location.state?.dropCoords || [75.8937, 22.7533];
+    const pickupCoords = liveRaw.pickupLocation?.coordinates || effectiveState?.pickupCoords || DEFAULT_DRIVER_COORDS;
+    const dropCoords = useMemo(
+        () => liveRaw.dropLocation?.coordinates || effectiveState?.dropCoords || [75.8937, 22.7533],
+        [effectiveState?.dropCoords, liveRaw.dropLocation?.coordinates],
+    );
     const assignedDriverCoords =
         liveRaw.driverLocation?.coordinates ||
         liveRequest.driverLocation?.coordinates ||
-        location.state?.driverCoords ||
-        location.state?.currentDriverCoords ||
+        effectiveState?.driverCoords ||
+        effectiveState?.currentDriverCoords ||
         null;
 
     const pickupPosition = useMemo(() => toLatLng(pickupCoords), [pickupCoords]);
@@ -145,20 +252,24 @@ const ActiveTrip = () => {
             name: liveRaw.parcel?.receiverName || 'Receiver',
             phone: liveRaw.parcel?.receiverMobile || '',
         },
-        pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
-        drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
-        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
-        payment: location.state?.paymentMethod || 'Online'
+        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
+        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
+        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        payment: effectiveState?.paymentMethod || 'Online'
     } : {
-        user: { name: 'Vinay Kumar', rating: '4.8', phone: '+91 98765 43210' },
-        pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
-        drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
-        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
-        payment: liveRequest?.payment || location.state?.paymentMethod || 'Online'
+        user: {
+            name: liveRaw.user?.name || liveRequest?.user?.name || 'Passenger',
+            rating: liveRaw.user?.rating || liveRequest?.user?.rating || '4.8',
+            phone: liveRaw.user?.phone || liveRequest?.user?.phone || '',
+        },
+        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
+        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
+        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        payment: liveRequest?.payment || effectiveState?.paymentMethod || 'Online'
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
-    const expectedOtp = String(liveRequest?.otp || location.state?.otp || '1234');
+    const expectedOtp = String(liveRequest?.otp || effectiveState?.otp || '1234');
 
     const publishRideStatus = (nextStatus) => {
         if (!rideId) {
@@ -181,7 +292,6 @@ const ActiveTrip = () => {
 
         setOtpError('');
         setPhase('in_trip');
-        setDriverPosition(dropPosition);
         publishRideStatus('started');
     };
 
@@ -349,6 +459,27 @@ const ActiveTrip = () => {
         }
     };
 
+    const handleOTPKeyDown = (index, event) => {
+        if (event.key !== 'Backspace') {
+            return;
+        }
+
+        if (otp[index]) {
+            const nextOtp = [...otp];
+            nextOtp[index] = '';
+            setOtp(nextOtp);
+            setOtpError('');
+            return;
+        }
+
+        if (index > 0) {
+            const previousInput = document.getElementById(`otp-${index - 1}`);
+            if (previousInput) {
+                previousInput.focus();
+            }
+        }
+    };
+
     const mapOptions = useMemo(() => ({
         styles: mapStyles,
         disableDefaultUI: true,
@@ -362,6 +493,13 @@ const ActiveTrip = () => {
 
     return (
         <div className="relative mx-auto min-h-[100dvh] max-w-lg overflow-hidden bg-slate-200 font-sans select-none">
+            {isHydratingTrip && (
+                <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-200/90 backdrop-blur-sm">
+                    <div className="rounded-[16px] bg-white/95 px-4 py-3 shadow-sm text-[12px] font-semibold text-slate-700">
+                        Restoring active trip...
+                    </div>
+                </div>
+            )}
             <div className="absolute inset-0 z-0 overflow-hidden bg-slate-200">
                 {!HAS_VALID_GOOGLE_MAPS_KEY ? (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
@@ -545,6 +683,7 @@ const ActiveTrip = () => {
                                         maxLength={1}
                                         value={digit}
                                         onChange={(e) => handleOTPChange(index, e.target.value)}
+                                        onKeyDown={(e) => handleOTPKeyDown(index, e)}
                                         className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-semibold text-slate-900 focus:outline-none focus:border-slate-900 transition-all shadow-inner"
                                     />
                                 ))}
@@ -578,24 +717,30 @@ const ActiveTrip = () => {
                             exit={{ y: '100%' }}
                             className="bg-white rounded-t-[2.5rem] p-5 pb-8 shadow-2xl border-t border-slate-100"
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="space-y-0.5 flex-1 pr-4">
-                                    <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.2em] leading-none mb-1">Destination</h4>
-                                    <p className="text-[16px] font-semibold text-slate-900 tracking-tight uppercase truncate">{tripData.drop}</p>
+                            <div className="mb-5 rounded-[22px] border border-slate-100 bg-slate-50/85 px-4 py-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.22em] leading-none mb-1.5">Destination</h4>
+                                        <p className="text-[15px] font-semibold text-slate-900 tracking-tight leading-5 break-words">
+                                            {tripData.drop}
+                                        </p>
+                                    </div>
+                                    <button className="shrink-0 w-11 h-11 bg-white text-rose-500 rounded-xl border border-rose-100 flex items-center justify-center active:scale-90 transition-transform shadow-sm">
+                                        <ShieldAlert size={22} strokeWidth={2.5} />
+                                    </button>
                                 </div>
-                                <button className="w-11 h-11 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center active:scale-90 transition-transform"><ShieldAlert size={22} strokeWidth={2.5} /></button>
                             </div>
-                            <div className="bg-slate-50 rounded-2xl p-3 mb-6 border border-slate-100 flex items-center justify-between">
+                            <div className="bg-slate-50 rounded-2xl p-3 mb-6 border border-slate-100 flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
                                         {isParcel ? <Package size={18} className="text-white" /> : <User size={18} className="text-white opacity-40" />}
                                     </div>
-                                    <div className="space-y-0.5">
-                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase truncate">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
                                         <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
-                                <button className="w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
+                                <button className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.96 }}

@@ -4,13 +4,13 @@ const walletTransactionSchema = new mongoose.Schema(
   {
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       required: true,
       index: true,
     },
     rideId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Ride',
+      ref: 'TaxiRide',
       default: null,
       index: true,
     },

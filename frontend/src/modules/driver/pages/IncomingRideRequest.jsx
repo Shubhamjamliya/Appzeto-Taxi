@@ -108,7 +108,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                                     strokeLinecap="round"
                                 />
                             </svg>
-                            <span className="text-xl font-black text-slate-900 z-10">{timer}</span>
+                            <span className="text-xl font-bold text-slate-900 z-10">{timer}</span>
                         </div>
                     </div>
 
@@ -117,9 +117,9 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                         <div className="space-y-1.5 pt-1">
                              <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full ${isParcel ? 'bg-orange-100 text-orange-600' : 'bg-slate-900 text-white'}`}>
                                 {isParcel ? <Package size={14} strokeWidth={2.5} /> : <Bike size={14} strokeWidth={2.5} />}
-                                <span className="text-[9px] font-black uppercase tracking-[0.15em]">{data.title} Request</span>
+                                <span className="text-[10px] font-semibold tracking-wide">{data.title} Request</span>
                              </div>
-                             <h2 className="text-2xl font-black text-slate-900 tracking-tight uppercase mt-2 leading-none">
+                             <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-2 leading-none">
                                 Incoming Order
                              </h2>
                         </div>
@@ -127,18 +127,18 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                         {/* Amount & Distance Stats */}
                         <div className="flex items-center justify-center gap-5 py-3 bg-slate-50 rounded-2xl border border-slate-100/50 mx-1">
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Distance</p>
-                                <p className="text-[13px] font-black text-slate-800 leading-none">{data.distance}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Distance</p>
+                                <p className="text-[13px] font-bold text-slate-800 leading-none">{data.distance}</p>
                             </div>
                             <div className="w-[1px] h-8 bg-slate-200" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Earnings</p>
-                                <p className="text-xl font-black text-slate-900 leading-none">{data.fare}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Earnings</p>
+                                <p className="text-lg font-bold text-slate-900 leading-none">{data.fare}</p>
                             </div>
                             <div className="w-[1px] h-8 bg-slate-200" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Method</p>
-                                <p className="text-[13px] font-black text-emerald-600 uppercase leading-none">{data.payment}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Method</p>
+                                <p className="text-[13px] font-bold text-emerald-600 uppercase leading-none">{data.payment}</p>
                             </div>
                         </div>
 
@@ -149,8 +149,8 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                                     <div className="w-2 h-2 rounded-full border-2 border-slate-900 bg-white" />
                                 </div>
                                 <div className="flex-1 text-left">
-                                     <p className="text-[13px] font-black text-slate-900 leading-tight uppercase line-clamp-1">{data.pickup}</p>
-                                     <p className="text-[8px] font-bold text-slate-400 tracking-[0.1em] uppercase">Pickup Point</p>
+                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.pickup}</p>
+                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Pickup Point</p>
                                 </div>
                             </div>
                             <div className="flex items-start gap-3 border-t border-dashed border-slate-100 pt-3">
@@ -158,8 +158,8 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                                     <div className="w-2 h-2 rounded-full border-2 border-rose-500 bg-white" />
                                 </div>
                                 <div className="flex-1 text-left">
-                                     <p className="text-[13px] font-black text-slate-900 leading-tight uppercase line-clamp-1">{data.drop}</p>
-                                     <p className="text-[8px] font-bold text-slate-400 tracking-[0.1em] uppercase">Drop Point</p>
+                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.drop}</p>
+                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Drop Point</p>
                                 </div>
                             </div>
                         </div>
@@ -198,6 +198,13 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                                     <ChevronRight size={24} strokeWidth={3} />
                                 </motion.div>
                             </div>
+                            <motion.button 
+                                whileTap={{ scale: 0.98 }}
+                                onClick={() => onAccept(data)}
+                                className="flex-1 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold shadow-xl shadow-slate-900/20"
+                            >
+                                Accept Ride <ArrowRight size={20} strokeWidth={2.5} />
+                            </motion.button>
                         </div>
                     </div>
                 </motion.div>

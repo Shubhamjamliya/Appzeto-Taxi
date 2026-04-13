@@ -49,7 +49,7 @@ const driverSchema = new mongoose.Schema(
     },
     vehicleTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
+      ref: 'TaxiVehicle',
       default: null,
     },
     vehicleIconType: {
@@ -124,7 +124,7 @@ const driverSchema = new mongoose.Schema(
     },
     zoneId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Zone',
+      ref: 'TaxiZone',
       default: null,
     },
     location: {
@@ -153,4 +153,4 @@ const driverSchema = new mongoose.Schema(
 
 driverSchema.index({ location: '2dsphere' });
 
-export const Driver = mongoose.models.Driver || mongoose.model('Driver', driverSchema);
+export const Driver = mongoose.models.TaxiDriver || mongoose.model('TaxiDriver', driverSchema);

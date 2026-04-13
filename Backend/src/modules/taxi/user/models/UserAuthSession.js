@@ -26,7 +26,6 @@ const userAuthSessionSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
   },
   { timestamps: true },
@@ -35,5 +34,5 @@ const userAuthSessionSchema = new mongoose.Schema(
 userAuthSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const UserAuthSession =
-  mongoose.models.UserAuthSession ||
-  mongoose.model('UserAuthSession', userAuthSessionSchema);
+  mongoose.models.TaxiUserAuthSession ||
+  mongoose.model('TaxiUserAuthSession', userAuthSessionSchema);

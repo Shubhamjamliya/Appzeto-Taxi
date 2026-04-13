@@ -546,12 +546,19 @@ function App() {
               <Route path="pricing">
                 <Route index element={<Navigate to="service-location" />} />
                 <Route path="service-location" element={<AdminServiceLocation />} />
+                <Route path="app-modules" element={<AdminAppModules />} />
+                <Route path="app-modules/create" element={<AdminAppModules mode="create" />} />
+                <Route path="app-modules/edit/:id" element={<AdminAppModules mode="edit" />} />
                 <Route path="zone" element={<AdminZoneManagement />} />
                 <Route path="airport" element={<AdminAirportManagement />} />
                 <Route path="vehicle-type" element={<AdminVehicleType />} />
+                <Route path="vehicle-type/create" element={<AdminVehicleType mode="create" />} />
+                <Route path="vehicle-type/edit/:id" element={<AdminVehicleType mode="edit" />} />
                 <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
+                <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
+                <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />
               </Route>
               <Route path="safety" element={<AdminSafetyCenter />} />
               <Route path="cms" element={<AdminCMSBuilder />} />
@@ -581,9 +588,6 @@ function App() {
               <Route path="settings/app/wallet" element={<AdminWalletSettings />} />
               <Route path="settings/app/tip" element={<AdminTipSettings />} />
               <Route path="settings/app/country" element={<AdminCountryManagement />} />
-              <Route path="settings/app/modules" element={<AdminAppModules />} />
-              <Route path="settings/app/modules/create" element={<AdminAppModules mode="create" />} />
-              <Route path="settings/app/modules/edit/:id" element={<AdminAppModules mode="edit" />} />
               <Route path="settings/app/onboard" element={<AdminOnboardingScreens />} />
               
               <Route path="settings/business/*" element={<AdminGeneralSettings />} />

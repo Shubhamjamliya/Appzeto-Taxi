@@ -51,7 +51,30 @@ const vehicleSchema = new mongoose.Schema(
       default: 'car',
       trim: true,
     },
+    capacity: {
+      type: Number,
+      default: 0,
+    },
+    size: {
+      type: String,
+      default: '',
+    },
+    is_taxi: {
+      type: String,
+      enum: ['taxi', 'delivery', 'both'],
+      default: 'taxi',
+    },
+    is_accept_share_ride: {
+      type: Number,
+      enum: [0, 1],
+      default: 0,
+    },
     image: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    icon: {
       type: String,
       default: '',
       trim: true,
@@ -67,12 +90,12 @@ const vehicleSchema = new mongoose.Schema(
     },
     supported_other_vehicle_types: {
       type: [ObjectId],
-      ref: 'Vehicle',
+      ref: 'TaxiVehicle',
       default: [],
     },
     vehicle_preference: {
       type: [ObjectId],
-      ref: 'Preference',
+      ref: 'TaxiPreference',
       default: [],
     },
   },
@@ -90,4 +113,4 @@ vehicleSchema.pre('save', function syncActiveStatus() {
 vehicleSchema.index({ name: 1 });
 vehicleSchema.index({ transport_type: 1, status: 1 });
 
-export const Vehicle = mongoose.models.Vehicle || mongoose.model('Vehicle', vehicleSchema);
+export const Vehicle = mongoose.models.TaxiVehicle || mongoose.model('TaxiVehicle', vehicleSchema);

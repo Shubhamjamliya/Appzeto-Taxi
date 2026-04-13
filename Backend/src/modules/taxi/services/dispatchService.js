@@ -8,6 +8,7 @@ import {
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
+import { Delivery } from '../user/models/Delivery.js';
 import { getRideRoom } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 
@@ -78,6 +79,13 @@ const closeRideAsUnmatched = async (rideId) => {
     return;
   }
 
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, {
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
+  }
+
   await User.findByIdAndUpdate(ride.userId, { currentRideId: null });
 
   emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
@@ -110,6 +118,14 @@ export const cancelRideByAdmin = async (rideId) => {
   ride.status = RIDE_STATUS.CANCELLED;
   ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
   await ride.save();
+
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, {
+      driverId: ride.driverId || null,
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
+  }
 
   await Promise.all([
     User.findByIdAndUpdate(ride.userId, { currentRideId: null }),

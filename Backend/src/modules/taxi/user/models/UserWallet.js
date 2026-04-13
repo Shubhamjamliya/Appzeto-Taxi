@@ -45,10 +45,8 @@ const userWalletSchema = new mongoose.Schema(
   {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'TaxiUser',
       required: true,
-      unique: true,
-      index: true,
     },
     balance: {
       type: Number,
@@ -66,4 +64,4 @@ const userWalletSchema = new mongoose.Schema(
 
 userWalletSchema.index({ userId: 1 }, { unique: true });
 
-export const UserWallet = mongoose.models.UserWallet || mongoose.model('UserWallet', userWalletSchema);
+export const UserWallet = mongoose.models.TaxiUserWallet || mongoose.model('TaxiUserWallet', userWalletSchema);

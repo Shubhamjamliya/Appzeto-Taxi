@@ -127,7 +127,7 @@ const userSchema = new mongoose.Schema(
     },
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'TaxiUser',
       default: null,
       index: true,
     },
@@ -169,7 +169,7 @@ const userSchema = new mongoose.Schema(
     },
     currentRideId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Ride',
+      ref: 'TaxiRide',
       default: null,
     },
   },
@@ -181,7 +181,7 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ 'addresses.location': '2dsphere' });
 
-const UserModel = mongoose.models.User || mongoose.model('User', userSchema);
+const UserModel = mongoose.models.TaxiUser || mongoose.model('TaxiUser', userSchema);
 
 export const User = UserModel;
 export const FoodUser = UserModel;

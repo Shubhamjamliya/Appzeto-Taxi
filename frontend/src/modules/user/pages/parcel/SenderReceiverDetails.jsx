@@ -22,6 +22,18 @@ const LOCATION_COORDS = {
 const POPULAR_LOCATIONS = Object.keys(LOCATION_COORDS);
 const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[title] || fallback;
 
+const readStoredUserInfo = () => {
+  if (typeof window === 'undefined') {
+    return {};
+  }
+
+  try {
+    return JSON.parse(window.localStorage.getItem('userInfo') || '{}');
+  } catch {
+    return {};
+  }
+};
+
 const PhoneInput = ({ label, value, onChange, error, name, onClearError }) => (
   <div className="space-y-1">
     <label className="text-[12px] font-black text-gray-400 ml-1">{label}</label>
@@ -95,16 +107,17 @@ const AddressField = ({ label, value, onChange, error, suggestions, onPickSugges
 );
 
 const SenderReceiverDetails = () => {
-  const [senderName, setSenderName] = useState('Hritik Raghuwanshi');
-  const [senderMobile, setSenderMobile] = useState('9876543210');
-  const [receiverName, setReceiverName] = useState('');
-  const [receiverMobile, setReceiverMobile] = useState('');
-  const [pickup, setPickup] = useState('Pipaliyahana, Indore');
-  const [drop, setDrop] = useState('');
-  const [errors, setErrors] = useState({});
   const navigate = useNavigate();
   const location = useLocation();
   const parcelState = location.state || {};
+  const storedUser = useMemo(() => readStoredUserInfo(), []);
+  const [senderName, setSenderName] = useState(() => storedUser?.name || '');
+  const [senderMobile, setSenderMobile] = useState(() => storedUser?.phone || '');
+  const [receiverName, setReceiverName] = useState(() => parcelState.receiverName || '');
+  const [receiverMobile, setReceiverMobile] = useState(() => parcelState.receiverMobile || '');
+  const [pickup, setPickup] = useState(() => parcelState.pickup || '');
+  const [drop, setDrop] = useState(() => parcelState.drop || '');
+  const [errors, setErrors] = useState({});
 
   const pickupSuggestions = useMemo(
     () => POPULAR_LOCATIONS.filter((item) => item.toLowerCase().includes(String(pickup || '').toLowerCase())).slice(0, 4),
@@ -170,7 +183,7 @@ const SenderReceiverDetails = () => {
         </button>
         <div>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">
-            {parcelState.parcelType || 'Parcel'} · {parcelState.weight || 'Under 5kg'}
+            {parcelState.parcelType || 'Parcel'} - {parcelState.weight || 'Under 5kg'}
           </p>
           <h1 className="text-[20px] font-extrabold text-gray-900 tracking-tight leading-none">Contacts & Route</h1>
         </div>

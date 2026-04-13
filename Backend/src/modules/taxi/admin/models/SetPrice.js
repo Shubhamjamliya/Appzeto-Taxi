@@ -6,12 +6,12 @@ const setPriceSchema = new mongoose.Schema(
   {
     zone_id: {
       type: ObjectId,
-      ref: 'Zone',
+      ref: 'TaxiZone',
       default: null,
     },
     service_location_id: {
       type: ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       default: null,
     },
     transport_type: {
@@ -21,7 +21,7 @@ const setPriceSchema = new mongoose.Schema(
     },
     vehicle_type: {
       type: ObjectId,
-      ref: 'Vehicle',
+      ref: 'TaxiVehicle',
       default: null,
     },
     app_modules: {
@@ -134,14 +134,78 @@ const setPriceSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
+    admin_commission_type_for_owner: {
+      type: Number,
+      default: 1, // 1 for percentage, 0 for fixed
+    },
+    admin_commission_for_owner: {
+      type: Number,
+      default: 0,
+    },
+    admin_commision_type: { // Keep same spelling as user sample
+      type: Number,
+      default: 1,
+    },
+    admin_commision: {
+      type: Number,
+      default: 0,
+    },
+    admin_commission_type_from_driver: {
+      type: Number,
+      default: 1,
+    },
+    admin_commission_from_driver: {
+      type: Number,
+      default: 0,
+    },
+    service_tax: {
+      type: Number,
+      default: 0,
+    },
+    airport_surge: {
+      type: Number,
+      default: 0,
+    },
+    support_airport_fee: {
+      type: Number,
+      default: 0,
+    },
+    support_outstation: {
+      type: Number,
+      default: 0,
+    },
+    enable_shared_ride: {
+      type: Number,
+      default: 0,
+    },
+    price_per_seat: {
+      type: Number,
+      default: 0,
+    },
+    shared_price_per_distance: {
+      type: Number,
+      default: 0,
+    },
+    shared_cancel_fee: {
+      type: Number,
+      default: 0,
+    },
+    order_number: {
+      type: Number,
+      default: 1,
+    },
+    bill_status: {
+      type: Number,
+      default: 1,
+    },
     status: {
       type: String,
       default: 'active',
       trim: true,
     },
     active: {
-      type: Boolean,
-      default: true,
+      type: Number,
+      default: 1,
     },
   },
   { timestamps: true },
@@ -150,4 +214,4 @@ const setPriceSchema = new mongoose.Schema(
 setPriceSchema.index({ zone_id: 1, transport_type: 1, vehicle_type: 1 });
 setPriceSchema.index({ status: 1, active: 1 });
 
-export const SetPrice = mongoose.models.SetPrice || mongoose.model('SetPrice', setPriceSchema);
+export const SetPrice = mongoose.models.TaxiSetPrice || mongoose.model('TaxiSetPrice', setPriceSchema);

@@ -9,4 +9,4 @@ const onboardingScreenSchema = new mongoose.Schema({
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 
-export const OnboardingScreen = mongoose.models.OnboardingScreen || mongoose.model('OnboardingScreen', onboardingScreenSchema);
+export const OnboardingScreen = mongoose.models.TaxiOnboardingScreen || mongoose.model('TaxiOnboardingScreen', onboardingScreenSchema);

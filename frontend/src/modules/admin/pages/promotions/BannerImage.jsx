@@ -225,93 +225,93 @@ const BannerImage = () => {
       {/* HEADER SECTION */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-[17px] font-black text-[#2D3A6E] uppercase tracking-tight italic mb-1">
-            {view === 'list' ? 'BANNER IMAGE' : 'CREATE'}
+          <h1 className="text-[19px] font-bold text-slate-900 tracking-tight mb-1">
+            {view === 'list' ? 'Banner Management' : 'Create New Banner'}
           </h1>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">
-             <span>Banner Image</span>
+          <div className="flex items-center gap-2 text-[11px] font-semibold text-slate-400 uppercase tracking-widest leading-none">
+             <span>Promotions</span>
              <ChevronRight size={12} className="opacity-50" />
-             <span className="text-gray-900 font-black">{view === 'list' ? 'Banner Image' : 'Create'}</span>
+             <span className="text-slate-900">{view === 'list' ? 'Banner Assets' : 'New Asset'}</span>
           </div>
         </div>
         {view === 'list' && (
           <button 
             onClick={() => setView('create')}
-            className="bg-[#2D3A6E] text-white h-12 px-6 rounded-xl flex items-center gap-2 text-[13px] font-black uppercase tracking-tight hover:bg-[#1a234a] transition-all shadow-lg active:scale-95"
+            className="bg-slate-900 text-white h-12 px-6 rounded-xl flex items-center gap-2 text-[14px] font-bold tracking-tight hover:bg-black transition-all shadow-lg active:scale-95"
           >
             <Plus size={18} strokeWidth={3} />
-            Add Banner Image
+            Create Banner
           </button>
         )}
       </div>
 
       {view === 'list' ? (
         <div className="space-y-6">
-          <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="bg-white rounded-[32px] border border-slate-100 shadow-sm overflow-hidden">
             {/* Table Controls */}
-            <div className="p-8 flex items-center justify-between border-b border-gray-50 bg-gray-50/20">
+            <div className="p-8 flex items-center justify-between border-b border-slate-50">
               <div className="flex items-center gap-3">
-                <span className="text-[13px] font-bold text-gray-500">show</span>
-                <select className="bg-white border border-gray-200 rounded-lg px-2 py-1 text-[13px] font-bold outline-none">
+                <span className="text-[13px] font-semibold text-slate-500">Show</span>
+                <select className="bg-white border border-slate-200 rounded-lg px-2 py-1 text-[13px] font-bold outline-none">
                   <option>10</option>
                   <option>25</option>
                   <option>50</option>
                 </select>
-                <span className="text-[13px] font-bold text-gray-500">entries</span>
+                <span className="text-[13px] font-semibold text-slate-500">entries</span>
               </div>
             </div>
 
             {/* Table Header */}
-            <div className="grid grid-cols-4 bg-gray-50 py-4 px-10 text-[12px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-100">
-              <div>Icon</div>
-              <div>Title</div>
+            <div className="grid grid-cols-4 bg-slate-50/50 py-4 px-10 text-[11px] font-bold text-slate-400 uppercase tracking-widest border-b border-slate-100">
+              <div>Visual Asset</div>
+              <div>Campaign Title</div>
               <div className="text-center">Status</div>
-              <div className="text-right">Action</div>
+              <div className="text-right">Actions</div>
             </div>
 
             {/* Table Body */}
             {banners.length > 0 ? (
-              <div className="divide-y divide-gray-50">
+              <div className="divide-y divide-slate-50">
                 {banners.map((item) => (
-                  <div key={item._id || item.id} className="grid grid-cols-4 items-center py-6 px-10 text-[14px] font-bold text-gray-900 hover:bg-gray-50/50 transition-colors">
-                    <div className="w-20 h-10 bg-gray-50 rounded-lg overflow-hidden border border-gray-100 shadow-sm relative group-hover:scale-105 transition-transform flex items-center justify-center">
+                  <div key={item._id || item.id} className="grid grid-cols-4 items-center py-6 px-10 text-[14px] font-semibold text-slate-900 hover:bg-slate-50/50 transition-colors">
+                    <div className="w-24 h-12 bg-slate-50 rounded-xl overflow-hidden border border-slate-100 shadow-sm transition-transform flex items-center justify-center">
                       {item.image ? (
                         <img 
                           src={resolveImageUrl(item.image)} 
                           alt="Banner" 
-                          className="w-full h-full object-contain"
+                          className="w-full h-full object-cover"
                           onError={(e) => {
                             e.target.onerror = null;
                             e.target.style.display = 'none';
-                            e.target.parentNode.innerHTML = '<div class="flex flex-col items-center justify-center text-gray-300 w-full h-full"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>';
+                            e.target.parentNode.innerHTML = '<div class="flex flex-col items-center justify-center text-slate-300 w-full h-full"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-image"><rect width="18" height="18" x="3" y="3" rx="2" ry="2"/><circle cx="9" cy="9" r="2"/><path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"/></svg></div>';
                           }}
                         />
                       ) : (
-                         <div className="flex items-center justify-center text-gray-300 w-full h-full">
+                         <div className="flex items-center justify-center text-slate-300 w-full h-full">
                             <ImageIcon size={20} />
                          </div>
                       )}
                     </div>
-                    <div className="truncate pr-4 text-gray-500">{item.title || "No Title"}</div>
+                    <div className="truncate pr-4 text-slate-600 font-bold">{item.title || "Untitled Campaign"}</div>
                     <div className="flex justify-center">
                        <button 
                         onClick={() => toggleStatus(item)}
-                        className="flex items-center gap-2 group"
+                        className="flex items-center gap-2"
                        >
                           {item.active ? (
-                            <div className="flex items-center gap-2 text-emerald-500 bg-emerald-50 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border border-emerald-100">
+                            <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-emerald-100">
                               <CheckCircle2 size={12} />
-                              Active
+                              Live
                             </div>
                           ) : (
-                            <div className="flex items-center gap-2 text-gray-400 bg-gray-50 px-3 py-1 rounded-full text-[11px] font-black uppercase tracking-wider border border-gray-100">
+                            <div className="flex items-center gap-2 text-slate-400 bg-slate-50 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider border border-slate-100">
                               <X size={12} />
                               Inactive
                             </div>
                           )}
                        </button>
                     </div>
-                    <div className="flex justify-end gap-2">
+                    <div className="flex justify-end gap-2.5">
                        <button 
                          onClick={async () => {
                            const bid = item._id || item.id;
@@ -322,15 +322,13 @@ const BannerImage = () => {
                              });
                              const data = await res.json();
                              if (data.success) {
-                               alert("Push notification sent successfully!");
-                             } else {
-                               alert(data.message || "Failed to send notification");
+                               alert("Marketing push sent!");
                              }
                            } catch (err) {
                              alert("Network Error");
                            }
                          }}
-                         title="Send Push Notification"
+                         title="Push to Users"
                          className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center hover:bg-emerald-500 hover:text-white transition-all shadow-sm active:scale-90"
                         >
                           <Bell size={16} />
@@ -343,7 +341,7 @@ const BannerImage = () => {
                        </button>
                        <button 
                         onClick={() => handleDelete(item._id || item.id)}
-                        className="w-10 h-10 bg-red-50 text-red-500 rounded-xl flex items-center justify-center hover:bg-red-500 hover:text-white transition-all shadow-sm active:scale-90"
+                        className="w-10 h-10 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center hover:bg-rose-500 hover:text-white transition-all shadow-sm active:scale-90"
                        >
                          <Trash2 size={16} />
                        </button>
@@ -352,61 +350,51 @@ const BannerImage = () => {
                 ))}
               </div>
             ) : (
-              <div className="py-24 flex flex-col items-center justify-center space-y-6">
-                 <div className="w-24 h-24 bg-blue-50/50 rounded-full flex items-center justify-center relative">
-                    <div className="w-16 h-20 bg-white border-2 border-blue-100 rounded-lg relative flex flex-col p-3 overflow-hidden shadow-sm">
-                       <div className="w-full h-6 bg-blue-50 rounded-md mb-2 flex items-center justify-center">
-                          <Search className="text-blue-500" size={14} strokeWidth={3} />
-                       </div>
-                       <div className="w-full h-1 bg-gray-100 rounded-full mb-1" />
-                       <div className="w-2/3 h-1 bg-gray-50 rounded-full mb-3" />
-                       <div className="w-full h-1 bg-blue-100/50 rounded-full" />
-                       <div className="absolute -bottom-1 -right-1 w-6 h-6 bg-rose-500 rounded-full border-2 border-white flex items-center justify-center text-white font-black text-[10px]">
-                          -
-                       </div>
-                    </div>
+              <div className="py-24 flex flex-col items-center justify-center space-y-4">
+                 <div className="w-24 h-24 bg-slate-50 rounded-[32px] flex items-center justify-center text-slate-200">
+                    <ImageIcon size={40} strokeWidth={1.5} />
                 </div>
                 <div className="text-center">
-                  <h3 className="text-[18px] font-black text-gray-950 uppercase tracking-tight italic">No Data Found</h3>
-                  <p className="text-[13px] font-bold text-gray-400 mt-1 max-w-xs uppercase leading-tight tracking-wider opacity-60">Looks like you haven't uploaded any banner images yet.</p>
+                  <h3 className="text-[17px] font-bold text-slate-900 tracking-tight">No Banners Found</h3>
+                  <p className="text-[13px] font-medium text-slate-400 mt-1 max-w-xs">Start by creating a promotional banner for your users.</p>
                 </div>
               </div>
             )}
 
             {/* Pagination Placeholder */}
-            <div className="p-8 bg-gray-50/20 flex items-center justify-between border-t border-gray-100">
-               <span className="text-[13px] font-bold text-gray-400">Showing 0 to 0 of 0 entries</span>
+            <div className="p-8 bg-slate-50/20 flex items-center justify-between border-t border-slate-50">
+               <span className="text-[13px] font-semibold text-slate-400">Total available results: {banners.length}</span>
                <div className="flex items-center gap-2">
-                  <button className="h-10 w-20 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-400 flex items-center justify-center cursor-not-allowed">Prev</button>
-                  <button className="h-10 w-10 bg-[#2D3A6E] text-white rounded-xl text-[12px] font-black flex items-center justify-center shadow-lg">1</button>
-                  <button className="h-10 w-20 bg-white border border-gray-200 rounded-xl text-[12px] font-bold text-gray-400 flex items-center justify-center cursor-not-allowed">Next</button>
+                  <button className="h-10 px-4 bg-white border border-slate-200 rounded-xl text-[12px] font-bold text-slate-400 flex items-center justify-center cursor-not-allowed">Previous</button>
+                  <button className="h-10 w-10 bg-slate-900 text-white rounded-xl text-[12px] font-bold flex items-center justify-center shadow-lg">1</button>
+                  <button className="h-10 px-4 bg-white border border-slate-200 rounded-xl text-[12px] font-bold text-slate-400 flex items-center justify-center cursor-not-allowed">Next</button>
                </div>
             </div>
           </div>
         </div>
       ) : (
         /* CREATE VIEW CARD */
-         <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm p-12 space-y-12">
+         <div className="bg-white rounded-[40px] border border-slate-100 shadow-sm p-12 space-y-12">
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
               {/* Title */}
               <div className="space-y-4 md:col-span-2">
-                 <label className="text-[12px] font-black text-gray-950 uppercase tracking-[0.2em] flex items-center gap-2 italic">
-                    Banner Title <span className="text-rose-500">*</span>
+                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    Campaign Title <span className="text-rose-500">*</span>
                  </label>
                  <input 
                    type="text" 
-                   placeholder="Enter Banner Title"
+                   placeholder="e.g. Summer Discount 50%"
                    value={formData.title}
                    onChange={(e) => setFormData({...formData, title: e.target.value})}
-                   className="w-full h-16 px-6 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner placeholder:text-gray-300"
+                   className="w-full h-16 px-6 bg-slate-50 border border-transparent rounded-[24px] text-[15px] font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 transition-all placeholder:text-slate-300"
                  />
               </div>
 
               {/* Link Type (Radio Buttons) */}
               <div className="space-y-4">
-                 <label className="text-[12px] font-black text-gray-950 uppercase tracking-[0.2em] flex items-center gap-2 italic">
-                    Link <span className="text-rose-500">*</span>
+                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    Redirection <span className="text-rose-500">*</span>
                  </label>
                  <div className="flex items-center gap-8 h-12">
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -418,10 +406,10 @@ const BannerImage = () => {
                          onChange={(e) => setFormData({...formData, link_type: e.target.value})}
                          className="hidden"
                        />
-                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${formData.link_type === 'external_link' ? 'border-[#2D3A6E] bg-white' : 'border-gray-200 bg-gray-50 group-hover:border-gray-300'}`}>
-                          {formData.link_type === 'external_link' && <div className="w-3 h-3 rounded-full bg-[#2D3A6E] animate-in zoom-in duration-300" />}
+                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${formData.link_type === 'external_link' ? 'border-slate-900 bg-white' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                          {formData.link_type === 'external_link' && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                        </div>
-                       <span className={`text-[14px] font-bold transition-colors ${formData.link_type === 'external_link' ? 'text-gray-950' : 'text-gray-400 group-hover:text-gray-600'}`}>External URL</span>
+                       <span className={`text-[14px] font-semibold transition-colors ${formData.link_type === 'external_link' ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>External Link</span>
                     </label>
 
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -433,17 +421,17 @@ const BannerImage = () => {
                          onChange={(e) => setFormData({...formData, link_type: e.target.value})}
                          className="hidden"
                        />
-                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${formData.link_type === 'deep_link' ? 'border-[#2D3A6E] bg-white' : 'border-gray-200 bg-gray-50 group-hover:border-gray-300'}`}>
-                          {formData.link_type === 'deep_link' && <div className="w-3 h-3 rounded-full bg-[#2D3A6E] animate-in zoom-in duration-300" />}
+                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${formData.link_type === 'deep_link' ? 'border-slate-900 bg-white' : 'border-slate-200 bg-slate-50 group-hover:border-slate-300'}`}>
+                          {formData.link_type === 'deep_link' && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                        </div>
-                       <span className={`text-[14px] font-bold transition-colors ${formData.link_type === 'deep_link' ? 'text-gray-950' : 'text-gray-400 group-hover:text-gray-600'}`}>App Link (Deep Link)</span>
+                       <span className={`text-[14px] font-semibold transition-colors ${formData.link_type === 'deep_link' ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>App Route</span>
                     </label>
                  </div>
               </div>
 
               {/* Status (Radio Buttons) */}
               <div className="space-y-4">
-                 <label className="text-[12px] font-black text-gray-950 uppercase tracking-[0.2em] flex items-center gap-2 italic">
+                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
                     Status <span className="text-rose-500">*</span>
                  </label>
                  <div className="flex items-center gap-8 h-12">
@@ -455,10 +443,10 @@ const BannerImage = () => {
                          onChange={() => setFormData({...formData, active: true})}
                          className="hidden"
                        />
-                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${formData.active ? 'border-[#2D3A6E] bg-white' : 'border-gray-200 bg-gray-50 group-hover:border-gray-300'}`}>
-                          {formData.active && <div className="w-3 h-3 rounded-full bg-[#2D3A6E] animate-in zoom-in duration-300" />}
+                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${formData.active ? 'border-slate-900 bg-white' : 'border-slate-200 bg-slate-50 group-hover:border-slate-400'}`}>
+                          {formData.active && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                        </div>
-                       <span className={`text-[14px] font-bold transition-colors ${formData.active ? 'text-gray-950' : 'text-gray-400 group-hover:text-gray-600'}`}>Active</span>
+                       <span className={`text-[14px] font-semibold transition-colors ${formData.active ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>Live</span>
                     </label>
 
                     <label className="flex items-center gap-3 cursor-pointer group">
@@ -469,55 +457,55 @@ const BannerImage = () => {
                          onChange={() => setFormData({...formData, active: false})}
                          className="hidden"
                        />
-                       <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${!formData.active ? 'border-[#2D3A6E] bg-white' : 'border-gray-200 bg-gray-50 group-hover:border-gray-300'}`}>
-                          {!formData.active && <div className="w-3 h-3 rounded-full bg-[#2D3A6E] animate-in zoom-in duration-300" />}
+                       <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${!formData.active ? 'border-slate-900 bg-white' : 'border-slate-200 bg-slate-50 group-hover:border-slate-400'}`}>
+                          {!formData.active && <div className="w-2.5 h-2.5 rounded-full bg-slate-900" />}
                        </div>
-                       <span className={`text-[14px] font-bold transition-colors ${!formData.active ? 'text-gray-950' : 'text-gray-400 group-hover:text-gray-600'}`}>Inactive</span>
+                       <span className={`text-[14px] font-semibold transition-colors ${!formData.active ? 'text-slate-900' : 'text-slate-400 group-hover:text-slate-600'}`}>Inactive</span>
                     </label>
                  </div>
               </div>
 
               {/* Redirect URL */}
               <div className="space-y-4 md:col-span-2">
-                 <label className="text-[12px] font-black text-gray-950 uppercase tracking-[0.2em] flex items-center gap-2 italic">
-                    Redirect URL <span className="text-rose-500">*</span>
+                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    Target Route URL <span className="text-rose-500">*</span>
                  </label>
                  <input 
                    type="text" 
-                   placeholder={formData.link_type === 'external_link' ? "Enter External URL (e.g. https://...)" : "Enter Deep Link Route (e.g. /offers)"}
+                   placeholder={formData.link_type === 'external_link' ? "https://rydon24.com/offer" : "/taxi/user/activity"}
                    value={formData.redirect_url}
                    onChange={(e) => setFormData({...formData, redirect_url: e.target.value})}
-                   className="w-full h-16 px-6 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner placeholder:text-gray-300"
+                   className="w-full h-16 px-6 bg-slate-50 border border-transparent rounded-[24px] text-[15px] font-bold text-slate-900 outline-none focus:bg-white focus:border-slate-900 transition-all placeholder:text-slate-300"
                  />
               </div>
 
               {/* Banner Image Upload */}
               <div className="space-y-4 md:col-span-2">
-                 <label className="text-[12px] font-black text-gray-950 uppercase tracking-[0.2em] flex items-center gap-2 italic">
-                    Banner Image (Recommended 500x100) <span className="text-rose-500">*</span>
+                 <label className="text-[12px] font-bold text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                    Marketing Asset (Optimized WebP) <span className="text-rose-500">*</span>
                  </label>
                  
                  <div className="relative group w-full">
-                    <div className={`w-full h-48 border-2 border-dashed rounded-[32px] flex flex-col items-center justify-center transition-all overflow-hidden ${imagePreview ? 'border-[#2D3A6E] bg-white' : 'border-gray-200 bg-gray-50 group-hover:bg-gray-100 group-hover:border-gray-300'}`}>
+                    <div className={`w-full min-h-[200px] border-4 border-dashed rounded-[40px] flex flex-col items-center justify-center transition-all overflow-hidden ${imagePreview ? 'border-slate-900 bg-white' : 'border-slate-100 bg-slate-50 group-hover:bg-slate-50 group-hover:border-slate-200'}`}>
                        {imagePreview ? (
-                          <div className="relative w-full h-full p-4">
-                             <img src={imagePreview} alt="Preview" className="w-full h-full object-contain rounded-[24px]" />
+                          <div className="relative w-full h-full p-8">
+                             <img src={imagePreview} alt="Preview" className="w-full h-full object-contain rounded-[24px] shadow-2xl" />
                              <button 
                                 onClick={() => {setImagePreview(null); setFormData({...formData, image: null})}}
-                                className="absolute top-6 right-6 w-12 h-12 bg-white/90 backdrop-blur-md rounded-full shadow-lg flex items-center justify-center text-rose-500 hover:bg-rose-500 hover:text-white transition-all transform hover:scale-110 active:scale-90"
+                                className="absolute top-10 right-10 w-12 h-12 bg-white shadow-xl rounded-full flex items-center justify-center text-rose-500 hover:scale-110 active:scale-95 transition-all"
                              >
                                 <X size={20} strokeWidth={3} />
                              </button>
                           </div>
                        ) : (
-                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer p-8 text-center space-y-4">
+                          <label className="w-full h-full flex flex-col items-center justify-center cursor-pointer p-12 text-center space-y-4">
                              <input type="file" className="hidden" accept="image/*" onChange={handleImageChange} />
-                             <div className="w-20 h-20 bg-white rounded-[24px] shadow-sm flex items-center justify-center text-gray-300 transition-transform group-hover:scale-110">
+                             <div className="w-20 h-20 bg-white rounded-[24px] shadow-sm flex items-center justify-center text-slate-200 transition-transform group-hover:scale-110">
                                 <Upload size={32} />
                              </div>
                              <div>
-                                <p className="text-[15px] font-black text-gray-950 uppercase tracking-tight italic">Drag & Drop or Click to Upload</p>
-                                <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest mt-1">PNG, JPG or WebP (max 2MB)</p>
+                                <p className="text-[16px] font-bold text-slate-900 tracking-tight leading-none">Choose Marketing Asset</p>
+                                <p className="text-[11px] font-bold text-slate-400 uppercase tracking-widest mt-2">Recommended: 1000x200 (WebP Enabled)</p>
                              </div>
                           </label>
                        )}
@@ -526,27 +514,25 @@ const BannerImage = () => {
               </div>
           </div>
 
-          <div className="flex justify-end gap-5 pt-8 border-t border-gray-50">
+          <div className="flex justify-end gap-4 pt-10 border-t border-slate-50">
              <button 
                onClick={() => setView('list')}
-               className="h-16 px-10 bg-gray-100 text-gray-500 rounded-[28px] text-[12px] font-black uppercase tracking-[0.2em] hover:bg-gray-200 transition-all active:scale-95 transition-all"
+               className="h-15 px-10 bg-slate-50 text-slate-400 rounded-[24px] text-[13px] font-bold uppercase tracking-widest hover:bg-slate-100 transition-all active:scale-95 transition-all"
              >
-                Cancel
+                Discard
              </button>
              <button 
                 onClick={handleSave}
                 disabled={saving}
-                className="h-16 px-20 bg-[#2D3A6E] text-white rounded-[28px] text-[12px] font-black uppercase tracking-[0.2em] hover:bg-[#1a234a] transition-all shadow-2xl shadow-indigo-900/20 active:scale-95 flex items-center gap-3 disabled:opacity-50"
+                className="h-15 px-20 bg-slate-900 text-white rounded-[24px] text-[13px] font-bold uppercase tracking-widest hover:bg-black transition-all shadow-xl shadow-slate-900/10 active:scale-95 flex items-center gap-3 disabled:opacity-50"
              >
                 {saving ? (
                    <>
                      <Loader2 className="animate-spin" size={20} />
-                     Saving...
+                     Processing...
                    </>
                 ) : (
-                   <>
-                     Save
-                   </>
+                   <>Save Campaign</>
                 )}
              </button>
           </div>
@@ -557,21 +543,16 @@ const BannerImage = () => {
       <AnimatePresence>
         {showToast && (
           <motion.div 
-            initial={{ opacity: 0, y: 50, scale: 0.9 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 50, scale: 0.9 }}
-            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-xl p-6"
+            initial={{ opacity: 0, scale: 0.9, y: 20 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.9 }}
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 z-50 w-full max-w-sm"
           >
-             <div className="bg-emerald-50 border border-emerald-100 text-emerald-700 px-8 py-5 rounded-[28px] shadow-2xl flex items-center justify-between ring-1 ring-emerald-200/50 backdrop-blur-xl">
-                <div className="flex items-center gap-4">
-                   <div className="w-10 h-10 bg-emerald-600 rounded-full flex items-center justify-center text-white shadow-lg shadow-emerald-600/30">
-                      <CheckCircle2 size={24} strokeWidth={3} />
-                   </div>
-                   <span className="text-[14px] font-black uppercase tracking-tight italic">{toastMsg}</span>
+             <div className="bg-emerald-500 text-white px-8 py-4 rounded-2xl shadow-2xl flex items-center justify-between border border-emerald-400">
+                <div className="flex items-center gap-3">
+                   <CheckCircle2 size={20} strokeWidth={3} />
+                   <span className="text-[13px] font-bold tracking-tight">{toastMsg}</span>
                 </div>
-                <button onClick={() => setShowToast(false)} className="text-emerald-400 hover:text-emerald-800 transition-colors">
-                   <X size={20} />
-                </button>
              </div>
           </motion.div>
         )}
@@ -581,4 +562,3 @@ const BannerImage = () => {
 };
 
 export default BannerImage;
-

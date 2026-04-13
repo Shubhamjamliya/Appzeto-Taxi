@@ -11,7 +11,7 @@ const driverLoginSessionSchema = new mongoose.Schema(
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       required: true,
     },
     otpHash: {
@@ -31,7 +31,6 @@ const driverLoginSessionSchema = new mongoose.Schema(
     expiresAt: {
       type: Date,
       required: true,
-      index: true,
     },
   },
   { timestamps: true },
@@ -40,5 +39,5 @@ const driverLoginSessionSchema = new mongoose.Schema(
 driverLoginSessionSchema.index({ expiresAt: 1 }, { expireAfterSeconds: 0 });
 
 export const DriverLoginSession =
-  mongoose.models.DriverLoginSession ||
-  mongoose.model('DriverLoginSession', driverLoginSessionSchema);
+  mongoose.models.TaxiDriverLoginSession ||
+  mongoose.model('TaxiDriverLoginSession', driverLoginSessionSchema);

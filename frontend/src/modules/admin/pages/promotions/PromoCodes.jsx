@@ -3,7 +3,6 @@ import {
   Plus,
   Filter,
   ChevronRight,
-  Edit,
   Trash2,
   Loader2,
   Ticket,
@@ -296,12 +295,6 @@ const PromoCodes = () => {
                           </td>
                           <td className="px-6 py-4">
                             <div className="flex items-center justify-end gap-2">
-                              <button
-                                type="button"
-                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-indigo-600 transition-colors"
-                              >
-                                <Edit size={16} />
-                              </button>
                               <button
                                 type="button"
                                 className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-rose-600 transition-colors"

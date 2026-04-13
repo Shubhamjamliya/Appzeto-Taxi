@@ -25,6 +25,11 @@ export const adminService = {
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),
+  getDriverNeededDocuments: () => api.get('/admin/owner-management/driver-needed-document'),
+  getDriverNeededDocument: (id) => api.get(`/admin/owner-management/driver-needed-document/${id}`),
+  createDriverNeededDocument: (data) => api.post('/admin/owner-management/driver-needed-document', data),
+  updateDriverNeededDocument: (id, data) => api.patch(`/admin/owner-management/driver-needed-document/${id}`, data),
+  deleteDriverNeededDocument: (id) => api.delete(`/admin/owner-management/driver-needed-document/${id}`),
 
   /**
    * Subscription Management

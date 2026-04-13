@@ -3,6 +3,7 @@ const CURRENT_RIDE_STORAGE_KEY = 'rydon24_current_ride';
 export const CURRENT_RIDE_UPDATED_EVENT = 'rydon24:current-ride-updated';
 
 const ACTIVE_RIDE_STATUSES = new Set(['accepted', 'arriving', 'started', 'ongoing']);
+const TERMINAL_RIDE_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
 
 const notifyCurrentRideChange = () => {
   if (typeof window === 'undefined') {
@@ -30,7 +31,14 @@ export const isActiveCurrentRide = (ride) => {
     return false;
   }
 
-  return ACTIVE_RIDE_STATUSES.has(String(ride.status || 'accepted').toLowerCase());
+  const status = String(ride.status || '').toLowerCase();
+  const liveStatus = String(ride.liveStatus || '').toLowerCase();
+
+  if (TERMINAL_RIDE_STATUSES.has(status) || TERMINAL_RIDE_STATUSES.has(liveStatus)) {
+    return false;
+  }
+
+  return ACTIVE_RIDE_STATUSES.has(liveStatus || status || 'accepted');
 };
 
 export const saveCurrentRide = (ride) => {
@@ -41,6 +49,7 @@ export const saveCurrentRide = (ride) => {
   const nextRide = {
     ...ride,
     status: ride.status || 'accepted',
+    liveStatus: ride.liveStatus || ride.status || 'accepted',
     updatedAt: Date.now(),
   };
 

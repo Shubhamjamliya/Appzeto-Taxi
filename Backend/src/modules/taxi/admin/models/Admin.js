@@ -32,7 +32,9 @@ const adminSchema = new mongoose.Schema(
       default: [],
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+  },
 );
 
 export const Admin = mongoose.models.TaxiAdmin || mongoose.model('TaxiAdmin', adminSchema);

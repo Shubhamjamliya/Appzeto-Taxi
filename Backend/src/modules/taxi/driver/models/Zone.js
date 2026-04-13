@@ -66,7 +66,9 @@ const zoneSchema = new mongoose.Schema(
       },
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+  },
 );
 
 zoneSchema.index({ geometry: '2dsphere' });

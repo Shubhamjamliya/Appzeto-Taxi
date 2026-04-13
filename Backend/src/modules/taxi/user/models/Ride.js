@@ -125,7 +125,9 @@ const rideSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+  },
 );
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

@@ -133,7 +133,9 @@ const driverSchema = new mongoose.Schema(
       default: {},
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+  },
 );
 
 driverSchema.index({ location: '2dsphere' });

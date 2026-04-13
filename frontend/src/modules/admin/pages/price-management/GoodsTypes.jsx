@@ -3,28 +3,34 @@ import {
   Plus, 
   Search, 
   ChevronRight, 
-  ChevronLeft, 
   Trash2, 
   Edit2, 
   Layers,
-  ChevronDown,
   ArrowLeft,
-  Filter,
   Globe,
   Package,
   CheckCircle2,
+  Loader2,
+  ChevronDown,
+  ChevronLeft,
+  Activity,
+  Tag,
+  Info
   Loader2,
   Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams } from 'react-router-dom';
 
+const inputClass = "w-full border border-gray-200 rounded-xl px-4 py-2.5 text-sm font-semibold text-gray-800 bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all";
+const labelClass = "block text-[11px] font-bold text-gray-400 uppercase tracking-widest mb-1.5";
+
 const StatusToggle = ({ active, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
-    className={`w-11 h-6 rounded-full transition-all duration-300 relative ${active ? 'bg-indigo-600 shadow-lg shadow-indigo-100' : 'bg-gray-200'}`}
+    className={`w-11 h-6 rounded-full transition-colors relative ${active ? 'bg-indigo-600' : 'bg-gray-200'}`}
   >
-    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white transition-all duration-300 shadow-sm ${active ? 'left-6' : 'left-1'}`} />
+    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-5' : 'translate-x-1'}`} />
   </button>
 );
 
@@ -59,6 +65,7 @@ const GoodsTypes = ({ mode }) => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('English');
+  const [searchTerm, setSearchTerm] = useState('');
   
   const languages = ['English', 'Arabic', 'French', 'Spanish'];
 
@@ -143,6 +150,7 @@ const GoodsTypes = ({ mode }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    if (!formData.name) return;
     setSaving(true);
     try {
       const isEdit = mode === 'edit' && id;
@@ -171,21 +179,20 @@ const GoodsTypes = ({ mode }) => {
         navigate('/admin/pricing/goods-types');
         fetchInitialData();
       } else {
-        alert(data.message || "Failed to save goods type");
+        alert(data.message || "Operation failed");
       }
     } catch (error) {
-      console.error("Error saving:", error);
+      console.error("Save error:", error);
     } finally {
       setSaving(false);
     }
   };
 
   const handleToggleStatus = async (item) => {
-    const currentActive = item.active !== undefined ? Number(item.active) : 1;
-    const nextActive = currentActive === 1 ? 0 : 1;
-    
+    const sid = item._id || item.id;
+    const nextActive = (Number(item.active) === 1) ? 0 : 1;
     try {
-      const res = await fetch(`${baseUrl}/goods-types/${item._id || item.id}`, {
+      const res = await fetch(`${baseUrl}/goods-types/${sid}`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`, 
@@ -195,31 +202,28 @@ const GoodsTypes = ({ mode }) => {
       });
       const data = await res.json();
       if (data.success) {
-        setGoods(prev => prev.map(g => 
-          (String(g._id || g.id) === String(item._id || item.id)) 
-          ? { ...g, active: nextActive } 
-          : g
-        ));
+        setGoods(prev => prev.map(g => (String(g._id || g.id) === String(sid)) ? { ...g, active: nextActive } : g));
       }
-    } catch (e) {
-      console.error("Error toggling status:", e);
-    }
+    } catch (e) {}
   };
 
   const handleDelete = async (itemId) => {
-    if (!window.confirm("Are you sure you want to delete this goods type?")) return;
+    if (!window.confirm("Delete this goods category permanently?")) return;
     try {
       const res = await fetch(`${baseUrl}/goods-types/${itemId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
+      if (data.success) fetchGoods();
+    } catch (err) {}
       if (data.success) fetchInitialData();
     } catch (error) {
       console.error("Error deleting:", error);
     }
   };
 
+  const filteredGoods = goods.filter(g => (g.name || g.goods_type_name || '').toLowerCase().includes(searchTerm.toLowerCase()));
   const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors shadow-sm";
   const labelClass = "block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider";
   const previewIcon = formData.iconFile ? URL.createObjectURL(formData.iconFile) : formData.icon;
@@ -241,121 +245,122 @@ const GoodsTypes = ({ mode }) => {
 
   if (!mode) {
     return (
-      <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
-        {/* Header Block */}
-        <div className="mb-8">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mb-3 uppercase tracking-widest">
-            <span>Price Management</span>
-            <ChevronRight size={12} className="text-gray-300" />
-            <span className="text-indigo-600">Goods Types</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <div>
-              <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Goods Types</h1>
-              <p className="text-xs text-gray-500 mt-1">Manage transportable goods categories and pricing modules</p>
+      <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 font-medium uppercase tracking-widest">
+              <span>Pricing</span>
+              <ChevronRight size={12} />
+              <span className="text-gray-700">Goods Types</span>
             </div>
-            <button 
-              onClick={() => navigate('/admin/pricing/goods-types/create')}
-              className="flex items-center gap-2 px-5 py-3 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-200 active:scale-95"
-            >
-              <Plus size={16} /> ADD GOODS TYPE
-            </button>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Goods Configuration</h1>
+                <p className="text-xs text-gray-500 mt-1 font-medium">Categorize transportable items for delivery and logistics modules.</p>
+              </div>
+              <button 
+                onClick={() => navigate('/admin/pricing/goods-types/create')}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+              >
+                <Plus size={18} /> New Goods Type
+              </button>
+            </div>
           </div>
-        </div>
 
-        {/* List Card */}
-        <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-          {/* Filters Bar */}
-          <div className="p-5 border-b border-gray-50 flex flex-wrap items-center justify-between gap-4 bg-gray-50/30">
-            <div className="flex items-center gap-2">
-              <div className="relative">
-                <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { label: 'Active Categories', value: goods.filter(g => Number(g.active) === 1).length, icon: Package, color: 'indigo' },
+              { label: 'Universal Support', value: goods.filter(g => (g.goods_type_for || 'both') === 'both').length, icon: Globe, color: 'emerald' },
+              { label: 'Total Definitions', value: goods.length, icon: Activity, color: 'blue' }
+            ].map((stat, i) => (
+              <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:border-indigo-100 transition-colors">
+                <div className={`w-12 h-12 rounded-xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 border border-${stat.color}-100 shadow-sm group-hover:scale-110 transition-transform`}>
+                  <stat.icon size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1">{stat.value}</h3>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* List Card */}
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-4 bg-gray-50/50 border-b border-gray-100">
+              <div className="relative w-full max-w-sm">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
                 <input 
-                  type="text" 
-                  placeholder="Search goods..." 
-                  className="pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-xs font-medium outline-none focus:border-indigo-500 w-64 transition-all"
+                  type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search goods categories..." 
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
                 />
               </div>
             </div>
-          </div>
 
-          <div className="overflow-x-auto text-sans">
-            <table className="w-full">
-              <thead>
-                <tr className="bg-gray-50/50 border-b border-gray-100">
-                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Goods Category</th>
-                  <th className="px-6 py-4 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Module Access</th>
-                  <th className="px-6 py-4 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
-                  <th className="px-6 py-4 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-50">
-                {loading ? (
-                  [...Array(5)].map((_, i) => (
-                    <tr key={i} className="animate-pulse">
-                      {[...Array(4)].map((_, j) => <td key={j} className="px-6 py-5"><div className="h-3 bg-gray-100 rounded-full w-full"></div></td>)}
+            <div className="overflow-x-auto">
+              {loading ? (
+                <div className="flex flex-col items-center justify-center py-24 gap-3">
+                  <Loader2 className="animate-spin text-indigo-600" size={32} />
+                  <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">Indexing Logistics Clusters</p>
+                </div>
+              ) : filteredGoods.length > 0 ? (
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-widest">
+                      <th className="px-6 py-4">Goods Identity</th>
+                      <th className="px-6 py-4">Module Compatibility</th>
+                      <th className="px-6 py-4 text-center">Status</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
                     </tr>
-                  ))
-                ) : goods.length > 0 ? (
-                  goods.map((item) => (
-                    <tr key={item._id || item.id} className="hover:bg-gray-50/50 transition-colors">
-                      <td className="px-6 py-5">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-gray-400">
-                            <Package size={16} />
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredGoods.map(item => (
+                      <tr key={item._id || item.id} className="hover:bg-gray-50/20 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-4">
+                            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm group-hover:rotate-12 transition-transform">
+                              <Package size={18} />
+                            </div>
+                            <span className="text-sm font-bold text-gray-900 leading-tight">{item.name || item.goods_type_name}</span>
                           </div>
-                          <span className="text-sm font-semibold text-gray-900">{item.name || item.goods_type_name}</span>
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-bold uppercase tracking-wider">
-                          {item.goods_types_for || item.goods_type_for || 'BOTH'}
-                        </span>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex justify-center">
-                          <StatusToggle 
-                            active={Number(item.active) === 1} 
-                            onToggle={() => handleToggleStatus(item)} 
-                          />
-                        </div>
-                      </td>
-                      <td className="px-6 py-5">
-                        <div className="flex items-center justify-end gap-2 text-sans">
-                          <button 
-                            onClick={() => navigate(`/admin/pricing/goods-types/edit/${item._id || item.id}`)}
-                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-all"
-                          >
-                            <Edit2 size={14} />
-                          </button>
-                          <button 
-                            onClick={() => handleDelete(item._id || item.id)}
-                            className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all"
-                          >
-                            <Trash2 size={14} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  ))
-                ) : (
-                  <tr>
-                    <td colSpan="4" className="px-6 py-20 text-center">
-                      <Layers size={40} className="mx-auto text-gray-200 mb-4" />
-                      <p className="text-sm text-gray-400 font-medium">No goods types found in database</p>
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
-          </div>
-          
-          <div className="p-5 border-t border-gray-50 bg-gray-50/20 flex items-center justify-between">
-            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Total: {goods.length} Units</span>
-            <div className="flex items-center gap-2">
-              <button className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled><ChevronLeft size={16} /></button>
-              <div className="w-8 h-8 rounded-lg bg-white border border-gray-200 flex items-center justify-center text-xs font-bold text-gray-900 shadow-sm">1</div>
-              <button className="p-2 text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled><ChevronRight size={16} /></button>
+                        </td>
+                        <td className="px-6 py-4 whitespace-nowrap">
+                           <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-gray-200">
+                              {item.goods_types_for || item.goods_type_for || 'Universal'}
+                           </span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                           <div className="flex justify-center"><StatusToggle active={Number(item.active) === 1} onToggle={() => handleToggleStatus(item)} /></div>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                           <div className="flex items-center justify-end gap-2">
+                             <button onClick={() => navigate(`/admin/pricing/goods-types/edit/${item._id || item.id}`)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all shadow-sm"><Edit2 size={16} /></button>
+                             <button onClick={() => handleDelete(item._id || item.id)} className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shadow-sm"><Trash2 size={16} /></button>
+                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="py-24 text-center">
+                  <div className="w-16 h-16 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center text-gray-200 mx-auto mb-4"><Package size={32} /></div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">No Goods Records</h3>
+                  <p className="text-xs text-gray-400 max-w-xs mx-auto">Define transportable items to enable delivery pricing rules.</p>
+                </div>
+              )}
+            </div>
+            
+            <div className="px-6 py-4 border-t border-gray-50 bg-gray-50/30 flex items-center justify-between">
+              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Synchronized Recordset</span>
+              <div className="flex items-center gap-1">
+                <button className="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled><ChevronLeft size={16} /></button>
+                <button className="w-7 h-7 rounded-lg bg-indigo-600 text-white text-xs font-bold shadow-md">1</button>
+                <button className="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled><ChevronRight size={16} /></button>
+              </div>
             </div>
           </div>
         </div>
@@ -364,37 +369,35 @@ const GoodsTypes = ({ mode }) => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans">
-      <div className="max-w-4xl mx-auto text-sans">
-        {/* Header Block */}
-        <div className="mb-8">
-          <div className="flex items-center gap-1.5 text-[10px] font-bold text-gray-400 mb-3 uppercase tracking-widest">
-            <span>Goods Types</span>
-            <ChevronRight size={12} className="text-gray-300" />
-            <span className="text-indigo-600 tracking-tight">{mode === 'edit' ? 'Update Category' : 'New Category'}</span>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500">
+      <div className="max-w-4xl mx-auto space-y-6">
+        {/* Header */}
+        <div>
+          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 font-medium uppercase tracking-widest">
+            <span>Goods Configuration</span>
+            <ChevronRight size={12} />
+            <span className="text-gray-700">{mode === 'edit' ? 'Refine' : 'Initialize'}</span>
           </div>
           <div className="flex items-center justify-between">
-            <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-              {mode === 'edit' ? 'Edit Goods Type' : 'Add New Goods Type'}
-            </h1>
+            <h1 className="text-xl font-bold text-gray-900 tracking-tight">{mode === 'edit' ? 'Edit Goods Type' : 'Add New Category'}</h1>
             <button 
               onClick={() => navigate('/admin/pricing/goods-types')}
-              className="flex items-center gap-2 px-4 py-2.5 text-xs font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all active:scale-95 shadow-sm"
+              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm"
             >
-              <ArrowLeft size={16} /> BACK TO LIST
+              <ArrowLeft size={16} /> Back to Registry
             </button>
           </div>
         </div>
 
         {/* Form Card */}
-        <div className="bg-white rounded-2xl border border-gray-200 shadow-xl shadow-gray-200/20 overflow-hidden">
+        <div className="bg-white rounded-3xl border border-gray-200 shadow-xl shadow-gray-200/20 overflow-hidden">
           {/* Language Tabs */}
-          <div className="flex items-center px-4 border-b border-gray-100 bg-gray-50/30">
+          <div className="flex items-center px-4 border-b border-gray-100 bg-gray-50/20">
             {languages.map(lang => (
               <button
                 key={lang}
                 onClick={() => setActiveTab(lang)}
-                className={`px-6 py-4 text-[11px] font-bold transition-all relative uppercase tracking-widest ${activeTab === lang ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`px-8 py-5 text-[10px] font-black tracking-[0.2em] transition-all relative uppercase ${activeTab === lang ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-700'}`}
               >
                 {lang}
                 {activeTab === lang && (
@@ -404,46 +407,40 @@ const GoodsTypes = ({ mode }) => {
             ))}
           </div>
 
-          <form onSubmit={handleSave} className="p-8 lg:p-10 space-y-8">
-            <div className="bg-gray-50/50 rounded-xl p-6 border border-gray-100">
-               <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-                  <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                    <Package size={18} />
-                  </div>
+          <form onSubmit={handleSave} className="p-8 lg:p-10 space-y-10">
+            <div className="space-y-8">
+               <div className="flex items-center gap-3 mb-2 pb-5 border-b border-gray-50">
+                  <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm"><Tag size={20} /></div>
                   <div>
-                    <h3 className="text-sm font-bold text-gray-900">General Information</h3>
-                    <p className="text-[10px] text-gray-400 font-medium uppercase tracking-wider">Basic identity and configuration</p>
+                    <h3 className="text-sm font-bold text-gray-900">Module Parameters</h3>
+                    <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mt-1">Classification Settings</p>
                   </div>
                </div>
 
                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                 <div className="space-y-2">
-                    <label className={labelClass}>
-                      <Globe size={11} className="inline mr-1 text-gray-400" />
-                      Goods Name ({activeTab}) *
-                    </label>
-                    <input 
-                      type="text" 
-                      required
-                      placeholder="e.g. Perishable Food Items"
-                      value={formData.name}
-                      onChange={(e) => setFormData({...formData, name: e.target.value})}
-                      className={inputClass}
-                    />
+                 <div className="space-y-1.5">
+                    <label className={labelClass}>Goods Name ({activeTab}) *</label>
+                    <div className="relative">
+                       <Globe size={14} className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" />
+                       <input 
+                          type="text" required value={formData.name}
+                          onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
+                          placeholder="e.g. Fragile Electronics" className={inputClass + " pl-11"}
+                       />
+                    </div>
                  </div>
 
-                 <div className="space-y-2">
-                    <label className={labelClass}>
-                      <Plus size={11} className="inline mr-1 text-gray-400" />
-                      Available For *
-                    </label>
+                 <div className="space-y-1.5">
+                    <label className={labelClass}>Compatibility Module *</label>
                     <div className="relative group">
                       <select 
-                        required
-                        value={formData.goods_type_for}
-                        onChange={(e) => setFormData({...formData, goods_type_for: e.target.value})}
-                        className={`${inputClass} appearance-none cursor-pointer`}
+                        required value={formData.goods_type_for}
+                        onChange={(e) => setFormData(p => ({ ...p, goods_type_for: e.target.value }))}
+                        className={inputClass + " appearance-none cursor-pointer"}
                       >
+                        <option value="both">Universal (Combined)</option>
+                        <option value="truck">Heavy Logistics (Truck)</option>
+                        <option value="motor_bike">Quick Dispatch (Bike)</option>
                         {availableForOptions.length > 0 ? (
                           availableForOptions.map((option) => (
                             <option key={option.value} value={option.value}>
@@ -456,7 +453,7 @@ const GoodsTypes = ({ mode }) => {
                           </option>
                         )}
                       </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-colors" />
+                      <ChevronDown size={16} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                     </div>
                     <p className="text-[10px] font-medium text-gray-400">
                       Vehicle types are loaded from the admin vehicle type catalog.
@@ -517,35 +514,38 @@ const GoodsTypes = ({ mode }) => {
                </div>
             </div>
 
-            <div className="flex items-center justify-between p-6 bg-indigo-50/30 rounded-xl border border-indigo-50">
-               <div className="flex items-center gap-3">
-                  <CheckCircle2 className="text-indigo-600" size={20} />
+            <div className="flex items-center justify-between p-6 bg-indigo-50/20 rounded-2xl border border-indigo-50 shadow-inner">
+               <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-50"><CheckCircle2 size={20} /></div>
                   <div>
-                    <p className="text-[11px] font-bold text-gray-900 uppercase">Publish Status</p>
-                    <p className="text-[10px] text-gray-500 font-medium">Immediate availability for dispatch modules</p>
+                    <p className="text-xs font-black text-gray-900 uppercase tracking-widest">Active Discovery</p>
+                    <p className="text-[10px] text-indigo-400 font-bold uppercase tracking-tighter mt-0.5">Visible to dispatchers</p>
                   </div>
                </div>
                <StatusToggle 
                  active={formData.active === 1} 
-                 onToggle={() => setFormData({...formData, active: formData.active === 1 ? 0 : 1})} 
+                 onToggle={() => setFormData(p => ({ ...p, active: p.active === 1 ? 0 : 1 }))} 
                />
             </div>
 
-            <div className="pt-4 flex justify-end gap-3">
+            <div className="bg-amber-50 p-4 rounded-2xl flex gap-3 border border-amber-100">
+               <Info size={18} className="text-amber-600 shrink-0 mt-0.5" />
+               <p className="text-[11px] font-bold text-amber-800 leading-relaxed">Defining correct goods types ensures that drivers with incompatible vehicles are not matched with specific cargo types.</p>
+            </div>
+
+            <div className="pt-6 border-t border-gray-50 flex justify-end gap-3">
                <button 
-                  type="button"
-                  onClick={() => navigate('/admin/pricing/goods-types')}
-                  className="px-8 py-3.5 bg-gray-100 text-gray-600 rounded-xl text-[11px] font-bold hover:bg-gray-200 transition-all uppercase tracking-widest"
+                  type="button" onClick={() => navigate('/admin/pricing/goods-types')}
+                  className="px-8 py-3.5 bg-white text-gray-400 border border-gray-200 rounded-xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-gray-50 transition-all"
                >
                  Cancel
                </button>
                <button 
-                  type="submit"
-                  disabled={saving}
-                  className="px-10 py-3.5 bg-indigo-600 text-white rounded-xl text-[11px] font-bold hover:bg-indigo-700 transition-all shadow-lg shadow-indigo-100 active:scale-95 flex items-center gap-2 uppercase tracking-widest disabled:opacity-50"
+                  type="submit" disabled={saving}
+                  className="px-10 py-3.5 bg-[#0F172A] text-white rounded-xl text-[11px] font-black uppercase tracking-[0.2em] hover:bg-slate-800 transition-all shadow-lg shadow-slate-200 active:scale-95 flex items-center gap-2 disabled:opacity-50"
                >
-                 {saving ? <Loader2 size={16} className="animate-spin" /> : <CheckCircle2 size={16} />}
-                 {saving ? 'Processing...' : (mode === 'edit' ? 'Update Goods Type' : 'Create Goods Type')}
+                  {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                  {saving ? 'Processing' : (mode === 'edit' ? 'Update Definition' : 'Publish Category')}
                </button>
             </div>
           </form>

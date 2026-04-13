@@ -96,7 +96,11 @@ export const validatePromoForContext = async ({
   }
 
   if (promoServiceLocationId && promoServiceLocationId !== serviceLocationId) {
-    return { eligible: false, reason: 'SERVICE_LOCATION_MISMATCH', message: 'Promo code is not valid for this service location' };
+    return {
+      eligible: false,
+      reason: 'SERVICE_LOCATION_MISMATCH',
+      message: 'Promo code is not valid for this service location',
+    };
   }
 
   if (promo.transport_type && promo.transport_type !== 'all' && promo.transport_type !== transportType) {

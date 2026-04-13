@@ -621,4 +621,3 @@ const ServiceConfig = () => {
 };
 
 export default ServiceConfig;
-

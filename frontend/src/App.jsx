@@ -159,9 +159,9 @@ const AdminWithdrawalRequestDetail = lazy(() => import('./modules/admin/pages/dr
 const AdminDriverDeleteRequests = lazy(() => import('./modules/admin/pages/drivers/DriverDeleteRequests'));
 const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/GlobalDocuments'));
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
+const AdminDriverImportCreate = lazy(() => import('./modules/admin/pages/drivers/DriverImportCreate'));
 const AdminDriverAudit = lazy(() => import('./modules/admin/pages/drivers/DriverAudit'));
 const AdminPaymentMethods = lazy(() => import('./modules/admin/pages/drivers/PaymentMethods'));
-const AdminServiceConfig = lazy(() => import('./modules/admin/pages/drivers/ServiceConfig'));
 const AdminDriverCreate = lazy(() => import('./modules/admin/pages/drivers/CreateDriver'));
 const AdminDriverEdit = lazy(() => import('./modules/admin/pages/drivers/EditDriver'));
 const AdminReferralDashboard = lazy(() => import('./modules/admin/pages/referrals/ReferralDashboard'));
@@ -192,6 +192,7 @@ const AdminPricingPlaceholder = ({ title }) => (
 
 const AdminOwnerDashboard = lazy(() => import('./modules/admin/pages/owners/OwnerDashboard'));
 const AdminManageOwners = lazy(() => import('./modules/admin/pages/owners/ManageOwners'));
+const AdminOwnerCreate = lazy(() => import('./modules/admin/pages/owners/OwnerCreate'));
 const AdminOwnerNeededDocuments = lazy(() => import('./modules/admin/pages/owners/OwnerNeededDocuments'));
 const AdminManageFleet = lazy(() => import('./modules/admin/pages/owners/ManageFleet'));
 const AdminFleetDrivers = lazy(() => import('./modules/admin/pages/owners/FleetDrivers'));
@@ -286,7 +287,9 @@ const AdminSectionPlaceholder = () => {
 const MainLayout = ({ children }) => {
   const location = useLocation();
   const isAdminPath =
-    location.pathname.startsWith('/admin') || location.pathname.startsWith('/user-import');
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/user-import') ||
+    location.pathname.startsWith('/driver-import');
 
   if (isAdminPath) {
     return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
@@ -316,6 +319,7 @@ const UserAccountInvalidationListener = () => {
     const isUserRoute =
       !location.pathname.startsWith('/admin') &&
       !location.pathname.startsWith('/user-import') &&
+      !location.pathname.startsWith('/driver-import') &&
       !location.pathname.startsWith('/taxi/driver');
 
     if (!isUserRoute) {
@@ -543,6 +547,12 @@ function App() {
             <Route path="/user-import/create" element={<AdminLayout />}>
               <Route index element={<AdminUserImportCreate />} />
             </Route>
+            <Route path="/driver-import/create" element={<AdminLayout />}>
+              <Route index element={<AdminDriverImportCreate />} />
+            </Route>
+            <Route path="/owner/create" element={<AdminLayout />}>
+              <Route index element={<AdminOwnerCreate />} />
+            </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" />} />
               <Route path="dashboard" element={<AdminDashboard />} />
@@ -573,8 +583,8 @@ function App() {
               <Route path="drivers/delete-requests" element={<AdminDriverDeleteRequests />} />
               <Route path="drivers/documents" element={<AdminGlobalDocuments />} />
               <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
+              <Route path="driver-import/create" element={<AdminDriverImportCreate />} />
               <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
-              <Route path="drivers/service-config" element={<AdminServiceConfig />} />
                <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
@@ -610,15 +620,23 @@ function App() {
               <Route path="pricing">
                 <Route index element={<Navigate to="service-location" />} />
                 <Route path="service-location" element={<AdminServiceLocation />} />
+                <Route path="service-location/add" element={<AdminServiceLocation mode="create" />} />
+                <Route path="service-location/edit/:id" element={<AdminServiceLocation mode="edit" />} />
                 <Route path="app-modules" element={<AdminAppModules />} />
                 <Route path="app-modules/create" element={<AdminAppModules mode="create" />} />
                 <Route path="app-modules/edit/:id" element={<AdminAppModules mode="edit" />} />
                 <Route path="zone" element={<AdminZoneManagement />} />
+                <Route path="zone/create" element={<AdminZoneManagement mode="create" />} />
+                <Route path="zone/edit/:id" element={<AdminZoneManagement mode="edit" />} />
                 <Route path="airport" element={<AdminAirportManagement />} />
+                <Route path="airport/create" element={<AdminAirportManagement mode="create" />} />
+                <Route path="airport/edit/:id" element={<AdminAirportManagement mode="edit" />} />
                 <Route path="vehicle-type" element={<AdminVehicleType />} />
                 <Route path="vehicle-type/create" element={<AdminVehicleType mode="create" />} />
                 <Route path="vehicle-type/edit/:id" element={<AdminVehicleType mode="edit" />} />
                 <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
+                <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
+                <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />

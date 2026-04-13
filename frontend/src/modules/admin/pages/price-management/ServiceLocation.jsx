@@ -1,16 +1,29 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, Edit2, Globe2, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
+import { 
+  ArrowLeft, 
+  Edit2, 
+  Globe2, 
+  Loader2, 
+  Plus, 
+  Save, 
+  Search, 
+  Trash2, 
+  ChevronRight, 
+  Globe, 
+  Tag, 
+  MapPin, 
+  Clock, 
+  DollarSign,
+  Activity,
+  Info,
+  ChevronLeft,
+  ChevronDown
+} from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
+import { useNavigate, useParams } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
-import { BACKEND_LABEL } from '../../../../shared/api/runtimeConfig';
+import countryMetadata from '../../constants/countries.json';
 
-const LANGUAGE_TABS = ['English', 'Arabic', 'French', 'Spanish', 'Tamil', 'Kannada'];
-const DEFAULT_COUNTRIES = [
-  { _id: 'country-in', name: 'India', code: 'IN' },
-  { _id: 'country-ae', name: 'United Arab Emirates', code: 'AE' },
-  { _id: 'country-gb', name: 'United Kingdom', code: 'GB' },
-  { _id: 'country-us', name: 'United States', code: 'US' }
-];
 const DEFAULT_TIMEZONES = [
   'Asia/Kolkata',
   'Asia/Dubai',
@@ -22,431 +35,369 @@ const DEFAULT_TIMEZONES = [
 const defaultFormData = {
   name: '',
   country: '',
-  currency_code: 'INR',
-  currency_symbol: '₹',
-  timezone: 'Asia/Kolkata'
+  currency_code: '',
+  currency_symbol: '',
+  timezone: ''
 };
 
-const EmptyState = ({ title, message }) => (
-  <div className="rounded-[28px] border border-dashed border-slate-200 bg-white px-8 py-16 text-center">
-    <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-3xl bg-slate-50 text-slate-300">
-      <Globe2 size={28} />
-    </div>
-    <h3 className="mt-5 text-lg font-black text-slate-900">{title}</h3>
-    <p className="mx-auto mt-2 max-w-md text-sm font-medium text-slate-500">{message}</p>
-  </div>
-);
+const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm font-semibold text-gray-800 bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 outline-none transition-all placeholder:text-gray-300";
+const labelClass = "block text-xs font-bold text-gray-500 mb-2";
 
-const ServiceLocation = () => {
-  const [view, setView] = useState('list');
+const ServiceLocation = ({ mode }) => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const isCreate = mode === 'create';
+  const isEdit = mode === 'edit';
+  const isList = !isCreate && !isEdit;
+
   const [locations, setLocations] = useState([]);
   const [countries, setCountries] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [errorMessage, setErrorMessage] = useState('');
-  const [selectedLanguage] = useState('English');
-  const [selectedLocation, setSelectedLocation] = useState(null);
+  const [activeLangTab, setActiveLangTab] = useState('English');
   const [formData, setFormData] = useState(defaultFormData);
-
-  const resetForm = (countryId = '') => {
-    setSelectedLocation(null);
-    setFormData({ ...defaultFormData, country: countryId });
-  };
 
   const fetchData = async () => {
     setLoading(true);
-    setErrorMessage('');
-
     try {
       const [locationsRes, countriesRes] = await Promise.allSettled([
         adminService.getServiceLocations(),
         adminService.getCountries()
       ]);
 
-      const nextLocations =
-        locationsRes.status === 'fulfilled'
-          ? Array.isArray(locationsRes.value?.data)
-            ? locationsRes.value.data
-            : (locationsRes.value?.data?.results || [])
-          : [];
+      const nextLocations = locationsRes.status === 'fulfilled' ? (Array.isArray(locationsRes.value?.data) ? locationsRes.value.data : (locationsRes.value?.data?.results || locationsRes.value?.results || [])) : [];
+      const nextCountries = countriesRes.status === 'fulfilled' ? (Array.isArray(countriesRes.value?.data?.results) ? countriesRes.value.data.results : (Array.isArray(countriesRes.value?.data) ? countriesRes.value.data : (countriesRes.value?.results || []))) : [];
 
-      const nextCountries =
-        countriesRes.status === 'fulfilled'
-          ? Array.isArray(countriesRes.value?.data?.results)
-            ? countriesRes.value.data.results
-            : (countriesRes.value?.data || [])
-          : DEFAULT_COUNTRIES;
-
-      const normalizedCountries = nextCountries.length ? nextCountries : DEFAULT_COUNTRIES;
-      const defaultCountryId =
-        normalizedCountries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
-        normalizedCountries[0]?._id ||
-        '';
-
-      setLocations(nextLocations);
-      setCountries(normalizedCountries);
-      setFormData((prev) => ({
-        ...prev,
-        country: prev.country || defaultCountryId
-      }));
-
-      if (locationsRes.status === 'rejected') {
-        setErrorMessage(`Service locations could not be loaded. Make sure the backend is running on ${BACKEND_LABEL}.`);
+      setLocations(Array.isArray(nextLocations) ? nextLocations : []);
+      setCountries(Array.isArray(nextCountries) ? nextCountries : []);
+      
+      if (isEdit && id) {
+        const item = nextLocations.find(l => String(l._id || l.id) === String(id));
+        if (item) {
+          const matchedCountry = nextCountries.find(c => (c._id || c.id) === item.country || c.name === item.country || c.name === item.country?.name);
+          setFormData({
+            name: item.name || item.service_location_name || '',
+            country: matchedCountry?._id || matchedCountry?.id || '',
+            currency_code: item.currency_code || '',
+            currency_symbol: item.currency_symbol || '',
+            timezone: item.timezone || ''
+          });
+        }
+      } else if (isCreate) {
+        if (Array.isArray(nextCountries) && nextCountries.length > 0) {
+          const defaultCountry = nextCountries.find(c => c.name?.toLowerCase() === 'india') || nextCountries[0];
+          setFormData(p => ({ ...p, country: defaultCountry?._id || defaultCountry?.id || '' }));
+        }
       }
     } catch (error) {
-      console.error('Service location fetch error:', error);
-      setCountries(DEFAULT_COUNTRIES);
-      setFormData((prev) => ({
-        ...prev,
-        country: prev.country || DEFAULT_COUNTRIES[0]._id
-      }));
-      setErrorMessage(`Service locations could not be loaded. Make sure the backend is running on ${BACKEND_LABEL}.`);
+      console.error('Fetch error:', error);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (formData.country && countries.length > 0) {
+      // 1. Try to find in the dynamic API data (highest priority)
+      let matched = countries.find(c => String(c._id || c.id) === String(formData.country));
+      
+      // 2. If dynamic data is missing currency info, fallback to our local master metadata
+      if (!matched?.currency_code) {
+        const countryName = matched?.name || '';
+        matched = countryMetadata.find(c => c.name === countryName || c.code === matched?.code);
+      }
+
+      if (matched?.currency_code) {
+        setFormData(prev => ({
+          ...prev,
+          currency_code: prev.currency_code || matched.currency_code,
+          currency_symbol: prev.currency_symbol || matched.currency_symbol
+        }));
+      }
+    }
+  }, [formData.country, countries]);
+
+  useEffect(() => { fetchData(); }, [mode, id]);
 
   const filteredLocations = useMemo(() => {
-    const query = searchTerm.trim().toLowerCase();
-    if (!query) {
-      return locations;
-    }
-
-    return locations.filter((location) => {
-      const countryName = typeof location.country === 'object' ? location.country?.name : location.country;
-      return [location.name, location.service_location_name, location.currency_code, location.timezone, countryName]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(query));
+    const q = searchTerm.toLowerCase();
+    if (!Array.isArray(locations)) return [];
+    return locations.filter(l => {
+      const countryName = typeof l.country === 'object' ? l.country?.name : l.country;
+      return [l.name, l.service_location_name, countryName].some(v => String(v || '').toLowerCase().includes(q));
     });
   }, [locations, searchTerm]);
 
-  const handleSave = async () => {
-    if (!formData.name.trim() || !formData.country || !formData.currency_code.trim() || !formData.currency_symbol.trim() || !formData.timezone) {
-      alert('Please fill all required fields.');
-      return;
-    }
-
+  const handleSave = async (e) => {
+    if (e) e.preventDefault();
+    if (!formData.name || !formData.country) return alert("Required fields missing");
     setSaving(true);
-
     try {
-      const selectedCountry = countries.find((country) => country._id === formData.country);
+      const selectedCountry = countries.find(c => (c._id || c.id) === formData.country);
       const payload = {
-        name: formData.name.trim(),
+        ...formData,
+        currency_code: formData.currency_code.toUpperCase(),
         country: selectedCountry?.name || formData.country,
-        currency_code: formData.currency_code.trim().toUpperCase(),
-        currency_symbol: formData.currency_symbol.trim(),
-        timezone: formData.timezone,
-        currency_name: formData.currency_code.trim().toUpperCase(),
+        currency_name: formData.currency_code.toUpperCase()
       };
 
-      const response = selectedLocation?._id
-        ? await adminService.updateServiceLocation(selectedLocation._id, payload)
-        : await adminService.createServiceLocation(payload);
-
-      if (response?.success) {
-        const defaultCountryId =
-          countries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
-          countries[0]?._id ||
-          '';
-        resetForm(defaultCountryId);
-        setView('list');
-        fetchData();
+      const res = isEdit ? await adminService.updateServiceLocation(id, payload) : await adminService.createServiceLocation(payload);
+      if (res?.success) {
+        navigate('/admin/pricing/service-location');
       } else {
-        alert(response?.message || 'Failed to save location');
+        alert(res?.message || "Operation failed");
       }
-    } catch (error) {
-      console.error('Service location save error:', error);
-      alert('Failed to save service location');
+    } catch (err) {
+      console.error(err);
+      alert("An error occurred while saving.");
     } finally {
       setSaving(false);
     }
   };
 
-  const handleEdit = (location) => {
-    const matchedCountry =
-      countries.find((country) => country._id === location.country) ||
-      countries.find((country) => country.name === location.country) ||
-      countries.find((country) => country.name === location.country?.name) ||
-      DEFAULT_COUNTRIES.find((country) => country.name === location.country) ||
-      DEFAULT_COUNTRIES[0];
-
-    setSelectedLocation(location);
-    setFormData({
-      name: location.name || location.service_location_name || '',
-      country: matchedCountry?._id || DEFAULT_COUNTRIES[0]._id,
-      currency_code: location.currency_code || 'INR',
-      currency_symbol: location.currency_symbol || '₹',
-      timezone: location.timezone || 'Asia/Kolkata'
-    });
-    setView('create');
-  };
-
-  const handleDelete = async (locationId) => {
-    if (!window.confirm('Delete this service location?')) {
-      return;
-    }
-
+  const handleDelete = async (itemId) => {
+    if (!window.confirm("Delete this service area?")) return;
     try {
-      const response = await adminService.deleteServiceLocation(locationId);
-      if (response?.success) {
-        setLocations((prev) => prev.filter((item) => item._id !== locationId && item.id !== locationId));
-      }
-    } catch (error) {
-      console.error('Service location delete error:', error);
-      alert('Failed to delete service location');
-    }
+      const res = await adminService.deleteServiceLocation(itemId);
+      if (res?.success) fetchData();
+    } catch (err) {}
   };
+
+  if (isList) {
+    return (
+      <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500 font-sans">
+        <div className="max-w-7xl mx-auto space-y-6">
+          {/* Header */}
+          <div>
+            <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 font-medium uppercase tracking-widest">
+              <span>Pricing</span>
+              <ChevronRight size={12} />
+              <span className="text-gray-700">Service Locations</span>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Active Service Areas</h1>
+                <p className="text-xs text-gray-500 mt-1 font-medium">Manage localized settings including currency, timezone, and regional clusters.</p>
+              </div>
+              <button 
+                onClick={() => navigate('/admin/pricing/service-location/add')}
+                className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 text-white rounded-xl text-sm font-semibold hover:bg-indigo-700 transition-all shadow-md active:scale-95"
+              >
+                <Plus size={18} /> Add Location
+              </button>
+            </div>
+          </div>
+
+          {/* Stats */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            {[
+              { label: 'Market Jurisdictions', value: Array.isArray(locations) ? [...new Set(locations.map(l => typeof l.country === 'object' ? l.country?.name : l.country))].filter(Boolean).length : 0, icon: Globe, color: 'indigo' },
+              { label: 'Operational Hubs', value: Array.isArray(locations) ? locations.length : 0, icon: MapPin, color: 'emerald' },
+              { label: 'Active Currencies', value: Array.isArray(locations) ? [...new Set(locations.map(l => l.currency_code))].filter(Boolean).length : 0, icon: DollarSign, color: 'blue' }
+            ].map((stat, i) => (
+              <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:border-indigo-100 transition-colors">
+                <div className={`w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm group-hover:scale-110 transition-transform`}>
+                  <stat.icon size={24} />
+                </div>
+                <div>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
+                  <h3 className="text-2xl font-black text-gray-900 mt-1">{stat.value}</h3>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* List Table */}
+          <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
+            <div className="p-4 bg-gray-50/50 border-b border-gray-100">
+              <div className="relative w-full max-w-sm">
+                <Search size={16} className="absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input 
+                  type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Search locations..." 
+                  className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 transition-all font-medium"
+                />
+              </div>
+            </div>
+
+            <div className="overflow-x-auto">
+              {loading ? (
+                 <div className="flex flex-col items-center justify-center py-24 gap-3">
+                    <Loader2 className="animate-spin text-indigo-600" size={32} />
+                    <p className="text-[10px] uppercase font-black text-gray-400 tracking-widest">Validating Market Access</p>
+                 </div>
+              ) : filteredLocations.length > 0 ? (
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50/50 border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-widest">
+                      <th className="px-6 py-4">Sector Name</th>
+                      <th className="px-6 py-4">Jurisdiction</th>
+                      <th className="px-6 py-4 text-center">Settlement</th>
+                      <th className="px-6 py-4">Temporal Zone</th>
+                      <th className="px-6 py-4 text-right">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {filteredLocations.map(l => (
+                      <tr key={l._id || l.id} className="hover:bg-gray-50/20 transition-colors group">
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-3">
+                              <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm group-hover:rotate-6 transition-transform"><MapPin size={18} /></div>
+                              <span className="text-sm font-bold text-gray-900 leading-tight">{l.name || l.service_location_name}</span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <span className="text-xs font-bold text-gray-600 uppercase tracking-wider">{typeof l.country === 'object' ? l.country?.name : l.country || '-'}</span>
+                        </td>
+                        <td className="px-6 py-4 text-center">
+                           <div className="inline-flex items-center gap-1.5 px-2.5 py-1 bg-gray-50 border border-gray-100 rounded-lg">
+                              <span className="text-[10px] font-black text-indigo-600">{l.currency_code}</span>
+                              <span className="text-xs font-bold text-gray-400">{l.currency_symbol}</span>
+                           </div>
+                        </td>
+                        <td className="px-6 py-4">
+                           <div className="flex items-center gap-2 text-xs font-semibold text-gray-500">
+                              <Clock size={12} className="text-indigo-300" /> {l.timezone}
+                           </div>
+                        </td>
+                        <td className="px-6 py-4 text-right whitespace-nowrap">
+                           <div className="flex items-center justify-end gap-2">
+                             <button onClick={() => navigate(`/admin/pricing/service-location/edit/${l._id || l.id}`)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all shadow-sm"><Edit2 size={16} /></button>
+                             <button onClick={() => handleDelete(l._id || l.id)} className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all shadow-sm"><Trash2 size={16} /></button>
+                           </div>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              ) : (
+                <div className="py-24 text-center">
+                  <div className="w-16 h-16 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center text-gray-200 mx-auto mb-4 tracking-tighter"><Globe size={32} /></div>
+                  <h3 className="text-sm font-bold text-gray-900 mb-1">No Hubs Discovered</h3>
+                  <p className="text-xs text-gray-400 max-w-xs mx-auto">Initialize service locations to define your operational footprint.</p>
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <AnimatePresence mode="wait">
-        {view === 'list' ? (
-          <motion.div
-            key="list"
-            initial={{ opacity: 0, y: 18 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -18 }}
-            className="space-y-6"
-          >
-            <div className="flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-sm md:flex-row md:items-center md:justify-between">
-              <div>
-                <h1 className="text-2xl font-black tracking-tight text-slate-900">Service Location</h1>
-                <p className="mt-1 text-sm font-medium text-slate-500">Manage only the core locale settings for each service location.</p>
-              </div>
-              <button
-                type="button"
-                onClick={() => {
-                  const defaultCountryId =
-                    countries.find((country) => country.name?.toLowerCase() === 'india')?._id ||
-                    countries[0]?._id ||
-                    '';
-                  resetForm(defaultCountryId);
-                  setView('create');
-                }}
-                className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-black text-white transition hover:bg-slate-800"
-              >
-                <Plus size={16} />
-                Add Service Location
-              </button>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500 font-sans">
+      <div className="max-w-7xl mx-auto space-y-6">
+        {/* Header - Matching Image */}
+        <div className="flex items-center justify-between mb-4">
+            <h1 className="text-lg font-black text-gray-900 uppercase tracking-tight">{isCreate ? 'CREATE' : 'EDIT'}</h1>
+            <div className="flex items-center gap-1.5 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+              <span>Service Location</span>
+              <ChevronRight size={12} className="text-gray-300" />
+              <span className="text-gray-900">{isCreate ? 'Create' : 'Edit'}</span>
             </div>
+        </div>
 
-            <div className="rounded-[28px] border border-slate-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-3 border-b border-slate-100 px-6 py-5 md:flex-row md:items-center md:justify-between">
-                <div className="relative w-full max-w-sm">
-                  <Search size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(event) => setSearchTerm(event.target.value)}
-                    placeholder="Search locations"
-                    className="w-full rounded-2xl border border-slate-200 bg-slate-50 py-3 pl-11 pr-4 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300 focus:bg-white"
-                  />
-                </div>
-              </div>
+        {/* Form Card - Matching Image */}
+        <div className="bg-white rounded-[32px] border border-gray-100 shadow-xl shadow-gray-200/20 overflow-hidden p-10">
+           {/* Language Tabs */}
+           <div className="flex items-center gap-8 border-b border-gray-100 mb-10">
+              {['English', 'Arabic', 'French', 'Spanish'].map(lang => (
+                <button 
+                  key={lang}
+                  onClick={() => setActiveLangTab(lang)}
+                  className={`pb-4 text-[13px] font-bold transition-all relative ${activeLangTab === lang ? 'text-emerald-500' : 'text-gray-400 hover:text-gray-600'}`}
+                >
+                  {lang}
+                  {activeLangTab === lang && (
+                    <motion.div layoutId="lang-tab" className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500" />
+                  )}
+                </button>
+              ))}
+           </div>
 
-              <div className="p-6">
-                {loading ? (
-                  <div className="flex min-h-[280px] items-center justify-center">
-                    <Loader2 className="animate-spin text-slate-400" size={30} />
-                  </div>
-                ) : filteredLocations.length > 0 ? (
-                  <div className="overflow-x-auto">
-                    <table className="w-full min-w-[760px] border-collapse">
-                      <thead>
-                        <tr className="border-b border-slate-100 text-left">
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">Name</th>
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">Country</th>
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">Currency Code</th>
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">Currency Symbol</th>
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400">Timezone</th>
-                          <th className="px-4 py-3 text-[11px] font-black uppercase tracking-widest text-slate-400 text-right">Action</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredLocations.map((location) => (
-                          <tr key={location._id || location.id} className="border-b border-slate-50 last:border-0">
-                            <td className="px-4 py-4 text-sm font-bold text-slate-900">{location.name || location.service_location_name}</td>
-                            <td className="px-4 py-4 text-sm font-semibold text-slate-600">
-                              {typeof location.country === 'object' ? location.country?.name : location.country || '-'}
-                            </td>
-                            <td className="px-4 py-4 text-sm font-semibold text-slate-600">{location.currency_code || '-'}</td>
-                            <td className="px-4 py-4 text-sm font-semibold text-slate-600">{location.currency_symbol || '-'}</td>
-                            <td className="px-4 py-4 text-sm font-semibold text-slate-600">{location.timezone || '-'}</td>
-                            <td className="px-4 py-4">
-                              <div className="flex items-center justify-end gap-2">
-                                <button
-                                  type="button"
-                                  onClick={() => handleEdit(location)}
-                                  className="rounded-xl border border-slate-200 p-2 text-slate-600 transition hover:bg-slate-50"
-                                >
-                                  <Edit2 size={15} />
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => handleDelete(location._id || location.id)}
-                                  className="rounded-xl border border-rose-200 p-2 text-rose-600 transition hover:bg-rose-50"
-                                >
-                                  <Trash2 size={15} />
-                                </button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                ) : (
-                  <EmptyState
-                    title={errorMessage ? 'Backend Unavailable' : 'No Service Locations Yet'}
-                    message={
-                      errorMessage ||
-                      'Create your first service location to define country, currency, and timezone settings.'
-                    }
-                  />
-                )}
-              </div>
-            </div>
-          </motion.div>
-        ) : (
-          <motion.div
-            key="create"
-            initial={{ opacity: 0, x: 24 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: -24 }}
-            className="space-y-6"
-          >
-            <div className="flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setView('list')}
-                className="inline-flex items-center gap-2 text-[11px] font-black uppercase tracking-[0.2em] text-slate-500 transition hover:text-slate-900"
-              >
-                <ArrowLeft size={16} />
-                Discard & Go Back
-              </button>
-              <h2 className="text-2xl font-black tracking-tight text-slate-900">
-                {selectedLocation ? 'Update Service Location' : 'Create Service Location'}
-              </h2>
-            </div>
-
-            <div className="rounded-[28px] border border-slate-200 bg-[#f5f7fc] p-5 shadow-sm">
-              <div className="rounded-[24px] border border-slate-100 bg-white p-6 shadow-sm">
-                <div className="mb-6 flex flex-wrap items-center gap-6 border-b border-slate-100 pb-4">
-                  {LANGUAGE_TABS.map((language) => (
-                    <button
-                      key={language}
-                      type="button"
-                      className={`border-b-2 pb-3 text-sm font-bold transition ${
-                        language === selectedLanguage
-                          ? 'border-teal-500 text-teal-600'
-                          : 'border-transparent text-slate-500'
-                      }`}
-                    >
-                      {language}
-                    </button>
-                  ))}
-                </div>
-
-                <div className="grid grid-cols-1 gap-5 md:grid-cols-2">
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-[12px] font-bold text-slate-600">
-                      Name <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.name}
-                      onChange={(event) => setFormData((prev) => ({ ...prev, name: event.target.value }))}
-                      placeholder="Enter Name in English"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300"
+           <form onSubmit={handleSave} className="space-y-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                 <div className="md:col-span-1 space-y-2">
+                    <label className={labelClass}>Name <span className="text-rose-400">*</span></label>
+                    <input 
+                       value={formData.name}
+                       onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
+                       placeholder={`Enter Name in ${activeLangTab}`} 
+                       className={inputClass} 
+                       required
                     />
-                  </div>
+                 </div>
 
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-[12px] font-bold text-slate-600">
-                      Currency Code <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.currency_code}
-                      onChange={(event) =>
-                        setFormData((prev) => ({ ...prev, currency_code: event.target.value.toUpperCase() }))
-                      }
-                      placeholder="Enter Currency Code"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300"
+                 <div className="md:col-span-1 border-0" />
+
+                 <div className="space-y-2">
+                    <label className={labelClass}>Select Country <span className="text-rose-400">*</span></label>
+                    <div className="relative">
+                      <select 
+                         value={formData.country} 
+                         onChange={(e) => setFormData(p => ({ ...p, country: e.target.value }))} 
+                         className={inputClass + " appearance-none cursor-pointer"}
+                         required
+                      >
+                         <option value="">Choose Country</option>
+                         {countries.map(c => <option key={c._id || c.id} value={c._id || c.id}>{c.name}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <label className={labelClass}>Currency Code <span className="text-rose-400">*</span></label>
+                    <input 
+                       value={formData.currency_code} 
+                       onChange={(e) => setFormData(p => ({ ...p, currency_code: e.target.value.toUpperCase() }))} 
+                       placeholder="Enter Currency Code" 
+                       className={inputClass} 
+                       required
                     />
-                  </div>
+                 </div>
 
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-[12px] font-bold text-slate-600">
-                      Select Country <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={formData.country}
-                      onChange={(event) => setFormData((prev) => ({ ...prev, country: event.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300"
-                    >
-                      <option value="">Choose Country</option>
-                      {countries.map((country) => (
-                        <option key={country._id} value={country._id}>
-                          {country.name}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-[12px] font-bold text-slate-600">
-                      Select Timezone <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={formData.timezone}
-                      onChange={(event) => setFormData((prev) => ({ ...prev, timezone: event.target.value }))}
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300"
-                    >
-                      <option value="">Choose Timezone</option>
-                      {DEFAULT_TIMEZONES.map((timezone) => (
-                        <option key={timezone} value={timezone}>
-                          {timezone}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div className="space-y-2 md:col-span-1">
-                    <label className="text-[12px] font-bold text-slate-600">
-                      Currency Symbol <span className="text-rose-500">*</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.currency_symbol}
-                      onChange={(event) => setFormData((prev) => ({ ...prev, currency_symbol: event.target.value }))}
-                      placeholder="Enter Currency Symbol"
-                      className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-semibold text-slate-700 outline-none transition focus:border-slate-300"
+                 <div className="space-y-2">
+                    <label className={labelClass}>Currency Symbol <span className="text-rose-400">*</span></label>
+                    <input 
+                       value={formData.currency_symbol} 
+                       onChange={(e) => setFormData(p => ({ ...p, currency_symbol: e.target.value }))} 
+                       placeholder="Enter Currency Symbol" 
+                       className={inputClass} 
+                       required
                     />
-                  </div>
-                </div>
+                 </div>
 
-                <div className="mt-8 flex justify-end">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="inline-flex items-center gap-2 rounded-xl bg-[#5468a5] px-5 py-3 text-sm font-black text-white transition hover:bg-[#475993] disabled:cursor-not-allowed disabled:opacity-70"
-                  >
-                    {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                    Save
-                  </button>
-                </div>
+                 <div className="space-y-2">
+                    <label className={labelClass}>Select Timezone <span className="text-rose-400">*</span></label>
+                    <div className="relative">
+                      <select 
+                         value={formData.timezone} 
+                         onChange={(e) => setFormData(p => ({ ...p, timezone: e.target.value }))} 
+                         className={inputClass + " appearance-none cursor-pointer"}
+                         required
+                      >
+                         <option value="">Choose Timezone</option>
+                         {DEFAULT_TIMEZONES.map(tz => <option key={tz} value={tz}>{tz}</option>)}
+                      </select>
+                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                    </div>
+                 </div>
               </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+
+              <div className="pt-10 flex justify-end">
+                 <button 
+                    type="submit" disabled={saving}
+                    className="px-10 py-3 bg-[#38467F] text-white rounded-lg text-sm font-bold hover:bg-[#2D3866] transition-all shadow-lg active:scale-95 flex items-center gap-2"
+                 >
+                    {saving ? <Loader2 size={16} className="animate-spin" /> : null}
+                    {isEdit ? 'Update' : 'Save'}
+                 </button>
+              </div>
+           </form>
+        </div>
+      </div>
     </div>
   );
 };

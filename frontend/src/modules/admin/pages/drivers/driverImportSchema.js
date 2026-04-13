@@ -1,6 +1,19 @@
 import * as XLSX from 'xlsx';
 
-export const USER_IMPORT_COLUMNS = ['Name', 'Email', 'Mobile', 'Gender', 'Country'];
+export const DRIVER_IMPORT_COLUMNS = [
+  'ServiceLocation',
+  'Name',
+  'Email',
+  'Mobile',
+  'Gender',
+  'Country',
+  'Vehicle Type',
+  'Transport Type',
+  'CustomMake',
+  'CustomModel',
+  'CarColor',
+  'CarNumber',
+];
 
 const normalizeColumn = (column = '') =>
   String(column ?? '')
@@ -10,7 +23,7 @@ const normalizeColumn = (column = '') =>
 
 const hasExpectedColumnsOnly = (columns = []) => {
   const normalizedColumns = columns.map(normalizeColumn);
-  const normalizedExpectedColumns = USER_IMPORT_COLUMNS.map(normalizeColumn);
+  const normalizedExpectedColumns = DRIVER_IMPORT_COLUMNS.map(normalizeColumn);
 
   return (
     normalizedColumns.length === normalizedExpectedColumns.length &&
@@ -40,7 +53,7 @@ const readWorkbook = async (file) => {
   };
 };
 
-export const parseUserImportFile = async (file) => {
+export const parseDriverImportFile = async (file) => {
   if (!file) {
     return { valid: false, message: 'Select a file before creating the import.', rows: [] };
   }
@@ -60,7 +73,7 @@ export const parseUserImportFile = async (file) => {
     if (!hasExpectedColumnsOnly(headers)) {
       return {
         valid: false,
-        message: `File columns must be exactly: ${USER_IMPORT_COLUMNS.join(', ')}.`,
+        message: `File columns must be exactly: ${DRIVER_IMPORT_COLUMNS.join(', ')}.`,
         rows: [],
       };
     }
@@ -74,11 +87,18 @@ export const parseUserImportFile = async (file) => {
         );
 
         return {
+          service_location: valuesByHeader.ServiceLocation || '',
           name: valuesByHeader.Name || '',
           email: valuesByHeader.Email || '',
           mobile: valuesByHeader.Mobile || '',
           gender: valuesByHeader.Gender || '',
           country: valuesByHeader.Country || '',
+          vehicle_type: valuesByHeader['Vehicle Type'] || '',
+          transport_type: valuesByHeader['Transport Type'] || '',
+          vehicle_make: valuesByHeader.CustomMake || '',
+          vehicle_model: valuesByHeader.CustomModel || '',
+          vehicle_color: valuesByHeader.CarColor || '',
+          vehicle_number: valuesByHeader.CarNumber || '',
         };
       }),
     };
@@ -87,7 +107,7 @@ export const parseUserImportFile = async (file) => {
   }
 };
 
-export const validateUserImportFile = async (file) => {
-  const result = await parseUserImportFile(file);
+export const validateDriverImportFile = async (file) => {
+  const result = await parseDriverImportFile(file);
   return { valid: result.valid, message: result.message };
 };

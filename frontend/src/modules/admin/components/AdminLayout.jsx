@@ -67,7 +67,9 @@ const resolvePageTitle = (pathname, sections) => {
 
   const label = findLabel(flattenItems(sections));
   if (label) return label;
+  if (pathname === '/owner/create') return 'Add Fleet Owner';
   if (pathname.includes('/owners')) return 'Owner Management';
+  if (pathname.includes('/owner')) return 'Owner Management';
   if (pathname.includes('/fleet')) return 'Fleet Management';
   if (pathname.includes('/settings')) return 'Settings';
   if (pathname.includes('/reports')) return 'Reports';
@@ -345,7 +347,6 @@ const AdminLayout = () => {
               { label: 'Driver Needed Documents', path: '/admin/drivers/documents' },
               { label: 'Driver Bulk Upload', path: '/admin/drivers/bulk-upload' },
               { label: 'Payment Methods', path: '/admin/drivers/payment-methods' },
-              { label: 'Service Config', path: '/admin/drivers/service-config' },
             ],
           },
           {
@@ -484,7 +485,10 @@ const AdminLayout = () => {
     []
   );
 
-  const isOwnerRoute = location.pathname.startsWith('/admin/owners') || location.pathname.startsWith('/admin/fleet');
+  const isOwnerRoute =
+    location.pathname.startsWith('/admin/owners') ||
+    location.pathname.startsWith('/admin/fleet') ||
+    location.pathname.startsWith('/owner');
   const mode = isOwnerRoute ? OWNER_MODE : ADMIN_MODE;
   const sidebarSections = mode === OWNER_MODE ? ownerSections : adminSections;
   const pageTitle = resolvePageTitle(location.pathname, sidebarSections);

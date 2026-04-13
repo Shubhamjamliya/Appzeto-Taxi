@@ -4,16 +4,16 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { adminService } from '../../services/adminService';
 import {
-  USER_IMPORT_COLUMNS,
-  parseUserImportFile,
-  validateUserImportFile,
-} from './userImportSchema';
+  DRIVER_IMPORT_COLUMNS,
+  parseDriverImportFile,
+  validateDriverImportFile,
+} from './driverImportSchema';
 
 const labelClass = 'block text-xs font-semibold text-gray-500 mb-1.5';
 
 const formatFileSize = (size = 0) => `${(size / (1024 * 1024)).toFixed(2)} MB`;
 
-const UserImportCreate = () => {
+const DriverImportCreate = () => {
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
   const [selectedFile, setSelectedFile] = useState(null);
@@ -21,12 +21,12 @@ const UserImportCreate = () => {
   const [error, setError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const goBack = () => navigate('/admin/users/bulk-upload');
+  const goBack = () => navigate('/admin/drivers/bulk-upload');
 
   const selectFile = async (file) => {
     if (!file) return;
 
-    const validation = await validateUserImportFile(file);
+    const validation = await validateDriverImportFile(file);
     if (!validation.valid) {
       setError(validation.message);
       setSelectedFile(null);
@@ -38,7 +38,7 @@ const UserImportCreate = () => {
   };
 
   const handleFileInput = (event) => {
-    selectFile(event.target.files?.[0]);
+    void selectFile(event.target.files?.[0]);
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -62,10 +62,10 @@ const UserImportCreate = () => {
     event.preventDefault();
     event.stopPropagation();
     setDragActive(false);
-    selectFile(event.dataTransfer.files?.[0]);
+    void selectFile(event.dataTransfer.files?.[0]);
   };
 
-  const submitImport = async (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
 
     if (!selectedFile) {
@@ -77,25 +77,25 @@ const UserImportCreate = () => {
       setIsSubmitting(true);
       setError('');
 
-      const parsed = await parseUserImportFile(selectedFile);
+      const parsed = await parseDriverImportFile(selectedFile);
       if (!parsed.valid) {
         setError(parsed.message);
         return;
       }
 
-      const response = await adminService.bulkImportUsers({ users: parsed.rows });
+      const response = await adminService.bulkImportDrivers({ drivers: parsed.rows });
       const result = response.data || {};
-      const summary = `Imported ${result.created_count || 0} users. Skipped ${result.skipped_count || 0}, errors ${result.error_count || 0}.`;
+      const summary = `Imported ${result.created_count || 0} drivers. Skipped ${result.skipped_count || 0}, errors ${result.error_count || 0}.`;
 
       if ((result.created_count || 0) > 0) {
         toast.success(summary);
-        navigate('/admin/users');
+        navigate('/admin/drivers');
         return;
       }
 
       setError(summary);
     } catch (importError) {
-      setError(importError.message || 'Failed to import users.');
+      setError(importError.message || 'Failed to import drivers.');
     } finally {
       setIsSubmitting(false);
     }
@@ -105,7 +105,7 @@ const UserImportCreate = () => {
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
       <div className="mb-6">
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-          <span>Users</span>
+          <span>Drivers</span>
           <ChevronRight size={12} />
           <span>Bulk Upload</span>
           <ChevronRight size={12} />
@@ -124,16 +124,16 @@ const UserImportCreate = () => {
         </div>
       </div>
 
-      <form onSubmit={submitImport} className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
+      <form onSubmit={handleSubmit} className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_320px]">
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
             <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
               <UploadCloud size={18} />
             </div>
             <div>
-              <h3 className="text-sm font-semibold text-gray-900">User Import File</h3>
+              <h3 className="text-sm font-semibold text-gray-900">Driver Import File</h3>
               <p className="text-xs text-gray-400">
-                Use only these columns: {USER_IMPORT_COLUMNS.join(', ')}
+                Use only these columns: {DRIVER_IMPORT_COLUMNS.join(', ')}
               </p>
             </div>
           </div>
@@ -201,7 +201,7 @@ const UserImportCreate = () => {
             <div className="rounded-lg border border-gray-200 bg-gray-50 px-4 py-3">
               <p className="text-xs font-semibold text-gray-500 mb-2">Required Excel Columns</p>
               <div className="flex flex-wrap gap-2">
-                {USER_IMPORT_COLUMNS.map((column) => (
+                {DRIVER_IMPORT_COLUMNS.map((column) => (
                   <span
                     key={column}
                     className="rounded-lg border border-gray-200 bg-white px-3 py-1.5 text-xs font-medium text-gray-800"
@@ -241,4 +241,4 @@ const UserImportCreate = () => {
   );
 };
 
-export default UserImportCreate;
+export default DriverImportCreate;

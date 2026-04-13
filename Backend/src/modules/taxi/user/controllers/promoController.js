@@ -1,5 +1,5 @@
 import { ApiError } from '../../../../utils/ApiError.js';
-import { validatePromoForContext, listAvailablePromosForUser } from '../../services/promoService.js';
+import { listAvailablePromosForUser, validatePromoForContext } from '../../services/promoService.js';
 
 export const validatePromo = async (req, res) => {
   const { code, fare, service_location_id, transport_type } = req.body || {};

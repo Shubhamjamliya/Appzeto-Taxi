@@ -23,6 +23,9 @@ export const getUsers = asyncHandler(async (req, res) =>
 export const bulkImportUsers = asyncHandler(async (req, res) =>
   ok(res, await adminService.bulkImportUsers(req.body)),
 );
+export const bulkImportDrivers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.bulkImportDrivers(req.body)),
+);
 export const createUser = asyncHandler(async (req, res) =>
   ok(res, await adminService.createUser(req.body)),
 );
@@ -106,15 +109,6 @@ export const getDriver = asyncHandler(async (req, res) =>
 export const getDriverProfile = asyncHandler(async (req, res) =>
   ok(res, await adminService.getDriverProfile(req.params.id)),
 );
-export const adjustDriverWallet = asyncHandler(async (req, res) =>
-  ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
-);
-export const getDriverRatings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listDriverRatings(req.query)),
-);
-export const getDriverRatingDetail = asyncHandler(async (req, res) =>
-  ok(res, await adminService.getDriverRatingDetail(req.params.id)),
-);
 export const updateDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateDriver(req.params.id, req.body)),
 );
@@ -128,6 +122,10 @@ export const deleteDriver = asyncHandler(async (req, res) => {
   await adminService.deleteDriver(req.params.id);
   ok(res, { deleted: true });
 });
+
+export const adjustDriverWallet = asyncHandler(async (req, res) =>
+  ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
+);
 
 export const getSubscriptionPlans = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listSubscriptionPlans() }),
@@ -162,9 +160,6 @@ export const getRideModules = asyncHandler(async (_req, res) =>
 );
 export const getOngoingRides = asyncHandler(async (req, res) =>
   ok(res, await adminService.listOngoingRides(req.query)),
-);
-export const getDeliveries = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listDeliveries(req.query)),
 );
 export const deleteOngoingRide = asyncHandler(async (req, res) =>
   ok(res, await adminService.deleteOngoingRide(req.params.id)),

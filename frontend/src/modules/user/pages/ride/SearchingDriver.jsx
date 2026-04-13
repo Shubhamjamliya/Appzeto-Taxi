@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation, AlertTriangle, Star, MapPin } from 'lucide-react';
@@ -112,7 +112,7 @@ const DriverCard = ({ driver, banner, bannerGradient, children }) => (
 const SearchingDriver = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const routeState = location.state || {};
+  const routeState = useMemo(() => location.state || {}, [location.state]);
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otp] = useState(generateOTP);
@@ -123,16 +123,27 @@ const SearchingDriver = () => {
   const requestStartedRef = useRef(false);
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
-  const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
-  const selectedVehicleTypeId = routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId;
+  const routePrefix = useMemo(
+    () => (location.pathname.startsWith('/taxi/user') ? '/taxi/user' : ''),
+    [location.pathname],
+  );
+  const selectedVehicleTypeId = useMemo(
+    () => routeState.vehicleTypeId || routeState.vehicle?.vehicleTypeId,
+    [routeState],
+  );
   const activeRideIdRef = useRef('');
   const [nearbyDrivers, setNearbyDrivers] = useState([]);
 
   const { isLoaded } = useAppGoogleMapsLoader();
 
-  const pickupPos = routeState.pickupCoords 
-    ? { lng: routeState.pickupCoords[0], lat: routeState.pickupCoords[1] }
-    : { lat: 22.7196, lng: 75.8577 };
+  const pickupPos = useMemo(
+    () => (
+      routeState.pickupCoords
+        ? { lng: routeState.pickupCoords[0], lat: routeState.pickupCoords[1] }
+        : { lat: 22.7196, lng: 75.8577 }
+    ),
+    [routeState.pickupCoords],
+  );
 
   // Initialize nearby drivers
   useEffect(() => {
@@ -157,9 +168,14 @@ const SearchingDriver = () => {
     return () => clearInterval(interval);
   }, [stage]);
 
-  const dropPos = routeState.dropCoords 
-    ? { lng: routeState.dropCoords[0], lat: routeState.dropCoords[1] }
-    : null;
+  const dropPos = useMemo(
+    () => (
+      routeState.dropCoords
+        ? { lng: routeState.dropCoords[0], lat: routeState.dropCoords[1] }
+        : null
+    ),
+    [routeState.dropCoords],
+  );
 
   useEffect(() => {
     driverRef.current = driver;
@@ -203,6 +219,8 @@ const SearchingDriver = () => {
       trackingStartedRef.current = true;
       saveCurrentRide({
         ...routeState,
+        pickup: rideSnapshot?.pickupAddress || routeState.pickup,
+        drop: rideSnapshot?.dropAddress || routeState.drop,
         pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
         dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
         rideId: activeRideIdRef.current,
@@ -219,6 +237,8 @@ const SearchingDriver = () => {
         navigate(`${routePrefix}/ride/tracking`, {
           state: {
             ...routeState,
+            pickup: rideSnapshot?.pickupAddress || routeState.pickup,
+            drop: rideSnapshot?.dropAddress || routeState.drop,
             pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
             dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
             rideId: activeRideIdRef.current,
@@ -315,6 +335,8 @@ const SearchingDriver = () => {
         const response = await api.post('/rides', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
+          pickupAddress: routeState.pickup || '',
+          dropAddress: routeState.drop || '',
           fare: routeState.fare || routeState.vehicle?.price || 22,
           vehicleTypeId: selectedVehicleTypeId,
           vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,

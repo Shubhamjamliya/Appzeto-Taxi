@@ -87,6 +87,11 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    vehicleImage: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     city: {
       type: String,
       default: '',
@@ -111,6 +116,16 @@ const driverSchema = new mongoose.Schema(
       default: 5,
       min: 0,
       max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalRatingScore: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     deletedAt: {
       type: Date,

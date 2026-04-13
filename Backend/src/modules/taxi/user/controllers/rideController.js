@@ -11,12 +11,13 @@ import {
   getRideRoom,
   listRideHistoryForIdentity,
   serializeRideRealtime,
+  submitRideFeedback,
   updateRideLifecycle,
 } from '../../services/rideService.js';
 import { startDispatchFlow } from '../../services/dispatchService.js';
 
 export const createRide = async (req, res) => {
-  const { pickup, drop, fare, vehicleTypeId, vehicleIconType, promo_code, service_location_id, transport_type } =
+  const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleIconType, promo_code, service_location_id, transport_type } =
     req.body;
 
   if (!pickup || !drop) {
@@ -27,6 +28,8 @@ export const createRide = async (req, res) => {
     userId: req.auth.sub,
     pickupCoords: normalizePoint(pickup, 'pickup'),
     dropCoords: normalizePoint(drop, 'drop'),
+    pickupAddress,
+    dropAddress,
     fare: Number(fare || 0),
     vehicleTypeId,
     vehicleIconType,
@@ -107,6 +110,25 @@ export const updateRideStatus = async (req, res) => {
     rideId: req.params.rideId,
     driverId: req.auth.sub,
     nextStatus,
+  });
+
+  res.json({
+    success: true,
+    data: serializeRideRealtime(ride),
+  });
+};
+
+export const submitRideReview = async (req, res) => {
+  if (req.auth.role !== 'user') {
+    throw new ApiError(403, 'Only users can rate completed rides');
+  }
+
+  const ride = await submitRideFeedback({
+    rideId: req.params.rideId,
+    userId: req.auth.sub,
+    rating: req.body.rating,
+    comment: req.body.comment,
+    tipAmount: req.body.tipAmount,
   });
 
   res.json({

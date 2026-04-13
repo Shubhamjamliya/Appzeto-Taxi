@@ -51,6 +51,11 @@ const deliverySchema = new mongoose.Schema(
         required: true,
       },
     },
+    pickupAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     dropLocation: {
       type: {
         type: String,
@@ -61,6 +66,11 @@ const deliverySchema = new mongoose.Schema(
         type: [Number],
         required: true,
       },
+    },
+    dropAddress: {
+      type: String,
+      default: '',
+      trim: true,
     },
     fare: {
       type: Number,

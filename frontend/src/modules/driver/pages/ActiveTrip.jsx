@@ -164,8 +164,8 @@ const ActiveTrip = () => {
                         title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
                         fare: `Rs ${currentJob.fare || 0}`,
                         payment: currentJob.paymentMethod || 'Cash',
-                        pickup: formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
-                        drop: formatAddressFromPoint(currentJob.dropLocation, 'Drop Location'),
+                        pickup: currentJob.pickupAddress || formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
+                        drop: currentJob.dropAddress || formatAddressFromPoint(currentJob.dropLocation, 'Drop Location'),
                         requestId: currentJob.rideId,
                         rideId: currentJob.rideId,
                         raw: currentJob,
@@ -238,14 +238,18 @@ const ActiveTrip = () => {
             name: liveRaw.parcel?.receiverName || 'Receiver',
             phone: liveRaw.parcel?.receiverMobile || '',
         },
-        pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
-        drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
+        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
+        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
         fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
         payment: effectiveState?.paymentMethod || 'Online'
     } : {
-        user: { name: 'Vinay Kumar', rating: '4.8', phone: '+91 98765 43210' },
-        pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
-        drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
+        user: {
+            name: liveRaw.user?.name || liveRequest?.user?.name || 'Passenger',
+            rating: liveRaw.user?.rating || liveRequest?.user?.rating || '4.8',
+            phone: liveRaw.user?.phone || liveRequest?.user?.phone || '',
+        },
+        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
+        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
         fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
         payment: liveRequest?.payment || effectiveState?.paymentMethod || 'Online'
     };
@@ -274,7 +278,6 @@ const ActiveTrip = () => {
 
         setOtpError('');
         setPhase('in_trip');
-        setDriverPosition(dropPosition);
         publishRideStatus('started');
     };
 
@@ -439,6 +442,27 @@ const ActiveTrip = () => {
 
         if (nextOtp.join('').length === 4 && nextOtp.join('') === expectedOtp) {
             setTimeout(() => startTripAfterOtp(nextOtp.join('')), 250);
+        }
+    };
+
+    const handleOTPKeyDown = (index, event) => {
+        if (event.key !== 'Backspace') {
+            return;
+        }
+
+        if (otp[index]) {
+            const nextOtp = [...otp];
+            nextOtp[index] = '';
+            setOtp(nextOtp);
+            setOtpError('');
+            return;
+        }
+
+        if (index > 0) {
+            const previousInput = document.getElementById(`otp-${index - 1}`);
+            if (previousInput) {
+                previousInput.focus();
+            }
         }
     };
 
@@ -645,6 +669,7 @@ const ActiveTrip = () => {
                                         maxLength={1}
                                         value={digit}
                                         onChange={(e) => handleOTPChange(index, e.target.value)}
+                                        onKeyDown={(e) => handleOTPKeyDown(index, e)}
                                         className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-semibold text-slate-900 focus:outline-none focus:border-slate-900 transition-all shadow-inner"
                                     />
                                 ))}
@@ -678,24 +703,30 @@ const ActiveTrip = () => {
                             exit={{ y: '100%' }}
                             className="bg-white rounded-t-[2.5rem] p-5 pb-8 shadow-2xl border-t border-slate-100"
                         >
-                            <div className="flex items-center justify-between mb-6">
-                                <div className="space-y-0.5 flex-1 pr-4">
-                                    <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.2em] leading-none mb-1">Destination</h4>
-                                    <p className="text-[16px] font-semibold text-slate-900 tracking-tight uppercase truncate">{tripData.drop}</p>
+                            <div className="mb-5 rounded-[22px] border border-slate-100 bg-slate-50/85 px-4 py-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+                                <div className="flex items-start justify-between gap-3">
+                                    <div className="min-w-0 flex-1">
+                                        <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.22em] leading-none mb-1.5">Destination</h4>
+                                        <p className="text-[15px] font-semibold text-slate-900 tracking-tight leading-5 break-words">
+                                            {tripData.drop}
+                                        </p>
+                                    </div>
+                                    <button className="shrink-0 w-11 h-11 bg-white text-rose-500 rounded-xl border border-rose-100 flex items-center justify-center active:scale-90 transition-transform shadow-sm">
+                                        <ShieldAlert size={22} strokeWidth={2.5} />
+                                    </button>
                                 </div>
-                                <button className="w-11 h-11 bg-rose-50 text-rose-500 rounded-xl flex items-center justify-center active:scale-90 transition-transform"><ShieldAlert size={22} strokeWidth={2.5} /></button>
                             </div>
-                            <div className="bg-slate-50 rounded-2xl p-3 mb-6 border border-slate-100 flex items-center justify-between">
+                            <div className="bg-slate-50 rounded-2xl p-3 mb-6 border border-slate-100 flex items-center justify-between gap-3">
                                 <div className="flex items-center gap-3">
                                     <div className="w-10 h-10 bg-slate-900 rounded-xl flex items-center justify-center">
                                         {isParcel ? <Package size={18} className="text-white" /> : <User size={18} className="text-white opacity-40" />}
                                     </div>
-                                    <div className="space-y-0.5">
-                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
+                                    <div className="min-w-0 space-y-0.5">
+                                        <p className="text-[13px] font-semibold text-slate-900 leading-none uppercase truncate">{isParcel ? tripData.receiver.name : tripData.user.name}</p>
                                         <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
-                                <button className="w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
+                                <button className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.96 }}

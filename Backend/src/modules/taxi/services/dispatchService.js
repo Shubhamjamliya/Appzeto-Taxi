@@ -219,7 +219,9 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
+        pickupAddress: ride.pickupAddress || '',
         dropLocation: ride.dropLocation,
+        dropAddress: ride.dropAddress || '',
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
         vehicleTypeIds: dispatchVehicleTypeIds,
         vehicleIconType: ride.vehicleIconType,
@@ -275,7 +277,7 @@ export const notifyRideAccepted = async (ride) => {
   // Once one driver wins the race, the rider is updated and the rest are told to stop.
   const populatedRide = await Ride.findById(ride._id).populate(
     'driverId',
-    'name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating',
+    'name phone profileImage vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating',
   );
 
   if (!populatedRide) {
@@ -306,7 +308,9 @@ export const notifyRideAccepted = async (ride) => {
     commissionAmount: populatedRide.commissionAmount,
     driverEarnings: populatedRide.driverEarnings,
     pickupLocation: populatedRide.pickupLocation,
+    pickupAddress: populatedRide.pickupAddress || '',
     dropLocation: populatedRide.dropLocation,
+    dropAddress: populatedRide.dropAddress || '',
     acceptedAt: populatedRide.acceptedAt,
     startedAt: populatedRide.startedAt,
     completedAt: populatedRide.completedAt,

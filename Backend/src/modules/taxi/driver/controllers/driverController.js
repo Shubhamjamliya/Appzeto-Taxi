@@ -168,6 +168,7 @@ export const getCurrentDriver = async (req, res) => {
       registerFor: driver.registerFor,
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
+      vehicleImage: driver.vehicleImage || '',
       city: driver.city,
       approve: driver.approve,
       status: driver.status,
@@ -281,7 +282,7 @@ const getGenericVehicleType = (vehicle = {}) => {
 };
 
 export const updateDriverVehicle = async (req, res) => {
-  const { vehicleTypeId, vehicleNumber, vehicleColor, vehicleMake, vehicleModel } = req.body;
+  const { vehicleTypeId, vehicleNumber, vehicleColor, vehicleMake, vehicleModel, vehicleImage } = req.body;
 
   let selectedVehicle = null;
 
@@ -313,6 +314,9 @@ export const updateDriverVehicle = async (req, res) => {
   if (vehicleModel !== undefined) {
     update.vehicleModel = String(vehicleModel || '').trim();
   }
+  if (vehicleImage !== undefined) {
+    update.vehicleImage = String(vehicleImage || '').trim();
+  }
 
   const driver = await Driver.findByIdAndUpdate(req.auth.sub, update, { new: true });
 
@@ -333,6 +337,7 @@ export const updateDriverVehicle = async (req, res) => {
       vehicleModel: driver.vehicleModel,
       vehicleNumber: driver.vehicleNumber,
       vehicleColor: driver.vehicleColor,
+      vehicleImage: driver.vehicleImage || '',
       registerFor: driver.registerFor,
       approve: driver.approve,
       status: driver.status,

@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Bike, Car, CheckCircle2, Edit3, LoaderCircle, Save, Truck, X } from 'lucide-react';
+import { ArrowLeft, Bike, Camera, Car, CheckCircle2, Edit3, LoaderCircle, Save, Truck, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
     getCurrentDriver,
     getDriverVehicleTypes,
     updateDriverVehicle,
 } from '../../services/registrationService';
+import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 
 const unwrap = (response) => response?.data?.data || response?.data || response;
 
@@ -45,6 +46,7 @@ const buildForm = (driver) => ({
     vehicleModel: driver?.vehicleModel || '',
     vehicleNumber: driver?.vehicleNumber || '',
     vehicleColor: driver?.vehicleColor || '',
+    vehicleImage: driver?.vehicleImage || '',
 });
 
 const buildVisibleVehicleTypes = (allTypes, driver) => {
@@ -90,6 +92,17 @@ const VehicleFleet = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
+    const {
+        uploading: imageUploading,
+        preview: imagePreview,
+        handleFileChange: onVehicleImageChange,
+        setPreview: setVehicleImagePreview,
+    } = useImageUpload({
+        folder: 'driver-vehicles',
+        onSuccess: (url) => {
+            setFormData((prev) => ({ ...prev, vehicleImage: url }));
+        },
+    });
 
     const selectedType = useMemo(() => {
         const selectedId = formData.vehicleTypeId || getDriverVehicleTypeId(driver);
@@ -123,6 +136,7 @@ const VehicleFleet = () => {
                 setDriver(nextDriver);
                 setVehicleTypes(nextTypes);
                 setFormData(buildForm(nextDriver));
+                setVehicleImagePreview(nextDriver?.vehicleImage || null);
             } catch (error) {
                 if (active) {
                     setMessage(error.message || 'Could not load vehicle details.');
@@ -159,6 +173,7 @@ const VehicleFleet = () => {
             const nextDriver = unwrap(response);
             setDriver(nextDriver);
             setFormData(buildForm(nextDriver));
+            setVehicleImagePreview(nextDriver?.vehicleImage || null);
             setIsEditing(false);
             setMessage('Vehicle updated successfully.');
         } catch (error) {
@@ -186,15 +201,21 @@ const VehicleFleet = () => {
                     <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white relative overflow-hidden shadow-xl border border-white/5">
                         <div className="relative z-10 space-y-5">
                             <div className="flex items-start justify-between gap-4">
-                                <div className="space-y-1.5 min-w-0">
+                                <div className="space-y-1.5 min-w-0 flex-1">
                                     <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/40">Primary Vehicle</h3>
                                     <p className="text-[22px] font-bold tracking-tight leading-none truncate">{vehicleModel}</p>
                                     <p className="text-[14px] font-semibold tracking-widest text-white/50 truncate uppercase mt-1">{driver?.vehicleNumber || 'Number not set'}</p>
                                     <p className="text-[11px] font-medium text-white/30 truncate">{activeVehicleName} • {driver?.vehicleColor || 'Color not set'}</p>
                                 </div>
-                                <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center text-white border border-white/10 shadow-lg shrink-0">
-                                    <ActiveIcon size={26} />
-                                </div>
+                                {driver?.vehicleImage ? (
+                                    <div className="h-16 w-20 overflow-hidden rounded-2xl border border-white/10 shadow-lg shrink-0 bg-white/5">
+                                        <img src={driver.vehicleImage} alt="Vehicle" className="h-full w-full object-cover" />
+                                    </div>
+                                ) : (
+                                    <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center text-white border border-white/10 shadow-lg shrink-0">
+                                        <ActiveIcon size={26} />
+                                    </div>
+                                )}
                             </div>
                             <div className="inline-flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-2xl">
                                 <CheckCircle2 size={15} />
@@ -323,14 +344,44 @@ const VehicleFleet = () => {
                                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Color</label>
                                     <input value={formData.vehicleColor} onChange={(e) => handleChange('vehicleColor', e.target.value)} placeholder="e.g. White, Black" className="w-full bg-transparent border-none p-0 text-[15px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300" />
                                 </div>
+
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Vehicle Image</label>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-16 w-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shrink-0">
+                                            {imagePreview || formData.vehicleImage ? (
+                                                <img
+                                                    src={imagePreview || formData.vehicleImage}
+                                                    alt="Vehicle"
+                                                    className={`h-full w-full object-cover ${imageUploading ? 'opacity-60' : ''}`}
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                                                    <ActiveIcon size={22} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <label className="inline-flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700">
+                                            {imageUploading ? <LoaderCircle size={16} className="animate-spin" /> : <Camera size={16} />}
+                                            {imageUploading ? 'Uploading...' : 'Upload Image'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={onVehicleImageChange}
+                                                disabled={imageUploading}
+                                            />
+                                        </label>
+                                    </div>
+                                </div>
                             </div>
 
                             <button
                                 onClick={handleSave}
-                                disabled={isSaving}
+                                disabled={isSaving || imageUploading}
                                 className="w-full h-16 bg-slate-950 text-white rounded-[1.5rem] flex items-center justify-center gap-3 text-[14px] font-bold uppercase tracking-widest shadow-xl shadow-slate-950/20 disabled:opacity-50"
                             >
-                                {isSaving ? <LoaderCircle size={20} className="animate-spin" /> : <Save size={20} />}
+                                {isSaving || imageUploading ? <LoaderCircle size={20} className="animate-spin" /> : <Save size={20} />}
                                 Update Vehicle
                             </button>
                         </motion.div>

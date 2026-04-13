@@ -29,6 +29,8 @@ const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[titl
 const SelectLocation = () => {
   const [pickup, setPickup] = useState('Pipaliyahana, Indore');
   const [drop, setDrop] = useState('');
+  const [pickupCoords, setPickupCoords] = useState(() => getCoords('Pipaliyahana, Indore'));
+  const [dropCoords, setDropCoords] = useState(null);
   const [stops, setStops] = useState([]);          // array of stop strings
   const [activeInput, setActiveInput] = useState('drop'); // 'pickup' | 'drop' | stopIdx
   const [showMapPicker, setShowMapPicker] = useState(false);
@@ -62,6 +64,35 @@ const SelectLocation = () => {
     { title: 'Mahalaxmi Nagar', address: 'Mahalaxmi Nagar, Indore, Madhya Pradesh' },
   ];
 
+  const resolveCoords = async (label, fallback = [75.8577, 22.7196]) => {
+    if (!label || !String(label).trim()) {
+      return fallback;
+    }
+
+    const knownCoords = LOCATION_COORDS[label];
+    if (knownCoords) {
+      return knownCoords;
+    }
+
+    if (!window.google?.maps?.Geocoder) {
+      return fallback;
+    }
+
+    const geocoder = new window.google.maps.Geocoder();
+
+    return new Promise((resolve) => {
+      geocoder.geocode({ address: String(label).trim() }, (results, status) => {
+        if (status === 'OK' && results?.[0]?.geometry?.location) {
+          const location = results[0].geometry.location;
+          resolve([location.lng(), location.lat()]);
+          return;
+        }
+
+        resolve(fallback);
+      });
+    });
+  };
+
   const getQuery = () => {
     if (activeInput === 'pickup') return pickup;
     if (activeInput === 'drop') return drop;
@@ -80,8 +111,8 @@ const SelectLocation = () => {
 
   const showMapToast = () => {
     // Reset map center to pickup or current location before opening
-    const startCoord = pickup && LOCATION_COORDS[pickup] 
-      ? { lat: LOCATION_COORDS[pickup][1], lng: LOCATION_COORDS[pickup][0] }
+    const startCoord = Array.isArray(pickupCoords) && pickupCoords.length === 2
+      ? { lat: pickupCoords[1], lng: pickupCoords[0] }
       : INDIA_CENTER;
     
     setMapCenter(startCoord);
@@ -137,32 +168,38 @@ const SelectLocation = () => {
     );
   };
 
-  const handleConfirmNavigate = (optionalDrop) => {
+  const handleConfirmNavigate = async (optionalDrop, optionalDropCoords = null) => {
     const finalDrop = optionalDrop || drop;
     const finalPickup = pickup || 'Pipaliyahana, Indore';
     
     if (!finalDrop || finalDrop.trim().length === 0) return;
+
+    const resolvedPickupCoords = pickupCoords || await resolveCoords(finalPickup);
+    const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
 
     navigate(`${routePrefix}/ride/select-vehicle`, {
       state: {
         pickup: finalPickup,
         drop: finalDrop,
         stops: stops.filter(s => s.trim().length > 0),
-        pickupCoords: getCoords(finalPickup),
-        dropCoords: getCoords(finalDrop),
+        pickupCoords: resolvedPickupCoords,
+        dropCoords: resolvedDropCoords,
       },
     });
   };
 
   const handleConfirmMapLocation = () => {
     const finalAddress = pickedAddress;
+    const selectedCoords = [lastCenterRef.current.lng, lastCenterRef.current.lat];
     if (activeInput === 'pickup') {
       setPickup(finalAddress);
+      setPickupCoords(selectedCoords);
       setActiveInput('drop');
     } else if (activeInput === 'drop') {
       setDrop(finalAddress);
+      setDropCoords(selectedCoords);
       // Auto-navigate if it's the destination
-      handleConfirmNavigate(finalAddress);
+      handleConfirmNavigate(finalAddress, selectedCoords);
     } else if (typeof activeInput === 'number') {
       updateStop(activeInput, finalAddress);
     }
@@ -180,17 +217,23 @@ const SelectLocation = () => {
         geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
           if (status === 'OK' && results[0]) {
             const addr = results[0].formatted_address;
+            const coords = [longitude, latitude];
             if (activeInput === 'drop') {
-              handleConfirmNavigate(addr);
+              setDrop(addr);
+              setDropCoords(coords);
+              handleConfirmNavigate(addr, coords);
             } else {
-              handleSelectResult(addr);
+              handleSelectResult(addr, coords);
             }
           } else {
             const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+            const coords = [longitude, latitude];
             if (activeInput === 'drop') {
-              handleConfirmNavigate(raw);
+              setDrop(raw);
+              setDropCoords(coords);
+              handleConfirmNavigate(raw, coords);
             } else {
-              handleSelectResult(raw);
+              handleSelectResult(raw, coords);
             }
           }
         });
@@ -219,12 +262,17 @@ const SelectLocation = () => {
   };
 
   // When a suggestion is tapped
-  const handleSelectResult = (title) => {
+  const handleSelectResult = async (title, selectedCoords = null) => {
+    const resolvedCoords = selectedCoords || await resolveCoords(title);
+
     if (activeInput === 'pickup') {
       setPickup(title);
+      setPickupCoords(resolvedCoords);
       setActiveInput('drop');
     } else if (activeInput === 'drop') {
-      handleConfirmNavigate(title);
+      setDrop(title);
+      setDropCoords(resolvedCoords);
+      handleConfirmNavigate(title, resolvedCoords);
     } else if (typeof activeInput === 'number') {
       updateStop(activeInput, title);
       // Move to next stop or drop

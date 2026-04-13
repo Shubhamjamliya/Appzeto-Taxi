@@ -183,6 +183,8 @@ const ParcelSearchingDriver = () => {
         ...routeState,
         type: 'parcel',
         serviceType: 'parcel',
+        pickup: rideSnapshot?.pickupAddress || routeState.pickup,
+        drop: rideSnapshot?.dropAddress || routeState.drop,
         rideId: activeRideIdRef.current,
         otp,
         driver: nextDriver,
@@ -312,6 +314,8 @@ const ParcelSearchingDriver = () => {
         const response = await api.post('/deliveries', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
+          pickupAddress: routeState.pickup || '',
+          dropAddress: routeState.drop || '',
           fare: routeState.fare || routeState.estimatedFare?.min || 45,
           vehicleTypeId: selectedVehicleTypeIds[0],
           vehicleTypeIds: selectedVehicleTypeIds,

@@ -15,6 +15,8 @@ import deliveryIcon from '../../../../assets/icons/Delivery.png';
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
+const ACTIVE_RIDE_VALIDATE_MS = 5000;
+const COMPLETED_TRACKING_STATUSES = new Set(['completed', 'delivered']);
 
 const toLatLng = (coords, fallback = DEFAULT_CENTER) => {
   const [lng, lat] = coords || [];
@@ -41,7 +43,16 @@ const getTrackingVehicleIcon = (ride, driver) => {
   return carIcon;
 };
 
+const getInitials = (name = '') =>
+  String(name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'DR';
+
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const isLikelyVehiclePhoto = (value = '') => /^(https?:|data:image\/|blob:|\/uploads\/|\/images\/)/i.test(String(value || '').trim());
 
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -51,19 +62,22 @@ const RideTracking = () => {
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
+  const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
   const fittedRouteKeyRef = useRef('');
   const navigate = useNavigate();
   const location = useLocation();
   const storedRide = useMemo(() => getCurrentRide(), []);
   const state = useMemo(() => location.state || storedRide || {}, [location.state, storedRide]);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
+  const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
+  const routeComplete = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/complete' : '/ride/complete';
 
   const rideId = state.rideId || '';
   const otp = state.otp || '1234';
   const fare = state.fare || 22;
   const paymentMethod = state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
-    () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '' },
+    () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },
     [state.driver],
   );
   const pickupLabel = rideRealtime?.pickup?.address || state.pickup || 'Pipaliyahana, Indore';
@@ -89,17 +103,83 @@ const RideTracking = () => {
   const driver = rideRealtime?.driver || fallbackDriver;
   const vehicleIcon = getTrackingVehicleIcon(state, driver);
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
+  const driverImage = driver.profileImage || '';
+  const vehicleImage = driver.vehicleImage || '';
+  const hasVehiclePhoto = isLikelyVehiclePhoto(vehicleImage) && !vehicleImageBroken;
+  const driverSubtitle = tripStatus === 'started'
+    ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started')
+    : serviceType === 'parcel'
+      ? 'Delivery agent is on the way'
+      : 'Captain is on the way';
+  const vehicleDetails = [driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ');
+  const activeRideEndpoint = serviceType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
+
+  useEffect(() => {
+    setVehicleImageBroken(false);
+  }, [vehicleImage]);
+
+  const exitTracking = useMemo(
+    () => () => {
+      clearCurrentRide();
+      navigate(routeHome, { replace: true });
+    },
+    [navigate, routeHome],
+  );
+
+  const completeTracking = useMemo(
+    () => (statusValue = 'completed') => {
+      clearCurrentRide();
+      navigate(routeComplete, {
+        replace: true,
+        state: {
+          ...state,
+          rideId,
+          fare,
+          paymentMethod,
+          pickup: pickupLabel,
+          drop: dropLabel,
+          driver,
+          status: statusValue,
+          liveStatus: statusValue,
+          feedback: rideRealtime?.feedback || state.feedback || null,
+          completedAt: rideRealtime?.completedAt || Date.now(),
+        },
+      });
+    },
+    [driver, dropLabel, fare, navigate, paymentMethod, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
+  );
 
   useEffect(() => {
     let active = true;
 
     if (!rideId) {
-      clearCurrentRide();
-      navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/', { replace: true });
+      exitTracking();
       return () => {
         active = false;
       };
     }
+
+    const validateActiveRide = async () => {
+      const activePayload = unwrapApiPayload(await api.get(activeRideEndpoint));
+      const activeRideId = String(activePayload?.rideId || '');
+      const activeStatus = String(activePayload?.liveStatus || activePayload?.status || '').toLowerCase();
+
+      if (COMPLETED_TRACKING_STATUSES.has(activeStatus)) {
+        if (active) {
+          completeTracking(activeStatus);
+        }
+        return false;
+      }
+
+      if (!activeRideId || activeRideId !== String(rideId) || TERMINAL_STATUSES.has(activeStatus)) {
+        if (active) {
+          exitTracking();
+        }
+        return false;
+      }
+
+      return true;
+    };
 
     const hydrateRideState = async () => {
       try {
@@ -112,24 +192,46 @@ const RideTracking = () => {
         }
 
         if (TERMINAL_STATUSES.has(nextStatus)) {
-          clearCurrentRide();
-          navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/', { replace: true });
+          if (COMPLETED_TRACKING_STATUSES.has(nextStatus)) {
+            setRideRealtime({
+              pickup: {
+                coordinates: payload?.pickupLocation?.coordinates,
+                address: payload?.pickupAddress || state.pickup || 'Pickup',
+              },
+              drop: {
+                coordinates: payload?.dropLocation?.coordinates,
+                address: payload?.dropAddress || state.drop || 'Drop',
+              },
+              driverLocation: payload?.lastDriverLocation
+                ? { coordinates: payload.lastDriverLocation.coordinates }
+                : null,
+              status: nextStatus,
+              completedAt: payload?.completedAt || null,
+              feedback: payload?.feedback || null,
+              driver: payload?.driver || fallbackDriver,
+            });
+            completeTracking(nextStatus);
+            return;
+          }
+          exitTracking();
           return;
         }
 
         setRideRealtime({
           pickup: {
             coordinates: payload?.pickupLocation?.coordinates,
-            address: state.pickup || 'Pickup',
+            address: payload?.pickupAddress || state.pickup || 'Pickup',
           },
           drop: {
             coordinates: payload?.dropLocation?.coordinates,
-            address: state.drop || 'Drop',
+            address: payload?.dropAddress || state.drop || 'Drop',
           },
           driverLocation: payload?.lastDriverLocation
             ? { coordinates: payload.lastDriverLocation.coordinates }
             : null,
           status: payload?.liveStatus || payload?.status || 'accepted',
+          completedAt: payload?.completedAt || null,
+          feedback: payload?.feedback || null,
           driver: payload?.driver || fallbackDriver,
         });
 
@@ -141,29 +243,37 @@ const RideTracking = () => {
           liveStatus: payload?.liveStatus || payload?.status || state.liveStatus || state.status || 'accepted',
         });
       } catch {
-        // Keep socket and stored state as fallback when direct fetch is unavailable.
+        await validateActiveRide().catch(() => {});
       }
     };
 
     hydrateRideState();
+    const validationInterval = window.setInterval(() => {
+      validateActiveRide().catch(() => {});
+    }, ACTIVE_RIDE_VALIDATE_MS);
 
     return () => {
       active = false;
+      window.clearInterval(validationInterval);
     };
-  }, [fallbackDriver, location.pathname, navigate, rideId, state]);
+  }, [activeRideEndpoint, completeTracking, exitTracking, fallbackDriver, rideId, state]);
 
   useEffect(() => {
     if (!TERMINAL_STATUSES.has(tripStatus)) {
       return;
     }
 
+    if (COMPLETED_TRACKING_STATUSES.has(tripStatus)) {
+      return;
+    }
+
     clearCurrentRide();
     const timeoutId = window.setTimeout(() => {
-      navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/');
+      navigate(routeHome, { replace: true });
     }, 700);
 
     return () => window.clearTimeout(timeoutId);
-  }, [location.pathname, navigate, tripStatus]);
+  }, [navigate, routeHome, tripStatus]);
 
   useEffect(() => {
     if (!rideId) {
@@ -184,16 +294,18 @@ const RideTracking = () => {
       setRideRealtime({
         pickup: {
           coordinates: payload.pickupLocation?.coordinates,
-          address: state.pickup || 'Pickup',
+          address: payload.pickupAddress || state.pickup || 'Pickup',
         },
         drop: {
           coordinates: payload.dropLocation?.coordinates,
-          address: state.drop || 'Drop',
+          address: payload.dropAddress || state.drop || 'Drop',
         },
         driverLocation: payload.lastDriverLocation
           ? { coordinates: payload.lastDriverLocation.coordinates }
           : null,
         status: payload.liveStatus || payload.status || 'accepted',
+        completedAt: payload.completedAt || null,
+        feedback: payload.feedback || null,
         driver: payload.driver || fallbackDriver,
       });
     };
@@ -217,7 +329,19 @@ const RideTracking = () => {
       }
 
       const nextStatus = payload.liveStatus || payload.status || 'accepted';
-      if (['completed', 'cancelled'].includes(String(nextStatus).toLowerCase())) {
+      const normalizedStatus = String(nextStatus).toLowerCase();
+
+      if (COMPLETED_TRACKING_STATUSES.has(normalizedStatus)) {
+        setRideRealtime((prev) => ({
+          ...(prev || {}),
+          status: normalizedStatus,
+          completedAt: payload.completedAt || prev?.completedAt || null,
+        }));
+        completeTracking(normalizedStatus);
+        return;
+      }
+
+      if (normalizedStatus === 'cancelled') {
         clearCurrentRide();
       } else {
         saveCurrentRide({
@@ -231,6 +355,7 @@ const RideTracking = () => {
       setRideRealtime((prev) => ({
         ...(prev || {}),
         status: nextStatus,
+        completedAt: payload.completedAt || prev?.completedAt || null,
       }));
     };
 
@@ -244,7 +369,7 @@ const RideTracking = () => {
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
     };
-  }, [fallbackDriver, rideId, state, state.drop, state.pickup]);
+  }, [completeTracking, fallbackDriver, rideId, state, state.drop, state.pickup]);
 
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.DirectionsService) {
@@ -470,14 +595,20 @@ const RideTracking = () => {
           <div className="flex items-center gap-3.5 pb-4 border-b border-slate-50">
             <div className="relative shrink-0">
               <div className="w-14 h-14 rounded-[16px] bg-slate-100 overflow-hidden border border-slate-100">
-                <img
-                  src={`https://ui-avatars.com/api/?name=${String(driver.name || 'Captain').replace(' ', '+')}&background=f1f5f9&color=0f172a`}
-                  className="w-full h-full object-cover"
-                  alt="Driver"
-                />
+                {driverImage ? (
+                  <img
+                    src={driverImage}
+                    className="w-full h-full object-cover"
+                    alt={driver.name || 'Driver'}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-slate-900 text-[18px] font-black text-white">
+                    {getInitials(driver.name)}
+                  </div>
+                )}
               </div>
               <div className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-[9px] border-2 border-white bg-slate-900 shadow-sm">
-                <img src={vehicleIcon} alt={vehicleLabel} className="h-5 w-5 object-contain" draggable={false} />
+                <img src={vehicleIcon} alt={vehicleLabel} className="h-4 w-4 object-contain" draggable={false} />
               </div>
               <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-[8px] border-2 border-white flex items-center gap-0.5 shadow-sm">
                 <Star size={9} className="text-slate-900 fill-slate-900" />
@@ -485,15 +616,38 @@ const RideTracking = () => {
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-[17px] font-bold text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
-              <p className="text-[12px] font-bold text-orange-500 mt-0.5">
-                {tripStatus === 'started' ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started') : serviceType === 'parcel' ? 'Delivery agent is on the way' : 'Captain is on the way'}
+              <h3 className="text-[18px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
+              <p className="text-[12px] font-black text-orange-500 mt-0.5">
+                {driverSubtitle}
               </p>
               <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} · {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
             </div>
-            <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[12px] px-3 py-2 text-right">
+            <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[14px] px-3 py-2 text-right shadow-sm">
               <p className="text-[8px] font-black text-orange-400 uppercase tracking-wider">OTP</p>
-              <p className="text-[16px] font-bold text-slate-900 tracking-widest leading-tight">{otp}</p>
+              <p className="text-[17px] font-black text-slate-900 tracking-[0.16em] leading-tight">{otp}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-[16px] border border-slate-100 bg-slate-50/80 px-3 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+            {hasVehiclePhoto ? (
+              <div className="h-12 w-16 shrink-0 overflow-hidden rounded-[10px] border border-slate-100 bg-white">
+                <img
+                  src={vehicleImage}
+                  alt={vehicleLabel}
+                  className="h-full w-full object-contain bg-white"
+                  draggable={false}
+                  onError={() => setVehicleImageBroken(true)}
+                />
+              </div>
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] border border-slate-100 bg-white">
+                <img src={vehicleIcon} alt={vehicleLabel} className="h-6 w-6 object-contain" draggable={false} />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Vehicle</p>
+              <p className="truncate text-[13px] font-black text-slate-900">{vehicleLabel}</p>
+              <p className="truncate text-[11px] font-bold text-slate-500">{vehicleDetails || 'Assigned vehicle'}</p>
             </div>
           </div>
 

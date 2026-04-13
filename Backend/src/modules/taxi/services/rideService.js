@@ -75,6 +75,8 @@ const normalizeServiceType = (serviceType) => (
   String(serviceType || 'ride').trim().toLowerCase() === 'parcel' ? 'parcel' : 'ride'
 );
 
+const normalizeAddress = (value = '') => String(value || '').trim();
+
 const normalizeParcelPayload = (parcel = {}) => ({
   category: String(parcel.category || '').trim(),
   weight: String(parcel.weight || '').trim(),
@@ -145,7 +147,9 @@ const syncDeliveryWithRide = async (ride) => {
     status: ride.status,
     liveStatus: ride.liveStatus,
     pickupLocation: ride.pickupLocation,
+    pickupAddress: normalizeAddress(ride.pickupAddress),
     dropLocation: ride.dropLocation,
+    dropAddress: normalizeAddress(ride.dropAddress),
     fare: ride.fare,
     paymentMethod: ride.paymentMethod,
     parcel: normalizeParcelPayload(ride.parcel),
@@ -168,6 +172,8 @@ export const createRideRecord = async ({
   userId,
   pickupCoords,
   dropCoords,
+  pickupAddress,
+  dropAddress,
   fare,
   vehicleTypeId,
   vehicleTypeIds,
@@ -211,7 +217,9 @@ export const createRideRecord = async ({
       vehicleIconType: vehicleIconType || '',
       serviceType: normalizeServiceType(serviceType),
       pickupLocation: toPoint(pickupCoords, 'pickup'),
+      pickupAddress: normalizeAddress(pickupAddress),
       dropLocation: toPoint(dropCoords, 'drop'),
+      dropAddress: normalizeAddress(dropAddress),
       fare: safeFare,
       paymentMethod: normalizeRidePaymentMethod(paymentMethod),
       parcel: normalizeParcelPayload(parcel),
@@ -243,7 +251,9 @@ export const createRideRecord = async ({
             vehicleIconType: vehicleIconType || '',
             serviceType: normalizeServiceType(serviceType),
             pickupLocation: toPoint(pickupCoords, 'pickup'),
+            pickupAddress: normalizeAddress(pickupAddress),
             dropLocation: toPoint(dropCoords, 'drop'),
+            dropAddress: normalizeAddress(dropAddress),
             fare: safeFare,
             paymentMethod: normalizeRidePaymentMethod(paymentMethod),
             parcel: normalizeParcelPayload(parcel),
@@ -295,7 +305,7 @@ export const getRideDetails = async (rideId) => {
   const ride = await Ride.findById(rideId)
     .populate('deliveryId')
     .populate('userId', 'name phone')
-    .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
+    .populate('driverId', 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating');
 
   if (!ride) {
     throw new ApiError(404, 'Ride not found');
@@ -312,7 +322,7 @@ const populateRideRealtime = async (rideId) =>
   Ride.findById(rideId)
     .populate('deliveryId')
     .populate('userId', 'name phone')
-    .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
+    .populate('driverId', 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating');
 
 export const serializeRideRealtime = (ride) => ({
   rideId: String(ride._id),
@@ -329,10 +339,13 @@ export const serializeRideRealtime = (ride) => ({
   driverEarnings: ride.driverEarnings,
   promo: ride.promo?.code ? ride.promo : null,
   pickupLocation: ride.pickupLocation,
+  pickupAddress: ride.pickupAddress || '',
   dropLocation: ride.dropLocation,
+  dropAddress: ride.dropAddress || '',
   acceptedAt: ride.acceptedAt,
   startedAt: ride.startedAt,
   completedAt: ride.completedAt,
+  feedback: ride.feedback || null,
   lastDriverLocation: ride.lastDriverLocation?.coordinates?.length
     ? {
         type: ride.lastDriverLocation.type,
@@ -389,7 +402,7 @@ export const getActiveRideForIdentity = async ({ role, entityId }) => {
     })
       .sort({ updatedAt: -1 })
       .populate('userId', 'name phone')
-      .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
+      .populate('driverId', 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating');
   }
 
   return null;
@@ -406,7 +419,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     .sort({ createdAt: -1 })
     .limit(safeLimit)
     .populate('deliveryId')
-    .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating')
+    .populate('driverId', 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating')
     .lean();
 
   return rides.map((ride) => ({
@@ -423,10 +436,13 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,
     pickupLocation: ride.pickupLocation,
+    pickupAddress: ride.pickupAddress || '',
     dropLocation: ride.dropLocation,
+    dropAddress: ride.dropAddress || '',
     acceptedAt: ride.acceptedAt,
     startedAt: ride.startedAt,
     completedAt: ride.completedAt,
+    feedback: ride.feedback || null,
     createdAt: ride.createdAt,
     updatedAt: ride.updatedAt,
     driver: ride.driverId || null,
@@ -619,4 +635,56 @@ export const updateRideDriverLocation = async ({ rideId, driverId, coordinates, 
     speed: ride.lastDriverLocation.speed,
     updatedAt: ride.lastDriverLocation.updatedAt,
   };
+};
+
+export const submitRideFeedback = async ({ rideId, userId, rating, comment = '', tipAmount = 0 }) => {
+  const numericRating = Number(rating);
+  const numericTip = Number(tipAmount || 0);
+
+  if (!Number.isInteger(numericRating) || numericRating < 1 || numericRating > 5) {
+    throw new ApiError(400, 'rating must be an integer between 1 and 5');
+  }
+
+  if (!Number.isFinite(numericTip) || numericTip < 0) {
+    throw new ApiError(400, 'tipAmount must be zero or greater');
+  }
+
+  const ride = await Ride.findOne({
+    _id: rideId,
+    userId,
+    status: RIDE_STATUS.COMPLETED,
+  });
+
+  if (!ride) {
+    throw new ApiError(404, 'Completed ride not found');
+  }
+
+  if (!ride.driverId) {
+    throw new ApiError(409, 'Ride has no assigned driver');
+  }
+
+  if (ride.feedback?.submittedAt) {
+    throw new ApiError(409, 'Feedback already submitted for this ride');
+  }
+
+  const driver = await Driver.findById(ride.driverId);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  ride.feedback = {
+    rating: numericRating,
+    comment: String(comment || '').trim(),
+    tipAmount: numericTip,
+    submittedAt: new Date(),
+  };
+
+  driver.ratingCount = Number(driver.ratingCount || 0) + 1;
+  driver.totalRatingScore = Number(driver.totalRatingScore || 0) + numericRating;
+  driver.rating = Number((driver.totalRatingScore / driver.ratingCount).toFixed(1));
+
+  await Promise.all([ride.save(), driver.save()]);
+
+  return populateRideRealtime(ride._id);
 };

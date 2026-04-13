@@ -90,6 +90,11 @@ const rideSchema = new mongoose.Schema(
         required: true,
       },
     },
+    pickupAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     dropLocation: {
       type: {
         type: String,
@@ -100,6 +105,11 @@ const rideSchema = new mongoose.Schema(
         type: [Number],
         required: true,
       },
+    },
+    dropAddress: {
+      type: String,
+      default: '',
+      trim: true,
     },
     fare: {
       type: Number,
@@ -231,6 +241,29 @@ const rideSchema = new mongoose.Schema(
     completedAt: {
       type: Date,
       default: null,
+    },
+    feedback: {
+      rating: {
+        type: Number,
+        default: null,
+        min: 1,
+        max: 5,
+      },
+      comment: {
+        type: String,
+        default: '',
+        trim: true,
+        maxlength: 500,
+      },
+      tipAmount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      submittedAt: {
+        type: Date,
+        default: null,
+      },
     },
   },
   { timestamps: true },

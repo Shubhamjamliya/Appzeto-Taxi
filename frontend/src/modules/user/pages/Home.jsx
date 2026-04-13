@@ -29,6 +29,16 @@ const normalizeActiveRide = (ride) => {
     return null;
   }
 
+  const formatPoint = (point, fallback) => {
+    const [lng, lat] = point?.coordinates || [];
+
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+    }
+
+    return fallback;
+  };
+
   return {
     rideId: ride.rideId,
     status: ride.status || ride.liveStatus || 'accepted',
@@ -40,9 +50,9 @@ const normalizeActiveRide = (ride) => {
     vehicleIconType: ride.vehicleIconType || ride.driver?.vehicleIconType || '',
     pickupCoords: ride.pickupLocation?.coordinates,
     dropCoords: ride.dropLocation?.coordinates,
-    pickup: 'Pickup location',
-    drop: 'Drop location',
-    paymentMethod: 'Cash',
+    pickup: formatPoint(ride.pickupLocation, 'Pickup location'),
+    drop: formatPoint(ride.dropLocation, 'Drop location'),
+    paymentMethod: ride.paymentMethod || 'Cash',
   };
 };
 
@@ -131,6 +141,15 @@ const Home = () => {
   const vehicleLabel = currentRide?.driver?.vehicle || currentRide?.driver?.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
   const currentRideIcon = getCurrentRideIcon(currentRide);
   const trackingPath = serviceType === 'parcel' ? `${routePrefix}/parcel/tracking` : `${routePrefix}/ride/tracking`;
+  const rideStage = String(currentRide?.liveStatus || currentRide?.status || 'accepted').toLowerCase();
+  const rideStageLabel =
+    rideStage === 'started'
+      ? serviceType === 'parcel' ? 'Parcel in transit' : 'Ride in progress'
+      : rideStage === 'arriving'
+        ? serviceType === 'parcel' ? 'Driver reached sender' : 'Driver arrived'
+        : serviceType === 'parcel'
+          ? 'Parcel booked'
+          : 'Ride booked';
 
   const footerIllustrationBg = {
     backgroundImage: 'url(/home_footer_gemini.png)',
@@ -241,7 +260,7 @@ const Home = () => {
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
             whileTap={{ scale: 0.98 }}
             onClick={() => navigate(trackingPath, { state: currentRide })}
-            className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[18px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
+            className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[20px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900">
               <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
@@ -254,15 +273,23 @@ const Home = () => {
                 </p>
               </div>
               <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
-                {driverName} is on the way
+                {rideStageLabel}
               </p>
               <div className="mt-1 flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-500">
+                <MapPin size={12} className="shrink-0 text-emerald-500" strokeWidth={2.5} />
+                <span className="truncate">{currentRide.pickup || 'Pickup location'}</span>
+              </div>
+              <div className="mt-0.5 flex min-w-0 items-center gap-1.5 text-[10px] font-bold text-slate-500">
                 <MapPin size={12} className="shrink-0 text-orange-500" strokeWidth={2.5} />
-                <span className="truncate">{currentRide.pickup || vehicleLabel}</span>
+                <span className="truncate">{currentRide.drop || 'Drop location'}</span>
               </div>
             </div>
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-orange-500 text-white">
-              <ChevronRight size={18} strokeWidth={3} />
+            <div className="shrink-0 text-right">
+              <p className="text-[11px] font-black text-slate-900">Rs {Number(currentRide.fare || 0).toFixed(0)}</p>
+              <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">{driverName}</p>
+              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-orange-500 text-white">
+                <ChevronRight size={18} strokeWidth={3} />
+              </div>
             </div>
           </Motion.button>
         )}

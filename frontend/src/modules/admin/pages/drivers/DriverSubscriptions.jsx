@@ -44,7 +44,7 @@ const DriverSubscriptions = () => {
         setConfig({ mode });
         toast.success(`Mode changed to ${mode.replace(/([A-Z])/g, ' $1').toLowerCase()}`);
       } else {
-        toast.error("Failed to update settings");
+        toast.error(res.message || "Failed to update settings");
       }
     } catch (err) {
       console.error('Update settings error:', err);

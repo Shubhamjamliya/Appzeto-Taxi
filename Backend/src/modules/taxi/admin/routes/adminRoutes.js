@@ -84,6 +84,11 @@ import {
   getPreferences,
   getRideModules,
   getRoles,
+  getReferralSettings,
+  updateReferralSettings,
+  getJoiningBonusSettings,
+  updateJoiningBonusSettings,
+  getReferralDashboard,
   getSetPrices,
   getServiceLocations,
   getSmsSettings,
@@ -233,6 +238,11 @@ adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDr
 adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
 adminRouter.get('/admin/referrals/translation', getReferralTranslations);
 adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
+adminRouter.get('/admin/referrals/settings/:type', getReferralSettings);
+adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
+adminRouter.get('/admin/referral/settings/joining-bonus', getJoiningBonusSettings);
+adminRouter.patch('/admin/referral/settings/joining-bonus', updateJoiningBonusSettings);
+adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);

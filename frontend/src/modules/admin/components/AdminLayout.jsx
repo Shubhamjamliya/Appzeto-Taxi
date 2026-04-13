@@ -354,6 +354,7 @@ const AdminLayout = () => {
               { label: 'Referral Dashboard', path: '/admin/referrals/dashboard' },
               { label: 'User Referral Settings', path: '/admin/referrals/user-settings' },
               { label: 'Driver Referral Settings', path: '/admin/referrals/driver-settings' },
+              { label: 'Joining Bonus Settings', path: '/admin/referrals/joining-bonus' },
               { label: 'Referral Translation', path: '/admin/referrals/translation' },
             ],
           },

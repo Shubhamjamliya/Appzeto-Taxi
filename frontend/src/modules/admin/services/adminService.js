@@ -33,6 +33,11 @@ export const adminService = {
   getReferralTranslations: () => api.get('/admin/referrals/translation'),
   updateReferralTranslation: (languageCode, data) =>
     api.patch(`/admin/referrals/translation/${languageCode}`, data),
+  getReferralSettings: (type) => api.get(`/admin/referrals/settings/${type}`),
+  updateReferralSettings: (type, data) => api.patch(`/admin/referrals/settings/${type}`, data),
+  getJoiningBonusSettings: () => api.get('/admin/referral/settings/joining-bonus'),
+  updateJoiningBonusSettings: (data) => api.patch('/admin/referral/settings/joining-bonus', data),
+  getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 
   /**
    * Subscription Management

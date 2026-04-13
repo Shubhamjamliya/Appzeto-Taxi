@@ -1525,6 +1525,80 @@ export const updateSubscriptionSettings = async (payload) => {
   return setting.subscription;
 };
 
+export const getReferralSettings = async (type) => {
+  const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
+  const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
+  return type ? referral[type] : referral;
+};
+
+export const updateReferralSettings = async (type, payload) => {
+  const updateKey = `referral.${type}`;
+  
+  // Sanitize data
+  const updateData = {
+    ...payload,
+    enabled: Boolean(payload.enabled),
+    amount: Number(payload.amount || 0),
+  };
+
+  const setting = await AdminBusinessSetting.findOneAndUpdate(
+    { scope: 'default' },
+    { $set: { [updateKey]: updateData } },
+    { new: true, upsert: true },
+  );
+
+  return setting.referral[type];
+};
+
+export const getJoiningBonusSettings = async () => {
+  const settings = await AdminAppSetting.findOne({ scope: 'default' }).lean();
+  return {
+    joining_bonus_enabled: settings?.wallet_setting?.enable_joining_bonus || "0",
+    joining_bonus_amount_for_user: Number(settings?.wallet_setting?.joining_bonus_for_user || 0),
+    joining_bonus_amount_for_driver: Number(settings?.wallet_setting?.joining_bonus_for_driver || 0)
+  };
+};
+
+export const updateJoiningBonusSettings = async (payload) => {
+  const settings = await AdminAppSetting.findOneAndUpdate(
+    { scope: 'default' },
+    { 
+      $set: { 
+        "wallet_setting.enable_joining_bonus": String(payload.joining_bonus_enabled),
+        "wallet_setting.joining_bonus_for_user": String(payload.joining_bonus_amount_for_user),
+        "wallet_setting.joining_bonus_for_driver": String(payload.joining_bonus_amount_for_driver)
+      } 
+    },
+    { new: true, upsert: true }
+  );
+  return getJoiningBonusSettings();
+};
+
+export const getReferralDashboard = async () => {
+  const [totalDrivers, totalUsers] = await Promise.all([
+    Driver.countDocuments(),
+    User.countDocuments(),
+  ]);
+
+  // Mocking some parts for the dashboard view
+  return {
+    total_drivers: totalDrivers,
+    total_users: totalUsers,
+    active_referrals: 0,
+    referral_earning: 0,
+    user_referrals: {
+      normal_user: totalUsers,
+      referral_user: 0,
+      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    driver_referrals: {
+      normal_driver: totalDrivers,
+      referral_driver: 0,
+      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+  };
+};
+
 export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
 
 export const createSubscriptionPlan = async (payload) => {

@@ -141,6 +141,26 @@ export const updateSubscriptionSettings = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateSubscriptionSettings(req.body)),
 );
 
+export const getReferralSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getReferralSettings(req.params.type)),
+);
+
+export const updateReferralSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateReferralSettings(req.params.type, req.body)),
+);
+
+export const getJoiningBonusSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getJoiningBonusSettings()),
+);
+
+export const updateJoiningBonusSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateJoiningBonusSettings(req.body)),
+);
+
+export const getReferralDashboard = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.getReferralDashboard()),
+);
+
 export const getServiceLocations = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listServiceLocations()),
 );

@@ -1,61 +1,48 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Plus, Search, MapPin, Globe, Trash2, Edit2, 
-  Map as MapIcon, Navigation, Save, ArrowLeft, 
-  Loader2, Zap, Target, Maximize2 
-} from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { 
-  GoogleMap, DrawingManager, Polygon, Autocomplete 
-} from '@react-google-maps/api';
+import React, { useState, useEffect, useRef, useMemo } from "react";
+import { motion, AnimatePresence } from "framer-motion";
+import { useNavigate, useParams } from "react-router-dom";
+import {
+  Search,
+  Plus,
+  Edit2,
+  Trash2,
+  Navigation,
+  Loader2,
+  ChevronRight,
+  Target,
+  Zap,
+  Tag,
+  Save,
+  ArrowLeft,
+  Maximize2,
+  Map as MapIcon,
+  Globe,
+  Info,
+  Layers,
+  MousePointer2
+} from "lucide-react";
+import {
+  GoogleMap,
+  DrawingManager,
+  Polygon,
+  Autocomplete,
+} from "@react-google-maps/api";
+import { useAppGoogleMapsLoader } from "../../utils/googleMaps";
+import { adminService } from "../../services/adminService";
+import {
+  buildCountryBoundaryUrl,
+  normalizeBoundaryRings,
+  isDriverAvailable,
+} from "../../utils/mapUtils";
 
-import { adminService } from '../../services/adminService';
-import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
-import { BACKEND_LABEL } from '../../../../shared/api/runtimeConfig';
+const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
+const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
+const cardClass = "bg-white rounded-xl border border-gray-200 p-6 shadow-sm";
 
-const mapContainerStyle = {
-  width: '100%',
-  height: '600px',
-  borderRadius: '40px'
-};
-
-const normalizeText = (value) => String(value || '').trim().toLowerCase();
-
-const buildCountryBoundaryUrl = (countryName) =>
-  `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(
-    countryName,
-  )}&format=jsonv2&limit=1&polygon_geojson=1`;
-
-const normalizeBoundaryRings = (geojson) => {
-  if (!geojson) return [];
-
-  if (geojson.type === 'Polygon') {
-    return geojson.coordinates
-      .map((ring) => ring.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) })))
-      .filter((ring) => ring.length >= 3);
-  }
-
-  if (geojson.type === 'MultiPolygon') {
-    return geojson.coordinates
-      .flatMap((polygon) =>
-        polygon.map((ring) => ring.map(([lng, lat]) => ({ lat: Number(lat), lng: Number(lng) }))),
-      )
-      .filter((ring) => ring.length >= 3);
-  }
-
-  return [];
-};
-
-const isDriverAvailable = (driver) => {
-  const status = normalizeText(driver?.status);
-  const approve = driver?.approve;
-  const active = driver?.active;
-
-  return active !== false && approve !== false && status !== 'inactive' && status !== 'declined';
-};
-
-const ZoneManagement = () => {
-  const [view, setView] = useState('list'); // 'list' or 'create'
+const ZoneManagement = ({ mode: initialMode = "list" }) => {
+  const navigate = useNavigate();
+  const { id } = useParams();
+  const [view, setView] = useState(initialMode);
   const [zones, setZones] = useState([]);
   const [serviceLocations, setServiceLocations] = useState([]);
   const [drivers, setDrivers] = useState([]);
@@ -63,14 +50,14 @@ const ZoneManagement = () => {
   const [fetchError, setFetchError] = useState('');
   const [saving, setSaving] = useState(false);
   const [enablePeakZoneGlobal, setEnablePeakZoneGlobal] = useState(true);
-  const [editingId, setEditingId] = useState(null);
-  const [activeTab, setActiveTab] = useState('English');
-  const [mapCenter, setMapCenter] = useState({ lat: 21.1458, lng: 79.0882 }); // Default India (Nagpur approx)
+  const [editingId, setEditingId] = useState(id || null);
+  const [mapCenter, setMapCenter] = useState({ lat: 21.1458, lng: 79.0882 }); 
   const [autocomplete, setAutocomplete] = useState(null);
   const [countryBoundaryPaths, setCountryBoundaryPaths] = useState([]);
   const [boundaryLoading, setBoundaryLoading] = useState(false);
-  const [boundaryError, setBoundaryError] = useState('');
   const mapRef = useRef(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [activeTab, setActiveTab] = useState('English');
 
   // Map & Drawing States
   const [polygonCoords, setPolygonCoords] = useState([]);
@@ -80,7 +67,7 @@ const ZoneManagement = () => {
   const [formData, setFormData] = useState({
     service_location_id: '',
     name: { English: '', Arabic: '', French: '', Spanish: '' },
-    unit: 'km',
+    unit: '',
     peak_zone_ride_count: '',
     peak_zone_radius: '',
     peak_zone_selection_duration: '',
@@ -90,6 +77,13 @@ const ZoneManagement = () => {
     maximum_distance_for_outstation_rides: '',
     status: 'active'
   });
+
+  useEffect(() => {
+    setView(initialMode);
+    if (initialMode === 'list') {
+      resetForm();
+    }
+  }, [initialMode]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -101,13 +95,11 @@ const ZoneManagement = () => {
         adminService.getDrivers(1, 200),
       ]);
 
-      // Robust Zone Parsing
       if (zoneRes) {
         const zoneData = zoneRes.success ? (zoneRes.data?.results || zoneRes.data) : zoneRes;
         setZones(Array.isArray(zoneData) ? zoneData : []);
       }
 
-      // Robust Service Location Parsing
       if (slRes) {
         const locs = slRes.success ? (slRes.data?.results || slRes.data) : slRes;
         setServiceLocations(Array.isArray(locs) ? locs : []);
@@ -117,9 +109,14 @@ const ZoneManagement = () => {
         const driverItems = driverRes.success ? (driverRes.data?.results || driverRes.data) : driverRes;
         setDrivers(Array.isArray(driverItems) ? driverItems : []);
       }
+
+      if (id && initialMode === 'edit') {
+        const zoneToEdit = Array.isArray(zones) && zones.find(z => (z._id || z.id) === id);
+        if (zoneToEdit) handleEdit(zoneToEdit);
+      }
     } catch (err) {
       console.error("Fetch error:", err);
-      setFetchError(`Zone data could not be loaded. Make sure the backend API is running on ${BACKEND_LABEL}.`);
+      setFetchError(`Zone data could not be loaded.`);
     } finally {
       setLoading(false);
     }
@@ -130,19 +127,24 @@ const ZoneManagement = () => {
   }, []);
 
   useEffect(() => {
-    if (view === 'create') {
-      fetchData();
+    if (id && zones.length > 0 && initialMode === 'edit') {
+      const zoneToEdit = zones.find(z => (z._id || z.id) === id);
+      if (zoneToEdit) handleEdit(zoneToEdit);
     }
-  }, [view]);
+  }, [id, zones]);
+
+  const filteredZones = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return zones;
+    return zones.filter(z => (z.name || z.zone_name || '').toLowerCase().includes(query));
+  }, [zones, searchTerm]);
 
   const fitMapToPaths = (paths) => {
     if (!mapRef.current || !window.google || !Array.isArray(paths) || paths.length === 0) {
       return;
     }
-
     const bounds = new window.google.maps.LatLngBounds();
     let hasPoint = false;
-
     paths.forEach((ring) => {
       ring.forEach((point) => {
         if (Number.isFinite(point?.lat) && Number.isFinite(point?.lng)) {
@@ -151,7 +153,6 @@ const ZoneManagement = () => {
         }
       });
     });
-
     if (hasPoint) {
       mapRef.current.fitBounds(bounds, 40);
     }
@@ -170,20 +171,21 @@ const ZoneManagement = () => {
     if (autocomplete !== null) {
       const place = autocomplete.getPlace();
       if (place.geometry) {
-        setMapCenter({
+        const loc = {
           lat: place.geometry.location.lat(),
           lng: place.geometry.location.lng()
-        });
+        };
+        setMapCenter(loc);
+        mapRef.current?.panTo(loc);
       }
     }
   };
 
   const handleSave = async () => {
     if (!formData.name.English.trim() || polygonCoords.length === 0) {
-      alert("Please add a zone name and draw a polygon on the map using the polygon tool. The zone needs at least 3 points.");
+      alert("Please add a zone name and draw a polygon on the map.");
       return;
     }
-
     setSaving(true);
     try {
       const payload = {
@@ -191,38 +193,41 @@ const ZoneManagement = () => {
         coordinates: polygonCoords,
         name: formData.name.English
       };
-
       const res = editingId 
         ? await adminService.updateZone(editingId, payload)
         : await adminService.createZone(payload);
-      
       if (res.success) {
-        setView('list');
-        setEditingId(null);
+        resetForm();
+        navigate("/admin/pricing/zone");
         fetchData();
-        setFormData({
-          service_location_id: '',
-          name: { English: '', Arabic: '', French: '', Spanish: '' },
-          unit: 'km',
-          peak_zone_ride_count: '',
-          peak_zone_radius: '',
-          peak_zone_selection_duration: '',
-          peak_zone_duration: '',
-          peak_zone_surge_percentage: '',
-          maximum_distance_for_regular_rides: '',
-          maximum_distance_for_outstation_rides: '',
-          status: 'active'
-        });
-        setPolygonCoords([]);
       } else {
         alert(res.message || "Operation failed");
       }
     } catch (err) {
       console.error("Save error:", err);
-      alert("Error connecting to server. Please try again.");
+      alert("Error connecting to server.");
     } finally {
       setSaving(false);
     }
+  };
+
+  const resetForm = () => {
+    setEditingId(null);
+    setFormData({
+      service_location_id: '',
+      name: { English: '', Arabic: '', French: '', Spanish: '' },
+      unit: '',
+      peak_zone_ride_count: '',
+      peak_zone_radius: '',
+      peak_zone_selection_duration: '',
+      peak_zone_duration: '',
+      peak_zone_surge_percentage: '',
+      maximum_distance_for_regular_rides: '',
+      maximum_distance_for_outstation_rides: '',
+      status: 'active'
+    });
+    setPolygonCoords([]);
+    setCountryBoundaryPaths([]);
   };
 
   const handleStatusToggle = async (zoneId, currentIsActive) => {
@@ -230,8 +235,6 @@ const ZoneManagement = () => {
       const res = await adminService.toggleZoneStatus(zoneId);
       if (res.success) {
         setZones(prev => prev.map(z => (z._id === zoneId || z.id === zoneId) ? { ...z, active: !currentIsActive } : z));
-      } else {
-        alert("Failed to update status");
       }
     } catch (err) {
       console.error("Status update error:", err);
@@ -239,13 +242,11 @@ const ZoneManagement = () => {
   };
 
   const handleDelete = async (zoneId) => {
-    if (!window.confirm("Are you sure you want to delete this zone?")) return;
+    if (!window.confirm("Are you sure?")) return;
     try {
       const res = await adminService.deleteZone(zoneId);
       if (res.success) {
         setZones(prev => prev.filter(z => (z._id !== zoneId && z.id !== zoneId)));
-      } else {
-        alert("Delete failed");
       }
     } catch (err) {
       console.error("Delete error:", err);
@@ -253,31 +254,13 @@ const ZoneManagement = () => {
   };
 
   const handleEdit = (zone) => {
-    console.log("Editing Zone Data:", zone);
     const zid = zone._id || zone.id;
-    if (!zid) {
-      console.warn("Zone ID missing, edit might fail.");
-    }
-    
     setEditingId(zid);
-    
-    // Safety check for name
-    let zoneName = '';
-    if (typeof zone.name === 'string') {
-      zoneName = zone.name;
-    } else if (zone.name && zone.name.English) {
-      zoneName = zone.name.English;
-    } else if (zone.zone_name) {
-      zoneName = zone.zone_name;
-    }
-
+    let zoneName = typeof zone.name === 'string' ? zone.name : (zone.name?.English || zone.zone_name || '');
     setFormData({
       service_location_id: zone.service_location_id || '',
-      name: { 
-        English: zoneName,
-        Arabic: '', French: '', Spanish: '' 
-      },
-      unit: zone.unit || 'km',
+      name: { English: zoneName, Arabic: '', French: '', Spanish: '' },
+      unit: zone.unit || '',
       peak_zone_ride_count: zone.peak_zone_ride_count || '',
       peak_zone_radius: zone.peak_zone_radius || '',
       peak_zone_selection_duration: zone.peak_zone_selection_duration || '',
@@ -287,707 +270,432 @@ const ZoneManagement = () => {
       maximum_distance_for_outstation_rides: zone.maximum_distance_for_outstation_rides || '',
       status: zone.active ? 'active' : 'inactive'
     });
-
-    // Parse coordinates safely
     let parsedCoords = [];
     if (Array.isArray(zone.coordinates)) {
       parsedCoords = zone.coordinates.map(coord => {
-        // Handle [lng, lat] array or {lat, lng} object
         if (Array.isArray(coord)) return { lat: coord[1], lng: coord[0] };
         if (coord && typeof coord === 'object') return { lat: Number(coord.lat), lng: Number(coord.lng) };
         return coord;
       });
     }
-    
-    if (parsedCoords.length > 0) {
-      setMapCenter(parsedCoords[0]);
-    }
-    
+    if (parsedCoords.length > 0) setMapCenter(parsedCoords[0]);
     setPolygonCoords(parsedCoords);
-    setView('create');
   };
 
-  const handleViewInMap = (zone) => {
-    handleEdit(zone);
-  };
-
-  const selectedServiceLocation = serviceLocations.find(
-    (location) => String(location._id || location.id) === String(formData.service_location_id),
-  );
-  const selectedCountry =
-    selectedServiceLocation?.country ||
-    selectedServiceLocation?.service_location_name ||
-    selectedServiceLocation?.name ||
-    '';
+  const selectedServiceLocation = serviceLocations.find(l => String(l._id || l.id) === String(formData.service_location_id));
+  const selectedCountry = selectedServiceLocation?.country || selectedServiceLocation?.name || '';
 
   useEffect(() => {
-    if (view !== 'create' || !selectedCountry) {
-      setCountryBoundaryPaths([]);
-      setBoundaryLoading(false);
-      setBoundaryError('');
-      return;
-    }
-
+    if (view === 'list' || !selectedCountry) return;
     let cancelled = false;
-
     const loadCountryBoundary = async () => {
       setBoundaryLoading(true);
-      setBoundaryError('');
-
       try {
-        const response = await fetch(buildCountryBoundaryUrl(selectedCountry), {
-          headers: {
-            Accept: 'application/json',
-          },
-        });
-
-        if (!response.ok) {
-          throw new Error(`Boundary request failed with status ${response.status}`);
-        }
-
+        const response = await fetch(buildCountryBoundaryUrl(selectedCountry));
+        if (!response.ok) throw new Error();
         const payload = await response.json();
         const feature = Array.isArray(payload) ? payload[0] : null;
         const nextPaths = normalizeBoundaryRings(feature?.geojson);
-
         if (!cancelled) {
           setCountryBoundaryPaths(nextPaths);
-
-          if (nextPaths.length > 0) {
-            fitMapToPaths(nextPaths);
-          } else {
-            setBoundaryError(`No border data found for ${selectedCountry}.`);
-          }
+          if (nextPaths.length > 0) fitMapToPaths(nextPaths);
         }
       } catch (error) {
-        if (!cancelled) {
-          console.error('Country boundary load failed:', error);
-          setCountryBoundaryPaths([]);
-          setBoundaryError(`Could not load ${selectedCountry} border outline.`);
-        }
+        if (!cancelled) setCountryBoundaryPaths([]);
       } finally {
-        if (!cancelled) {
-          setBoundaryLoading(false);
-        }
+        if (!cancelled) setBoundaryLoading(false);
       }
     };
-
     loadCountryBoundary();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [selectedCountry, view]);
 
-  useEffect(() => {
-    if (polygonCoords.length > 0) {
-      fitMapToPaths([polygonCoords]);
-    }
-  }, [polygonCoords]);
-
-  const availableDrivers = drivers.filter((driver) => {
-    if (!isDriverAvailable(driver)) {
-      return false;
-    }
-
-    if (!formData.service_location_id) {
-      return true;
-    }
-
-    const selectedLocationId = String(selectedServiceLocation?._id || selectedServiceLocation?.id || '');
-    const driverLocationId = String(driver.service_location_id || driver.location_id || '');
-    const selectedLocationName = normalizeText(
-      selectedServiceLocation?.name || selectedServiceLocation?.service_location_name,
-    );
-    const driverCity = normalizeText(driver.city);
-
-    return (
-      (selectedLocationId && driverLocationId === selectedLocationId) ||
-      (selectedLocationName && driverCity === selectedLocationName)
-    );
-  });
-
-  const StatusToggle = ({ active, onToggle }) => (
-    <button 
-      onClick={(e) => {
-        e.stopPropagation();
-        onToggle();
-      }}
-      className={`relative w-12 h-6 rounded-full transition-all duration-300 ${active ? 'bg-emerald-500 shadow-inner' : 'bg-gray-200'}`}
-    >
-      <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow-lg transition-transform duration-300 ${active ? 'translate-x-6' : ''}`} />
-    </button>
-  );
-
   return (
-    <div className="space-y-6 min-h-screen pb-20">
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500">
       <AnimatePresence mode="wait">
         {view === 'list' ? (
           <motion.div 
-            key="list"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
+            key="list" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }}
+            className="max-w-7xl mx-auto space-y-6"
           >
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm">
-               <div>
-                  <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-                     <Target className="text-indigo-600" size={32} />
-                     Zone Management
-                  </h1>
-                  <p className="text-gray-500 text-[14px] font-medium mt-1">Configure and oversee operational geofenced sectors</p>
+            <div className="mb-6">
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+                <span>Pricing</span>
+                <ChevronRight size={12} />
+                <span className="text-gray-700">Zone Management</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <h1 className="text-xl font-semibold text-gray-900">Zone Management</h1>
+                  <p className="text-xs text-gray-400 mt-1">Configure geofenced boundaries for operational control.</p>
+                </div>
+                <button 
+                  onClick={() => navigate("create")}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm"
+                >
+                  <Plus size={16} /> Add Market Zone
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6 flex items-center justify-between shadow-sm">
+               <div className="flex items-center gap-4">
+                  <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${enablePeakZoneGlobal ? 'bg-amber-50 text-amber-600' : 'bg-gray-50 text-gray-300'}`}>
+                     <Zap size={20} className={enablePeakZoneGlobal ? 'animate-pulse' : ''} />
+                  </div>
+                  <div>
+                     <h3 className="text-sm font-semibold text-gray-900">Dynamic Peak Pricing</h3>
+                     <p className="text-[11px] text-gray-400">Toggle surge modifiers across all zones globally</p>
+                  </div>
                </div>
                <button 
-                 onClick={() => {
-                   setEditingId(null);
-                   setFormData({
-                     service_location_id: '',
-                     name: { English: '', Arabic: '', French: '', Spanish: '' },
-                     unit: 'km',
-                     peak_zone_ride_count: '',
-                     peak_zone_radius: '',
-                     peak_zone_selection_duration: '',
-                     peak_zone_duration: '',
-                     peak_zone_surge_percentage: '',
-                     maximum_distance_for_regular_rides: '',
-                     maximum_distance_for_outstation_rides: '',
-                     status: 'active'
-                   });
-                   setPolygonCoords([]);
-                   setView('create');
-                 }}
-                 className="bg-[#0F172A] text-white px-8 py-4 rounded-2xl font-black text-sm flex items-center gap-2 hover:bg-slate-800 transition-all shadow-xl shadow-slate-200 active:scale-95"
+                 onClick={() => setEnablePeakZoneGlobal(!enablePeakZoneGlobal)}
+                 className={`relative w-11 h-6 rounded-full transition-colors ${enablePeakZoneGlobal ? 'bg-indigo-600' : 'bg-gray-200'}`}
                >
-                 <Plus size={20} /> Add Market Zone
+                 <div className={`absolute top-1 left-1 w-4 h-4 bg-white rounded-full transition-transform ${enablePeakZoneGlobal ? 'translate-x-5' : ''}`} />
                </button>
             </div>
 
-            {/* Peak Toggle */}
-            <div className="bg-white p-6 rounded-[32px] border border-gray-100 shadow-sm flex items-center justify-between group">
-               <div className="flex items-center gap-5">
-                  <div className={`w-14 h-14 rounded-2xl flex items-center justify-center transition-all ${enablePeakZoneGlobal ? 'bg-amber-100 text-amber-600' : 'bg-gray-100 text-gray-400'}`}>
-                     <Zap size={28} className={enablePeakZoneGlobal ? 'animate-pulse' : ''} />
-                  </div>
-                  <div>
-                     <p className="text-lg font-black text-gray-900">Enable Peak Zone</p>
-                     <p className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mt-0.5">Toggle dynamic pricing modifiers globally</p>
-                  </div>
-               </div>
-               <StatusToggle active={enablePeakZoneGlobal} onToggle={() => setEnablePeakZoneGlobal(!enablePeakZoneGlobal)} />
-            </div>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+              <div className="p-4 border-b border-gray-100 bg-gray-50/50">
+                <div className="relative w-full max-w-sm">
+                  <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                  <input 
+                    type="text" 
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    placeholder="Search zones..." 
+                    className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-all font-medium"
+                  />
+                </div>
+              </div>
 
-            {/* Table */}
-            <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden min-h-[600px]">
-               <div className="p-6 border-b border-gray-50 flex items-center justify-between bg-gray-50/30">
-                  <div className="relative w-96">
-                     <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={18} />
-                     <input 
-                       type="text" 
-                       placeholder="Search zones by identifier..." 
-                       className="w-full bg-white border border-gray-200 rounded-2xl py-3 pl-12 pr-6 text-[14px] focus:ring-4 focus:ring-indigo-500/10 outline-none transition-all font-black placeholder:text-gray-300"
-                     />
+              <div className="overflow-x-auto">
+                {loading ? (
+                  <div className="flex flex-col items-center justify-center py-20">
+                    <Loader2 className="animate-spin text-indigo-600 mb-2" size={32} />
+                    <p className="text-xs text-gray-400 font-medium">Loading data...</p>
                   </div>
-                  <button className="flex items-center gap-2 bg-rose-50 text-rose-600 px-6 py-3 rounded-xl text-[11px] font-black uppercase tracking-widest hover:bg-rose-100 transition-all">
-                     <Trash2 size={16} /> Bulk Delete
-                  </button>
-               </div>
-
-               {loading ? (
-                 <div className="flex flex-col items-center justify-center h-[500px] gap-6">
-                    <Loader2 className="animate-spin text-indigo-600" size={48} />
-                    <p className="text-gray-400 font-bold uppercase tracking-widest text-[12px]">Acquiring Spatial Data...</p>
-                 </div>
-               ) : fetchError ? (
-                 <div className="flex flex-col items-center justify-center h-[500px] text-center px-8">
-                    <div className="w-24 h-24 bg-rose-50 rounded-full flex items-center justify-center text-rose-300 mb-8">
-                       <Navigation size={48} strokeWidth={1} />
-                    </div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">Backend Unavailable</h3>
-                    <p className="text-slate-400 text-[14px] max-w-md mt-3 font-medium leading-relaxed">{fetchError}</p>
-                 </div>
-               ) : zones.length > 0 ? (
-                 <div className="overflow-x-auto">
-                    <table className="w-full text-left border-separate border-spacing-0">
-                       <thead>
-                          <tr className="bg-white">
-                             <th className="px-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-center w-24">S.No</th>
-                             <th className="px-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">Market Zone Identity</th>
-                             <th className="px-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-center">Status</th>
-                             <th className="px-8 py-6 text-[11px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50 text-right">Actions</th>
-                          </tr>
-                       </thead>
-                       <tbody className="divide-y divide-gray-50">
-                          {zones.map((zone, idx) => {
-                             const zid = zone._id || zone.id;
-                             return (
-                                <tr key={zid || idx} className="hover:bg-indigo-50/30 transition-all group">
-                                   <td className="px-8 py-6 text-center">
-                                      <span className="text-[14px] font-black text-gray-400">{(idx + 1).toString().padStart(2, '0')}</span>
-                                   </td>
-                                   <td className="px-8 py-6">
-                                      <div className="flex items-center gap-4">
-                                         <div className="w-12 h-12 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-400 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-all">
-                                            <MapIcon size={22} />
-                                         </div>
-                                         <span className="text-[16px] font-black text-gray-900 tracking-tight">{zone.name || zone.zone_name}</span>
-                                      </div>
-                                   </td>
-                                   <td className="px-8 py-6">
-                                      <div className="flex justify-center">
-                                         <StatusToggle 
-                                           active={zone.active === true || zone.status === 'active'} 
-                                           onToggle={() => handleStatusToggle(zid, zone.active)} 
-                                         />
-                                      </div>
-                                   </td>
-                                   <td className="px-8 py-6 text-right">
-                                      <div className="flex items-center justify-end gap-3">
-                                         <button 
-                                           onClick={() => handleEdit(zone)}
-                                           className="p-3 bg-amber-50 text-amber-600 rounded-2xl hover:bg-amber-100 transition-all active:scale-90 shadow-sm"
-                                         >
-                                           <Edit2 size={18} />
-                                         </button>
-                                         <button 
-                                           onClick={() => handleViewInMap(zone)}
-                                           className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl hover:bg-indigo-100 transition-all active:scale-90 shadow-sm"
-                                         >
-                                           <Globe size={18} />
-                                         </button>
-                                         <button 
-                                           onClick={() => handleDelete(zid)}
-                                           className="p-3 bg-rose-50 text-rose-600 rounded-2xl hover:bg-rose-100 transition-all active:scale-90 shadow-sm"
-                                         >
-                                           <Trash2 size={18} />
-                                         </button>
-                                      </div>
-                                   </td>
-                                </tr>
-                             );
-                          })}
-                       </tbody>
-                    </table>
-                 </div>
-               ) : (
-                 <div className="flex flex-col items-center justify-center h-[500px] text-center">
-                    <div className="w-24 h-24 bg-slate-50 rounded-full flex items-center justify-center text-slate-200 mb-8">
-                       <Navigation size={48} strokeWidth={1} />
-                    </div>
-                    <h3 className="text-xl font-black text-slate-900 tracking-tight">No Market Zones Configured</h3>
-                    <p className="text-slate-400 text-[14px] max-w-xs mt-3 font-medium px-4 leading-relaxed">Map your operational sector boundaries to initiate geofencing and dynamic pricing.</p>
-                 </div>
-               )}
+                ) : filteredZones.length > 0 ? (
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50/50 border-b border-gray-100">
+                        <th className="px-6 py-3.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">S.No</th>
+                        <th className="px-6 py-3.5 text-left text-[10px] font-bold text-gray-400 uppercase tracking-widest">Market Zone Identity</th>
+                        <th className="px-6 py-3.5 text-center text-[10px] font-bold text-gray-400 uppercase tracking-widest">Status</th>
+                        <th className="px-6 py-3.5 text-right text-[10px] font-bold text-gray-400 uppercase tracking-widest">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100">
+                      {filteredZones.map((zone, idx) => (
+                        <tr key={zone._id || zone.id} className="hover:bg-gray-50/50 transition-colors group">
+                          <td className="px-6 py-4 whitespace-nowrap text-xs font-bold text-gray-400">{(idx + 1).toString().padStart(2, '0')}</td>
+                          <td className="px-6 py-4 whitespace-nowrap">
+                            <div className="flex items-center gap-3">
+                              <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm border border-indigo-100/50 transition-transform group-hover:scale-105">
+                                <Target size={16} />
+                              </div>
+                              <span className="font-semibold text-gray-900">{zone.name || zone.zone_name}</span>
+                            </div>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-center">
+                            <button 
+                               onClick={() => handleStatusToggle(zone._id || zone.id, zone.active)} 
+                               className={`px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider ${zone.active ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' : 'bg-gray-50 text-gray-400 border border-gray-200'}`}
+                            >
+                               {zone.active ? 'Active' : 'Inactive'}
+                            </button>
+                          </td>
+                          <td className="px-6 py-4 whitespace-nowrap text-right">
+                            <div className="flex items-center justify-end gap-2">
+                               <button onClick={() => navigate(`edit/${zone._id || zone.id}`)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 size={14} /></button>
+                               <button onClick={() => handleDelete(zone._id || zone.id)} className="p-2 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"><Trash2 size={14} /></button>
+                               <button onClick={() => handleEdit(zone)} className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Globe size={14} /></button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                ) : (
+                  <div className="py-20 text-center">
+                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center text-gray-200 mx-auto mb-4"><Navigation size={32} /></div>
+                    <h3 className="text-sm font-semibold text-gray-900 mb-1">No Zones Configured</h3>
+                    <p className="text-xs text-gray-400 max-w-xs mx-auto">Map your operational sector boundaries to initiate geofencing.</p>
+                  </div>
+                )}
+              </div>
             </div>
           </motion.div>
         ) : (
           <motion.div 
-            key="create"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="space-y-6"
+            key="form" initial={{ opacity: 0, x: 20 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -20 }}
+            className="max-w-7xl mx-auto space-y-6 pb-20"
           >
-            {/* Page Header as per image */}
-            <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-              <h2 className="text-xl font-bold text-slate-800 uppercase tracking-tight">
-                {editingId ? 'Edit' : 'Add Market Zone'}
-              </h2>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span>Zone</span>
-                <span>{'>'}</span>
-                <span className="text-slate-600 font-medium">{editingId ? 'Edit' : 'Add'}</span>
+            <div className="mb-6">
+              <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+                <span>Pricing</span>
+                <ChevronRight size={12} />
+                <span>Zone Management</span>
+                <ChevronRight size={12} />
+                <span className="text-gray-700">{editingId ? 'Edit' : 'Create'}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <h1 className="text-xl font-semibold text-gray-900">{editingId ? 'Edit Market Zone' : 'Add Market Zone'}</h1>
+                <button 
+                  onClick={() => navigate("/admin/pricing/zone")}
+                  className="flex items-center gap-2 px-3 py-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <ArrowLeft size={14} /> Back
+                </button>
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-              {/* Left Column: Form Fields */}
-              <div className="bg-white p-6 rounded-xl border border-gray-200 shadow-sm space-y-6">
-                {/* Service Location */}
-                <div className="space-y-2">
-                  <label className="text-sm font-semibold text-slate-600">Service Location</label>
-                  <select 
-                    value={formData.service_location_id}
-                    onChange={(e) => {
-                      const nextId = e.target.value;
-                      setFormData({...formData, service_location_id: nextId});
-
-                      const nextLocation = serviceLocations.find(
-                        (location) => String(location._id || location.id) === String(nextId),
-                      );
-
-                      const lat = Number(nextLocation?.latitude);
-                      const lng = Number(nextLocation?.longitude);
-
-                      if (Number.isFinite(lat) && Number.isFinite(lng)) {
-                        setMapCenter({ lat, lng });
-                      }
-                    }}
-                    className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                  >
-                    <option value="">Optional: Select Location</option>
-                    {serviceLocations.map(sl => (
-                      <option key={sl._id || sl.id} value={sl._id || sl.id}>
-                        {sl.service_location_name || sl.name || 'Unknown Location'}
-                      </option>
-                    ))}
-                  </select>
-                  {serviceLocations.length === 0 ? (
-                    <p className="text-xs text-amber-700">
-                      No service locations found yet. Create one in `/admin/pricing/service-location` first.
-                    </p>
-                  ) : null}
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-slate-50 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Selected Service Location</p>
-                      <p className="mt-1 text-base font-black text-slate-900">
-                        {selectedServiceLocation?.service_location_name || selectedServiceLocation?.name || 'All Locations'}
-                      </p>
-                    </div>
-                    <div className="text-right">
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Available Drivers</p>
-                      <p className="mt-1 text-2xl font-black text-indigo-700">{availableDrivers.length}</p>
-                    </div>
-                  </div>
-                  <p className="mt-2 text-sm text-slate-500">
-                    {selectedServiceLocation
-                      ? `${selectedServiceLocation.country || 'Unknown country'} • ${selectedServiceLocation.timezone || 'No timezone set'}`
-                      : 'Choose a service location to narrow the drivers list, or leave it empty to see all active drivers.'}
-                  </p>
-                </div>
-
-                <div className="rounded-xl border border-rose-100 bg-rose-50/70 p-4">
-                  <div className="flex items-center justify-between gap-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-rose-400">Country Border</p>
-                      <p className="mt-1 text-base font-black text-slate-900">
-                        {selectedCountry || 'Select a service location first'}
-                      </p>
-                    </div>
-                    {boundaryLoading ? <Loader2 size={18} className="animate-spin text-rose-600" /> : null}
-                  </div>
-                  <p className="mt-2 text-sm text-slate-600">
-                    {selectedCountry
-                      ? 'The map will outline the selected country border so you can draw the zone inside it.'
-                      : 'Pick a service location and the country border will be drawn on the map.'}
-                  </p>
-                  {boundaryError ? (
-                    <p className="mt-2 text-xs font-semibold text-amber-700">{boundaryError}</p>
-                  ) : null}
-                </div>
-
-                <div className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-                  <div className="flex items-center justify-between gap-3 border-b border-slate-100 pb-3">
-                    <div>
-                      <p className="text-[11px] font-black uppercase tracking-[0.2em] text-slate-400">Available Drivers</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-600">
-                        {selectedServiceLocation
-                          ? `Drivers available around ${selectedServiceLocation.service_location_name || selectedServiceLocation.name}`
-                          : 'Showing all active drivers'}
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="mt-3 space-y-3">
-                    {availableDrivers.length > 0 ? (
-                      availableDrivers.map((driver) => (
-                        <div
-                          key={driver._id || driver.id}
-                          className="flex items-center justify-between rounded-lg border border-slate-100 bg-slate-50 px-4 py-3"
+            <div className="grid grid-cols-1 xl:grid-cols-12 gap-6">
+              {/* Form Section */}
+              <div className="xl:col-span-4 space-y-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
+                   <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+                      <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                        <Tag size={18} />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-semibold text-gray-900">Zone Identity</h3>
+                        <p className="text-xs text-gray-400">Basic identification settings</p>
+                      </div>
+                   </div>
+                   
+                   <div className="space-y-5">
+                      <div>
+                        <label className={labelClass}>Service Location</label>
+                        <select 
+                          value={formData.service_location_id}
+                          onChange={(e) => {
+                            const nextId = e.target.value;
+                            setFormData({...formData, service_location_id: nextId});
+                            const loc = serviceLocations.find(l => String(l._id || l.id) === String(nextId));
+                            if (loc?.latitude) {
+                              const center = { lat: Number(loc.latitude), lng: Number(loc.longitude) };
+                              setMapCenter(center);
+                              mapRef.current?.panTo(center);
+                            }
+                          }}
+                          className={inputClass}
                         >
-                          <div>
-                            <p className="text-sm font-bold text-slate-900">{driver.name || 'Unnamed Driver'}</p>
-                            <p className="mt-1 text-xs text-slate-500">
-                              {(driver.city || 'Unknown city')} • {(driver.mobile || 'No phone')}
-                            </p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-xs font-bold uppercase tracking-widest text-emerald-600">
-                              {driver.status || 'available'}
-                            </p>
-                            <p className="mt-1 text-xs text-slate-400">
-                              Rating: {driver.rating ?? '-'}
-                            </p>
-                          </div>
+                          <option value="">Select Service Location</option>
+                          {serviceLocations.map(sl => (
+                            <option key={sl._id || sl.id} value={sl._id || sl.id}>{sl.name || sl.service_location_name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-1 border-b border-gray-100 mb-4">
+                          {['English', 'Arabic', 'French', 'Spanish'].map(lang => (
+                            <button
+                              key={lang}
+                              onClick={() => setActiveTab(lang)}
+                              className={`px-4 py-2 text-xs font-medium transition-colors relative ${activeTab === lang ? 'text-indigo-600' : 'text-gray-400 hover:text-gray-600'}`}
+                            >
+                              {lang}
+                              {activeTab === lang && (
+                                <motion.div layoutId="activeTab" className="absolute bottom-[-1px] left-0 right-0 h-[2px] bg-indigo-600" />
+                              )}
+                            </button>
+                          ))}
                         </div>
-                      ))
-                    ) : (
-                      <div className="rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center text-sm text-slate-500">
-                        No active drivers found for this service location yet.
+                        
+                        <div>
+                          <label className={labelClass}>Zone Name *</label>
+                          <input 
+                            type="text" 
+                            value={formData.name[activeTab] || ''}
+                            onChange={(e) => setFormData({...formData, name: { ...formData.name, [activeTab]: e.target.value }})}
+                            placeholder={`Name in ${activeTab}`}
+                            className={inputClass}
+                          />
+                        </div>
                       </div>
-                    )}
-                  </div>
-                </div>
 
-                {/* Language Tabs */}
-                <div className="space-y-4">
-                  <div className="flex items-center border-b border-gray-100 gap-6">
-                    {['English', 'Arabic', 'French', 'Spanish'].map(lang => (
-                      <button
-                        key={lang}
-                        onClick={() => setActiveTab(lang)}
-                        className={`pb-3 text-sm font-semibold transition-all relative ${activeTab === lang ? 'text-indigo-600' : 'text-slate-400 hover:text-slate-600'}`}
-                      >
-                        {lang}
-                        {activeTab === lang && (
-                          <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
-                        )}
-                      </button>
-                    ))}
-                  </div>
+                      <div>
+                        <label className={labelClass}>Select Unit</label>
+                        <select 
+                           value={formData.unit} 
+                           onChange={(e) => setFormData({...formData, unit: e.target.value})} 
+                           className={inputClass}
+                        >
+                           <option value="">Choose Unit</option>
+                           <option value="km">KM</option>
+                           <option value="miles">Miles</option>
+                        </select>
+                      </div>
 
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-600">Name <span className="text-rose-500">*</span></label>
-                    <input 
-                      type="text" 
-                      placeholder="Enter name"
-                      value={formData.name[activeTab]}
-                      onChange={(e) => setFormData({
-                        ...formData, 
-                        name: { ...formData.name, [activeTab]: e.target.value }
-                      })}
-                      className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                </div>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                         <div>
+                            <label className={labelClass}>Peak Zone Ride Count *</label>
+                            <input 
+                              type="number" value={formData.peak_zone_ride_count}
+                              onChange={(e) => setFormData({...formData, peak_zone_ride_count: e.target.value})}
+                              placeholder="Ride Count"
+                              className={inputClass}
+                            />
+                         </div>
+                         <div>
+                            <label className={labelClass}>Peak Zone Radius *</label>
+                            <input 
+                              type="number" value={formData.peak_zone_radius}
+                              onChange={(e) => setFormData({...formData, peak_zone_radius: e.target.value})}
+                              placeholder="Radius"
+                              className={inputClass}
+                            />
+                         </div>
+                         <div>
+                            <label className={labelClass}>Peak Selection Duration (mins) *</label>
+                            <input 
+                              type="number" value={formData.peak_zone_selection_duration}
+                              onChange={(e) => setFormData({...formData, peak_zone_selection_duration: e.target.value})}
+                              placeholder="Duration in mins"
+                              className={inputClass}
+                            />
+                         </div>
+                         <div>
+                            <label className={labelClass}>Peak Zone Duration (mins) *</label>
+                            <input 
+                              type="number" value={formData.peak_zone_duration}
+                              onChange={(e) => setFormData({...formData, peak_zone_duration: e.target.value})}
+                              placeholder="Duration in mins"
+                              className={inputClass}
+                            />
+                         </div>
+                      </div>
 
-                {/* Select Unit */}
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <label className="text-sm font-semibold text-slate-600">Select Unit</label>
-                    <select 
-                      value={formData.unit}
-                      onChange={(e) => setFormData({...formData, unit: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    >
-                      <option value="km">Kilometers</option>
-                      <option value="miles">Miles</option>
-                    </select>
-                  </div>
-
-                  {localStorage.getItem('enable_max_distance') === 'true' && (
-                    <motion.div 
-                      initial={{ opacity: 0, height: 0 }} 
-                      animate={{ opacity: 1, height: 'auto' }}
-                      className="space-y-4 border-t border-slate-50 pt-4"
-                    >
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-600">Maximum Distance for Regular Rides <span className="text-rose-500">*</span></label>
+                      <div>
+                        <div className="flex items-center justify-between mb-1.5">
+                           <label className={labelClass + " mb-0"}>Peak Zone Surge percentage *</label>
+                           <button className="text-[10px] font-semibold text-indigo-600 hover:text-indigo-700 tracking-wider uppercase">How It Works</button>
+                        </div>
                         <input 
-                          type="number" 
-                          placeholder="Enter Maximum Distance for Regular Rides"
-                          value={formData.maximum_distance_for_regular_rides}
-                          onChange={(e) => setFormData({...formData, maximum_distance_for_regular_rides: e.target.value})}
-                          className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                           type="number" value={formData.peak_zone_surge_percentage}
+                           onChange={(e) => setFormData({...formData, peak_zone_surge_percentage: e.target.value})}
+                           placeholder="Enter Surge percentage"
+                           className={inputClass}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <label className="text-sm font-semibold text-slate-600">Maximum Distance for Outstation Rides <span className="text-rose-500">*</span></label>
-                        <input 
-                          type="number" 
-                          placeholder="Enter Maximum Distance for Outstation Rides"
-                          value={formData.maximum_distance_for_outstation_rides}
-                          onChange={(e) => setFormData({...formData, maximum_distance_for_outstation_rides: e.target.value})}
-                          className="w-full border border-gray-200 rounded-lg py-3 px-4 text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                        />
-                      </div>
-                    </motion.div>
-                  )}
+                   </div>
                 </div>
 
-                {/* Peak Zone Parameters Grid */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Ride Count</label>
-                    <input 
-                      type="number" 
-                      value={formData.peak_zone_ride_count}
-                      onChange={(e) => setFormData({...formData, peak_zone_ride_count: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Radius</label>
-                    <input 
-                      type="number" 
-                      value={formData.peak_zone_radius}
-                      onChange={(e) => setFormData({...formData, peak_zone_radius: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Selection Duration in mins</label>
-                    <input 
-                      type="number" 
-                      value={formData.peak_zone_selection_duration}
-                      onChange={(e) => setFormData({...formData, peak_zone_selection_duration: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Duration in mins</label>
-                    <input 
-                      type="number" 
-                      value={formData.peak_zone_duration}
-                      onChange={(e) => setFormData({...formData, peak_zone_duration: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                  <div className="col-span-1 space-y-2">
-                    <label className="text-xs font-semibold text-slate-600">Peak Zone Surge percentage <span className="text-cyan-500 cursor-pointer">How It Works</span></label>
-                    <input 
-                      type="number" 
-                      value={formData.peak_zone_surge_percentage}
-                      onChange={(e) => setFormData({...formData, peak_zone_surge_percentage: e.target.value})}
-                      className="w-full border border-gray-200 rounded-lg py-2.5 px-3 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
-                    />
-                  </div>
-                </div>
-
-                {/* Footer Action */}
-                <div className="pt-6 flex justify-end">
-                  <button 
-                    onClick={handleSave}
-                    disabled={saving}
-                    className="bg-[#415385] text-white px-8 py-3 rounded-lg font-semibold text-sm hover:bg-[#34446b] transition-all shadow-md active:scale-95 disabled:opacity-70 flex items-center gap-2"
-                  >
-                    {saving && <Loader2 className="animate-spin" size={16} />}
-                    {editingId ? 'Update' : 'Create'}
-                  </button>
+                <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3 shadow-sm">
+                   <button 
+                     disabled={saving} onClick={handleSave}
+                     className="w-full py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50 flex items-center justify-center gap-2"
+                   >
+                     {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                     {editingId ? 'Update Zone' : 'Save'}
+                   </button>
+                   <button 
+                     onClick={() => navigate("/admin/pricing/zone")}
+                     className="w-full py-3 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+                   >
+                     Cancel
+                   </button>
                 </div>
               </div>
 
-              {/* Right Column: Map */}
-              <div className="space-y-4">
-                <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm relative overflow-hidden">
-                  {polygonCoords.length === 0 ? (
-                    <div className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
-                      Draw the zone first: use the polygon tool on the map, click at least 3 points, then finish the shape.
-                    </div>
-                  ) : null}
-
-                  {/* Search Bar inside map container area */}
-                  <div className="mb-4 relative z-10">
-                    {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-                      <Autocomplete
-                        onLoad={setAutocomplete}
-                        onPlaceChanged={onPlaceChanged}
-                      >
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-                          <input 
-                            type="text" 
-                            placeholder="Search for a city"
-                            className="w-full border border-gray-200 rounded-lg py-2.5 pl-10 pr-4 text-sm text-slate-700 focus:ring-2 focus:ring-indigo-500/10 focus:border-indigo-500 outline-none"
-                          />
-                        </div>
-                      </Autocomplete>
-                    ) : (
-                      <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                        Add a valid Google Maps browser key in `frontend/.env` to draw zones on the map.
-                      </div>
-                    )}
-                  </div>
-
-                  <div className="h-[550px] w-full bg-slate-100 rounded-lg overflow-hidden border border-gray-100 relative shadow-inner">
-                    {loadError ? (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-50 p-6 text-center">
-                        <div>
-                          <p className="text-sm font-bold text-rose-600 uppercase tracking-widest">Google Maps failed to load</p>
-                          <p className="text-sm text-slate-500 mt-2">Check your browser API key and Maps JavaScript API setup.</p>
-                        </div>
-                      </div>
-	                    ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-	                      <GoogleMap
-	                        onLoad={(map) => {
-	                          mapRef.current = map;
-	                        }}
-	                        mapContainerStyle={{ width: '100%', height: '100%' }}
-	                        center={mapCenter}
-	                        zoom={12}
-                        options={{
-                          mapTypeControl: true,
-                          streetViewControl: true,
-                          fullscreenControl: true,
-                          mapTypeControlOptions: {
-                            position: isLoaded ? window.google.maps.ControlPosition.TOP_LEFT : 0
-                          }
-	                        }}
-	                      >
-	                        {countryBoundaryPaths.map((ring, index) => (
-	                          <Polygon
-	                            key={`country-boundary-${index}`}
-	                            paths={ring}
-	                            options={{
-	                              fillColor: '#ef4444',
-	                              fillOpacity: 0.18,
-	                              strokeColor: '#b91c1c',
-	                              strokeWeight: 2,
-	                              clickable: false,
-	                              editable: false,
-	                              draggable: false,
-	                              zIndex: 1,
-	                            }}
-	                          />
-	                        ))}
-	                        <DrawingManager
-	                          onPolygonComplete={onPolygonComplete}
-                          options={{
-                            drawingControl: true,
-                            drawingControlOptions: {
-                              position: isLoaded ? window.google.maps.ControlPosition.LEFT_CENTER : 0,
-                              drawingModes: [isLoaded ? window.google.maps.drawing.OverlayType.POLYGON : 'polygon'],
-                            },
-                            polygonOptions: {
-                              fillColor: '#6366f1',
-                              fillOpacity: 0.3,
-                              strokeWeight: 2,
-                              strokeColor: '#6366f1',
-                              editable: true,
-                            },
-                          }}
-                        />
-                        {polygonCoords.length > 0 && (
-                          <Polygon
-                            paths={polygonCoords}
-	                            options={{
-	                              fillColor: '#6366f1',
-	                              fillOpacity: 0.35,
-	                              strokeColor: '#6366f1',
-	                              strokeWeight: 3,
-	                              editable: true,
-	                              draggable: true,
-	                              zIndex: 2
-	                            }}
-	                          />
-	                        )}
-                      </GoogleMap>
-                    ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-slate-50 p-6 text-center">
-                        <div>
-                          <p className="text-sm font-bold text-slate-600 uppercase tracking-widest">Map unavailable</p>
-                          <p className="text-sm text-slate-500 mt-2">Set `VITE_GOOGLE_MAPS_API_KEY` to enable polygon drawing.</p>
-                        </div>
-                      </div>
-                    )}
-
-                    {/* Vertices indicator overlay (optional, but keeping it for UX) */}
-                    <div className="absolute bottom-4 right-4 bg-white/90 backdrop-blur px-3 py-1.5 rounded-lg border border-gray-100 shadow-sm flex items-center gap-2">
-                       <div className="w-2 h-2 bg-indigo-500 rounded-full animate-pulse" />
-                       <span className="text-[10px] font-bold text-slate-500 uppercase">Vertices: {polygonCoords.length}</span>
-                    </div>
-                  </div>
+              {/* Map Section */}
+              <div className="xl:col-span-8 space-y-6">
+                <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm relative overflow-hidden h-[650px]">
+                   {isLoaded ? (
+                     <div className="w-full h-full rounded-lg overflow-hidden relative">
+                       <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-3">
+                            <div className="flex-1 bg-white border border-gray-200 rounded-lg shadow-lg p-1 flex items-center">
+                               <Search className="ml-3 text-gray-400" size={16} />
+                               <Autocomplete 
+                                  onLoad={a => setAutocomplete(a)} 
+                                  onPlaceChanged={onPlaceChanged}
+                                  className="w-full"
+                                >
+                                  <input 
+                                    type="text" placeholder="Search for a city" 
+                                    className="px-3 py-2 text-sm text-gray-800 outline-none w-full bg-transparent"
+                                  />
+                               </Autocomplete>
+                            </div>
+                            <button 
+                              onClick={() => setPolygonCoords([])}
+                              className="bg-white border border-gray-200 text-rose-600 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:bg-rose-50 transition-colors whitespace-nowrap"
+                            >
+                               Clear Map
+                            </button>
+                       </div>
+                       
+                       <GoogleMap
+                         mapContainerStyle={{ width: '100%', height: '100%' }}
+                         center={mapCenter} zoom={12}
+                         onLoad={m => { mapRef.current = m; }}
+                         options={{
+                            styles: [
+                                { elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+                                { elementType: "labels.icon", stylers: [{ visibility: "off" }] }
+                            ],
+                            disableDefaultUI: false,
+                            zoomControl: true,
+                            mapTypeControl: true,
+                            streetViewControl: false,
+                            fullscreenControl: true
+                         }}
+                       >
+                         <DrawingManager
+                           onPolygonComplete={onPolygonComplete}
+                           options={{
+                             drawingControl: true,
+                             drawingControlOptions: {
+                               position: window.google.maps.ControlPosition.TOP_CENTER,
+                               drawingModes: [window.google.maps.drawing.OverlayType.POLYGON],
+                             },
+                             polygonOptions: {
+                               fillColor: '#4f46e5',
+                               fillOpacity: 0.15,
+                               strokeColor: '#4f46e5',
+                               strokeWeight: 2,
+                               editable: true,
+                             },
+                           }}
+                         />
+                         {polygonCoords.length > 0 && (
+                           <Polygon
+                             paths={polygonCoords}
+                             options={{ fillColor: '#4f46e5', strokeColor: '#4f46e5', strokeWeight: 2, fillOpacity: 0.25, editable: true, draggable: true }}
+                           />
+                         )}
+                         {countryBoundaryPaths.map((path, index) => (
+                            <Polygon
+                              key={index} paths={path}
+                              options={{ strokeColor: '#f43f5e', fillOpacity: 0.05, fillColor: '#f43f5e', strokeWeight: 1.5, strokeDasharray: '5,5', clickable: false }}
+                            />
+                         ))}
+                       </GoogleMap>
+                     </div>
+                   ) : (
+                     <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
+                        <Loader2 className="animate-spin text-gray-300" size={32} />
+                     </div>
+                   )}
                 </div>
 
-                {/* Overlap Warning Box as per image */}
-                <div className="bg-[#fff9e6] border border-[#ffecb3] p-4 rounded-lg flex items-center gap-3">
-                   <div className="w-2 h-2 bg-amber-400 rounded-full" />
-                   <p className="text-amber-800 text-xs font-semibold">
-                     Avoid make new polygons that overlap with existing zones.
+                <div className="bg-amber-50 border border-amber-100 rounded-xl p-4 text-amber-800 flex items-start gap-3 shadow-sm">
+                   <Info size={18} className="text-amber-500 shrink-0 mt-0.5" />
+                   <p className="text-sm font-medium">
+                     Avoid drawing multiple zones that overlap with each other.
                    </p>
+                </div>
+
+                <div className="bg-indigo-900 rounded-xl p-6 text-white overflow-hidden relative shadow-md">
+                    <Maximize2 className="absolute -right-4 -bottom-4 text-white/10" size={120} />
+                    <h4 className="text-sm font-semibold mb-2">Instructions</h4>
+                    <p className="text-xs text-indigo-100 leading-relaxed">
+                      Use the polygon tool at the top center of the map to draw your zone. Click to place vertices and return to the first point to close the shape. 
+                      The red dashed line represents the country boundary for reference.
+                    </p>
                 </div>
               </div>
             </div>

@@ -150,20 +150,6 @@ const rideSchema = new mongoose.Schema(
         trim: true,
       },
     },
-    commissionAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    driverEarnings: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    walletSettledAt: {
-      type: Date,
-      default: null,
-    },
     promo: {
       code: {
         type: String,
@@ -247,9 +233,7 @@ const rideSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { 
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

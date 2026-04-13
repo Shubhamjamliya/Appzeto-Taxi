@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { GoogleMap } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
+import { userAuthService } from '../../services/authService';
 
 const Motion = motion;
 const PHONE_REGEX = /^[6-9]\d{9}$/;
@@ -425,8 +426,8 @@ const SenderReceiverDetails = () => {
   const { isLoaded: isGoogleMapsLoaded } = useAppGoogleMapsLoader();
   const parcelState = location.state || {};
   const storedUser = useMemo(() => readStoredUserInfo(), []);
-  const [senderName, setSenderName] = useState(() => storedUser?.name || '');
-  const [senderMobile, setSenderMobile] = useState(() => storedUser?.phone || '');
+  const [senderName, setSenderName] = useState(() => parcelState.senderName || storedUser?.name || '');
+  const [senderMobile, setSenderMobile] = useState(() => parcelState.senderMobile || storedUser?.phone || '');
   const [receiverName, setReceiverName] = useState(() => parcelState.receiverName || '');
   const [receiverMobile, setReceiverMobile] = useState(() => parcelState.receiverMobile || '');
   const [pickup, setPickup] = useState(() => parcelState.pickup || '');
@@ -436,6 +437,61 @@ const SenderReceiverDetails = () => {
   const [activeMapPicker, setActiveMapPicker] = useState(null);
   const [isLocatingPickup, setIsLocatingPickup] = useState(false);
   const [errors, setErrors] = useState({});
+
+  useEffect(() => {
+    let active = true;
+
+    const hydrateSenderDetails = async () => {
+      try {
+        const response = await userAuthService.getCurrentUser();
+        const user = response?.data?.user || response?.data?.data || {};
+
+        if (!active || (!user?.name && !user?.phone)) {
+          return;
+        }
+
+        const nextName = user.name || '';
+        const nextPhone = user.phone || '';
+
+        if (nextName || nextPhone) {
+          window.localStorage.setItem('userInfo', JSON.stringify({
+            ...storedUser,
+            ...user,
+          }));
+        }
+
+        setSenderName((current) => {
+          const normalized = String(current || '').trim();
+          const storedName = String(storedUser?.name || '').trim();
+
+          if (!normalized || normalized === storedName) {
+            return nextName || current;
+          }
+
+          return current;
+        });
+
+        setSenderMobile((current) => {
+          const normalized = String(current || '').trim();
+          const storedPhone = String(storedUser?.phone || '').trim();
+
+          if (!normalized || normalized === storedPhone) {
+            return nextPhone || current;
+          }
+
+          return current;
+        });
+      } catch {
+        // Keep local fallback if profile fetch is unavailable.
+      }
+    };
+
+    hydrateSenderDetails();
+
+    return () => {
+      active = false;
+    };
+  }, [storedUser]);
 
   const pickupSuggestions = useMemo(
     () => POPULAR_LOCATIONS.filter((item) => item.toLowerCase().includes(String(pickup || '').toLowerCase())).slice(0, 4),

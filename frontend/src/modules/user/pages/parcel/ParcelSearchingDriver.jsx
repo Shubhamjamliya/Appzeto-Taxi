@@ -17,7 +17,8 @@ const unwrapLoginPayload = (response) => {
 };
 const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '4.9', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted' };
-const ACTIVE_DELIVERY_POLL_MS = 8000;
+const ACTIVE_DELIVERY_POLL_MS = 1500;
+const SEARCH_TIMEOUT_MS = 20000;
 
 const withUserAuthorization = (token) => (
   token
@@ -79,6 +80,19 @@ const pickParcelVehicles = (types = [], preferredType = '') => {
     return matches;
   }
 
+  if (!preferredLabels.length) {
+    const parcelMatches = activeTypes.filter((type) => {
+      const value = `${type.name || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
+      return value.includes('bike') || value.includes('delivery') || value.includes('parcel') || value.includes('car');
+    });
+
+    if (parcelMatches.length > 0) {
+      return parcelMatches;
+    }
+
+    return activeTypes;
+  }
+
   const parcelFirst = activeTypes.find((type) => {
     const value = `${type.name || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
     return value.includes('bike') || value.includes('delivery') || value.includes('parcel');
@@ -133,6 +147,7 @@ const ParcelSearchingDriver = () => {
   const [searchStatus, setSearchStatus] = useState('Preparing your parcel booking...');
   const [bookingError, setBookingError] = useState('');
   const activeRidePollRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
   const requestStartedRef = useRef(false);
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
@@ -180,6 +195,7 @@ const ParcelSearchingDriver = () => {
       saveCurrentRide(nextRide);
 
       clearInterval(activeRidePollRef.current);
+      clearTimeout(searchTimeoutRef.current);
       setTimeout(() => {
         navigate('/parcel/tracking', { state: nextRide });
       }, 1400);
@@ -190,7 +206,7 @@ const ParcelSearchingDriver = () => {
         ...withUserAuthorization(token),
         params: { t: Date.now() },
       });
-      const activeDelivery = activeResponse?.data || activeResponse;
+      const activeDelivery = unwrap(activeResponse);
       if (!activeDelivery?.rideId) return null;
       return activeDelivery;
     };
@@ -232,11 +248,13 @@ const ParcelSearchingDriver = () => {
       setBookingError(reason || 'No drivers accepted the parcel request.');
       setSearchStatus(reason || 'No drivers accepted the parcel request.');
       setStage(STAGES.SEARCHING);
+      clearTimeout(searchTimeoutRef.current);
     };
 
     const onError = ({ message }) => {
       setBookingError(message || 'Could not create parcel booking.');
       setSearchStatus(message || 'Could not create parcel booking.');
+      clearTimeout(searchTimeoutRef.current);
     };
 
     socketService.on('rideSearchUpdate', onRideSearchUpdate);
@@ -289,6 +307,8 @@ const ParcelSearchingDriver = () => {
           goodsTypeFor: preferredVehicleType || routeState.parcel?.goodsTypeFor || 'both',
         };
 
+        const socket = socketService.connect({ role: 'user', token: userToken });
+
         const response = await api.post('/deliveries', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
@@ -301,11 +321,10 @@ const ParcelSearchingDriver = () => {
           parcel: parcelPayload,
         }, rideRequestConfig);
 
-        const payload = response?.data || response;
+        const payload = unwrap(response);
         const rideId = payload?.rideId || payload?.realtime?.rideId || payload?.ride?._id || payload?._id || payload?.id;
         activeRideIdRef.current = String(rideId || '');
 
-        const socket = socketService.connect({ role: 'user', token: userToken });
         if (socket && rideId) {
           socketService.emit('joinRide', { rideId });
           socketService.emit('ride:join', { rideId });
@@ -314,9 +333,24 @@ const ParcelSearchingDriver = () => {
         const pollActiveRide = async () => {
           try {
             const activeRide = await hydrateAcceptedDelivery(userToken);
-            if (!activeRide?.rideId) return;
+            if (!activeRide?.rideId) {
+              if (activeRideIdRef.current && !trackingStartedRef.current) {
+                clearInterval(activeRidePollRef.current);
+                setBookingError('No drivers accepted the parcel request.');
+                setSearchStatus('No drivers accepted the parcel request.');
+              }
+              return;
+            }
+
             const isThisRide = String(activeRide.rideId || '') === String(rideId || '');
+            const rideState = String(activeRide.status || activeRide.liveStatus || '').toLowerCase();
             const isAcceptedRide = ['accepted', 'arriving', 'started', 'ongoing'].includes(String(activeRide.status || activeRide.liveStatus || '').toLowerCase());
+
+            if (isThisRide && ['searching', 'pending'].includes(rideState)) {
+              setStage(STAGES.SEARCHING);
+              setSearchStatus('Parcel booking created. Searching nearby drivers...');
+            }
+
             if (isThisRide && isAcceptedRide) {
               moveToTracking({ acceptedDriver: activeRide.driver || driverRef.current, rideId: activeRide.rideId, rideSnapshot: activeRide });
             }
@@ -330,15 +364,45 @@ const ParcelSearchingDriver = () => {
         activeRidePollRef.current = setInterval(pollActiveRide, ACTIVE_DELIVERY_POLL_MS);
         pollActiveRide();
         setSearchStatus('Parcel booking created. Searching nearby drivers...');
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(async () => {
+          if (trackingStartedRef.current) {
+            return;
+          }
+
+          const activeRide = await hydrateAcceptedDelivery(userToken).catch(() => null);
+          const rideState = String(activeRide?.status || activeRide?.liveStatus || '').toLowerCase();
+
+          if (!activeRide?.rideId || rideState === 'cancelled') {
+            setBookingError('No drivers accepted the parcel request.');
+            setSearchStatus('No drivers accepted the parcel request.');
+            clearInterval(activeRidePollRef.current);
+            return;
+          }
+
+          if (['accepted', 'arriving', 'started', 'ongoing'].includes(rideState)) {
+            moveToTracking({
+              acceptedDriver: activeRide.driver || driverRef.current,
+              rideId: activeRide.rideId,
+              rideSnapshot: activeRide,
+            });
+            return;
+          }
+
+          setBookingError('Still searching. Try again or keep waiting for a driver.');
+          setSearchStatus('Still searching. Try again or keep waiting for a driver.');
+        }, SEARCH_TIMEOUT_MS);
       } catch (error) {
         const message = error?.message || 'Could not create parcel booking.';
         setBookingError(message);
         setSearchStatus(message);
+        clearTimeout(searchTimeoutRef.current);
       }
     })();
 
     return () => {
       clearInterval(activeRidePollRef.current);
+      clearTimeout(searchTimeoutRef.current);
       socketService.off('rideSearchUpdate', onRideSearchUpdate);
       socketService.off('rideAccepted', onRideAccepted);
       socketService.off('ride:state', onRideState);

@@ -19,6 +19,11 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    profileImage: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     gender: {
       type: String,
       default: '',
@@ -106,6 +111,11 @@ const driverSchema = new mongoose.Schema(
       default: 5,
       min: 0,
       max: 5,
+    },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
     },
     wallet: {
       balance: {

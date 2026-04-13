@@ -19,6 +19,7 @@ import {
   registerDriver,
   startOnboarding,
   topUpMyWallet,
+  updateCurrentDriver,
   updateDriverVehicle,
   verifyOnboardingOtp,
   verifyDriverLoginOtpRequest,
@@ -31,6 +32,7 @@ driverRouter.post('/login', asyncHandler(loginDriver));
 driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
 driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
+driverRouter.patch('/me', authenticate(['driver']), asyncHandler(updateCurrentDriver));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));

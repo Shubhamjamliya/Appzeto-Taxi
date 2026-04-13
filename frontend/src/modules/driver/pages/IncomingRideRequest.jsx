@@ -70,88 +70,88 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   };
 
   return (
-    <AnimatePresence>
+    <AnimatePresence mode="wait">
       <Motion.div
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/65 px-3 pb-4 pt-16 backdrop-blur-md"
+        className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/40 px-3 pb-6 sm:pb-8 backdrop-blur-sm"
       >
         <Motion.div
-          initial={{ y: '105%', scale: 0.98 }}
+          initial={{ y: '100%', scale: 0.95 }}
           animate={{ y: 0, scale: 1 }}
-          exit={{ y: '105%', scale: 0.98 }}
-          transition={{ type: 'spring', stiffness: 280, damping: 26 }}
-          className="relative w-full max-w-[430px] overflow-hidden rounded-[32px] border border-white/80 bg-white shadow-[0_28px_80px_rgba(15,23,42,0.35)]"
+          exit={{ y: '100%', scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="relative w-full max-w-[440px] overflow-hidden rounded-[32px] bg-white shadow-[0_40px_100px_rgba(0,0,0,0.15)] border border-slate-100"
         >
-          <div className="absolute inset-x-0 top-0 h-1.5 bg-slate-100">
+          {/* Progress Header */}
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-slate-50">
             <Motion.div
-              className="h-full rounded-r-full bg-slate-950"
+              className={`h-full rounded-r-full ${isParcel ? 'bg-orange-400' : 'bg-slate-900'}`}
               animate={{ width: `${timerProgress}%` }}
-              transition={{ duration: 0.35, ease: 'easeOut' }}
+              transition={{ duration: 0.4 }}
             />
           </div>
 
-          <div className="px-6 pb-6 pt-7">
-            <div className="mb-5 flex items-start justify-between gap-4">
-              <div className="flex items-start gap-3">
-                <div className={`flex h-[52px] w-[52px] items-center justify-center rounded-[18px] shadow-sm ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-950 text-white'}`}>
-                  {isParcel ? <Package size={25} strokeWidth={2.6} /> : <Bike size={25} strokeWidth={2.6} />}
+          <div className="px-6 pb-6 pt-8">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`flex h-[60px] w-[60px] items-center justify-center rounded-2xl shadow-sm ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-900 text-white'}`}>
+                  {isParcel ? <Package size={28} /> : <Bike size={28} />}
                 </div>
-                <div className="min-w-0">
-                  <div className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-[10px] font-black uppercase tracking-[0.16em] ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-700'}`}>
+                <div>
+                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
                     {title}
                   </div>
-                  <h2 className="mt-2 text-[23px] font-black leading-none tracking-tight text-slate-950">Incoming Order</h2>
-                  <p className="mt-1 line-clamp-1 text-[12px] font-bold text-slate-500">{category}</p>
+                  <h2 className="mt-1 text-[22px] font-bold tracking-tight text-slate-950">Incoming Order</h2>
+                  <p className="text-[12px] font-medium text-slate-500">{category}</p>
                 </div>
               </div>
 
-              <div className="flex h-[58px] w-[58px] shrink-0 flex-col items-center justify-center rounded-[20px] bg-slate-950 text-white shadow-[0_14px_30px_rgba(15,23,42,0.25)]">
-                <Clock size={14} className="mb-0.5 text-white/70" strokeWidth={2.6} />
-                <span className="text-[20px] font-black leading-none">{timer}</span>
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-slate-50 bg-slate-50 shadow-inner">
+                <span className="text-[22px] font-bold text-slate-900">{timer}</span>
+                <Clock size={12} className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-slate-100 rounded-full text-slate-400" />
               </div>
             </div>
 
-            <div className="mb-5 grid grid-cols-3 overflow-hidden rounded-[24px] border border-slate-100 bg-slate-50 shadow-inner">
-              <div className="px-3 py-4 text-center">
-                <Navigation size={16} className="mx-auto mb-1.5 text-slate-400" strokeWidth={2.6} />
-                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Distance</p>
-                <p className="mt-1 text-[13px] font-black leading-tight text-slate-950">{data.distance}</p>
-              </div>
-              <div className="border-x border-slate-100 px-3 py-4 text-center">
-                <Banknote size={16} className="mx-auto mb-1.5 text-slate-400" strokeWidth={2.6} />
-                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Earnings</p>
-                <p className="mt-1 text-[18px] font-black leading-none text-slate-950">{data.fare}</p>
-              </div>
-              <div className="px-3 py-4 text-center">
-                <CreditCard size={16} className="mx-auto mb-1.5 text-slate-400" strokeWidth={2.6} />
-                <p className="text-[9px] font-black uppercase tracking-[0.16em] text-slate-400">Method</p>
-                <p className="mt-1 text-[13px] font-black leading-tight text-emerald-600">{payment}</p>
-              </div>
+            {/* Quick Stats */}
+            <div className="mb-6 flex items-center justify-between px-2 py-4 rounded-[22px] bg-slate-50/70 border border-slate-100/50">
+               <div className="text-center flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Distance</p>
+                  <p className="text-[15px] font-bold text-slate-900">{data.distance}</p>
+               </div>
+               <div className="w-px h-8 bg-slate-200" />
+               <div className="text-center flex-[1.5] px-4">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Earnings</p>
+                  <p className="text-[20px] font-bold text-slate-900 leading-none">{data.fare}</p>
+               </div>
+               <div className="w-px h-8 bg-slate-200" />
+               <div className="text-center flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Payment</p>
+                  <p className="text-[13px] font-bold text-emerald-600">{payment}</p>
+               </div>
             </div>
 
-            <div className="mb-5 rounded-[26px] border border-slate-100 bg-white px-4 py-4 shadow-[0_12px_34px_rgba(15,23,42,0.06)]">
-              <div className="grid grid-cols-[20px_1fr] gap-x-3">
-                <div className="flex flex-col items-center">
-                  <div className="mt-1 h-3 w-3 rounded-full border-[3px] border-slate-950 bg-white" />
-                  <div className="my-2 h-10 w-px border-l border-dashed border-slate-300" />
-                  <div className="h-3 w-3 rounded-full bg-orange-500 ring-[3px] ring-orange-100" />
-                </div>
-                <div className="space-y-5">
-                  <div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                      <MapPin size={12} strokeWidth={2.8} />
-                      Pickup Point
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-[14px] font-black leading-snug text-slate-950">{data.pickup}</p>
+            {/* Journey Timeline */}
+            <div className="mb-6 relative">
+              <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] border-l-2 border-dashed border-slate-100" />
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="relative z-10 mt-1.5 h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-white shadow-sm" />
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup Point</p>
+                    <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-950 truncate max-w-[280px]">
+                      {data.raw?.pickupAddress || data.pickup}
+                    </p>
                   </div>
-                  <div>
-                    <div className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-[0.18em] text-slate-400">
-                      <MapPin size={12} strokeWidth={2.8} />
-                      Drop Point
-                    </div>
-                    <p className="mt-1 line-clamp-2 text-[14px] font-black leading-snug text-slate-950">{data.drop}</p>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="relative z-10 mt-1.5 h-3.5 w-3.5 rounded-full border-2 border-orange-500 bg-white shadow-sm" />
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Drop Point</p>
+                    <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-950 truncate max-w-[280px]">
+                      {data.raw?.dropAddress || data.drop}
+                    </p>
                   </div>
                 </div>
               </div>
@@ -162,42 +162,31 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                 type="button"
                 onClick={onDecline}
                 disabled={isAccepting}
-                className="flex h-[60px] w-[64px] shrink-0 items-center justify-center rounded-[20px] border border-slate-100 bg-white text-slate-400 shadow-[0_10px_24px_rgba(15,23,42,0.08)] transition-colors hover:text-rose-500 disabled:pointer-events-none disabled:opacity-50"
-                aria-label="Decline request"
+                className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white text-slate-400 shadow-sm active:scale-95 transition-all hover:text-rose-500"
               >
-                <X size={25} strokeWidth={2.6} />
+                <X size={26} />
               </button>
 
-              <div className="relative h-[60px] flex-1 overflow-hidden rounded-[20px] bg-slate-950 shadow-[0_16px_34px_rgba(15,23,42,0.24)]">
-                <Motion.div style={{ width: slideFillWidth }} className="absolute inset-y-0 left-0 rounded-[20px] bg-emerald-500" />
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center pl-14 pr-4">
-                  <span className="truncate text-[12px] font-black uppercase tracking-[0.18em] text-white/80">
+              <div className="relative h-[64px] flex-1 overflow-hidden rounded-2xl bg-slate-900 shadow-xl shadow-slate-200">
+                <Motion.div style={{ width: slideFillWidth }} className="absolute inset-y-0 left-0 rounded-2xl bg-emerald-500" />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center pl-10">
+                  <span className="text-[13px] font-bold uppercase tracking-[0.1em] text-white">
                     {isAccepting ? 'Accepting...' : 'Slide to accept'}
                   </span>
-                  <ArrowRight size={16} className="ml-2 shrink-0 text-white/70" strokeWidth={3} />
+                  {!isAccepting && <ArrowRight size={18} className="ml-2 text-white/50" />}
                 </div>
                 <Motion.div
                   drag={isAccepting ? false : 'x'}
                   dragConstraints={{ left: 0, right: 180 }}
-                  dragElastic={0.02}
+                  dragElastic={0.05}
                   dragMomentum={false}
                   style={{ x: slideX }}
                   onDragEnd={handleSlideEnd}
-                  className="absolute left-1.5 top-1.5 z-10 flex h-12 w-12 cursor-grab items-center justify-center rounded-[16px] bg-white text-slate-950 shadow-xl active:cursor-grabbing"
+                  className="absolute left-1 top-1 z-10 flex h-[56px] w-[56px] cursor-grab items-center justify-center rounded-[14px] bg-white text-slate-950 shadow-lg active:cursor-grabbing"
                 >
-                  <ChevronRight size={25} strokeWidth={3} />
+                  <ChevronRight size={28} />
                 </Motion.div>
               </div>
-
-              <Motion.button
-                type="button"
-                whileTap={{ scale: 0.98 }}
-                onClick={() => onAccept(data)}
-                disabled={isAccepting}
-                className="hidden h-[60px] shrink-0 items-center justify-center gap-2 rounded-[20px] bg-slate-950 px-5 text-[14px] font-black text-white shadow-[0_16px_34px_rgba(15,23,42,0.24)] disabled:opacity-70 sm:flex"
-              >
-                Accept <ArrowRight size={18} strokeWidth={2.8} />
-              </Motion.button>
             </div>
           </div>
         </Motion.div>

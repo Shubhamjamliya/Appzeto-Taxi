@@ -90,8 +90,8 @@ const RideComplete = () => {
             <CheckCircle2 size={22} className="text-white" strokeWidth={2.5} />
           </div>
           <div>
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Ride Completed</p>
-            <h1 className="text-[19px] font-black text-slate-900 tracking-tight leading-tight">You've Arrived!</h1>
+            <p className="text-[9px] font-bold uppercase tracking-wider text-slate-400">Ride Completed</p>
+            <h1 className="text-[19px] font-bold text-slate-900 tracking-tight leading-tight">You've Arrived!</h1>
           </div>
         </motion.div>
 
@@ -106,7 +106,7 @@ const RideComplete = () => {
                 <Receipt size={13} className="text-orange-400" strokeWidth={2} />
               </div>
               <div>
-                <p className="text-white font-black text-[13px] leading-tight">Trip Invoice</p>
+                <p className="text-white font-bold text-[13px] leading-tight">Trip Invoice</p>
                 <p className="text-slate-400 text-[9px] font-bold">{rideDate} · {rideEndTime}</p>
               </div>
             </div>
@@ -119,7 +119,7 @@ const RideComplete = () => {
 
           {/* Route */}
           <div className="px-4 py-3 border-b border-slate-50">
-            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400 mb-2">Route</p>
+            <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mb-2">Route</p>
             <div className="flex gap-2.5">
               <div className="flex flex-col items-center pt-1 gap-0.5">
                 <div className="w-2 h-2 rounded-full bg-emerald-500 border-2 border-white shadow-sm" />
@@ -134,7 +134,7 @@ const RideComplete = () => {
               </div>
               <div className="flex-1 space-y-1.5">
                 <div>
-                  <p className="text-[12px] font-black text-slate-900 leading-tight">{pickup}</p>
+                  <p className="text-[12px] font-bold text-slate-900 leading-tight">{pickup}</p>
                   <p className="text-[9px] font-bold text-slate-400">Pickup</p>
                 </div>
                 {stops.map((s, i) => (
@@ -144,7 +144,7 @@ const RideComplete = () => {
                   </div>
                 ))}
                 <div>
-                  <p className="text-[12px] font-black text-slate-900 leading-tight">{drop}</p>
+                  <p className="text-[12px] font-bold text-slate-900 leading-tight">{drop}</p>
                   <p className="text-[9px] font-bold text-slate-400">Drop</p>
                 </div>
               </div>
@@ -158,21 +158,21 @@ const RideComplete = () => {
                 className="w-full h-full object-cover" alt="Driver" />
             </div>
             <div className="flex-1 min-w-0">
-              <p className="text-[13px] font-black text-slate-900 leading-tight">{driver.name}</p>
+              <p className="text-[13px] font-bold text-slate-900 leading-tight">{driver.name}</p>
               <p className="text-[10px] font-bold text-slate-400">{driver.vehicle} · {driver.plate}</p>
             </div>
             <div className="flex items-center gap-1 bg-yellow-50 border border-yellow-100 rounded-full px-2 py-0.5 shrink-0">
               <Star size={9} className="text-yellow-500 fill-yellow-500" />
-              <span className="text-[10px] font-black text-slate-800">{driver.rating || '4.9'}</span>
+              <span className="text-[10px] font-bold text-slate-800">{driver.rating || '4.9'}</span>
             </div>
           </div>
 
           {/* Fare breakdown */}
           <div className="px-4 py-3 space-y-1.5">
-            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400 mb-1.5">Fare Breakdown</p>
+            <p className="text-[8px] font-bold uppercase tracking-wider text-slate-400 mb-1.5">Fare Breakdown</p>
             <div className="flex justify-between items-center">
               <span className="text-[12px] font-bold text-slate-500">Base Fare</span>
-              <span className="text-[12px] font-black text-slate-900">₹{fare}.00</span>
+              <span className="text-[12px] font-bold text-slate-900">₹{fare}.00</span>
             </div>
             {effectiveTip > 0 && (
               <div className="flex justify-between items-center">
@@ -181,8 +181,8 @@ const RideComplete = () => {
               </div>
             )}
             <div className="border-t border-slate-50 pt-1.5 flex justify-between items-center">
-              <span className="text-[14px] font-black text-slate-900">Total</span>
-              <span className="text-[17px] font-black text-slate-900 tracking-tight">₹{totalBill}.00</span>
+              <span className="text-[14px] font-bold text-slate-900">Total</span>
+              <span className="text-[17px] font-bold text-slate-900 tracking-tight">₹{totalBill}.00</span>
             </div>
             <div className="flex justify-between items-center">
               <span className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Payment</span>
@@ -222,7 +222,7 @@ const RideComplete = () => {
                   <span className="text-[13px] font-black text-slate-400">₹</span>
                   <input type="number" placeholder="Enter tip amount" value={customTip}
                     onChange={(e) => setCustomTip(e.target.value)}
-                    className="flex-1 bg-transparent border-none text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-300" />
+                    className="flex-1 bg-transparent border-none text-[13px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300" />
                 </div>
               </motion.div>
             )}
@@ -238,7 +238,7 @@ const RideComplete = () => {
         {/* Rating section */}
         <motion.div initial={{ y: 12, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.26 }}
           className="rounded-[18px] border border-white/80 bg-white/90 shadow-[0_4px_12px_rgba(15,23,42,0.05)] px-4 py-3 space-y-2.5 text-center">
-          <p className="text-[13px] font-black text-slate-900">How was your ride with {driver.name?.split(' ')[0]}?</p>
+          <p className="text-[13px] font-bold text-slate-900">How was your ride with {driver.name?.split(' ')[0]}?</p>
           <div className="flex justify-center gap-1.5">
             {[1, 2, 3, 4, 5].map((num) => (
               <motion.button key={num} whileTap={{ scale: 0.9 }} onClick={() => handleRating(num)}
@@ -271,7 +271,7 @@ const RideComplete = () => {
             </motion.button>
           </div>
           <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate('/')}
-            className="w-full bg-slate-900 py-3.5 rounded-[16px] text-[14px] font-black text-white shadow-[0_6px_20px_rgba(15,23,42,0.18)] flex items-center justify-center gap-2">
+            className="w-full bg-slate-900 py-3.5 rounded-[16px] text-[14px] font-bold text-slate-900 shadow-[0_6px_20px_rgba(15,23,42,0.18)] flex items-center justify-center gap-2">
             Back to Home <ChevronRight size={15} strokeWidth={3} className="opacity-50" />
           </motion.button>
         </motion.div>

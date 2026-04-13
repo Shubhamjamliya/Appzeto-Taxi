@@ -157,6 +157,7 @@ export const getCurrentDriver = async (req, res) => {
       name: driver.name,
       phone: driver.phone,
       email: driver.email,
+      profileImage: driver.profileImage || '',
       gender: driver.gender,
       vehicleType: driver.vehicleType,
       vehicleTypeId: driver.vehicleTypeId,
@@ -177,6 +178,39 @@ export const getCurrentDriver = async (req, res) => {
       zoneId: driver.zoneId,
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+export const updateCurrentDriver = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'name')) {
+    driver.name = String(req.body.name || '').trim();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'email')) {
+    driver.email = String(req.body.email || '').trim().toLowerCase();
+  }
+
+  if (Object.prototype.hasOwnProperty.call(req.body || {}, 'profileImage')) {
+    driver.profileImage = String(req.body.profileImage || '').trim();
+  }
+
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      id: driver._id,
+      name: driver.name,
+      phone: driver.phone,
+      email: driver.email,
+      profileImage: driver.profileImage || '',
     },
   });
 };

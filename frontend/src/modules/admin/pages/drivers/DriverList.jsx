@@ -1,7 +1,21 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  Search, MoreVertical, FileText, Star, Plus, Eye, Edit2, Key,
-  XCircle, Trash2, Lock, Loader2, ChevronRight
+import {
+  Search,
+  MoreVertical,
+  FileText,
+  Star,
+  Plus,
+  Eye,
+  Edit2,
+  Key,
+  XCircle,
+  Trash2,
+  Lock,
+  Loader2,
+  ChevronRight,
+  Filter,
+  List,
+  LayoutGrid
 } from 'lucide-react';
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
@@ -34,11 +48,11 @@ const DriverList = () => {
           }).map(d => ({
             id: d._id,
             name: d.name || 'Unknown',
-            serviceLocation: d.city || d.service_location?.name || 'India',
+            serviceLocation: d.service_location_name || d.city || d.service_location?.name || 'India',
             phone: d.phone || d.mobile || 'N/A',
             transportType: d.transport_type || d.register_for || d.vehicle_type || 'All - Bike',
             rating: d.rating || d.average_rating || d.avg_rating || 0,
-            registeredAt: d.createdAt ? new Date(d.createdAt).toLocaleString() : 'N/A',
+            registeredAt: d.createdAt || null,
             status: d.approve ? 'Approved' : (d.status || 'Approved')
           }));
           setDrivers(approved);
@@ -123,7 +137,7 @@ const DriverList = () => {
       if (action === 'delete') {
         resData = await adminService.deleteDriver(driverId);
       } else if (action === 'disapprove') {
-        resData = await adminService.updateDriverStatus(driverId, { approve: false, status: 'inactive', active: false });
+        resData = await adminService.updateDriverStatus(driverId, { approve: false, status: 'disapproved', active: false });
       } else if (action === 'password') {
         setPasswordModal(prev => ({ ...prev, isSubmitting: true }));
         resData = await adminService.updateDriverPassword(driverId, passwordModal.password);
@@ -152,6 +166,18 @@ const DriverList = () => {
     d.phone.includes(searchTerm)
   );
 
+  const formatDate = (value) => {
+    if (!value) return 'N/A';
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return 'N/A';
+    return date.toLocaleString('en-IN', {
+      day: '2-digit',
+      month: 'short',
+      hour: '2-digit',
+      minute: '2-digit',
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
       {error && (
@@ -159,50 +185,64 @@ const DriverList = () => {
           {error}
         </div>
       )}
-      {/* Breadcrumb */}
-      <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-        <span>Drivers</span>
-        <ChevronRight size={12} />
-        <span className="text-gray-700">Approved Drivers</span>
-      </div>
-
-      {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-semibold text-gray-900">Approved Drivers</h1>
-        <button 
-          onClick={() => navigate('/admin/drivers/create')}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
-        >
-          <Plus size={15} /> Add Driver
-        </button>
+      <div className="mb-6">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Drivers</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Approved Drivers</span>
+        </div>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900">Approved Drivers</h1>
+          <button
+            onClick={() => navigate('/admin/drivers/create')}
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+          >
+            <Plus size={15} /> Add Drivers
+          </button>
+        </div>
       </div>
 
       {/* Table Card */}
       <div className="bg-white rounded-xl border border-gray-200 overflow-visible">
-        {/* Toolbar */}
-        <div className="p-4 border-b border-gray-100 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>Show</span>
-            <select 
-              value={itemsPerPage}
-              onChange={(e) => setItemsPerPage(e.target.value)}
-              className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
-            >
-              <option value={10}>10</option>
-              <option value={25}>25</option>
-              <option value={50}>50</option>
-            </select>
-            <span>entries</span>
+        <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <button className="w-10 h-10 bg-teal-500 text-white rounded-lg flex items-center justify-center shadow-sm">
+              <List size={18} />
+            </button>
+            <button className="w-10 h-10 bg-gray-100 text-gray-400 rounded-lg flex items-center justify-center hover:bg-indigo-50 transition-all">
+              <LayoutGrid size={18} />
+            </button>
+            <div className="flex items-center gap-2 text-xs text-gray-500 ml-4">
+              <span>Show</span>
+              <select
+                value={itemsPerPage}
+                onChange={(e) => setItemsPerPage(e.target.value)}
+                className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
+              >
+                <option value={10}>10</option>
+                <option value={25}>25</option>
+                <option value={50}>50</option>
+              </select>
+              <span>entries</span>
+            </div>
           </div>
-          <div className="relative">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-            <input 
-              type="text" 
-              placeholder="Search drivers..." 
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-56 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
-            />
+          <div className="flex items-center gap-3">
+            <button className="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-400 flex items-center justify-center shadow-sm">
+              <Search size={16} />
+            </button>
+            <button className="bg-orange-500 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm uppercase tracking-wide">
+              <Filter size={14} /> Filters
+            </button>
+            <div className="relative">
+              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search drivers..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-56 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+              />
+            </div>
           </div>
         </div>
 
@@ -212,14 +252,14 @@ const DriverList = () => {
             <thead>
               <tr className="bg-gray-50 border-b border-gray-100">
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Name</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Location</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mobile</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Transport</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Docs</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Status</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Service Location</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mobile Number</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Transport Type</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Document View</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Approved Status</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Rating</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Registered</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Actions</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Registered at</th>
+                <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Action</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
@@ -244,7 +284,10 @@ const DriverList = () => {
                     <td className="px-4 py-4 text-sm text-gray-500">{driver.phone}</td>
                     <td className="px-4 py-4 text-sm text-gray-500">{driver.transportType}</td>
                     <td className="px-4 py-4">
-                      <button className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                      <button
+                        onClick={() => navigate(`/admin/drivers/${driver.id}?tab=Documents`)}
+                        className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                      >
                         <FileText size={16} />
                       </button>
                     </td>
@@ -260,7 +303,7 @@ const DriverList = () => {
                         ))}
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-xs text-gray-400 whitespace-nowrap">{driver.registeredAt}</td>
+                    <td className="px-4 py-4 text-xs text-gray-400 whitespace-nowrap">{formatDate(driver.registeredAt)}</td>
                     <td className="px-4 py-4 text-center">
                       <div className="relative inline-block">
                         <button 
@@ -305,11 +348,11 @@ const DriverList = () => {
             <button
               onClick={() => {
                 closeMenu();
-                navigate(`/admin/drivers/${activeMenu}`);
+                handleAction('disapprove', activeMenu);
               }}
-              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
             >
-              <Eye size={13} className="text-gray-400" /> View Profile
+              <XCircle size={13} /> Disapprove
             </button>
             <button
               onClick={() => {
@@ -332,11 +375,11 @@ const DriverList = () => {
             <button
               onClick={() => {
                 closeMenu();
-                handleAction('disapprove', activeMenu);
+                navigate(`/admin/drivers/${activeMenu}`);
               }}
-              className="w-full text-left px-3 py-2 text-xs text-red-500 hover:bg-red-50 flex items-center gap-2"
+              className="w-full text-left px-3 py-2 text-xs text-gray-700 hover:bg-gray-50 flex items-center gap-2"
             >
-              <XCircle size={13} /> Disapprove
+              <Eye size={13} className="text-gray-400" /> View Profile
             </button>
             <div className="h-px bg-gray-100 my-1" />
             <button

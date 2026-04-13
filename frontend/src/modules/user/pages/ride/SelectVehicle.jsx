@@ -92,7 +92,7 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
     return (
       <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
         <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-          <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+          <p className="text-[12px] font-bold text-slate-900">Google Maps key missing</p>
           <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
         </div>
       </div>
@@ -103,7 +103,7 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
     return (
       <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
         <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-          <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+          <p className="text-[12px] font-bold text-slate-900">Google Maps failed to load</p>
           <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
         </div>
       </div>
@@ -115,7 +115,7 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
       <div className="flex h-full w-full items-center justify-center bg-slate-200">
         <div className="flex items-center gap-2 rounded-[16px] bg-white/90 px-4 py-3 shadow-sm">
           <LoaderCircle size={18} className="animate-spin text-slate-500" />
-          <span className="text-[12px] font-black text-slate-700">Loading map</span>
+          <span className="text-[12px] font-bold text-slate-700">Loading map</span>
         </div>
       </div>
     );
@@ -195,13 +195,13 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
       </GoogleMap>
 
       <div className="pointer-events-none absolute bottom-24 left-4 rounded-[12px] border border-white/70 bg-white/90 px-3 py-2 shadow-sm">
-        <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Pickup</p>
-        <p className="text-[11px] font-black text-slate-800">{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</p>
+        <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup</p>
+        <p className="text-[11px] font-bold text-slate-800">{center.lat.toFixed(4)}, {center.lng.toFixed(4)}</p>
       </div>
       {routeError && (
         <div className="pointer-events-none absolute bottom-10 left-4 rounded-[12px] border border-amber-100 bg-white/90 px-3 py-2 shadow-sm">
           <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Route</p>
-          <p className="text-[11px] font-black text-slate-700">Using fallback path while directions load.</p>
+          <p className="text-[11px] font-bold text-slate-700">Using fallback path while directions load.</p>
         </div>
       )}
     </div>
@@ -454,8 +454,8 @@ const SelectVehicle = () => {
           >
             <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
           </motion.button>
-          <div className="flex-1 bg-white/95 rounded-[14px] px-4 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.10)] flex items-center gap-2">
-            <span className="text-[14px] font-black text-slate-800 truncate flex-1">{pickup}</span>
+          <div className="flex-1 min-w-0 bg-white/95 rounded-[14px] px-4 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.10)] flex items-center gap-2">
+            <span className="text-[14px] font-bold text-slate-800 truncate flex-1">{pickup}</span>
             <X size={15} className="text-slate-400 shrink-0" />
           </div>
         </div>
@@ -469,8 +469,8 @@ const SelectVehicle = () => {
               className="absolute bottom-20 left-4 right-4 bg-white/95 backdrop-blur-md border border-white/80 rounded-[18px] flex items-center overflow-hidden z-30 shadow-[0_8px_24px_rgba(15,23,42,0.10)] pr-3"
             >
               <div className="flex-1 px-4 py-3">
-                <p className="text-[12px] font-black text-slate-900 leading-tight">Going a few kms away?</p>
-                <p className="text-[10px] font-black text-orange-500 mt-0.5 uppercase tracking-wider">Use GOFREE on 1st cab ride</p>
+                <p className="text-[12px] font-bold text-slate-900 leading-tight">Going a few kms away?</p>
+                <p className="text-[10px] font-semibold text-orange-500 mt-0.5 uppercase tracking-wider">Use GOFREE on 1st cab ride</p>
               </div>
               <img src="/ride_now_banner.png" className="h-12 w-16 object-cover rounded-[10px] shrink-0" alt="Promo" />
               <button onClick={() => setShowPromo(false)} className="ml-2.5 pl-2.5 border-l border-slate-100">
@@ -482,14 +482,14 @@ const SelectVehicle = () => {
 
         <div className="absolute left-4 right-4 bottom-4 z-20 flex items-center justify-between gap-3">
           <div className="bg-white/95 rounded-[14px] px-3 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.10)] border border-white/80">
-            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Online {selectedVehicleName}</p>
-            <p className="text-[15px] font-black text-slate-900 leading-none mt-1">
+            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Online {selectedVehicleName}</p>
+            <p className="text-[15px] font-bold text-slate-900 leading-none mt-1">
               {isLoadingDrivers ? 'Checking...' : `${onlineDrivers.length} online`}
             </p>
           </div>
           {driverLoadError && (
             <div className="bg-red-50/95 rounded-[14px] px-3 py-2 border border-red-100 max-w-[190px]">
-              <p className="text-[10px] font-black text-red-500 leading-tight">{driverLoadError}</p>
+              <p className="text-[10px] font-bold text-red-500 leading-tight">{driverLoadError}</p>
             </div>
           )}
         </div>
@@ -502,7 +502,7 @@ const SelectVehicle = () => {
           {isLoadingVehicles && (
             <div className="min-h-[220px] flex flex-col items-center justify-center gap-3 text-slate-400">
               <LoaderCircle size={26} className="animate-spin" />
-              <p className="text-[11px] font-black uppercase tracking-widest">Loading vehicle types</p>
+              <p className="text-[11px] font-bold uppercase tracking-widest">Loading vehicle types</p>
             </div>
           )}
 
@@ -515,7 +515,7 @@ const SelectVehicle = () => {
 
           {!isLoadingVehicles && !vehicleLoadError && vehicles.length === 0 && (
             <div className="bg-white/90 border border-slate-100 rounded-[18px] px-4 py-5 text-center">
-              <p className="text-[13px] font-black text-slate-900">No vehicle types available</p>
+              <p className="text-[13px] font-bold text-slate-900">No vehicle types available</p>
               <p className="text-[11px] font-bold text-slate-400 mt-1">Admin needs to create active taxi vehicle types first.</p>
             </div>
           )}
@@ -545,7 +545,7 @@ const SelectVehicle = () => {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[14px] font-black text-slate-900 leading-tight">{v.name}</span>
+                    <span className="text-[14px] font-bold text-slate-900 leading-tight">{v.name}</span>
                     <div className="flex items-center gap-0.5 text-slate-400">
                       <Users size={11} strokeWidth={2.5} />
                       <span className="text-[10px] font-black">{v.capacity}</span>
@@ -561,7 +561,7 @@ const SelectVehicle = () => {
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <span className="text-[17px] font-black text-slate-900 tracking-tighter leading-none">Rs {v.price}</span>
+                  <span className="text-[17px] font-bold text-slate-900 tracking-tighter leading-none">Rs {v.price}</span>
                   {isSelected && (
                     <motion.div
                       initial={{ scale: 0 }}
@@ -585,7 +585,7 @@ const SelectVehicle = () => {
               <div className="w-7 h-7 rounded-[9px] bg-white flex items-center justify-center shadow-sm">
                 {paymentMethod === 'Cash' ? <Banknote size={14} className="text-slate-600" strokeWidth={2} /> : <CreditCard size={14} className="text-slate-600" strokeWidth={2} />}
               </div>
-              <span className="text-[13px] font-black text-slate-800">{paymentMethod}</span>
+              <span className="text-[13px] font-bold text-slate-800">{paymentMethod}</span>
               <ChevronDown size={14} className="text-slate-400" />
             </div>
             <ChevronRight size={15} className="text-slate-300" />
@@ -595,7 +595,7 @@ const SelectVehicle = () => {
             whileTap={selectedVehicle ? { scale: 0.98 } : undefined}
             disabled={!selectedVehicle}
             onClick={handleBook}
-            className="w-full bg-[#f8e001] py-4 rounded-[18px] text-[15px] font-black text-slate-900 shadow-[0_6px_20px_rgba(248,224,1,0.35)] uppercase tracking-tight disabled:opacity-50 disabled:shadow-none"
+            className="w-full bg-[#f8e001] py-4 rounded-[18px] text-[15px] font-bold text-slate-900 shadow-[0_6px_20px_rgba(248,224,1,0.35)] uppercase tracking-tight disabled:opacity-50 disabled:shadow-none"
           >
             {selectedVehicle ? `Book ${selectedVehicle.name}` : 'Select Vehicle'}
           </motion.button>
@@ -620,8 +620,8 @@ const SelectVehicle = () => {
               className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-white rounded-t-[28px] px-5 pt-4 pb-10 z-[101]"
             >
               <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mb-5" />
-              <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400 mb-1">Payment</p>
-              <h3 className="text-[18px] font-black text-slate-900 mb-5">Select Method</h3>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-1">Payment</p>
+              <h3 className="text-[18px] font-bold text-slate-900 mb-5">Select Method</h3>
               <div className="space-y-2.5">
                 {[
                   { id: 'Cash', label: 'Cash', sub: 'Pay after ride', Icon: Banknote, bg: 'bg-green-50', color: 'text-green-600' },
@@ -642,7 +642,7 @@ const SelectVehicle = () => {
                       <Icon size={18} className={color} strokeWidth={2} />
                     </div>
                     <div className="flex-1 text-left">
-                      <p className="text-[14px] font-black text-slate-900">{label}</p>
+                      <p className="text-[14px] font-bold text-slate-900">{label}</p>
                       <p className="text-[11px] font-bold text-slate-400">{sub}</p>
                     </div>
                     {paymentMethod === id && (

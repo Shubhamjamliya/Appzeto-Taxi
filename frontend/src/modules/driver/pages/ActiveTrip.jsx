@@ -23,7 +23,9 @@ import { useNavigate, useLocation } from 'react-router-dom';
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
+import api from '../../../shared/api/axiosInstance';
 import carIcon from '../../../assets/icons/car.png';
+import { getLocalDriverToken } from '../services/registrationService';
 
 const MAP_CONTAINER_STYLE = {
     width: '100%',
@@ -75,6 +77,16 @@ const formatAddressFromPoint = (point, fallback) => {
 };
 
 const buildFallbackRoute = (origin, destination) => [origin, destination];
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const withDriverAuthorization = (token) => (
+    token
+        ? {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+        : {}
+);
 
 const createTaxiMarkerIcon = () => ({
     url: carIcon,
@@ -98,20 +110,101 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
 const ActiveTrip = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const routeState = location.state || {};
+    const [hydratedTripState, setHydratedTripState] = useState(null);
+    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeState?.rideId && !routeState?.request?.rideId);
 
-    const tripType = location.state?.type || 'ride';
+    useEffect(() => {
+        let active = true;
+
+        if (routeState?.rideId || routeState?.request?.rideId) {
+            setIsHydratingTrip(false);
+            return () => {
+                active = false;
+            };
+        }
+
+        const hydrateTripState = async () => {
+            try {
+                const driverToken = getLocalDriverToken();
+                const [activeDelivery, activeRide] = await Promise.allSettled([
+                    api.get('/deliveries/active/me', withDriverAuthorization(driverToken)),
+                    api.get('/rides/active/me', withDriverAuthorization(driverToken)),
+                ]);
+
+                if (!active) {
+                    return;
+                }
+
+                const deliveryPayload =
+                    activeDelivery.status === 'fulfilled' ? unwrapApiPayload(activeDelivery.value) : null;
+                const ridePayload =
+                    activeRide.status === 'fulfilled' ? unwrapApiPayload(activeRide.value) : null;
+
+                const currentJob = deliveryPayload?.rideId
+                    ? deliveryPayload
+                    : ridePayload?.rideId
+                        ? ridePayload
+                        : null;
+
+                if (!currentJob?.rideId) {
+                    navigate('/taxi/driver/home', { replace: true });
+                    return;
+                }
+
+                const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
+                    ? 'parcel'
+                    : 'ride';
+
+                setHydratedTripState({
+                    type: currentType,
+                    rideId: currentJob.rideId,
+                    request: {
+                        type: currentType,
+                        title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                        fare: `Rs ${currentJob.fare || 0}`,
+                        payment: currentJob.paymentMethod || 'Cash',
+                        pickup: formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
+                        drop: formatAddressFromPoint(currentJob.dropLocation, 'Drop Location'),
+                        requestId: currentJob.rideId,
+                        rideId: currentJob.rideId,
+                        raw: currentJob,
+                    },
+                    currentDriverCoords: currentJob.lastDriverLocation?.coordinates || null,
+                });
+            } catch {
+                if (active) {
+                    navigate('/taxi/driver/home', { replace: true });
+                }
+            } finally {
+                if (active) {
+                    setIsHydratingTrip(false);
+                }
+            }
+        };
+
+        hydrateTripState();
+
+        return () => {
+            active = false;
+        };
+    }, [navigate, routeState]);
+
+    const effectiveState = hydratedTripState || routeState;
+
+    const tripType = effectiveState?.type || 'ride';
     const isParcel = tripType === 'parcel';
-    const liveRequest = location.state?.request || {};
+    const liveRequest = effectiveState?.request || {};
     const liveRaw = liveRequest.raw || {};
-    const rideId = liveRequest?.rideId || location.state?.rideId || '';
+    const rideId = liveRequest?.rideId || effectiveState?.rideId || '';
 
-    const pickupCoords = liveRaw.pickupLocation?.coordinates || location.state?.pickupCoords || DEFAULT_DRIVER_COORDS;
-    const dropCoords = liveRaw.dropLocation?.coordinates || location.state?.dropCoords || [75.8937, 22.7533];
+    const pickupCoords = liveRaw.pickupLocation?.coordinates || effectiveState?.pickupCoords || DEFAULT_DRIVER_COORDS;
+    const dropCoords = liveRaw.dropLocation?.coordinates || effectiveState?.dropCoords || [75.8937, 22.7533];
     const assignedDriverCoords =
         liveRaw.driverLocation?.coordinates ||
         liveRequest.driverLocation?.coordinates ||
-        location.state?.driverCoords ||
-        location.state?.currentDriverCoords ||
+        effectiveState?.driverCoords ||
+        effectiveState?.currentDriverCoords ||
         null;
 
     const pickupPosition = useMemo(() => toLatLng(pickupCoords), [pickupCoords]);
@@ -147,18 +240,18 @@ const ActiveTrip = () => {
         },
         pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
         drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
-        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
-        payment: location.state?.paymentMethod || 'Online'
+        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        payment: effectiveState?.paymentMethod || 'Online'
     } : {
         user: { name: 'Vinay Kumar', rating: '4.8', phone: '+91 98765 43210' },
         pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
         drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
-        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
-        payment: liveRequest?.payment || location.state?.paymentMethod || 'Online'
+        fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
+        payment: liveRequest?.payment || effectiveState?.paymentMethod || 'Online'
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
-    const expectedOtp = String(liveRequest?.otp || location.state?.otp || '1234');
+    const expectedOtp = String(liveRequest?.otp || effectiveState?.otp || '1234');
 
     const publishRideStatus = (nextStatus) => {
         if (!rideId) {
@@ -362,6 +455,13 @@ const ActiveTrip = () => {
 
     return (
         <div className="relative mx-auto min-h-[100dvh] max-w-lg overflow-hidden bg-slate-200 font-sans select-none">
+            {isHydratingTrip && (
+                <div className="absolute inset-0 z-[60] flex items-center justify-center bg-slate-200/90 backdrop-blur-sm">
+                    <div className="rounded-[16px] bg-white/95 px-4 py-3 shadow-sm text-[12px] font-semibold text-slate-700">
+                        Restoring active trip...
+                    </div>
+                </div>
+            )}
             <div className="absolute inset-0 z-0 overflow-hidden bg-slate-200">
                 {!HAS_VALID_GOOGLE_MAPS_KEY ? (
                     <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">

@@ -5,6 +5,7 @@ import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
+import api from '../../../../shared/api/axiosInstance';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import carIcon from '../../../../assets/icons/car.png';
 import bikeIcon from '../../../../assets/icons/bike.png';
@@ -39,6 +40,8 @@ const getTrackingVehicleIcon = (ride, driver) => {
   if (iconType.includes('auto')) return autoIcon;
   return carIcon;
 };
+
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -86,6 +89,68 @@ const RideTracking = () => {
   const driver = rideRealtime?.driver || fallbackDriver;
   const vehicleIcon = getTrackingVehicleIcon(state, driver);
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
+
+  useEffect(() => {
+    let active = true;
+
+    if (!rideId) {
+      clearCurrentRide();
+      navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/', { replace: true });
+      return () => {
+        active = false;
+      };
+    }
+
+    const hydrateRideState = async () => {
+      try {
+        const response = await api.get(`/rides/${rideId}`);
+        const payload = unwrapApiPayload(response);
+        const nextStatus = String(payload?.liveStatus || payload?.status || '').toLowerCase();
+
+        if (!active) {
+          return;
+        }
+
+        if (TERMINAL_STATUSES.has(nextStatus)) {
+          clearCurrentRide();
+          navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/', { replace: true });
+          return;
+        }
+
+        setRideRealtime({
+          pickup: {
+            coordinates: payload?.pickupLocation?.coordinates,
+            address: state.pickup || 'Pickup',
+          },
+          drop: {
+            coordinates: payload?.dropLocation?.coordinates,
+            address: state.drop || 'Drop',
+          },
+          driverLocation: payload?.lastDriverLocation
+            ? { coordinates: payload.lastDriverLocation.coordinates }
+            : null,
+          status: payload?.liveStatus || payload?.status || 'accepted',
+          driver: payload?.driver || fallbackDriver,
+        });
+
+        saveCurrentRide({
+          ...state,
+          rideId,
+          driver: payload?.driver || fallbackDriver,
+          status: payload?.status || state.status || 'accepted',
+          liveStatus: payload?.liveStatus || payload?.status || state.liveStatus || state.status || 'accepted',
+        });
+      } catch {
+        // Keep socket and stored state as fallback when direct fetch is unavailable.
+      }
+    };
+
+    hydrateRideState();
+
+    return () => {
+      active = false;
+    };
+  }, [fallbackDriver, location.pathname, navigate, rideId, state]);
 
   useEffect(() => {
     if (!TERMINAL_STATUSES.has(tripStatus)) {
@@ -275,7 +340,7 @@ const RideTracking = () => {
       className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-[14px] border border-slate-100 bg-slate-50/80 transition-all ${colorClass || ''}`}
     >
       <Icon size={17} className="text-slate-700" strokeWidth={2} />
-      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
     </motion.button>
   );
 
@@ -298,14 +363,14 @@ const RideTracking = () => {
         {!HAS_VALID_GOOGLE_MAPS_KEY ? (
           <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
             <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-              <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+              <p className="text-[12px] font-bold text-slate-900">Google Maps key missing</p>
               <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
             </div>
           </div>
         ) : loadError ? (
           <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
             <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-              <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+              <p className="text-[12px] font-bold text-slate-900">Google Maps failed to load</p>
               <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
             </div>
           </div>
@@ -340,12 +405,9 @@ const RideTracking = () => {
               position={driverPosition}
               title="Driver"
               icon={{
-                path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                fillColor: '#f59e0b',
-                fillOpacity: 1,
-                strokeColor: '#ffffff',
-                strokeWeight: 2,
-                scale: 6,
+                url: vehicleIcon,
+                scaledSize: new window.google.maps.Size(42, 42),
+                anchor: new window.google.maps.Point(21, 21),
               }}
             />
             <MarkerF
@@ -363,7 +425,7 @@ const RideTracking = () => {
           </GoogleMap>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-slate-200">
-            <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-black text-slate-700">
+            <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-bold text-slate-700">
               Loading map
             </div>
           </div>
@@ -388,13 +450,13 @@ const RideTracking = () => {
         className="absolute top-24 right-4 z-10 bg-white/90 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/80 shadow-[0_4px_14px_rgba(15,23,42,0.08)] flex items-center gap-1.5"
       >
         <Shield size={13} className="text-blue-500" strokeWidth={2.5} />
-        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Safety</span>
+        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Safety</span>
       </motion.button>
 
       {routeError && (
         <div className="absolute top-24 left-4 z-10 rounded-[12px] border border-amber-100 bg-white/90 px-3 py-2 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Route</p>
-          <p className="text-[11px] font-black text-slate-700">Using fallback path while directions load.</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Route</p>
+          <p className="text-[11px] font-bold text-slate-700">Using fallback path while directions load.</p>
         </div>
       )}
 
@@ -419,19 +481,19 @@ const RideTracking = () => {
               </div>
               <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-[8px] border-2 border-white flex items-center gap-0.5 shadow-sm">
                 <Star size={9} className="text-slate-900 fill-slate-900" />
-                <span className="text-[9px] font-black text-slate-900">{driver.rating || '4.9'}</span>
+                <span className="text-[9px] font-bold text-slate-900">{driver.rating || '4.9'}</span>
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-[17px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
-              <p className="text-[12px] font-black text-orange-500 mt-0.5">
+              <h3 className="text-[17px] font-bold text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
+              <p className="text-[12px] font-bold text-orange-500 mt-0.5">
                 {tripStatus === 'started' ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started') : serviceType === 'parcel' ? 'Delivery agent is on the way' : 'Captain is on the way'}
               </p>
               <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} · {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
             </div>
             <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[12px] px-3 py-2 text-right">
               <p className="text-[8px] font-black text-orange-400 uppercase tracking-wider">OTP</p>
-              <p className="text-[16px] font-black text-slate-900 tracking-widest leading-tight">{otp}</p>
+              <p className="text-[16px] font-bold text-slate-900 tracking-widest leading-tight">{otp}</p>
             </div>
           </div>
 
@@ -446,14 +508,14 @@ const RideTracking = () => {
             <div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Fare</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[20px] font-black text-slate-900 tracking-tighter leading-none">Rs {fare}.00</span>
+                <span className="text-[20px] font-bold text-slate-900 tracking-tighter leading-none">Rs {fare}.00</span>
                 <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full uppercase tracking-wide">{paymentMethod}</span>
               </div>
             </div>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => setShowCancelConfirm(true)}
-              className="bg-white border border-red-100 text-red-400 font-black text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-[12px] shadow-sm"
+              className="bg-white border border-red-100 text-red-400 font-bold text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-[12px] shadow-sm"
             >
               Cancel
             </motion.button>
@@ -480,7 +542,7 @@ const RideTracking = () => {
               <div className="w-14 h-14 bg-red-50 rounded-[18px] flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={26} className="text-red-400" strokeWidth={2} />
               </div>
-              <h3 className="text-[18px] font-black text-slate-900 mb-1.5">Cancel your ride?</h3>
+              <h3 className="text-[18px] font-bold text-slate-900 mb-1.5">Cancel your ride?</h3>
               <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">Your captain is already on the way.</p>
               <div className="space-y-2.5">
                 <motion.button
@@ -489,13 +551,13 @@ const RideTracking = () => {
                     clearCurrentRide();
                     navigate('/taxi/user');
                   }}
-                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest"
+                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest"
                 >
                   Yes, Cancel
                 </motion.button>
                 <button
                   onClick={() => setShowCancelConfirm(false)}
-                  className="w-full py-3.5 text-[13px] font-black text-slate-400 uppercase tracking-widest"
+                  className="w-full py-3.5 text-[13px] font-bold text-slate-400 uppercase tracking-widest"
                 >
                   No, Go Back
                 </button>

@@ -1,7 +1,9 @@
-﻿import React, { useState, useRef } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, MapPin, X, Plus, Minus } from 'lucide-react';
+import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle, Navigation, AlertTriangle, ChevronRight } from 'lucide-react';
+import { GoogleMap, MarkerF } from '@react-google-maps/api';
+import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 
 const LOCATION_COORDS = {
   'Pipaliyahana, Indore': [75.9048, 22.7039],
@@ -29,7 +31,15 @@ const SelectLocation = () => {
   const [drop, setDrop] = useState('');
   const [stops, setStops] = useState([]);          // array of stop strings
   const [activeInput, setActiveInput] = useState('drop'); // 'pickup' | 'drop' | stopIdx
-  const [mapToast, setMapToast] = useState(false);
+  const [showMapPicker, setShowMapPicker] = useState(false);
+  const [mapCenter, setMapCenter] = useState(INDIA_CENTER);
+  const [pickedAddress, setPickedAddress] = useState('Loading address...');
+  const [isGeocoding, setIsGeocoding] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
+  const mapInstanceRef = useRef(null);
+  const lastCenterRef = useRef(INDIA_CENTER);
+  const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const navigate = useNavigate();
   const routePrefix = window.location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
 
@@ -69,9 +79,127 @@ const SelectLocation = () => {
     : allResults.slice(0, 6);
 
   const showMapToast = () => {
-    setMapToast(true);
-    setTimeout(() => setMapToast(false), 2500);
+    // Reset map center to pickup or current location before opening
+    const startCoord = pickup && LOCATION_COORDS[pickup] 
+      ? { lat: LOCATION_COORDS[pickup][1], lng: LOCATION_COORDS[pickup][0] }
+      : INDIA_CENTER;
+    
+    setMapCenter(startCoord);
+    lastCenterRef.current = startCoord;
+    setShowMapPicker(true);
   };
+
+  const handleMapIdle = () => {
+    if (!mapInstanceRef.current || !window.google) return;
+    const center = mapInstanceRef.current.getCenter();
+    const lat = center.lat();
+    const lng = center.lng();
+    
+    // Only update and geocode if the center has actually changed significantly
+    const dist = Math.abs(lat - lastCenterRef.current.lat) + Math.abs(lng - lastCenterRef.current.lng);
+    if (dist < 0.00001) {
+      setIsDragging(false);
+      return;
+    }
+    
+    lastCenterRef.current = { lat, lng };
+    setIsDragging(false);
+
+    // Reverse Geocode
+    setIsGeocoding(true);
+    const geocoder = new window.google.maps.Geocoder();
+    geocoder.geocode({ location: { lat, lng } }, (results, status) => {
+      setIsGeocoding(false);
+      if (status === 'OK' && results[0]) {
+        setPickedAddress(results[0].formatted_address);
+      } else {
+        setPickedAddress(`${lat.toFixed(5)}, ${lng.toFixed(5)}`);
+      }
+    });
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const newCoords = { lat: pos.coords.latitude, lng: pos.coords.longitude };
+        if (mapInstanceRef.current) {
+          mapInstanceRef.current.panTo(newCoords);
+          mapInstanceRef.current.setZoom(17);
+        }
+      },
+      () => {
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true }
+    );
+  };
+
+  const handleConfirmNavigate = (optionalDrop) => {
+    const finalDrop = optionalDrop || drop;
+    const finalPickup = pickup || 'Pipaliyahana, Indore';
+    
+    if (!finalDrop || finalDrop.trim().length === 0) return;
+
+    navigate(`${routePrefix}/ride/select-vehicle`, {
+      state: {
+        pickup: finalPickup,
+        drop: finalDrop,
+        stops: stops.filter(s => s.trim().length > 0),
+        pickupCoords: getCoords(finalPickup),
+        dropCoords: getCoords(finalDrop),
+      },
+    });
+  };
+
+  const handleConfirmMapLocation = () => {
+    const finalAddress = pickedAddress;
+    if (activeInput === 'pickup') {
+      setPickup(finalAddress);
+      setActiveInput('drop');
+    } else if (activeInput === 'drop') {
+      setDrop(finalAddress);
+      // Auto-navigate if it's the destination
+      handleConfirmNavigate(finalAddress);
+    } else if (typeof activeInput === 'number') {
+      updateStop(activeInput, finalAddress);
+    }
+    setShowMapPicker(false);
+  };
+
+  const handleUseCurrentLocationResult = () => {
+    if (!navigator.geolocation) return;
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setIsLocating(false);
+        const { latitude, longitude } = pos.coords;
+        const geocoder = new window.google.maps.Geocoder();
+        geocoder.geocode({ location: { lat: latitude, lng: longitude } }, (results, status) => {
+          if (status === 'OK' && results[0]) {
+            const addr = results[0].formatted_address;
+            if (activeInput === 'drop') {
+              handleConfirmNavigate(addr);
+            } else {
+              handleSelectResult(addr);
+            }
+          } else {
+            const raw = `${latitude.toFixed(5)}, ${longitude.toFixed(5)}`;
+            if (activeInput === 'drop') {
+              handleConfirmNavigate(raw);
+            } else {
+              handleSelectResult(raw);
+            }
+          }
+        });
+      },
+      () => setIsLocating(false),
+      { enableHighAccuracy: true }
+    );
+  };
+
 
   // Add a new empty stop
   const addStop = () => {
@@ -96,15 +224,7 @@ const SelectLocation = () => {
       setPickup(title);
       setActiveInput('drop');
     } else if (activeInput === 'drop') {
-      navigate(`${routePrefix}/ride/select-vehicle`, {
-        state: {
-          pickup: pickup || 'Pipaliyahana, Indore',
-          drop: title,
-          stops: stops.filter(s => s.trim().length > 0),
-          pickupCoords: getCoords(pickup || 'Pipaliyahana, Indore'),
-          dropCoords: getCoords(title),
-        },
-      });
+      handleConfirmNavigate(title);
     } else if (typeof activeInput === 'number') {
       updateStop(activeInput, title);
       // Move to next stop or drop
@@ -122,14 +242,138 @@ const SelectLocation = () => {
       <div className="absolute top-56 left-[-60px] h-56 w-56 rounded-full bg-emerald-100/50 blur-3xl pointer-events-none" />
       <div className="absolute bottom-16 right-[-40px] h-44 w-44 rounded-full bg-blue-100/50 blur-3xl pointer-events-none" />
       <AnimatePresence>
-        {mapToast && (
+        {showMapPicker && (
           <motion.div
-            initial={{ opacity: 0, y: -20 }}
+            initial={{ opacity: 0, y: '100%' }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -20 }}
-            className="fixed top-4 left-1/2 -translate-x-1/2 z-50 bg-slate-900 text-white px-5 py-3 rounded-2xl text-[12px] font-black shadow-2xl whitespace-nowrap border border-white/10"
+            exit={{ opacity: 0, y: '100%' }}
+            className="fixed inset-0 z-[100] bg-white flex flex-col max-w-lg mx-auto"
           >
-            🗺️ Map picker coming soon.
+            {/* Map Header */}
+            <div className="absolute top-0 left-0 right-0 z-20 px-5 pt-10 pb-4 bg-gradient-to-b from-white via-white/80 to-transparent">
+               <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => setShowMapPicker(false)}
+                    className="w-10 h-10 bg-white rounded-full shadow-lg flex items-center justify-center border border-slate-100 active:scale-95 transition-all"
+                  >
+                    <ArrowLeft size={20} className="text-slate-900" strokeWidth={2.5} />
+                  </button>
+                  <div className="flex-1 bg-white rounded-2xl shadow-lg border border-slate-100 px-4 py-3">
+                    <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400 mb-0.5">Select Point</p>
+                    <p className="text-[14px] font-semibold text-slate-900 truncate leading-tight">
+                      {isGeocoding ? 'Locating...' : pickedAddress}
+                    </p>
+                  </div>
+               </div>
+            </div>
+
+            {/* Map Area */}
+            <div className="flex-1 relative bg-slate-200">
+              {!HAS_VALID_GOOGLE_MAPS_KEY ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 px-6 text-center">
+                  <div className="rounded-3xl bg-white px-8 py-10 shadow-xl border border-slate-100">
+                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <X size={32} className="text-rose-400" />
+                    </div>
+                    <p className="text-[16px] font-bold text-slate-900">Config Error</p>
+                    <p className="mt-2 text-[13px] font-medium text-slate-500">
+                      Google Maps API Key is missing.
+                    </p>
+                  </div>
+                </div>
+              ) : loadError ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-slate-100 px-6 text-center">
+                  <div className="rounded-3xl bg-white px-8 py-10 shadow-xl border border-slate-100">
+                    <div className="w-16 h-16 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <AlertTriangle size={32} className="text-rose-400" />
+                    </div>
+                    <p className="text-[16px] font-bold text-slate-900">Load Failed</p>
+                    <p className="mt-2 text-[13px] font-medium text-slate-500">
+                      Map could not be loaded. Please check your browser console or network.
+                    </p>
+                  </div>
+                </div>
+              ) : isLoaded ? (
+                <GoogleMap
+                  mapContainerStyle={{ width: '100%', height: '100%' }}
+                  center={mapCenter}
+                  zoom={16}
+                  onLoad={(map) => (mapInstanceRef.current = map)}
+                  onIdle={handleMapIdle}
+                  onDragStart={() => setIsDragging(true)}
+                  options={{
+                    disableDefaultUI: true,
+                    clickableIcons: false,
+                    gestureHandling: 'greedy',
+                  }}
+                />
+              ) : (
+                <div className="w-full h-full flex flex-col items-center justify-center gap-4 bg-slate-50">
+                  <div className="relative">
+                    <LoaderCircle size={44} className="animate-spin text-slate-300" />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <MapIcon size={18} className="text-slate-200" />
+                    </div>
+                  </div>
+                  <p className="text-[12px] font-bold uppercase tracking-[0.2em] text-slate-400 animate-pulse">Initializing Maps</p>
+                </div>
+              )}
+
+              {/* Central Pin - Uber Style */}
+              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-[100%] pointer-events-none z-10">
+                <div className="relative">
+                  <motion.div 
+                    animate={isDragging || isGeocoding ? { y: -12 } : { y: 0 }}
+                    transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+                    className="flex flex-col items-center"
+                  >
+                    <div className="w-10 h-10 bg-slate-900 rounded-2xl flex items-center justify-center shadow-2xl rotate-45 border-2 border-white">
+                      <div className="-rotate-45">
+                        <MapIcon size={18} className="text-white fill-white/20" />
+                      </div>
+                    </div>
+                    {/* Stick */}
+                    <div className="w-1 h-5 bg-slate-900 -mt-2 shadow-2xl" />
+                  </motion.div>
+                  {/* Shadow Dot */}
+                  <div className="absolute -bottom-1 left-1/2 -translate-x-1/2 w-2 h-1 bg-black/30 rounded-full blur-sm" />
+                </div>
+              </div>
+
+              {/* Current Location FAB */}
+              <button 
+                onClick={handleUseCurrentLocation}
+                disabled={isLocating}
+                className="absolute bottom-6 right-5 w-12 h-12 bg-white rounded-2xl shadow-xl flex items-center justify-center border border-slate-100 active:scale-90 transition-all z-20"
+              >
+                {isLocating ? (
+                  <LoaderCircle size={20} className="animate-spin text-slate-400" />
+                ) : (
+                  <Navigation size={20} className="text-slate-900 fill-slate-900/10" />
+                )}
+              </button>
+            </div>
+
+            {/* Confirm Actions */}
+            <div className="px-5 pt-4 pb-10 bg-white border-t border-slate-50 space-y-4">
+              <div className="flex items-center gap-3 py-1 px-1">
+                 <div className="w-10 h-10 rounded-xl bg-slate-50 border border-slate-100 flex items-center justify-center shrink-0">
+                    <MapPin size={20} className="text-slate-400" />
+                 </div>
+                 <div className="min-w-0 flex-1">
+                    <h4 className="text-[15px] font-bold text-slate-900 leading-none">Confirm Spot</h4>
+                    <p className="text-[12px] font-medium text-slate-400 mt-1 line-clamp-1">{pickedAddress}</p>
+                 </div>
+              </div>
+              <button
+                onClick={handleConfirmMapLocation}
+                disabled={isGeocoding}
+                className="w-full bg-slate-900 py-4 rounded-3xl text-white font-bold text-[15px] shadow-xl shadow-slate-200 flex items-center justify-center gap-2 active:scale-[0.98] transition-all disabled:opacity-50"
+              >
+                <Check size={18} strokeWidth={3} />
+                Confirm Location
+              </button>
+            </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -142,8 +386,8 @@ const SelectLocation = () => {
               <ArrowLeft size={22} className="text-slate-900" strokeWidth={3} />
             </button>
             <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Ride</p>
-              <h1 className="mt-1 text-[18px] font-black text-slate-900 tracking-tight leading-none truncate">Where to?</h1>
+              <p className="text-[10px] font-bold uppercase tracking-wider text-slate-400">Ride</p>
+              <h1 className="mt-0.5 text-[20px] font-bold text-slate-900 tracking-tight leading-none truncate">Where to?</h1>
             </div>
           </div>
         </div>
@@ -171,7 +415,7 @@ const SelectLocation = () => {
                   onChange={(e) => setPickup(e.target.value)}
                   onFocus={() => setActiveInput('pickup')}
                   placeholder="Your pickup location"
-                  className="w-full bg-transparent border-none text-[14px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
+                  className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
                 {pickup.length > 0 && (
                   <button onClick={() => setPickup('')} className="ml-2 shrink-0">
@@ -211,7 +455,7 @@ const SelectLocation = () => {
                         placeholder={`Stop ${idx + 1} location...`}
                         onFocus={() => setActiveInput(idx)}
                         onChange={(e) => updateStop(idx, e.target.value)}
-                        className="w-full bg-transparent border-none text-[14px] font-bold text-slate-900 focus:outline-none placeholder:text-indigo-300"
+                        className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-indigo-300"
                       />
                       {stop.length > 0 && (
                         <button onClick={() => updateStop(idx, '')} className="ml-2 shrink-0">
@@ -250,7 +494,7 @@ const SelectLocation = () => {
                   placeholder="Enter drop location..."
                   onFocus={() => setActiveInput('drop')}
                   onChange={(e) => setDrop(e.target.value)}
-                  className="w-full bg-transparent border-none text-[14px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300"
+                  className="w-full bg-transparent border-none text-[15px] font-medium text-slate-900 focus:outline-none placeholder:text-slate-300"
                 />
                 {drop.length > 0 && (
                   <button onClick={() => setDrop('')} className="ml-2 shrink-0">
@@ -268,14 +512,14 @@ const SelectLocation = () => {
       <div className="relative z-10 flex gap-3 px-5 my-4">
         <button
           onClick={showMapToast}
-          className="flex-1 flex items-center justify-center gap-2 bg-white/75 backdrop-blur-md border border-white/80 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[12px] font-black text-slate-800"
+          className="flex-1 flex items-center justify-center gap-2 bg-white/75 backdrop-blur-md border border-white/80 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold text-slate-800"
         >
           <MapPin size={16} className="text-slate-900" />
           <span>Select on map</span>
         </button>
         <button
           onClick={addStop}
-          className="flex-1 flex items-center justify-center gap-2 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[12px] font-black bg-white/75 backdrop-blur-md border border-white/80 text-slate-800"
+          className="flex-1 flex items-center justify-center gap-2 rounded-full py-2.5 shadow-[0_12px_26px_rgba(15,23,42,0.06)] active:scale-95 transition-all text-[13px] font-bold bg-white/75 backdrop-blur-md border border-white/80 text-slate-800"
         >
           <div className="w-4 h-4 rounded bg-indigo-500 flex items-center justify-center">
             <Plus size={12} className="text-white" strokeWidth={3} />
@@ -291,7 +535,7 @@ const SelectLocation = () => {
             {stops.map((s, idx) => (
               <div key={idx} className="flex items-center gap-1.5 bg-white/75 backdrop-blur-md border border-white/80 rounded-full px-3 py-1 shadow-sm">
                 <div className="w-2 h-2 rounded-full bg-indigo-400" />
-                <span className="text-[11px] font-black text-slate-700 truncate max-w-[110px]">
+                <span className="text-[12px] font-bold text-slate-700 truncate max-w-[110px]">
                   {s.trim() || `Stop ${idx + 1}`}
                 </span>
                 <button onClick={() => removeStop(idx)}>
@@ -305,12 +549,32 @@ const SelectLocation = () => {
 
       {/* Search Results */}
       <div className="relative z-10 px-5 mb-4">
-        <h2 className="text-[16px] font-black text-slate-900 mb-2 ml-1 tracking-tight">
+        <h2 className="text-[14px] font-bold text-slate-400 mb-3 ml-1 uppercase tracking-widest">
           {query.trim().length > 0 ? 'Search Results' : 'Popular Locations'}
         </h2>
 
         {searchResults.length > 0 ? (
           <div className="bg-white/75 backdrop-blur-md rounded-2xl border border-white/80 overflow-hidden shadow-[0_14px_34px_rgba(15,23,42,0.06)]">
+            {/* Quick Go to Current Location */}
+            <motion.button
+              whileTap={{ scale: 0.99 }}
+              onClick={handleUseCurrentLocationResult}
+              className="w-full text-left flex items-center gap-3 px-4 py-3.5 border-b border-white/70 bg-emerald-50/30 hover:bg-emerald-50/50 transition-colors group"
+            >
+               <div className="w-10 h-10 rounded-2xl bg-white border border-emerald-100 shadow-sm flex items-center justify-center shrink-0">
+                  {isLocating ? (
+                     <LoaderCircle size={18} className="animate-spin text-emerald-500" />
+                  ) : (
+                     <Navigation size={18} className="text-emerald-500 fill-emerald-50" />
+                  )}
+               </div>
+               <div className="flex-1">
+                  <h4 className="text-[15px] font-bold text-slate-900 leading-tight group-hover:text-emerald-600 transition-colors">Use Current Location</h4>
+                  <p className="text-[12px] text-slate-400 font-medium mt-0.5">Perfect for accurate pickup</p>
+               </div>
+               <ChevronRight size={16} className="text-slate-300" />
+            </motion.button>
+
             {searchResults.map((result, idx) => (
               <motion.button
                 key={idx}
@@ -323,27 +587,46 @@ const SelectLocation = () => {
                   <MapPin size={18} strokeWidth={2.6} />
                 </div>
                 <div className="min-w-0">
-                  <h4 className="text-[14px] font-black text-slate-900 leading-tight">{result.title}</h4>
-                  <p className="text-[12px] text-slate-500 font-bold mt-1 line-clamp-1">{result.address}</p>
+                  <h4 className="text-[15px] font-semibold text-slate-900 leading-tight">{result.title}</h4>
+                  <p className="text-[13px] text-slate-500 font-medium mt-1 line-clamp-1">{result.address}</p>
                 </div>
               </motion.button>
             ))}
           </div>
         ) : (
           <div className="text-center py-12">
-            <div className="w-14 h-14 rounded-3xl bg-white/80 border border-white/80 shadow-sm flex items-center justify-center mx-auto text-slate-400 text-[22px] font-black">
+            <div className="w-14 h-14 rounded-3xl bg-white/80 border border-white/80 shadow-sm flex items-center justify-center mx-auto text-slate-400 text-[22px] font-bold">
               —
             </div>
-            <p className="mt-3 text-[14px] font-black text-slate-600">
+            <p className="mt-3 text-[15px] font-semibold text-slate-600">
               No results for <span className="text-slate-900">"{query}"</span>
             </p>
-            <p className="text-[12px] font-bold text-slate-400 mt-1">Try a different search term</p>
+            <p className="text-[13px] font-medium text-slate-400 mt-1">Try a different search term</p>
           </div>
         )}
       </div>
+
+      {/* Persistent Confirm Button */}
+      <AnimatePresence>
+        {pickup && drop && (
+          <motion.div
+            initial={{ y: 80, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            exit={{ y: 80, opacity: 0 }}
+            className="fixed bottom-6 left-5 right-5 z-40"
+          >
+            <button
+              onClick={() => handleConfirmNavigate()}
+              className="w-full bg-[#f8e001] py-4 rounded-3xl text-slate-900 font-bold text-[16px] shadow-[0_8px_30px_rgba(248,224,1,0.3)] flex items-center justify-center gap-2 active:scale-[0.98] transition-all"
+            >
+              Confirm & Proceed
+              <ChevronRight size={18} strokeWidth={3} className="opacity-60" />
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 };
 
 export default SelectLocation;
-

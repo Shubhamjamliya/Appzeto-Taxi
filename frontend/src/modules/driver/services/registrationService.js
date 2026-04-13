@@ -99,6 +99,8 @@ const withDriverAuth = (config = {}) => {
 
 export const getCurrentDriver = () => api.get('/drivers/me', withDriverAuth());
 
+export const updateDriverProfile = (payload) => api.patch('/drivers/me', payload, withDriverAuth());
+
 export const updateDriverVehicle = (payload) =>
   api.patch('/drivers/vehicle', payload, withDriverAuth());
 

@@ -64,10 +64,52 @@ const rideSchema = new mongoose.Schema(
     },
     serviceType: {
       type: String,
-      enum: ['ride', 'parcel'],
+      enum: ['ride', 'parcel', 'intercity'],
       default: 'ride',
       lowercase: true,
       trim: true,
+    },
+    intercity: {
+      bookingId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      fromCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      toCity: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      tripType: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      travelDate: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      passengers: {
+        type: Number,
+        default: 1,
+        min: 1,
+      },
+      distance: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      vehicleName: {
+        type: String,
+        default: '',
+        trim: true,
+      },
     },
     status: {
       type: String,

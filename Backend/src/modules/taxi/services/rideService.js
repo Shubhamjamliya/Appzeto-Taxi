@@ -71,9 +71,10 @@ const normalizeRidePaymentMethod = (paymentMethod) => (
   !paymentMethod || String(paymentMethod).trim().toLowerCase() === 'cash' ? 'cash' : 'online'
 );
 
-const normalizeServiceType = (serviceType) => (
-  String(serviceType || 'ride').trim().toLowerCase() === 'parcel' ? 'parcel' : 'ride'
-);
+const normalizeServiceType = (serviceType) => {
+  const normalized = String(serviceType || 'ride').trim().toLowerCase();
+  return ['parcel', 'intercity'].includes(normalized) ? normalized : 'ride';
+};
 
 const normalizeAddress = (value = '') => String(value || '').trim();
 
@@ -85,6 +86,17 @@ const normalizeParcelPayload = (parcel = {}) => ({
   senderMobile: String(parcel.senderMobile || '').trim(),
   receiverName: String(parcel.receiverName || '').trim(),
   receiverMobile: String(parcel.receiverMobile || '').trim(),
+});
+
+const normalizeIntercityPayload = (intercity = {}) => ({
+  bookingId: String(intercity.bookingId || '').trim(),
+  fromCity: String(intercity.fromCity || '').trim(),
+  toCity: String(intercity.toCity || '').trim(),
+  tripType: String(intercity.tripType || '').trim(),
+  travelDate: String(intercity.travelDate || intercity.date || '').trim(),
+  passengers: Math.max(Number(intercity.passengers || 1), 1),
+  distance: Math.max(Number(intercity.distance || 0), 0),
+  vehicleName: String(intercity.vehicleName || '').trim(),
 });
 
 const normalizeVehicleTypeIds = (vehicleTypeIds = [], vehicleTypeId = null) => {
@@ -181,6 +193,7 @@ export const createRideRecord = async ({
   paymentMethod,
   serviceType,
   parcel,
+  intercity,
   promo_code,
   service_location_id,
   transport_type,
@@ -223,6 +236,7 @@ export const createRideRecord = async ({
       fare: safeFare,
       paymentMethod: normalizeRidePaymentMethod(paymentMethod),
       parcel: normalizeParcelPayload(parcel),
+      intercity: normalizeIntercityPayload(intercity),
       status: RIDE_STATUS.SEARCHING,
       liveStatus: RIDE_LIVE_STATUS.SEARCHING,
     });
@@ -257,6 +271,7 @@ export const createRideRecord = async ({
             fare: safeFare,
             paymentMethod: normalizeRidePaymentMethod(paymentMethod),
             parcel: normalizeParcelPayload(parcel),
+            intercity: normalizeIntercityPayload(intercity),
             status: RIDE_STATUS.SEARCHING,
             liveStatus: RIDE_LIVE_STATUS.SEARCHING,
           },
@@ -335,6 +350,7 @@ export const serializeRideRealtime = (ride) => ({
   fare: ride.fare,
   paymentMethod: ride.paymentMethod,
   parcel: ride.deliveryId?.parcel || ride.parcel || null,
+  intercity: ride.intercity || null,
   commissionAmount: ride.commissionAmount,
   driverEarnings: ride.driverEarnings,
   promo: ride.promo?.code ? ride.promo : null,
@@ -432,6 +448,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     fare: ride.fare,
     paymentMethod: ride.paymentMethod,
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
+    intercity: ride.intercity || null,
     commissionAmount: ride.commissionAmount,
     driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,

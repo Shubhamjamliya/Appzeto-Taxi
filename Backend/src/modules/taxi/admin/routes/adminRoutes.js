@@ -48,6 +48,7 @@ import {
   getCancelChart,
   getCountries,
   getDashboardData,
+  getDeliveries,
   getDriver,
   getDriverNeededDocument,
   getDriverNeededDocuments,
@@ -231,6 +232,7 @@ adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
+adminRouter.get('/admin/deliveries', getDeliveries);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);
 

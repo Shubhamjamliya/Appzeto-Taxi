@@ -1646,6 +1646,50 @@ const toAdminRideRow = (ride) => {
   };
 };
 
+const toAdminDeliveryRow = (ride) => {
+  const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
+  const rideStatus = String(ride.status || '').toLowerCase();
+  const tripStatus = rideStatus === RIDE_STATUS.COMPLETED || liveStatus === RIDE_LIVE_STATUS.COMPLETED
+    ? 'COMPLETED'
+    : rideStatus === RIDE_STATUS.CANCELLED || liveStatus === RIDE_LIVE_STATUS.CANCELLED
+      ? 'CANCELLED'
+      : liveStatus === RIDE_LIVE_STATUS.STARTED || rideStatus === RIDE_STATUS.ONGOING
+        ? 'ON_TRIP'
+        : 'UPCOMING';
+
+  return {
+    id: String(ride._id),
+    requestId: requestCode,
+    date: ride.createdAt,
+    userName: ride.userId?.name || 'Unknown User',
+    driverName: ride.driverId?.name || 'Unassigned',
+    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Delivery',
+    tripStatus,
+    rideStatus: ride.status,
+    liveStatus: ride.liveStatus,
+    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
+    fare: Number(ride.fare || 0),
+    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    parcel: ride.deliveryId?.parcel || ride.parcel || null,
+    user: ride.userId ? {
+      id: String(ride.userId._id),
+      name: ride.userId.name || '',
+      phone: ride.userId.phone || '',
+    } : null,
+    driver: ride.driverId ? {
+      id: String(ride.driverId._id),
+      name: ride.driverId.name || '',
+      phone: ride.driverId.phone || '',
+      vehicleType: ride.driverId.vehicleType || '',
+      vehicleNumber: ride.driverId.vehicleNumber || '',
+    } : null,
+  };
+};
+
 export const listOngoingRides = async (query = {}) => {
   const page = Number(query.page || 1);
   const limit = Number(query.limit || 10);
@@ -1679,6 +1723,50 @@ export const listOngoingRides = async (query = {}) => {
         row.transportType,
         row.pickupLabel,
         row.dropLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
+export const listDeliveries = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const rides = await Ride.find({ serviceType: 'parcel' })
+    .sort({ createdAt: -1 })
+    .populate('deliveryId')
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = rides.map(toAdminDeliveryRow);
+
+  if (tab === 'completed') {
+    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
+  } else if (tab === 'cancelled') {
+    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.pickupLabel,
+        row.dropLabel,
+        row.parcel?.category,
+        row.parcel?.senderName,
+        row.parcel?.receiverName,
       ].some((value) => String(value || '').toLowerCase().includes(search)),
     );
   }

@@ -76,6 +76,19 @@ const formatAddressFromPoint = (point, fallback) => {
     return fallback;
 };
 
+const normalizeTripType = (job = {}) => {
+    const value = String(job.type || job.serviceType || 'ride').toLowerCase();
+    if (value === 'parcel') return 'parcel';
+    if (value === 'intercity') return 'intercity';
+    return 'ride';
+};
+
+const getTripTitle = (type) => {
+    if (type === 'parcel') return 'Delivery';
+    if (type === 'intercity') return 'Intercity Ride';
+    return 'Taxi Ride';
+};
+
 const buildFallbackRoute = (origin, destination) => [origin, destination];
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 const withDriverAuthorization = (token) => (
@@ -110,7 +123,7 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
 const ActiveTrip = () => {
     const navigate = useNavigate();
     const location = useLocation();
-    const routeState = location.state || {};
+    const routeState = useMemo(() => location.state || {}, [location.state]);
     const [hydratedTripState, setHydratedTripState] = useState(null);
     const [isHydratingTrip, setIsHydratingTrip] = useState(!routeState?.rideId && !routeState?.request?.rideId);
 
@@ -152,16 +165,14 @@ const ActiveTrip = () => {
                     return;
                 }
 
-                const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
-                    ? 'parcel'
-                    : 'ride';
+                const currentType = normalizeTripType(currentJob);
 
                 setHydratedTripState({
                     type: currentType,
                     rideId: currentJob.rideId,
                     request: {
                         type: currentType,
-                        title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                        title: getTripTitle(currentType),
                         fare: `Rs ${currentJob.fare || 0}`,
                         payment: currentJob.paymentMethod || 'Cash',
                         pickup: currentJob.pickupAddress || formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
@@ -199,7 +210,10 @@ const ActiveTrip = () => {
     const rideId = liveRequest?.rideId || effectiveState?.rideId || '';
 
     const pickupCoords = liveRaw.pickupLocation?.coordinates || effectiveState?.pickupCoords || DEFAULT_DRIVER_COORDS;
-    const dropCoords = liveRaw.dropLocation?.coordinates || effectiveState?.dropCoords || [75.8937, 22.7533];
+    const dropCoords = useMemo(
+        () => liveRaw.dropLocation?.coordinates || effectiveState?.dropCoords || [75.8937, 22.7533],
+        [effectiveState?.dropCoords, liveRaw.dropLocation?.coordinates],
+    );
     const assignedDriverCoords =
         liveRaw.driverLocation?.coordinates ||
         liveRequest.driverLocation?.coordinates ||

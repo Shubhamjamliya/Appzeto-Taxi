@@ -228,6 +228,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         fare: ride.fare,
         paymentMethod: ride.paymentMethod,
         parcel: ride.parcel || null,
+        intercity: ride.intercity || null,
         radius,
         zoneId: zone?._id ? String(zone._id) : null,
       });
@@ -305,6 +306,7 @@ export const notifyRideAccepted = async (ride) => {
     fare: populatedRide.fare,
     paymentMethod: populatedRide.paymentMethod,
     parcel: populatedRide.parcel || null,
+    intercity: populatedRide.intercity || null,
     commissionAmount: populatedRide.commissionAmount,
     driverEarnings: populatedRide.driverEarnings,
     pickupLocation: populatedRide.pickupLocation,

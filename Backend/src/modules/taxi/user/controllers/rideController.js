@@ -17,7 +17,7 @@ import {
 import { startDispatchFlow } from '../../services/dispatchService.js';
 
 export const createRide = async (req, res) => {
-  const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleIconType, promo_code, service_location_id, transport_type } =
+  const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleIconType, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type } =
     req.body;
 
   if (!pickup || !drop) {
@@ -33,6 +33,9 @@ export const createRide = async (req, res) => {
     fare: Number(fare || 0),
     vehicleTypeId,
     vehicleIconType,
+    paymentMethod,
+    serviceType,
+    intercity,
     promo_code,
     service_location_id,
     transport_type,

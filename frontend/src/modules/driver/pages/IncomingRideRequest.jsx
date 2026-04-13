@@ -52,8 +52,10 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   if (!visible || !data) return null;
 
   const isParcel = data.type === 'parcel';
-  const title = isParcel ? 'Delivery Request' : 'Ride Request';
-  const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : 'Passenger ride');
+  const isIntercity = data.type === 'intercity';
+  const title = isParcel ? 'Delivery Request' : isIntercity ? 'Intercity Request' : 'Ride Request';
+  const intercityRoute = [data.raw?.intercity?.fromCity, data.raw?.intercity?.toCity].filter(Boolean).join(' to ');
+  const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
   const payment = normalizePayment(data.payment);
   const timerProgress = Math.max(0, Math.min(100, (timer / 15) * 100));
 
@@ -96,11 +98,11 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
           <div className="px-6 pb-6 pt-8">
             <div className="mb-6 flex items-center justify-between">
               <div className="flex items-center gap-4">
-                <div className={`flex h-[60px] w-[60px] items-center justify-center rounded-2xl shadow-sm ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-900 text-white'}`}>
-                  {isParcel ? <Package size={28} /> : <Bike size={28} />}
+                <div className={`flex h-[60px] w-[60px] items-center justify-center rounded-2xl shadow-sm ${isParcel ? 'bg-orange-50 text-orange-600' : isIntercity ? 'bg-yellow-400 text-slate-950' : 'bg-slate-900 text-white'}`}>
+                  {isParcel ? <Package size={28} /> : isIntercity ? <Navigation size={28} /> : <Bike size={28} />}
                 </div>
                 <div>
-                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isParcel ? 'bg-orange-50 text-orange-600' : 'bg-slate-100 text-slate-500'}`}>
+                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isParcel ? 'bg-orange-50 text-orange-600' : isIntercity ? 'bg-yellow-50 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
                     {title}
                   </div>
                   <h2 className="mt-1 text-[22px] font-bold tracking-tight text-slate-950">Incoming Order</h2>
@@ -131,6 +133,23 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                   <p className="text-[13px] font-bold text-emerald-600">{payment}</p>
                </div>
             </div>
+
+            {isIntercity && (
+              <div className="mb-6 grid grid-cols-3 gap-2 rounded-[18px] border border-yellow-100 bg-yellow-50/70 px-3 py-3">
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Trip</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.tripType || 'Intercity'}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Date</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.travelDate || 'Today'}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Pax</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.passengers || 1}</p>
+                </div>
+              </div>
+            )}
 
             {/* Journey Timeline */}
             <div className="mb-6 relative">

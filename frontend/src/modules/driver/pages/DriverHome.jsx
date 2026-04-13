@@ -107,6 +107,19 @@ const formatPoint = (point, fallback) => {
     return fallback;
 };
 
+const normalizeJobType = (job = {}) => {
+    const value = String(job.type || job.serviceType || 'ride').toLowerCase();
+    if (value === 'parcel') return 'parcel';
+    if (value === 'intercity') return 'intercity';
+    return 'ride';
+};
+
+const getJobTitle = (type) => {
+    if (type === 'parcel') return 'Delivery';
+    if (type === 'intercity') return 'Intercity Ride';
+    return 'Taxi Ride';
+};
+
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 const withDriverAuthorization = (token) => (
     token
@@ -260,9 +273,7 @@ const DriverHome = () => {
                         : null;
 
                 if (currentJob?.rideId) {
-                    const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
-                        ? 'parcel'
-                        : 'ride';
+                    const currentType = normalizeJobType(currentJob);
 
                     navigate('/taxi/driver/active-trip', {
                         replace: true,
@@ -271,7 +282,7 @@ const DriverHome = () => {
                             rideId: currentJob.rideId,
                             request: {
                                 type: currentType,
-                                title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                                title: getJobTitle(currentType),
                                 fare: `Rs ${currentJob.fare || 0}`,
                                 payment: currentJob.paymentMethod || 'Cash',
                                 pickup: currentJob.pickupAddress || formatPoint(currentJob.pickupLocation, 'Pickup Location'),
@@ -380,15 +391,15 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
-                const requestType = String(data.type || data.serviceType || 'ride').toLowerCase() === 'parcel' ? 'parcel' : 'ride';
+                const requestType = normalizeJobType(data);
                 const request = {
                     type: requestType,
-                    title: requestType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                    title: getJobTitle(requestType),
                     fare: `Rs ${data.fare || 0}`,
                     payment: data.paymentMethod || 'Cash',
                     pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
                     drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
-                    distance: data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
+                    distance: data.intercity?.distance ? `${data.intercity.distance} km` : data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
                     requestId: data.rideId,
                     rideId: data.rideId,
                     raw: data,

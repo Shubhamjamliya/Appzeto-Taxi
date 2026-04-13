@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Bike, Car, CheckCircle2, Edit3, LoaderCircle, Save, Truck, X } from 'lucide-react';
+import { ArrowLeft, Bike, Camera, Car, CheckCircle2, Edit3, LoaderCircle, Save, Truck, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import {
     getCurrentDriver,
     getDriverVehicleTypes,
     updateDriverVehicle,
 } from '../../services/registrationService';
+import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 
 const unwrap = (response) => response?.data?.data || response?.data || response;
 
@@ -45,7 +46,42 @@ const buildForm = (driver) => ({
     vehicleModel: driver?.vehicleModel || '',
     vehicleNumber: driver?.vehicleNumber || '',
     vehicleColor: driver?.vehicleColor || '',
+    vehicleImage: driver?.vehicleImage || '',
 });
+
+const buildVisibleVehicleTypes = (allTypes, driver) => {
+    const driverMode = String(driver?.registerFor || 'taxi').toLowerCase();
+    const savedVehicleTypeId = getDriverVehicleTypeId(driver);
+
+    const activeMatchingTypes = allTypes.filter((type) => {
+        const isActive = type.active !== false && Number(type.status ?? 1) !== 0;
+        const transportType = String(type.transport_type || 'taxi').toLowerCase();
+
+        if (!isActive) {
+            return false;
+        }
+
+        if (driverMode === 'both') {
+            return true;
+        }
+
+        return transportType === driverMode;
+    });
+
+    if (!savedVehicleTypeId) {
+        return activeMatchingTypes;
+    }
+
+    const savedType = allTypes.find((type) => String(type._id || type.id) === String(savedVehicleTypeId));
+
+    if (!savedType) {
+        return activeMatchingTypes;
+    }
+
+    const alreadyIncluded = activeMatchingTypes.some((type) => String(type._id || type.id) === String(savedVehicleTypeId));
+
+    return alreadyIncluded ? activeMatchingTypes : [savedType, ...activeMatchingTypes];
+};
 
 const VehicleFleet = () => {
     const navigate = useNavigate();
@@ -56,12 +92,22 @@ const VehicleFleet = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
+    const {
+        uploading: imageUploading,
+        preview: imagePreview,
+        handleFileChange: onVehicleImageChange,
+        setPreview: setVehicleImagePreview,
+    } = useImageUpload({
+        folder: 'driver-vehicles',
+        onSuccess: (url) => {
+            setFormData((prev) => ({ ...prev, vehicleImage: url }));
+        },
+    });
 
     const selectedType = useMemo(() => {
         const selectedId = formData.vehicleTypeId || getDriverVehicleTypeId(driver);
         return vehicleTypes.find((type) => String(type._id || type.id) === String(selectedId));
     }, [driver, formData.vehicleTypeId, vehicleTypes]);
-    const driverRegisterFor = String(driver?.registerFor || 'taxi').toLowerCase();
 
     const ActiveIcon = iconFor(selectedType?.icon_types || driver?.vehicleIconType || driver?.vehicleType);
     const activeVehicleName = getTypeLabel(selectedType) || driver?.vehicleType || 'Vehicle';
@@ -85,24 +131,12 @@ const VehicleFleet = () => {
                 }
 
                 const nextDriver = unwrap(driverResponse);
-                const nextTypes = getVehicleTypes(typeResponse).filter((type) => {
-                    const isActive = type.active !== false && Number(type.status ?? 1) !== 0;
-                    const transportType = String(type.transport_type || 'taxi').toLowerCase();
-
-                    if (!isActive) {
-                        return false;
-                    }
-
-                    if (String(nextDriver?.registerFor || 'taxi').toLowerCase() === 'both') {
-                        return true;
-                    }
-
-                    return transportType === String(nextDriver?.registerFor || 'taxi').toLowerCase();
-                });
+                const nextTypes = buildVisibleVehicleTypes(getVehicleTypes(typeResponse), nextDriver);
 
                 setDriver(nextDriver);
                 setVehicleTypes(nextTypes);
                 setFormData(buildForm(nextDriver));
+                setVehicleImagePreview(nextDriver?.vehicleImage || null);
             } catch (error) {
                 if (active) {
                     setMessage(error.message || 'Could not load vehicle details.');
@@ -139,8 +173,9 @@ const VehicleFleet = () => {
             const nextDriver = unwrap(response);
             setDriver(nextDriver);
             setFormData(buildForm(nextDriver));
+            setVehicleImagePreview(nextDriver?.vehicleImage || null);
             setIsEditing(false);
-            setMessage('Vehicle updated. Map icon will use this vehicle type.');
+            setMessage('Vehicle updated successfully.');
         } catch (error) {
             setMessage(error.message || 'Could not update vehicle.');
         } finally {
@@ -150,11 +185,11 @@ const VehicleFleet = () => {
 
     return (
         <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
-            <header className="flex items-center gap-4 mb-8 text-slate-900 uppercase">
+            <header className="flex items-center gap-4 mb-8">
                 <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
-                    <ArrowLeft size={18} />
+                    <ArrowLeft size={18} className="text-slate-900" />
                 </button>
-                <h1 className="text-lg font-black tracking-tight tracking-tighter uppercase">My Vehicle</h1>
+                <h1 className="text-xl font-bold text-slate-900 tracking-tight">My Vehicle</h1>
             </header>
 
             {isLoading ? (
@@ -163,71 +198,72 @@ const VehicleFleet = () => {
                 </div>
             ) : (
                 <main className="space-y-6">
-                    <div className="bg-gradient-to-br from-[#1a1c24] to-[#3a3d4d] p-6 rounded-[2rem] text-white relative overflow-hidden group shadow-2xl">
-                        <div className="relative z-10 space-y-4">
+                    <div className="bg-slate-900 p-7 rounded-[2.5rem] text-white relative overflow-hidden shadow-xl border border-white/5">
+                        <div className="relative z-10 space-y-5">
                             <div className="flex items-start justify-between gap-4">
-                                <div className="space-y-1 min-w-0">
-                                    <h3 className="text-[12px] font-black uppercase tracking-widest text-taxi-primary/60">Primary Vehicle</h3>
-                                    <p className="text-[20px] font-black tracking-tight leading-none truncate">{vehicleModel}</p>
-                                    <p className="text-[14px] font-black tracking-[0.2em] opacity-40 truncate">{driver?.vehicleNumber || 'Number not set'}</p>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-white/40">{activeVehicleName} · {driver?.vehicleColor || 'Color not set'}</p>
+                                <div className="space-y-1.5 min-w-0 flex-1">
+                                    <h3 className="text-[11px] font-bold uppercase tracking-widest text-white/40">Primary Vehicle</h3>
+                                    <p className="text-[22px] font-bold tracking-tight leading-none truncate">{vehicleModel}</p>
+                                    <p className="text-[14px] font-semibold tracking-widest text-white/50 truncate uppercase mt-1">{driver?.vehicleNumber || 'Number not set'}</p>
+                                    <p className="text-[11px] font-medium text-white/30 truncate">{activeVehicleName} • {driver?.vehicleColor || 'Color not set'}</p>
                                 </div>
-                                <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-taxi-primary border border-white/10 shadow-lg shrink-0">
-                                    <ActiveIcon size={28} />
-                                </div>
+                                {driver?.vehicleImage ? (
+                                    <div className="h-16 w-20 overflow-hidden rounded-2xl border border-white/10 shadow-lg shrink-0 bg-white/5">
+                                        <img src={driver.vehicleImage} alt="Vehicle" className="h-full w-full object-cover" />
+                                    </div>
+                                ) : (
+                                    <div className="w-14 h-14 bg-white/5 rounded-2xl flex items-center justify-center text-white border border-white/10 shadow-lg shrink-0">
+                                        <ActiveIcon size={26} />
+                                    </div>
+                                )}
                             </div>
-                            <div className="bg-emerald-500/10 border border-emerald-500/20 text-emerald-500 px-4 py-2 rounded-xl flex items-center gap-2">
-                                <CheckCircle2 size={16} strokeWidth={3} />
-                                <span className="text-[11px] font-black uppercase tracking-widest leading-none mt-0.5">Map icon linked to selected type</span>
+                            <div className="inline-flex items-center gap-2.5 bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 px-4 py-2.5 rounded-2xl">
+                                <CheckCircle2 size={15} />
+                                <span className="text-[11px] font-semibold uppercase tracking-wider">Map icon linked to selected type</span>
                             </div>
                         </div>
                     </div>
 
                     {message && (
-                        <p className="text-[11px] font-black text-slate-500 uppercase tracking-widest px-1">{message}</p>
+                        <p className="text-[11px] font-bold text-slate-500 uppercase tracking-widest px-1">{message}</p>
                     )}
 
-                    <section className="space-y-4">
+                    <section className="space-y-5">
                         <div className="flex items-center justify-between px-1">
-                            <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Vehicle Details</h3>
+                            <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">Configuration</h3>
                             <button
                                 onClick={() => {
                                     setFormData(buildForm(driver));
                                     setIsEditing(true);
                                 }}
-                                className="text-[10px] font-black text-blue-500 uppercase tracking-widest flex items-center gap-1"
+                                className="text-[11px] font-bold text-blue-600 flex items-center gap-1.5 bg-blue-50 px-3 py-1.5 rounded-lg"
                             >
-                                <Edit3 size={13} /> Edit
+                                <Edit3 size={13} /> Edit Details
                             </button>
                         </div>
 
-                        <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Dispatch Matching</p>
-                            <p className="text-[11px] font-bold text-slate-600 mt-1 leading-relaxed">
-                                Update the primary vehicle here if requests are not reaching this driver. Dispatch uses the selected vehicle type exactly, including delivery jobs.
+                        <div className="bg-amber-50/50 border border-amber-100/50 rounded-2xl px-5 py-4">
+                            <p className="text-[11px] font-bold uppercase tracking-wider text-amber-600 mb-1">Dispatch Matching</p>
+                            <p className="text-[12px] font-medium text-slate-500 leading-relaxed">
+                                Update the primary vehicle here if requests are not reaching this driver. The system uses the selected vehicle type exactly for job distribution.
                             </p>
                         </div>
 
-                        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
-                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Dispatch Mode</p>
-                            <p className="text-[11px] font-bold text-slate-600 mt-1 leading-relaxed">
-                                This driver is registered for <span className="text-slate-900 uppercase">{driverRegisterFor}</span>. Only matching {driverRegisterFor === 'both' ? 'taxi and delivery' : driverRegisterFor} vehicle types are shown below.
-                            </p>
-                        </div>
-
-                        <div className="bg-white p-5 rounded-2xl border border-white shadow-sm flex items-center justify-between gap-4">
+                        <div className="bg-slate-50 border border-slate-100 rounded-2xl p-5 flex items-center justify-between gap-4">
                             <div className="flex items-center gap-4 min-w-0">
-                                <div className="w-11 h-11 rounded-xl flex items-center justify-center border bg-emerald-50 text-emerald-500 shadow-sm border-emerald-500/5 shrink-0">
-                                    <ActiveIcon size={18} />
+                                <div className="w-12 h-12 rounded-2xl flex items-center justify-center bg-white text-slate-900 border border-slate-100 shadow-sm shrink-0">
+                                    <ActiveIcon size={20} />
                                 </div>
                                 <div className="space-y-0.5 min-w-0">
-                                    <h4 className="text-[14px] font-black text-slate-900 leading-tight tracking-tight uppercase tracking-tighter truncate">{activeVehicleName}</h4>
-                                    <p className="text-[11px] font-bold text-slate-400 opacity-70 leading-tight tracking-tighter uppercase truncate">
-                                        {driver?.vehicleNumber || 'No number'} · {driver?.vehicleColor || 'No color'} · {driver?.vehicleIconType || driver?.vehicleType || 'car'}
+                                    <h4 className="text-[15px] font-bold text-slate-900 leading-tight truncate">{activeVehicleName}</h4>
+                                    <p className="text-[12px] font-medium text-slate-400 truncate">
+                                        {driver?.vehicleNumber || 'No number'} • {driver?.vehicleColor || 'No color'}
                                     </p>
                                 </div>
                             </div>
-                            <span className="text-[9px] font-black uppercase tracking-widest text-emerald-500">Active</span>
+                            <div className="px-2.5 py-1 rounded-full bg-emerald-500/10 text-emerald-600 text-[10px] font-bold uppercase tracking-wider">
+                                Active
+                            </div>
                         </div>
                     </section>
                 </main>
@@ -248,73 +284,105 @@ const VehicleFleet = () => {
                             animate={{ y: 0 }}
                             exit={{ y: '100%' }}
                             transition={{ type: 'spring', damping: 28, stiffness: 320 }}
-                            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-[2rem] p-5 pb-8 shadow-2xl max-w-lg mx-auto space-y-4"
+                            className="fixed bottom-0 left-0 right-0 z-[100] bg-white rounded-t-[2.5rem] p-6 pb-10 shadow-2xl max-w-lg mx-auto space-y-6"
                         >
                             <div className="flex items-center justify-between">
                                 <div>
-                                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Edit Vehicle</p>
-                                    <h2 className="text-xl font-black text-slate-900 uppercase">Primary Vehicle</h2>
+                                    <p className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Settings</p>
+                                    <h2 className="text-2xl font-bold text-slate-900">Vehicle Details</h2>
                                 </div>
-                                <button onClick={() => setIsEditing(false)} className="w-9 h-9 rounded-xl bg-slate-50 flex items-center justify-center text-slate-500">
-                                    <X size={18} />
+                                <button onClick={() => setIsEditing(false)} className="w-10 h-10 rounded-2xl bg-slate-50 flex items-center justify-center text-slate-500">
+                                    <X size={22} />
                                 </button>
                             </div>
 
-                            <div className="space-y-3">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Vehicle Type</label>
-                                <div className="grid grid-cols-3 gap-2 max-h-44 overflow-y-auto pr-1">
-                                    {vehicleTypes.map((type) => {
-                                        const id = String(type._id || type.id);
-                                        const TypeIcon = iconFor(type.icon_types || type.name);
-                                        const selected = String(formData.vehicleTypeId) === id;
+                            <div className="space-y-4">
+                                <div className="space-y-2">
+                                    <label className="text-[11px] font-bold text-slate-400 uppercase tracking-widest pl-1">Selection</label>
+                                    <div className="grid grid-cols-3 gap-3">
+                                        {vehicleTypes.map((type) => {
+                                            const id = String(type._id || type.id);
+                                            const TypeIcon = iconFor(type.icon_types || type.name);
+                                            const selected = String(formData.vehicleTypeId) === id;
 
-                                        return (
-                                            <button
-                                                key={id}
-                                                type="button"
-                                                onClick={() => handleChange('vehicleTypeId', id)}
-                                                className={`flex flex-col items-center justify-center gap-1.5 p-2.5 rounded-xl transition-all min-h-20 ${
-                                                    selected
-                                                        ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10'
-                                                        : 'bg-slate-50 text-slate-400'
-                                                }`}
-                                            >
-                                                <TypeIcon size={16} />
-                                                <span className="text-[9px] font-black uppercase tracking-widest leading-none text-center">{getTypeLabel(type)}</span>
-                                            </button>
-                                        );
-                                    })}
-                                </div>
-
-                                <div className="grid grid-cols-2 gap-2.5">
-                                    <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Make</label>
-                                        <input value={formData.vehicleMake} onChange={(e) => handleChange('vehicleMake', e.target.value)} placeholder="Suzuki" className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-200" />
-                                    </div>
-                                    <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Model</label>
-                                        <input value={formData.vehicleModel} onChange={(e) => handleChange('vehicleModel', e.target.value)} placeholder="WagonR" className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-200" />
+                                            return (
+                                                <button
+                                                    key={id}
+                                                    type="button"
+                                                    onClick={() => handleChange('vehicleTypeId', id)}
+                                                    className={`flex flex-col items-center justify-center gap-2 p-3 rounded-2xl transition-all min-h-[90px] border-2 ${
+                                                        selected
+                                                            ? 'bg-slate-950 border-slate-950 text-white shadow-xl shadow-slate-950/20'
+                                                            : 'bg-white border-slate-100 text-slate-400 transition-colors hover:border-slate-200'
+                                                    }`}
+                                                >
+                                                    <TypeIcon size={20} />
+                                                    <span className="text-[10px] font-bold uppercase tracking-wider leading-none text-center">{getTypeLabel(type)}</span>
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Vehicle Number</label>
-                                    <input value={formData.vehicleNumber} onChange={(e) => handleChange('vehicleNumber', e.target.value.toUpperCase())} placeholder="MP 09 AB 1234" className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-200 uppercase" />
+                                <div className="grid grid-cols-2 gap-4">
+                                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl focus-within:border-slate-400 transition-colors">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Make</label>
+                                        <input value={formData.vehicleMake} onChange={(e) => handleChange('vehicleMake', e.target.value)} placeholder="e.g. Suzuki" className="w-full bg-transparent border-none p-0 text-[15px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300" />
+                                    </div>
+                                    <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl focus-within:border-slate-400 transition-colors">
+                                        <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Model</label>
+                                        <input value={formData.vehicleModel} onChange={(e) => handleChange('vehicleModel', e.target.value)} placeholder="e.g. WagonR" className="w-full bg-transparent border-none p-0 text-[15px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300" />
+                                    </div>
                                 </div>
 
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Color</label>
-                                    <input value={formData.vehicleColor} onChange={(e) => handleChange('vehicleColor', e.target.value)} placeholder="White, Black, Silver" className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none placeholder:text-slate-200" />
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl focus-within:border-slate-400 transition-colors">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Plate Number</label>
+                                    <input value={formData.vehicleNumber} onChange={(e) => handleChange('vehicleNumber', e.target.value.toUpperCase())} placeholder="e.g. MP 09 AB 1234" className="w-full bg-transparent border-none p-0 text-[15px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300 uppercase" />
+                                </div>
+
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl focus-within:border-slate-400 transition-colors">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-1">Color</label>
+                                    <input value={formData.vehicleColor} onChange={(e) => handleChange('vehicleColor', e.target.value)} placeholder="e.g. White, Black" className="w-full bg-transparent border-none p-0 text-[15px] font-bold text-slate-900 focus:outline-none placeholder:text-slate-300" />
+                                </div>
+
+                                <div className="bg-slate-50 border border-slate-200 p-4 rounded-2xl">
+                                    <label className="text-[10px] font-bold text-slate-500 uppercase tracking-widest block mb-3">Vehicle Image</label>
+                                    <div className="flex items-center gap-3">
+                                        <div className="h-16 w-20 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm shrink-0">
+                                            {imagePreview || formData.vehicleImage ? (
+                                                <img
+                                                    src={imagePreview || formData.vehicleImage}
+                                                    alt="Vehicle"
+                                                    className={`h-full w-full object-cover ${imageUploading ? 'opacity-60' : ''}`}
+                                                />
+                                            ) : (
+                                                <div className="flex h-full w-full items-center justify-center text-slate-300">
+                                                    <ActiveIcon size={22} />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <label className="inline-flex h-11 flex-1 cursor-pointer items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 text-[12px] font-bold text-slate-700">
+                                            {imageUploading ? <LoaderCircle size={16} className="animate-spin" /> : <Camera size={16} />}
+                                            {imageUploading ? 'Uploading...' : 'Upload Image'}
+                                            <input
+                                                type="file"
+                                                accept="image/*"
+                                                className="hidden"
+                                                onChange={onVehicleImageChange}
+                                                disabled={imageUploading}
+                                            />
+                                        </label>
+                                    </div>
                                 </div>
                             </div>
 
                             <button
                                 onClick={handleSave}
-                                disabled={isSaving}
-                                className="w-full h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg disabled:opacity-50"
+                                disabled={isSaving || imageUploading}
+                                className="w-full h-16 bg-slate-950 text-white rounded-[1.5rem] flex items-center justify-center gap-3 text-[14px] font-bold uppercase tracking-widest shadow-xl shadow-slate-950/20 disabled:opacity-50"
                             >
-                                {isSaving ? <LoaderCircle size={16} className="animate-spin" /> : <Save size={16} />}
-                                Save Vehicle
+                                {isSaving || imageUploading ? <LoaderCircle size={20} className="animate-spin" /> : <Save size={20} />}
+                                Update Vehicle
                             </button>
                         </motion.div>
                     </>

@@ -150,6 +150,7 @@ const AdminDriverList = lazy(() => import('./modules/admin/pages/drivers/DriverL
 const AdminDriverDetails = lazy(() => import('./modules/admin/pages/drivers/DriverDetails'));
 const AdminPendingDrivers = lazy(() => import('./modules/admin/pages/drivers/PendingDrivers'));
 const AdminDriverSubscriptions = lazy(() => import('./modules/admin/pages/drivers/DriverSubscriptions'));
+const AdminDriverSubscriptionCreate = lazy(() => import('./modules/admin/pages/drivers/DriverSubscriptionCreate'));
 const AdminDriverRatings = lazy(() => import('./modules/admin/pages/drivers/DriverRatings'));
 const AdminDriverRatingDetail = lazy(() => import('./modules/admin/pages/drivers/DriverRatingDetail'));
 const AdminDriverWallet = lazy(() => import('./modules/admin/pages/drivers/DriverWallet'));
@@ -168,7 +169,6 @@ const AdminDriverEdit = lazy(() => import('./modules/admin/pages/drivers/EditDri
 const AdminReferralDashboard = lazy(() => import('./modules/admin/pages/referrals/ReferralDashboard'));
 const AdminUserReferralSettings = lazy(() => import('./modules/admin/pages/referrals/UserReferralSettings'));
 const AdminDriverReferralSettings = lazy(() => import('./modules/admin/pages/referrals/DriverReferralSettings'));
-const AdminJoiningBonusSettings = lazy(() => import('./modules/admin/pages/referrals/JoiningBonusSettings'));
 const AdminReferralTranslation = lazy(() => import('./modules/admin/pages/referrals/ReferralTranslation'));
 
 const AdminPromoCodes = lazy(() => import('./modules/admin/pages/promotions/PromoCodes'));
@@ -583,6 +583,7 @@ function App() {
               <Route path="drivers/:id" element={<AdminDriverDetails />} />
               <Route path="drivers/pending" element={<AdminPendingDrivers />} />
               <Route path="drivers/subscription" element={<AdminDriverSubscriptions />} />
+              <Route path="drivers/subscription/create" element={<AdminDriverSubscriptionCreate />} />
               <Route path="drivers/ratings" element={<AdminDriverRatings />} />
               <Route path="drivers/ratings/:id" element={<AdminDriverRatingDetail />} />
               <Route path="drivers/wallet" element={<AdminDriverWallet />} />
@@ -600,8 +601,8 @@ function App() {
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
               <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-              <Route path="referrals/joining-bonus" element={<AdminJoiningBonusSettings />} />
-               <Route path="referrals/translation" element={<AdminReferralTranslation />} />
+              <Route path="referrals/joining-bonus" element={<Navigate to="/admin/referrals/dashboard" replace />} />
+              <Route path="referrals/translation" element={<AdminReferralTranslation />} />
                
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
@@ -656,6 +657,8 @@ function App() {
                 <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
                 <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
+                <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
+                <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
                 <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />

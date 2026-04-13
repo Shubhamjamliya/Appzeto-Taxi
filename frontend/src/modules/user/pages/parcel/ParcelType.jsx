@@ -11,6 +11,8 @@ import imgClothes from '@/assets/3d images/clothes.png';
 import imgElectronics from '@/assets/3d images/electronics.png';
 import imgOthers from '@/assets/3d images/others.png';
 
+const Motion = motion;
+
 const fallbackCategories = [
   {
     id: '1',
@@ -80,8 +82,15 @@ const formatGoodsType = (item, index) => {
   const title = String(item?.name || item?.goods_type_name || '').trim();
   const rawModuleAccess = String(item?.goods_types_for || item?.goods_type_for || 'both').trim();
   const moduleAccess = rawModuleAccess
-    .replace(/_/g, ' ')
-    .replace(/\b\w/g, (char) => char.toUpperCase());
+    .split(',')
+    .map((entry) =>
+      entry
+        .trim()
+        .replace(/_/g, ' ')
+        .replace(/\b\w/g, (char) => char.toUpperCase())
+    )
+    .filter(Boolean)
+    .join(', ');
   const savedIcon = String(item?.icon || '').trim();
 
   return {
@@ -110,7 +119,7 @@ const ParcelType = () => {
       setLoadError('');
 
       try {
-        const response = await api.get('/admin/goods-types');
+        const response = await api.get('/users/goods-types');
         const items = response?.results || response?.data?.results || response?.data?.goods_types || [];
         const activeItems = items.filter((item) => Number(item?.active ?? 1) === 1);
         const mappedCategories = (activeItems.length ? activeItems : items).map(formatGoodsType);
@@ -128,7 +137,7 @@ const ParcelType = () => {
           setCategories(fallbackCategories);
           setSelectedType(fallbackCategories[0]?.title || '');
         }
-      } catch (_error) {
+      } catch {
         if (!isMounted) return;
         setLoadError('Unable to load goods types right now.');
         setCategories(fallbackCategories);
@@ -159,19 +168,19 @@ const ParcelType = () => {
       <div className="absolute top-52 left-[-60px] h-52 w-52 rounded-full bg-emerald-100/60 blur-3xl pointer-events-none" />
 
       {/* Header */}
-      <motion.header
+      <Motion.header
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.4, ease: 'easeOut' }}
         className="bg-white/90 backdrop-blur-md px-5 py-5 flex items-center gap-4 border-b border-white/80 shadow-[0_4px_20px_rgba(15,23,42,0.05)] sticky top-0 z-20"
       >
-        <motion.button
+        <Motion.button
           whileTap={{ scale: 0.9 }}
           onClick={() => navigate(-1)}
           className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)] active:scale-90 transition-all shrink-0"
         >
           <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
-        </motion.button>
+        </Motion.button>
         <div className="flex-1 min-w-0">
           <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Parcel Delivery</p>
           <h1 className="text-[19px] font-black tracking-tight text-slate-900 leading-tight">What are you sending?</h1>
@@ -180,13 +189,13 @@ const ParcelType = () => {
           <Package size={12} className="inline mr-1 text-orange-400" />
           {categories.length} types
         </div>
-      </motion.header>
+      </Motion.header>
 
       {/* Content */}
       <div className="flex-1 px-5 pt-5 pb-32 overflow-y-auto no-scrollbar">
 
         {/* Section label */}
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 8 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.08, ease: 'easeOut' }}
@@ -195,21 +204,21 @@ const ParcelType = () => {
           <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Step 1 of 3</p>
           <h2 className="mt-0.5 text-[16px] font-black tracking-tight text-slate-900">Select Category</h2>
           <p className="mt-0.5 text-[11px] font-bold text-slate-500">Tap a category that best describes your item.</p>
-        </motion.div>
+        </Motion.div>
 
         {loadError ? (
-          <motion.div
+          <Motion.div
             initial={{ opacity: 0, y: 8 }}
             animate={{ opacity: 1, y: 0 }}
             className="mb-4 flex items-center gap-2 rounded-[16px] border border-amber-200 bg-amber-50/90 px-3.5 py-3 text-[11px] font-bold text-amber-700"
           >
             <AlertCircle size={15} className="shrink-0" />
             <span>{loadError} Showing saved defaults for now.</span>
-          </motion.div>
+          </Motion.div>
         ) : null}
 
         {/* Category Grid */}
-        <motion.div
+        <Motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.12, ease: 'easeOut' }}
@@ -230,7 +239,7 @@ const ParcelType = () => {
             categories.map((cat, i) => {
               const isSelected = selectedType === cat.title;
               return (
-                <motion.button
+                <Motion.button
                   key={cat.id}
                   type="button"
                   initial={{ opacity: 0, y: 10 }}
@@ -247,7 +256,7 @@ const ParcelType = () => {
                   {/* Selected indicator dot */}
                   <AnimatePresence>
                     {isSelected && (
-                      <motion.div
+                      <Motion.div
                         initial={{ scale: 0, opacity: 0 }}
                         animate={{ scale: 1, opacity: 1 }}
                         exit={{ scale: 0, opacity: 0 }}
@@ -279,16 +288,16 @@ const ParcelType = () => {
                       {cat.desc}
                     </span>
                   </div>
-                </motion.button>
+                </Motion.button>
               );
             })
           )}
-        </motion.div>
+        </Motion.div>
 
         {/* Selected preview card */}
         <AnimatePresence mode="wait">
           {!loading && selected && (
-            <motion.div
+            <Motion.div
               key={selected.title}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
@@ -309,14 +318,14 @@ const ParcelType = () => {
                   <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"/>
                 </svg>
               </div>
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Sticky CTA */}
       <div className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-lg px-5 pb-6 pt-3 bg-gradient-to-t from-[#EEF2F7] via-[#F3F4F6]/95 to-transparent pointer-events-none z-30">
-        <motion.button
+        <Motion.button
           type="button"
           whileTap={{ scale: 0.98 }}
           onClick={() =>
@@ -342,7 +351,7 @@ const ParcelType = () => {
               <ChevronRight size={17} className="opacity-50" strokeWidth={3} />
             </>
           )}
-        </motion.button>
+        </Motion.button>
       </div>
     </div>
   );

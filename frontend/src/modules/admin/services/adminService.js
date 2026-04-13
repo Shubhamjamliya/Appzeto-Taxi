@@ -37,12 +37,17 @@ export const adminService = {
   createDriverNeededDocument: (data) => api.post('/admin/owner-management/driver-needed-document', data),
   updateDriverNeededDocument: (id, data) => api.patch(`/admin/owner-management/driver-needed-document/${id}`, data),
   deleteDriverNeededDocument: (id) => api.delete(`/admin/owner-management/driver-needed-document/${id}`),
+  getReferralTranslations: () => api.get('/admin/referrals/translation'),
+  updateReferralTranslation: (languageCode, data) =>
+    api.patch(`/admin/referrals/translation/${languageCode}`, data),
 
   /**
    * Subscription Management
    */
   getSubscriptionPlans: () => api.get('/admin/driver-subscriptions/plans/list'),
   createSubscriptionPlan: (planData) => api.post('/admin/driver-subscriptions/plans/create', planData),
+  getSubscriptionSettings: () => api.get('/admin/driver-subscriptions/settings'),
+  updateSubscriptionSettings: (data) => api.post('/admin/driver-subscriptions/settings', data),
   
   /**
    * Common / Configuration Data
@@ -52,8 +57,9 @@ export const adminService = {
   updateServiceLocation: (id, data) => api.patch(`/admin/service-locations/${id}`, data),
   deleteServiceLocation: (id) => api.delete(`/admin/service-locations/${id}`),
   getCountries: () => api.get('/countries'),
+  getVehicleTypes: (transportType) => api.get(`/admin/types/vehicle-types/list${transportType ? `?transport_type=${transportType}` : ''}`),
   getRideModules: () => api.get('/common/ride_modules'),
-  getVehicleTypes: (locationId, transportType) => api.get(`/types/${locationId}?transport_type=${transportType}`),
+  getLocationVehicleTypes: (locationId, transportType) => api.get(`/types/${locationId}?transport_type=${transportType}`),
 
   /**
    * Owner Management
@@ -109,8 +115,12 @@ export const adminService = {
   getCancelChart: () => api.get('/admin/dashboard/cancel-chart'),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
+    api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getDeliveries: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/deliveries?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getTrips: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
+    api.get(`/admin/trips?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   deleteOngoingRide: (id) => api.delete(`/admin/ongoing-rides/${id}`),
 
   /**

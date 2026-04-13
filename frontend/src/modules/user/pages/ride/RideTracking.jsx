@@ -5,10 +5,18 @@ import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
+import api from '../../../../shared/api/axiosInstance';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
+import carIcon from '../../../../assets/icons/car.png';
+import bikeIcon from '../../../../assets/icons/bike.png';
+import autoIcon from '../../../../assets/icons/auto.png';
+import deliveryIcon from '../../../../assets/icons/Delivery.png';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
+const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
+const ACTIVE_RIDE_VALIDATE_MS = 5000;
+const COMPLETED_TRACKING_STATUSES = new Set(['completed', 'delivered']);
 
 const toLatLng = (coords, fallback = DEFAULT_CENTER) => {
   const [lng, lat] = coords || [];
@@ -25,6 +33,27 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
   Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
 
+const getTrackingVehicleIcon = (ride, driver) => {
+  const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
+  const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
+
+  if (serviceType === 'parcel') return deliveryIcon;
+  if (iconType.includes('bike')) return bikeIcon;
+  if (iconType.includes('auto')) return autoIcon;
+  return carIcon;
+};
+
+const getInitials = (name = '') =>
+  String(name || '')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('') || 'DR';
+
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const isLikelyVehiclePhoto = (value = '') => /^(https?:|data:image\/|blob:|\/uploads\/|\/images\/)/i.test(String(value || '').trim());
+
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
@@ -33,19 +62,22 @@ const RideTracking = () => {
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
+  const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
   const fittedRouteKeyRef = useRef('');
   const navigate = useNavigate();
   const location = useLocation();
   const storedRide = useMemo(() => getCurrentRide(), []);
   const state = useMemo(() => location.state || storedRide || {}, [location.state, storedRide]);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
+  const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
+  const routeComplete = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/complete' : '/ride/complete';
 
   const rideId = state.rideId || '';
   const otp = state.otp || '1234';
   const fare = state.fare || 22;
   const paymentMethod = state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
-    () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '' },
+    () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },
     [state.driver],
   );
   const pickupLabel = rideRealtime?.pickup?.address || state.pickup || 'Pipaliyahana, Indore';
@@ -62,12 +94,186 @@ const RideTracking = () => {
     () => toLatLng(rideRealtime?.driverLocation?.coordinates, pickupPosition),
     [pickupPosition, rideRealtime?.driverLocation?.coordinates],
   );
-  const tripStatus = String(rideRealtime?.status || 'accepted').toLowerCase();
+  const tripStatus = String(rideRealtime?.status || state.liveStatus || state.status || 'accepted').toLowerCase();
+  const serviceType = String(state.serviceType || state.type || 'ride').toLowerCase();
   const activeDestination = useMemo(
     () => (tripStatus === 'started' ? dropPosition : pickupPosition),
     [dropPosition, pickupPosition, tripStatus],
   );
   const driver = rideRealtime?.driver || fallbackDriver;
+  const vehicleIcon = getTrackingVehicleIcon(state, driver);
+  const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
+  const driverImage = driver.profileImage || '';
+  const vehicleImage = driver.vehicleImage || '';
+  const hasVehiclePhoto = isLikelyVehiclePhoto(vehicleImage) && !vehicleImageBroken;
+  const driverSubtitle = tripStatus === 'started'
+    ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started')
+    : serviceType === 'parcel'
+      ? 'Delivery agent is on the way'
+      : 'Captain is on the way';
+  const vehicleDetails = [driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ');
+  const activeRideEndpoint = serviceType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
+
+  useEffect(() => {
+    setVehicleImageBroken(false);
+  }, [vehicleImage]);
+
+  const exitTracking = useMemo(
+    () => () => {
+      clearCurrentRide();
+      navigate(routeHome, { replace: true });
+    },
+    [navigate, routeHome],
+  );
+
+  const completeTracking = useMemo(
+    () => (statusValue = 'completed') => {
+      clearCurrentRide();
+      navigate(routeComplete, {
+        replace: true,
+        state: {
+          ...state,
+          rideId,
+          fare,
+          paymentMethod,
+          pickup: pickupLabel,
+          drop: dropLabel,
+          driver,
+          status: statusValue,
+          liveStatus: statusValue,
+          feedback: rideRealtime?.feedback || state.feedback || null,
+          completedAt: rideRealtime?.completedAt || Date.now(),
+        },
+      });
+    },
+    [driver, dropLabel, fare, navigate, paymentMethod, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
+  );
+
+  useEffect(() => {
+    let active = true;
+
+    if (!rideId) {
+      exitTracking();
+      return () => {
+        active = false;
+      };
+    }
+
+    const validateActiveRide = async () => {
+      const activePayload = unwrapApiPayload(await api.get(activeRideEndpoint));
+      const activeRideId = String(activePayload?.rideId || '');
+      const activeStatus = String(activePayload?.liveStatus || activePayload?.status || '').toLowerCase();
+
+      if (COMPLETED_TRACKING_STATUSES.has(activeStatus)) {
+        if (active) {
+          completeTracking(activeStatus);
+        }
+        return false;
+      }
+
+      if (!activeRideId || activeRideId !== String(rideId) || TERMINAL_STATUSES.has(activeStatus)) {
+        if (active) {
+          exitTracking();
+        }
+        return false;
+      }
+
+      return true;
+    };
+
+    const hydrateRideState = async () => {
+      try {
+        const response = await api.get(`/rides/${rideId}`);
+        const payload = unwrapApiPayload(response);
+        const nextStatus = String(payload?.liveStatus || payload?.status || '').toLowerCase();
+
+        if (!active) {
+          return;
+        }
+
+        if (TERMINAL_STATUSES.has(nextStatus)) {
+          if (COMPLETED_TRACKING_STATUSES.has(nextStatus)) {
+            setRideRealtime({
+              pickup: {
+                coordinates: payload?.pickupLocation?.coordinates,
+                address: payload?.pickupAddress || state.pickup || 'Pickup',
+              },
+              drop: {
+                coordinates: payload?.dropLocation?.coordinates,
+                address: payload?.dropAddress || state.drop || 'Drop',
+              },
+              driverLocation: payload?.lastDriverLocation
+                ? { coordinates: payload.lastDriverLocation.coordinates }
+                : null,
+              status: nextStatus,
+              completedAt: payload?.completedAt || null,
+              feedback: payload?.feedback || null,
+              driver: payload?.driver || fallbackDriver,
+            });
+            completeTracking(nextStatus);
+            return;
+          }
+          exitTracking();
+          return;
+        }
+
+        setRideRealtime({
+          pickup: {
+            coordinates: payload?.pickupLocation?.coordinates,
+            address: payload?.pickupAddress || state.pickup || 'Pickup',
+          },
+          drop: {
+            coordinates: payload?.dropLocation?.coordinates,
+            address: payload?.dropAddress || state.drop || 'Drop',
+          },
+          driverLocation: payload?.lastDriverLocation
+            ? { coordinates: payload.lastDriverLocation.coordinates }
+            : null,
+          status: payload?.liveStatus || payload?.status || 'accepted',
+          completedAt: payload?.completedAt || null,
+          feedback: payload?.feedback || null,
+          driver: payload?.driver || fallbackDriver,
+        });
+
+        saveCurrentRide({
+          ...state,
+          rideId,
+          driver: payload?.driver || fallbackDriver,
+          status: payload?.status || state.status || 'accepted',
+          liveStatus: payload?.liveStatus || payload?.status || state.liveStatus || state.status || 'accepted',
+        });
+      } catch {
+        await validateActiveRide().catch(() => {});
+      }
+    };
+
+    hydrateRideState();
+    const validationInterval = window.setInterval(() => {
+      validateActiveRide().catch(() => {});
+    }, ACTIVE_RIDE_VALIDATE_MS);
+
+    return () => {
+      active = false;
+      window.clearInterval(validationInterval);
+    };
+  }, [activeRideEndpoint, completeTracking, exitTracking, fallbackDriver, rideId, state]);
+
+  useEffect(() => {
+    if (!TERMINAL_STATUSES.has(tripStatus)) {
+      return;
+    }
+
+    if (COMPLETED_TRACKING_STATUSES.has(tripStatus)) {
+      return;
+    }
+
+    clearCurrentRide();
+    const timeoutId = window.setTimeout(() => {
+      navigate(routeHome, { replace: true });
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [navigate, routeHome, tripStatus]);
 
   useEffect(() => {
     if (!rideId) {
@@ -88,16 +294,18 @@ const RideTracking = () => {
       setRideRealtime({
         pickup: {
           coordinates: payload.pickupLocation?.coordinates,
-          address: state.pickup || 'Pickup',
+          address: payload.pickupAddress || state.pickup || 'Pickup',
         },
         drop: {
           coordinates: payload.dropLocation?.coordinates,
-          address: state.drop || 'Drop',
+          address: payload.dropAddress || state.drop || 'Drop',
         },
         driverLocation: payload.lastDriverLocation
           ? { coordinates: payload.lastDriverLocation.coordinates }
           : null,
         status: payload.liveStatus || payload.status || 'accepted',
+        completedAt: payload.completedAt || null,
+        feedback: payload.feedback || null,
         driver: payload.driver || fallbackDriver,
       });
     };
@@ -121,7 +329,19 @@ const RideTracking = () => {
       }
 
       const nextStatus = payload.liveStatus || payload.status || 'accepted';
-      if (['completed', 'cancelled'].includes(String(nextStatus).toLowerCase())) {
+      const normalizedStatus = String(nextStatus).toLowerCase();
+
+      if (COMPLETED_TRACKING_STATUSES.has(normalizedStatus)) {
+        setRideRealtime((prev) => ({
+          ...(prev || {}),
+          status: normalizedStatus,
+          completedAt: payload.completedAt || prev?.completedAt || null,
+        }));
+        completeTracking(normalizedStatus);
+        return;
+      }
+
+      if (normalizedStatus === 'cancelled') {
         clearCurrentRide();
       } else {
         saveCurrentRide({
@@ -135,6 +355,7 @@ const RideTracking = () => {
       setRideRealtime((prev) => ({
         ...(prev || {}),
         status: nextStatus,
+        completedAt: payload.completedAt || prev?.completedAt || null,
       }));
     };
 
@@ -148,7 +369,7 @@ const RideTracking = () => {
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
     };
-  }, [fallbackDriver, rideId, state, state.drop, state.pickup]);
+  }, [completeTracking, fallbackDriver, rideId, state, state.drop, state.pickup]);
 
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.DirectionsService) {
@@ -244,7 +465,7 @@ const RideTracking = () => {
       className={`flex-1 flex flex-col items-center gap-1.5 py-3 rounded-[14px] border border-slate-100 bg-slate-50/80 transition-all ${colorClass || ''}`}
     >
       <Icon size={17} className="text-slate-700" strokeWidth={2} />
-      <span className="text-[10px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
+      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
     </motion.button>
   );
 
@@ -267,14 +488,14 @@ const RideTracking = () => {
         {!HAS_VALID_GOOGLE_MAPS_KEY ? (
           <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
             <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-              <p className="text-[12px] font-black text-slate-900">Google Maps key missing</p>
+              <p className="text-[12px] font-bold text-slate-900">Google Maps key missing</p>
               <p className="mt-1 text-[11px] font-bold text-slate-500">Set `VITE_GOOGLE_MAPS_API_KEY` in `frontend/.env`.</p>
             </div>
           </div>
         ) : loadError ? (
           <div className="flex h-full w-full items-center justify-center bg-slate-200 px-6 text-center">
             <div className="rounded-[18px] bg-white/90 px-4 py-4 shadow-sm">
-              <p className="text-[12px] font-black text-slate-900">Google Maps failed to load</p>
+              <p className="text-[12px] font-bold text-slate-900">Google Maps failed to load</p>
               <p className="mt-1 text-[11px] font-bold text-slate-500">Check the browser key restrictions and reload.</p>
             </div>
           </div>
@@ -309,12 +530,9 @@ const RideTracking = () => {
               position={driverPosition}
               title="Driver"
               icon={{
-                path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-                fillColor: '#f59e0b',
-                fillOpacity: 1,
-                strokeColor: '#ffffff',
-                strokeWeight: 2,
-                scale: 6,
+                url: vehicleIcon,
+                scaledSize: new window.google.maps.Size(42, 42),
+                anchor: new window.google.maps.Point(21, 21),
               }}
             />
             <MarkerF
@@ -332,7 +550,7 @@ const RideTracking = () => {
           </GoogleMap>
         ) : (
           <div className="flex h-full w-full items-center justify-center bg-slate-200">
-            <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-black text-slate-700">
+            <div className="rounded-[16px] bg-white/90 px-4 py-3 shadow-sm text-[12px] font-bold text-slate-700">
               Loading map
             </div>
           </div>
@@ -357,13 +575,13 @@ const RideTracking = () => {
         className="absolute top-24 right-4 z-10 bg-white/90 backdrop-blur-md px-3.5 py-2 rounded-full border border-white/80 shadow-[0_4px_14px_rgba(15,23,42,0.08)] flex items-center gap-1.5"
       >
         <Shield size={13} className="text-blue-500" strokeWidth={2.5} />
-        <span className="text-[10px] font-black text-slate-700 uppercase tracking-wider">Safety</span>
+        <span className="text-[10px] font-bold text-slate-700 uppercase tracking-wider">Safety</span>
       </motion.button>
 
       {routeError && (
         <div className="absolute top-24 left-4 z-10 rounded-[12px] border border-amber-100 bg-white/90 px-3 py-2 shadow-sm">
-          <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Route</p>
-          <p className="text-[11px] font-black text-slate-700">Using fallback path while directions load.</p>
+          <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Route</p>
+          <p className="text-[11px] font-bold text-slate-700">Using fallback path while directions load.</p>
         </div>
       )}
 
@@ -377,27 +595,59 @@ const RideTracking = () => {
           <div className="flex items-center gap-3.5 pb-4 border-b border-slate-50">
             <div className="relative shrink-0">
               <div className="w-14 h-14 rounded-[16px] bg-slate-100 overflow-hidden border border-slate-100">
-                <img
-                  src={`https://ui-avatars.com/api/?name=${String(driver.name || 'Captain').replace(' ', '+')}&background=f1f5f9&color=0f172a`}
-                  className="w-full h-full object-cover"
-                  alt="Driver"
-                />
+                {driverImage ? (
+                  <img
+                    src={driverImage}
+                    className="w-full h-full object-cover"
+                    alt={driver.name || 'Driver'}
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center bg-slate-900 text-[18px] font-black text-white">
+                    {getInitials(driver.name)}
+                  </div>
+                )}
+              </div>
+              <div className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-[9px] border-2 border-white bg-slate-900 shadow-sm">
+                <img src={vehicleIcon} alt={vehicleLabel} className="h-4 w-4 object-contain" draggable={false} />
               </div>
               <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-[8px] border-2 border-white flex items-center gap-0.5 shadow-sm">
                 <Star size={9} className="text-slate-900 fill-slate-900" />
-                <span className="text-[9px] font-black text-slate-900">{driver.rating || '4.9'}</span>
+                <span className="text-[9px] font-bold text-slate-900">{driver.rating || '4.9'}</span>
               </div>
             </div>
             <div className="flex-1 min-w-0">
-              <h3 className="text-[17px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
+              <h3 className="text-[18px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
               <p className="text-[12px] font-black text-orange-500 mt-0.5">
-                {tripStatus === 'started' ? 'Trip started' : 'Captain is on the way'}
+                {driverSubtitle}
               </p>
               <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} · {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
             </div>
-            <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[12px] px-3 py-2 text-right">
+            <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[14px] px-3 py-2 text-right shadow-sm">
               <p className="text-[8px] font-black text-orange-400 uppercase tracking-wider">OTP</p>
-              <p className="text-[16px] font-black text-slate-900 tracking-widest leading-tight">{otp}</p>
+              <p className="text-[17px] font-black text-slate-900 tracking-[0.16em] leading-tight">{otp}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 rounded-[16px] border border-slate-100 bg-slate-50/80 px-3 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
+            {hasVehiclePhoto ? (
+              <div className="h-12 w-16 shrink-0 overflow-hidden rounded-[10px] border border-slate-100 bg-white">
+                <img
+                  src={vehicleImage}
+                  alt={vehicleLabel}
+                  className="h-full w-full object-contain bg-white"
+                  draggable={false}
+                  onError={() => setVehicleImageBroken(true)}
+                />
+              </div>
+            ) : (
+              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] border border-slate-100 bg-white">
+                <img src={vehicleIcon} alt={vehicleLabel} className="h-6 w-6 object-contain" draggable={false} />
+              </div>
+            )}
+            <div className="min-w-0">
+              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Vehicle</p>
+              <p className="truncate text-[13px] font-black text-slate-900">{vehicleLabel}</p>
+              <p className="truncate text-[11px] font-bold text-slate-500">{vehicleDetails || 'Assigned vehicle'}</p>
             </div>
           </div>
 
@@ -412,14 +662,14 @@ const RideTracking = () => {
             <div>
               <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Fare</p>
               <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[20px] font-black text-slate-900 tracking-tighter leading-none">Rs {fare}.00</span>
+                <span className="text-[20px] font-bold text-slate-900 tracking-tighter leading-none">Rs {fare}.00</span>
                 <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full uppercase tracking-wide">{paymentMethod}</span>
               </div>
             </div>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => setShowCancelConfirm(true)}
-              className="bg-white border border-red-100 text-red-400 font-black text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-[12px] shadow-sm"
+              className="bg-white border border-red-100 text-red-400 font-bold text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-[12px] shadow-sm"
             >
               Cancel
             </motion.button>
@@ -446,7 +696,7 @@ const RideTracking = () => {
               <div className="w-14 h-14 bg-red-50 rounded-[18px] flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={26} className="text-red-400" strokeWidth={2} />
               </div>
-              <h3 className="text-[18px] font-black text-slate-900 mb-1.5">Cancel your ride?</h3>
+              <h3 className="text-[18px] font-bold text-slate-900 mb-1.5">Cancel your ride?</h3>
               <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">Your captain is already on the way.</p>
               <div className="space-y-2.5">
                 <motion.button
@@ -455,13 +705,13 @@ const RideTracking = () => {
                     clearCurrentRide();
                     navigate('/taxi/user');
                   }}
-                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest"
+                  className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest"
                 >
                   Yes, Cancel
                 </motion.button>
                 <button
                   onClick={() => setShowCancelConfirm(false)}
-                  className="w-full py-3.5 text-[13px] font-black text-slate-400 uppercase tracking-widest"
+                  className="w-full py-3.5 text-[13px] font-bold text-slate-400 uppercase tracking-widest"
                 >
                   No, Go Back
                 </button>

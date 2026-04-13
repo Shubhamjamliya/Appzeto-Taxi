@@ -21,7 +21,7 @@ import {
 
 export const promotionsRouter = Router();
 
-promotionsRouter.use(authenticate(['admin']));
+promotionsRouter.use('/admin', authenticate(['admin']));
 
 promotionsRouter.get('/admin/promotions/bootstrap', getPromotionsBootstrap);
 promotionsRouter.get('/admin/promos', getPromoCodes);

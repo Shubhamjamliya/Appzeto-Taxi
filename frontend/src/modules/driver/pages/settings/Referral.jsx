@@ -1,87 +1,259 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, UserPlus, Gift, Copy, Share2, TrendingUp, CheckCircle2, Zap, X } from 'lucide-react';
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence } from 'framer-motion';
+import { ArrowLeft, CheckCircle2, Copy, Gift, Loader2, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getCurrentDriver } from '../../services/registrationService';
+import { getReferralTranslationContent } from '../../../shared/services/referralTranslationService';
+import {
+  buildReferralPreviewBlocks,
+  DRIVER_REFERRAL_TRANSLATION_FIELDS,
+  getStoredReferralLanguageCode,
+} from '../../../shared/utils/referralTranslationFields';
+
+const readStoredDriverInfo = () => {
+  try {
+    return JSON.parse(localStorage.getItem('driverInfo') || '{}');
+  } catch {
+    return {};
+  }
+};
 
 const DriverReferral = () => {
-    const navigate = useNavigate();
-    const [copied, setCopied] = useState(false);
-    const referralCode = 'ZETO-DRIVER-9080';
+  const navigate = useNavigate();
+  const [activeTab, setActiveTab] = useState('refer');
+  const [copied, setCopied] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [driverProfile, setDriverProfile] = useState(() => {
+    const stored = readStoredDriverInfo();
+    return {
+      referralCode: stored.referralCode || '',
+    };
+  });
+  const [translation, setTranslation] = useState({
+    language_code: 'en',
+    driver_referral: {
+      instant_referrer_user: '',
+      instant_referrer_user_and_new_user: '',
+      conditional_referrer_user_ride_count: '',
+      conditional_referrer_user_earnings: '',
+      dual_conditional_referrer_user_and_new_user_ride_count: '',
+      dual_conditional_referrer_user_and_new_user_earnings: '',
+      banner_text: '',
+    },
+  });
 
-    const handleCopy = () => {
-        setCopied(true);
-        navigator.clipboard.writeText(referralCode);
-        setTimeout(() => setCopied(false), 2000);
+  useEffect(() => {
+    const loadDriverReferral = async () => {
+      setLoading(true);
+      const languageCode = getStoredReferralLanguageCode('driver');
+      const stored = readStoredDriverInfo();
+      const fallbackDriverSection = {
+        instant_referrer_user: '',
+        instant_referrer_user_and_new_user: '',
+        conditional_referrer_user_ride_count: '',
+        conditional_referrer_user_earnings: '',
+        dual_conditional_referrer_user_and_new_user_ride_count: '',
+        dual_conditional_referrer_user_and_new_user_earnings: '',
+        banner_text: '',
+      };
+
+      try {
+        const [driverResponse, translationResponse] = await Promise.all([
+          getCurrentDriver(),
+          getReferralTranslationContent(languageCode),
+        ]);
+
+        const driver = driverResponse?.data || {};
+        const translationData = translationResponse?.data || {};
+
+        setDriverProfile({
+          referralCode: driver.referralCode || stored.referralCode || '',
+        });
+        setTranslation({
+          language_code: translationData.language_code || languageCode,
+          driver_referral: translationData.driver_referral || fallbackDriverSection,
+        });
+
+        localStorage.setItem(
+          'driverInfo',
+          JSON.stringify({
+            ...stored,
+            referralCode: driver.referralCode || '',
+          }),
+        );
+      } catch {
+        try {
+          const translationResponse = await getReferralTranslationContent(languageCode);
+          setTranslation({
+            language_code: translationResponse?.data?.language_code || languageCode,
+            driver_referral: translationResponse?.data?.driver_referral || fallbackDriverSection,
+          });
+        } catch {
+          // Keep local fallback state.
+        }
+      } finally {
+        setLoading(false);
+      }
     };
 
-    const handleWhatsAppShare = () => {
-        const text = `Join Redigo Driver and start earning today! Use my code: ${referralCode}`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(text)}`);
-    };
+    loadDriverReferral();
+  }, []);
 
-    return (
-        <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32">
-            <header className="flex items-center gap-4 mb-10 text-slate-900 uppercase">
-                <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
-                    <ArrowLeft size={18} />
-                </button>
-                <h1 className="text-lg font-black tracking-tight underline dec-taxi-primary">Grow Fleet</h1>
-            </header>
+  const referralCode = driverProfile.referralCode || '';
+  const bannerText = translation.driver_referral?.banner_text || 'Refer and Earn';
+  const infoBlocks = buildReferralPreviewBlocks(
+    translation.driver_referral,
+    DRIVER_REFERRAL_TRANSLATION_FIELDS,
+  );
 
-            <main className="space-y-6">
-                <div className="bg-gradient-to-br from-[#1a1c24] to-[#3a3d4d] p-7 rounded-[2.5rem] text-white relative overflow-hidden group shadow-2xl">
-                    <div className="absolute top-[-30%] right-[-10%] w-48 h-48 bg-taxi-primary/20 rounded-full blur-3xl opacity-50 transition-opacity group-hover:opacity-70" />
-                    <div className="relative z-10 space-y-6 text-center">
-                        <div className="mx-auto w-16 h-16 bg-taxi-primary/10 rounded-2xl flex items-center justify-center text-taxi-primary border border-white/20 backdrop-blur-md mb-2">
-                             <TrendingUp size={32} strokeWidth={2.5} />
-                        </div>
-                        <div className="space-y-1">
-                             <h2 className="text-2xl font-black tracking-tighter">Refer & Earn ₹500</h2>
-                             <p className="text-[11px] font-bold text-white/40 leading-tight uppercase tracking-widest">For every driver that joins</p>
-                        </div>
-                        <div className="bg-white/5 border border-white/10 p-3 rounded-2xl flex items-center justify-between gap-4">
-                             <p className="text-[14px] font-black tracking-[0.2em] opacity-40 uppercase pl-2">{referralCode}</p>
-                             <button onClick={handleCopy} className="w-10 h-10 bg-taxi-primary text-black rounded-xl flex items-center justify-center shadow-lg active:scale-90 transition-transform">
-                                 {copied ? <CheckCircle2 size={18} strokeWidth={3} /> : <Copy size={18} strokeWidth={3} />}
-                             </button>
-                        </div>
-                    </div>
-                </div>
+  const handleCopy = async () => {
+    if (!referralCode) {
+      return;
+    }
+    await navigator.clipboard.writeText(referralCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 1800);
+  };
 
-                <div className="space-y-4">
-                     <div className="flex items-center justify-between px-1">
-                          <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60">Success Tracking</h3>
-                          <button onClick={() => alert('Detailed Network list upcoming')} className="text-[10px] font-black text-blue-500 uppercase tracking-widest">My Network</button>
-                     </div>
+  const handleShare = async () => {
+    if (!referralCode) {
+      return;
+    }
+    const shareText = `${bannerText}\nUse my referral code ${referralCode} and join as a driver.`;
 
-                     <div className="grid grid-cols-2 gap-3">
-                         <div className="bg-white p-4 rounded-3xl border border-white shadow-sm flex flex-col gap-2">
-                             <div className="flex items-center gap-2">
-                                 <UserPlus size={14} className="text-blue-500" />
-                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Invites</span>
-                             </div>
-                             <p className="text-[18px] font-black text-slate-900 leading-none tracking-tighter text-center py-2">12</p>
-                         </div>
-                         <div className="bg-white p-4 rounded-3xl border border-white shadow-sm flex flex-col gap-2">
-                             <div className="flex items-center gap-2">
-                                 <Gift size={15} className="text-rose-500" />
-                                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Earned</span>
-                             </div>
-                             <p className="text-[18px] font-black text-slate-900 leading-none tracking-tighter text-center py-2">₹2.5k</p>
-                         </div>
-                     </div>
-                </div>
+    try {
+      if (navigator.share) {
+        await navigator.share({
+          title: bannerText,
+          text: shareText,
+        });
+        return;
+      }
+    } catch {
+      return;
+    }
 
-                <motion.button 
-                    whileTap={{ scale: 0.97 }}
-                    onClick={handleWhatsAppShare}
-                    className="h-14 w-full bg-slate-900 rounded-2xl flex items-center justify-center gap-3 text-[13px] font-black text-white uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-97 transition-all mt-4"
-                >
-                     Blast To WhatsApp <Share2 size={18} strokeWidth={3} />
-                </motion.button>
-            </main>
+    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');
+  };
+
+  return (
+    <div className="min-h-screen bg-[#f5f7fb] font-sans p-5 pt-8 pb-10">
+      <header className="mb-5 flex items-center gap-3">
+        <button
+          onClick={() => navigate(-1)}
+          className="w-9 h-9 rounded-xl border border-gray-200 bg-white flex items-center justify-center shadow-sm"
+        >
+          <ArrowLeft size={18} className="text-gray-900" strokeWidth={2.3} />
+        </button>
+        <h1 className="text-[19px] font-semibold text-gray-900">Referrals</h1>
+      </header>
+
+      <div className="rounded-[28px] border border-gray-200 bg-white shadow-sm overflow-hidden max-w-md mx-auto">
+        <div className="bg-[#1830b8] px-5 py-5 text-white flex items-center justify-between">
+          <div>
+            <p className="text-[26px] font-semibold leading-tight">{bannerText}</p>
+            <p className="text-[11px] text-indigo-100 mt-1">Language: {translation.language_code?.toUpperCase() || 'EN'}</p>
+          </div>
+          <div className="w-12 h-12 rounded-2xl bg-white/15 flex items-center justify-center">
+            <Gift size={20} />
+          </div>
         </div>
-    );
+
+        <div className="px-4 py-4">
+          <div className="grid grid-cols-[1fr_auto] gap-2">
+            <div className="rounded-xl border border-dashed border-gray-300 px-3 py-3 text-center">
+              <p className="text-[18px] font-semibold text-gray-900 tracking-wide">
+                {referralCode || 'Not available'}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-1">Your referral code</p>
+            </div>
+            <button
+              type="button"
+              onClick={handleCopy}
+              disabled={!referralCode}
+              className="rounded-xl bg-[#1830b8] text-white px-4 text-sm font-medium flex items-center gap-2 disabled:opacity-50"
+            >
+              {copied ? <CheckCircle2 size={15} /> : <Copy size={15} />}
+              Copy
+            </button>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => setActiveTab('refer')}
+              className={`rounded-lg py-2 text-xs font-medium ${
+                activeTab === 'refer' ? 'bg-white border border-gray-200 text-gray-900' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              Refer and earn
+            </button>
+            <button
+              type="button"
+              onClick={() => setActiveTab('history')}
+              className={`rounded-lg py-2 text-xs font-medium ${
+                activeTab === 'history' ? 'bg-white border border-gray-200 text-gray-900' : 'bg-gray-100 text-gray-500'
+              }`}
+            >
+              Referral history
+            </button>
+          </div>
+        </div>
+
+        <div className="px-4 pb-4 min-h-[340px]">
+          {loading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2 className="animate-spin text-[#1830b8]" size={26} />
+            </div>
+          ) : activeTab === 'refer' ? (
+            <div className="space-y-4">
+              <h2 className="text-[18px] font-semibold text-gray-900">How it works?</h2>
+              {infoBlocks.length === 0 ? (
+                <p className="text-sm text-gray-400">Referral content will appear here after admin updates this language.</p>
+              ) : (
+                infoBlocks.map((block) => (
+                  <div
+                    key={block.key}
+                    className="text-[14px] leading-6 text-gray-800 prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: block.html }}
+                  />
+                ))
+              )}
+            </div>
+          ) : (
+            <div className="rounded-2xl border border-dashed border-gray-200 bg-gray-50 px-5 py-8 text-center">
+              <p className="text-sm font-medium text-gray-900">Referral history</p>
+              <p className="text-xs text-gray-400 mt-2">Detailed driver referral history is not available on this screen yet.</p>
+            </div>
+          )}
+        </div>
+
+        <div className="px-4 pb-5">
+          <button
+            type="button"
+            onClick={handleShare}
+            disabled={!referralCode}
+            className="w-full rounded-xl bg-[#ef4444] text-white py-3.5 text-sm font-semibold flex items-center justify-center gap-2 disabled:opacity-50"
+          >
+            Refer now <Share2 size={16} />
+          </button>
+        </div>
+      </div>
+
+      <AnimatePresence>
+        {copied ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-10 left-1/2 -translate-x-1/2 rounded-2xl bg-gray-900 text-white px-4 py-3 text-xs font-semibold shadow-xl"
+          >
+            Referral code copied
+          </motion.div>
+        ) : null}
+      </AnimatePresence>
+    </div>
+  );
 };
 
 export default DriverReferral;

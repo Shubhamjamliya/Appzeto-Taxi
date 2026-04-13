@@ -1,216 +1,217 @@
-import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
-import { 
-    Clock, 
-    Navigation, 
-    MapPin, 
-    CreditCard, 
-    Bike, 
-    Banknote, 
-    CheckCircle2, 
-    X, 
-    ChevronRight,
-    CircleDashed,
-    ScanLine,
-    Package,
-    ArrowRightLeft,
-    TrendingUp,
-    IndianRupee,
-    ArrowRight
+import React, { useEffect, useState } from 'react';
+import { AnimatePresence, motion, useMotionValue, useTransform } from 'framer-motion';
+import {
+  ArrowRight,
+  Banknote,
+  Bike,
+  ChevronRight,
+  Clock,
+  CreditCard,
+  MapPin,
+  Navigation,
+  Package,
+  X,
 } from 'lucide-react';
 
+const Motion = motion;
+
+const normalizePayment = (value = '') => String(value || 'cash').toUpperCase();
+
 const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAccepting = false }) => {
-    const [timer, setTimer] = useState(15);
-    const slideX = useMotionValue(0);
-    const slideFillWidth = useTransform(slideX, [0, 160], ['52px', '100%']);
+  const [timer, setTimer] = useState(15);
+  const slideX = useMotionValue(0);
+  const slideFillWidth = useTransform(slideX, [0, 180], ['58px', '100%']);
+  const data = requestData;
 
-    const data = requestData;
+  useEffect(() => {
+    let interval;
+    let resetTimer;
+    if (visible) {
+      resetTimer = setTimeout(() => setTimer(15), 0);
+      interval = setInterval(() => {
+        setTimer((current) => {
+          if (current <= 1) {
+            onDecline();
+            return 0;
+          }
+          return current - 1;
+        });
+      }, 1000);
+    }
 
-    useEffect(() => {
-        let interval;
-        if (visible) {
-            setTimer(15);
-            interval = setInterval(() => {
-                setTimer((t) => {
-                    if (t <= 1) {
-                        onDecline();
-                        return 0;
-                    }
-                    return t - 1;
-                });
-            }, 1000);
-        }
-        return () => clearInterval(interval);
-    }, [visible, onDecline]);
-
-    useEffect(() => {
-        slideX.set(0);
-    }, [slideX, visible, data?.rideId]);
-
-    const handleSlideEnd = (_event, info) => {
-        if (isAccepting) {
-            return;
-        }
-
-        if (info.offset.x >= 110) {
-            slideX.set(160);
-            onAccept(data);
-            return;
-        }
-
-        slideX.set(0);
+    return () => {
+      clearTimeout(resetTimer);
+      clearInterval(interval);
     };
+  }, [visible, onDecline]);
 
-    if (!visible || !data) return null;
+  useEffect(() => {
+    slideX.set(0);
+  }, [slideX, visible, data?.rideId]);
 
-    const isParcel = data.type === 'parcel';
+  if (!visible || !data) return null;
 
-    const radius = 35;
-    const circumference = 2 * Math.PI * radius;
+  const isParcel = data.type === 'parcel';
+  const isIntercity = data.type === 'intercity';
+  const title = isParcel ? 'Delivery Request' : isIntercity ? 'Intercity Request' : 'Ride Request';
+  const intercityRoute = [data.raw?.intercity?.fromCity, data.raw?.intercity?.toCity].filter(Boolean).join(' to ');
+  const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
+  const payment = normalizePayment(data.payment);
+  const timerProgress = Math.max(0, Math.min(100, (timer / 15) * 100));
 
-    return (
-        <AnimatePresence>
-            <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-[100] p-4 flex items-end justify-center"
-            >
-                {/* Main Card */}
-                <motion.div 
-                    initial={{ y: '100%' }}
-                    animate={{ y: 0 }}
-                    exit={{ y: '100%' }}
-                    className="w-full max-w-md bg-white rounded-[2rem] overflow-hidden shadow-2xl border border-slate-100 relative p-6 pt-10"
+  const handleSlideEnd = (_event, info) => {
+    if (isAccepting) return;
+
+    if (info.offset.x >= 120) {
+      slideX.set(180);
+      onAccept(data);
+      return;
+    }
+
+    slideX.set(0);
+  };
+
+  return (
+    <AnimatePresence mode="wait">
+      <Motion.div
+        initial={{ opacity: 0 }}
+        animate={{ opacity: 1 }}
+        exit={{ opacity: 0 }}
+        className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-950/40 px-3 pb-6 sm:pb-8 backdrop-blur-sm"
+      >
+        <Motion.div
+          initial={{ y: '100%', scale: 0.95 }}
+          animate={{ y: 0, scale: 1 }}
+          exit={{ y: '100%', scale: 0.95 }}
+          transition={{ type: 'spring', stiffness: 300, damping: 30 }}
+          className="relative w-full max-w-[440px] overflow-hidden rounded-[32px] bg-white shadow-[0_40px_100px_rgba(0,0,0,0.15)] border border-slate-100"
+        >
+          {/* Progress Header */}
+          <div className="absolute inset-x-0 top-0 h-1.5 bg-slate-50">
+            <Motion.div
+              className={`h-full rounded-r-full ${isParcel ? 'bg-orange-400' : 'bg-slate-900'}`}
+              animate={{ width: `${timerProgress}%` }}
+              transition={{ duration: 0.4 }}
+            />
+          </div>
+
+          <div className="px-6 pb-6 pt-8">
+            <div className="mb-6 flex items-center justify-between">
+              <div className="flex items-center gap-4">
+                <div className={`flex h-[60px] w-[60px] items-center justify-center rounded-2xl shadow-sm ${isParcel ? 'bg-orange-50 text-orange-600' : isIntercity ? 'bg-yellow-400 text-slate-950' : 'bg-slate-900 text-white'}`}>
+                  {isParcel ? <Package size={28} /> : isIntercity ? <Navigation size={28} /> : <Bike size={28} />}
+                </div>
+                <div>
+                  <div className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider ${isParcel ? 'bg-orange-50 text-orange-600' : isIntercity ? 'bg-yellow-50 text-yellow-700' : 'bg-slate-100 text-slate-500'}`}>
+                    {title}
+                  </div>
+                  <h2 className="mt-1 text-[22px] font-bold tracking-tight text-slate-950">Incoming Order</h2>
+                  <p className="text-[12px] font-medium text-slate-500">{category}</p>
+                </div>
+              </div>
+
+              <div className="relative flex h-14 w-14 items-center justify-center rounded-2xl border-2 border-slate-50 bg-slate-50 shadow-inner">
+                <span className="text-[22px] font-bold text-slate-900">{timer}</span>
+                <Clock size={12} className="absolute -top-1.5 -right-1.5 p-0.5 bg-white border border-slate-100 rounded-full text-slate-400" />
+              </div>
+            </div>
+
+            {/* Quick Stats */}
+            <div className="mb-6 flex items-center justify-between px-2 py-4 rounded-[22px] bg-slate-50/70 border border-slate-100/50">
+               <div className="text-center flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Distance</p>
+                  <p className="text-[15px] font-bold text-slate-900">{data.distance}</p>
+               </div>
+               <div className="w-px h-8 bg-slate-200" />
+               <div className="text-center flex-[1.5] px-4">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Earnings</p>
+                  <p className="text-[20px] font-bold text-slate-900 leading-none">{data.fare}</p>
+               </div>
+               <div className="w-px h-8 bg-slate-200" />
+               <div className="text-center flex-1">
+                  <p className="text-[9px] font-bold uppercase tracking-widest text-slate-400 mb-1">Payment</p>
+                  <p className="text-[13px] font-bold text-emerald-600">{payment}</p>
+               </div>
+            </div>
+
+            {isIntercity && (
+              <div className="mb-6 grid grid-cols-3 gap-2 rounded-[18px] border border-yellow-100 bg-yellow-50/70 px-3 py-3">
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Trip</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.tripType || 'Intercity'}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Date</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.travelDate || 'Today'}</p>
+                </div>
+                <div>
+                  <p className="text-[8px] font-bold uppercase tracking-widest text-yellow-700/60">Pax</p>
+                  <p className="mt-1 truncate text-[11px] font-black text-slate-900">{data.raw?.intercity?.passengers || 1}</p>
+                </div>
+              </div>
+            )}
+
+            {/* Journey Timeline */}
+            <div className="mb-6 relative">
+              <div className="absolute left-[7px] top-3 bottom-3 w-[1.5px] border-l-2 border-dashed border-slate-100" />
+              <div className="space-y-6">
+                <div className="flex items-start gap-4">
+                  <div className="relative z-10 mt-1.5 h-3.5 w-3.5 rounded-full border-2 border-emerald-500 bg-white shadow-sm" />
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Pickup Point</p>
+                    <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-950 truncate max-w-[280px]">
+                      {data.raw?.pickupAddress || data.pickup}
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-4">
+                  <div className="relative z-10 mt-1.5 h-3.5 w-3.5 rounded-full border-2 border-orange-500 bg-white shadow-sm" />
+                  <div className="flex-1">
+                    <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Drop Point</p>
+                    <p className="mt-1 text-[15px] font-semibold leading-snug text-slate-950 truncate max-w-[280px]">
+                      {data.raw?.dropAddress || data.drop}
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={onDecline}
+                disabled={isAccepting}
+                className="flex h-[64px] w-[64px] shrink-0 items-center justify-center rounded-2xl border border-slate-100 bg-white text-slate-400 shadow-sm active:scale-95 transition-all hover:text-rose-500"
+              >
+                <X size={26} />
+              </button>
+
+              <div className="relative h-[64px] flex-1 overflow-hidden rounded-2xl bg-slate-900 shadow-xl shadow-slate-200">
+                <Motion.div style={{ width: slideFillWidth }} className="absolute inset-y-0 left-0 rounded-2xl bg-emerald-500" />
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center pl-10">
+                  <span className="text-[13px] font-bold uppercase tracking-[0.1em] text-white">
+                    {isAccepting ? 'Accepting...' : 'Slide to accept'}
+                  </span>
+                  {!isAccepting && <ArrowRight size={18} className="ml-2 text-white/50" />}
+                </div>
+                <Motion.div
+                  drag={isAccepting ? false : 'x'}
+                  dragConstraints={{ left: 0, right: 180 }}
+                  dragElastic={0.05}
+                  dragMomentum={false}
+                  style={{ x: slideX }}
+                  onDragEnd={handleSlideEnd}
+                  className="absolute left-1 top-1 z-10 flex h-[56px] w-[56px] cursor-grab items-center justify-center rounded-[14px] bg-white text-slate-950 shadow-lg active:cursor-grabbing"
                 >
-                    {/* Timer Circle */}
-                    <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
-                        <div className="relative w-16 h-16 bg-white rounded-full p-1 shadow-xl border border-slate-50 flex items-center justify-center">
-                            <svg className="w-full h-full -rotate-90 absolute inset-0">
-                                <circle
-                                    cx="32"
-                                    cy="32"
-                                    r="28"
-                                    fill="none"
-                                    stroke="#F1F5F9"
-                                    strokeWidth="4"
-                                />
-                                <motion.circle
-                                    cx="32"
-                                    cy="32"
-                                    r="28"
-                                    fill="none"
-                                    stroke="#0F172A"
-                                    strokeWidth="4"
-                                    strokeDasharray={2 * Math.PI * 28}
-                                    animate={{ strokeDashoffset: (2 * Math.PI * 28) * (1 - timer / 15) }}
-                                    className="transition-all duration-1000"
-                                    strokeLinecap="round"
-                                />
-                            </svg>
-                            <span className="text-xl font-bold text-slate-900 z-10">{timer}</span>
-                        </div>
-                    </div>
-
-                    {/* Content Section */}
-                    <div className="text-center space-y-4">
-                        <div className="space-y-1.5 pt-1">
-                             <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full ${isParcel ? 'bg-orange-100 text-orange-600' : 'bg-slate-900 text-white'}`}>
-                                {isParcel ? <Package size={14} strokeWidth={2.5} /> : <Bike size={14} strokeWidth={2.5} />}
-                                <span className="text-[10px] font-semibold tracking-wide">{data.title} Request</span>
-                             </div>
-                             <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-2 leading-none">
-                                Incoming Order
-                             </h2>
-                        </div>
-
-                        {/* Amount & Distance Stats */}
-                        <div className="flex items-center justify-center gap-5 py-3 bg-slate-50 rounded-2xl border border-slate-100/50 mx-1">
-                            <div className="text-center">
-                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Distance</p>
-                                <p className="text-[13px] font-bold text-slate-800 leading-none">{data.distance}</p>
-                            </div>
-                            <div className="w-[1px] h-8 bg-slate-200" />
-                            <div className="text-center">
-                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Earnings</p>
-                                <p className="text-lg font-bold text-slate-900 leading-none">{data.fare}</p>
-                            </div>
-                            <div className="w-[1px] h-8 bg-slate-200" />
-                            <div className="text-center">
-                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Method</p>
-                                <p className="text-[13px] font-bold text-emerald-600 uppercase leading-none">{data.payment}</p>
-                            </div>
-                        </div>
-
-                        {/* Route Details - Very Compact */}
-                        <div className="px-2 space-y-3 mt-5">
-                            <div className="flex items-start gap-3">
-                                <div className="mt-1">
-                                    <div className="w-2 h-2 rounded-full border-2 border-slate-900 bg-white" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.pickup}</p>
-                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Pickup Point</p>
-                                </div>
-                            </div>
-                            <div className="flex items-start gap-3 border-t border-dashed border-slate-100 pt-3">
-                                <div className="mt-1">
-                                    <div className="w-2 h-2 rounded-full border-2 border-rose-500 bg-white" />
-                                </div>
-                                <div className="flex-1 text-left">
-                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.drop}</p>
-                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Drop Point</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Action Controls */}
-                        <div className="flex gap-3 pt-4">
-                            <button 
-                                onClick={onDecline}
-                                disabled={isAccepting}
-                                className="w-14 h-14 rounded-2xl border-2 border-slate-100 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors bg-white shadow-sm shrink-0 disabled:opacity-50 disabled:pointer-events-none"
-                            >
-                                <X size={24} strokeWidth={2.5} />
-                            </button>
-                            <div 
-                                className="relative h-14 flex-1 overflow-hidden rounded-2xl bg-slate-900 shadow-xl shadow-slate-900/20"
-                            >
-                                <motion.div
-                                    style={{ width: slideFillWidth }}
-                                    className="absolute inset-y-0 left-0 rounded-2xl bg-emerald-500"
-                                />
-                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center pl-12 pr-3">
-                                    <span className="truncate text-[11px] font-black uppercase tracking-[0.16em] text-white/75">
-                                        {isAccepting ? 'Accepting...' : 'Slide to accept'}
-                                    </span>
-                                    <ArrowRight size={15} className="ml-1.5 shrink-0 text-white/70" strokeWidth={3} />
-                                </div>
-                                <motion.div
-                                    drag="x"
-                                    dragConstraints={{ left: 0, right: 160 }}
-                                    dragElastic={0.02}
-                                    dragMomentum={false}
-                                    style={{ x: slideX }}
-                                    onDragEnd={handleSlideEnd}
-                                    className="absolute left-1.5 top-1.5 z-10 flex h-[44px] w-[44px] cursor-grab items-center justify-center rounded-[14px] bg-white text-slate-900 shadow-lg active:cursor-grabbing"
-                                >
-                                    <ChevronRight size={24} strokeWidth={3} />
-                                </motion.div>
-                            </div>
-                            <motion.button 
-                                whileTap={{ scale: 0.98 }}
-                                onClick={() => onAccept(data)}
-                                className="flex-1 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold shadow-xl shadow-slate-900/20"
-                            >
-                                Accept Ride <ArrowRight size={20} strokeWidth={2.5} />
-                            </motion.button>
-                        </div>
-                    </div>
-                </motion.div>
-            </motion.div>
-        </AnimatePresence>
-    );
+                  <ChevronRight size={28} />
+                </Motion.div>
+              </div>
+            </div>
+          </div>
+        </Motion.div>
+      </Motion.div>
+    </AnimatePresence>
+  );
 };
 
 export default IncomingRideRequest;

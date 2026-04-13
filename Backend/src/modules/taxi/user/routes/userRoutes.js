@@ -18,11 +18,13 @@ import {
   verifyUserOtpRequest,
   verifyUserPhoneForOtpLogin,
 } from '../controllers/userController.js';
-import { getAppModules } from '../../admin/controllers/adminController.js';
+import { getAppModules, getGoodsTypes, getVehicleTypeCatalog } from '../../admin/controllers/adminController.js';
 
 export const userRouter = Router();
 
 userRouter.get('/app-modules', asyncHandler(getAppModules));
+userRouter.get('/goods-types', asyncHandler(getGoodsTypes));
+userRouter.get('/vehicle-types', asyncHandler(getVehicleTypeCatalog));
 userRouter.post('/register', asyncHandler(registerUser));
 userRouter.post('/signup', asyncHandler(signupUser));
 userRouter.post('/login', asyncHandler(loginUser));

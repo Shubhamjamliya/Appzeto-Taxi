@@ -3,6 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift, Trash2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
+import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
+import { clearCurrentRide } from '../services/currentRideService';
+import { socketService } from '../../../shared/api/socket';
 import { userAuthService } from '../services/authService';
 
 const MotionDiv = motion.div;
@@ -23,6 +26,25 @@ const menuItems = [
 
 const Profile = () => {
   const navigate = useNavigate();
+  const [profile, setProfile] = useState({
+    name: '',
+    phone: '',
+    profileImage: '',
+  });
+
+  useEffect(() => {
+    const token = getLocalUserToken();
+
+    if (!token) {
+      setProfile({
+        name: '',
+        phone: '',
+        profileImage: '',
+      });
+      navigate('/taxi/user/login', { replace: true });
+      return;
+    }
+
   const [profile, setProfile] = useState(() => {
     let stored = {};
     try {
@@ -61,7 +83,19 @@ const Profile = () => {
     };
 
     loadProfile();
-  }, []);
+  }, [navigate]);
+
+  const handleLogout = () => {
+    clearCurrentRide();
+    socketService.disconnect();
+    clearLocalUserSession();
+    setProfile({
+      name: '',
+      phone: '',
+      profileImage: '',
+    });
+    navigate('/taxi/user/login', { replace: true });
+  };
 
   const initials = (profile.name || 'User')
     .split(' ')
@@ -152,7 +186,7 @@ const Profile = () => {
         {/* Sign Out Action */}
         <div className="pt-4 pb-8">
           <button 
-            onClick={() => navigate('/taxi/user/login')}
+            onClick={handleLogout}
             className="w-full h-15 rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 flex items-center justify-center gap-3 text-[14px] font-bold active:scale-98 transition-all"
           >
             <LogOut size={16} strokeWidth={2.5} />

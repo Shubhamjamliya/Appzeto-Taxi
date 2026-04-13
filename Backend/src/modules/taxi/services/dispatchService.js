@@ -5,6 +5,7 @@ import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
   DISPATCH_RADII,
+  DISPATCH_INTERCITY_RADII,
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
@@ -36,6 +37,21 @@ export const addSocketSubscriptions = (socket, { role, entityId }) => {
     socket.join(getDriverRoom(entityId));
   }
 };
+
+const getDispatchVehicleTypeIds = (ride) => {
+  const ids = [
+    ...(Array.isArray(ride.dispatchVehicleTypeIds) ? ride.dispatchVehicleTypeIds : []),
+    ride.vehicleTypeId,
+  ];
+
+  return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+};
+
+const getDispatchRadii = (ride) => (
+  String(ride?.serviceType || '').toLowerCase() === 'intercity'
+    ? DISPATCH_INTERCITY_RADII
+    : DISPATCH_RADII
+);
 
 const emitToSocket = (socketId, event, payload) => {
   if (ioInstance && socketId) {
@@ -76,6 +92,7 @@ export const stopDispatchFlow = (rideId) => {
 };
 
 const closeRideAsUnmatched = async (rideId) => {
+  const dispatchState = activeDispatches.get(String(rideId));
   const ride = await Ride.findOneAndUpdate(
     { _id: rideId, status: RIDE_STATUS.SEARCHING },
     { status: RIDE_STATUS.CANCELLED, liveStatus: RIDE_LIVE_STATUS.CANCELLED },
@@ -105,6 +122,13 @@ const closeRideAsUnmatched = async (rideId) => {
     rideId: String(ride._id),
     reason: 'unmatched',
   });
+
+  for (const driverId of dispatchState?.driverIds || []) {
+    emitToDriver(driverId, 'rideRequestClosed', {
+      rideId: String(ride._id),
+      reason: 'unmatched',
+    });
+  }
 
   emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
     rideId: String(ride._id),
@@ -186,10 +210,13 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
   }
 
   try {
-    const radius = DISPATCH_RADII[radiusIndex];
+    const dispatchRadii = getDispatchRadii(ride);
+    const radius = dispatchRadii[radiusIndex] || dispatchRadii[dispatchRadii.length - 1];
+    const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
+      vehicleTypeIds: dispatchVehicleTypeIds,
     });
 
     const targetDrivers = drivers;
@@ -207,12 +234,16 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
+        pickupAddress: ride.pickupAddress || '',
         dropLocation: ride.dropLocation,
+        dropAddress: ride.dropAddress || '',
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
+        vehicleTypeIds: dispatchVehicleTypeIds,
         vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
         paymentMethod: ride.paymentMethod,
         parcel: ride.parcel || null,
+        intercity: ride.intercity || null,
         radius,
         zoneId: zone?._id ? String(zone._id) : null,
       });
@@ -225,7 +256,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       matchedDrivers: targetDrivers.length,
     });
 
-    if (radiusIndex === DISPATCH_RADII.length - 1) {
+    if (radiusIndex === dispatchRadii.length - 1) {
       // Final attempt waits one more cycle before the ride is closed as unmatched.
       const timer = setTimeout(() => {
         closeRideAsUnmatched(rideId)
@@ -262,7 +293,7 @@ export const notifyRideAccepted = async (ride) => {
   // Once one driver wins the race, the rider is updated and the rest are told to stop.
   const populatedRide = await Ride.findById(ride._id).populate(
     'driverId',
-    'name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating',
+    'name phone profileImage vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating',
   );
 
   if (!populatedRide) {
@@ -290,10 +321,13 @@ export const notifyRideAccepted = async (ride) => {
     fare: populatedRide.fare,
     paymentMethod: populatedRide.paymentMethod,
     parcel: populatedRide.parcel || null,
+    intercity: populatedRide.intercity || null,
     commissionAmount: populatedRide.commissionAmount,
     driverEarnings: populatedRide.driverEarnings,
     pickupLocation: populatedRide.pickupLocation,
+    pickupAddress: populatedRide.pickupAddress || '',
     dropLocation: populatedRide.dropLocation,
+    dropAddress: populatedRide.dropAddress || '',
     acceptedAt: populatedRide.acceptedAt,
     startedAt: populatedRide.startedAt,
     completedAt: populatedRide.completedAt,

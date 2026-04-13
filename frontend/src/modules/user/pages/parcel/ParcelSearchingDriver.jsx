@@ -7,6 +7,8 @@ import { socketService } from '../../../../shared/api/socket';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
 import { saveCurrentRide } from '../../services/currentRideService';
 
+const Motion = motion;
+
 const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
 const unwrap = (response) => response?.data?.data || response?.data || response;
 const unwrapLoginPayload = (response) => {
@@ -15,7 +17,8 @@ const unwrapLoginPayload = (response) => {
 };
 const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '4.9', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted' };
-const ACTIVE_DELIVERY_POLL_MS = 8000;
+const ACTIVE_DELIVERY_POLL_MS = 1500;
+const SEARCH_TIMEOUT_MS = 20000;
 
 const withUserAuthorization = (token) => (
   token
@@ -38,43 +41,75 @@ const normalizeDriver = (driver = {}) => ({
 
 const normalizeLabel = (value = '') => String(value).trim().toLowerCase();
 
-const pickParcelVehicle = (types = [], preferredType = '') => {
+const normalizePreferredVehicleTypes = (value = '') =>
+  String(value || '')
+    .split(',')
+    .map((entry) => normalizeLabel(entry))
+    .filter(Boolean);
+
+const findVehicleMatch = (types, preferredLabel) => {
+  const exactMatch = types.find((type) => normalizeLabel(type.name || type.vehicle_type || type.label) === preferredLabel);
+  if (exactMatch) {
+    return exactMatch;
+  }
+
+  const transportMatch = types.find((type) => normalizeLabel(type.transport_type) === preferredLabel);
+  if (transportMatch) {
+    return transportMatch;
+  }
+
+  return types.find((type) => {
+    const haystack = `${type.name || ''} ${type.vehicle_type || ''} ${type.label || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
+    return haystack.includes(preferredLabel);
+  });
+};
+
+const pickParcelVehicles = (types = [], preferredType = '') => {
   const activeTypes = types.filter((type) => type.active !== false && Number(type.status ?? 1) !== 0);
-  const preferredLabel = normalizeLabel(preferredType);
+  const preferredLabels = normalizePreferredVehicleTypes(preferredType).filter((entry) => entry !== 'both');
+  const matches = [];
 
-  if (preferredLabel && preferredLabel !== 'both') {
-    const exactMatch = activeTypes.find((type) => normalizeLabel(type.name || type.vehicle_type || type.label) === preferredLabel);
-    if (exactMatch) {
-      return exactMatch;
+  for (const preferredLabel of preferredLabels) {
+    const match = findVehicleMatch(activeTypes, preferredLabel);
+    if (match && !matches.some((item) => String(item._id || item.id) === String(match._id || match.id))) {
+      matches.push(match);
     }
+  }
 
-    const transportMatch = activeTypes.find((type) => normalizeLabel(type.transport_type) === preferredLabel);
-    if (transportMatch) {
-      return transportMatch;
-    }
+  if (matches.length > 0) {
+    return matches;
+  }
 
-    const partialMatch = activeTypes.find((type) => {
-      const haystack = `${type.name || ''} ${type.vehicle_type || ''} ${type.label || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
-      return haystack.includes(preferredLabel);
+  if (!preferredLabels.length) {
+    const parcelMatches = activeTypes.filter((type) => {
+      const value = `${type.name || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
+      return value.includes('bike') || value.includes('delivery') || value.includes('parcel') || value.includes('car');
     });
-    if (partialMatch) {
-      return partialMatch;
+
+    if (parcelMatches.length > 0) {
+      return parcelMatches;
     }
+
+    return activeTypes;
   }
 
   const parcelFirst = activeTypes.find((type) => {
     const value = `${type.name || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
     return value.includes('bike') || value.includes('delivery') || value.includes('parcel');
   });
-  return parcelFirst || activeTypes[0] || null;
+  return parcelFirst ? [parcelFirst] : activeTypes.slice(0, 1);
 };
 
-const ActionBtn = ({ icon: Icon, label, onClick }) => (
-  <motion.button whileTap={{ scale: 0.94 }} onClick={onClick} className="flex-1 flex flex-col items-center gap-1 py-2 rounded-[12px] border border-slate-100 bg-slate-50/80 transition-all">
-    <Icon size={15} className="text-slate-700" strokeWidth={2} />
-    <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
-  </motion.button>
-);
+const ActionBtn = ({ icon: Icon, label, onClick }) => {
+  const ActionIcon = Icon;
+
+  return (
+    <Motion.button whileTap={{ scale: 0.94 }} onClick={onClick} className="flex-1 flex flex-col items-center gap-1 py-2 rounded-[12px] border border-slate-100 bg-slate-50/80 transition-all">
+      <ActionIcon size={15} className="text-slate-700" strokeWidth={2} />
+      <span className="text-[9px] font-black text-slate-500 uppercase tracking-wider">{label}</span>
+    </Motion.button>
+  );
+};
 
 const DriverCard = ({ driver, banner, bannerGradient, children }) => (
   <div className="rounded-[20px] border border-white/80 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.14)] overflow-hidden">
@@ -104,7 +139,7 @@ const DriverCard = ({ driver, banner, bannerGradient, children }) => (
 const ParcelSearchingDriver = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const routeState = location.state || {};
+  const routeState = useMemo(() => location.state || {}, [location.state]);
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [otp] = useState(generateOTP);
@@ -112,6 +147,7 @@ const ParcelSearchingDriver = () => {
   const [searchStatus, setSearchStatus] = useState('Preparing your parcel booking...');
   const [bookingError, setBookingError] = useState('');
   const activeRidePollRef = useRef(null);
+  const searchTimeoutRef = useRef(null);
   const requestStartedRef = useRef(false);
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
@@ -147,6 +183,8 @@ const ParcelSearchingDriver = () => {
         ...routeState,
         type: 'parcel',
         serviceType: 'parcel',
+        pickup: rideSnapshot?.pickupAddress || routeState.pickup,
+        drop: rideSnapshot?.dropAddress || routeState.drop,
         rideId: activeRideIdRef.current,
         otp,
         driver: nextDriver,
@@ -159,6 +197,7 @@ const ParcelSearchingDriver = () => {
       saveCurrentRide(nextRide);
 
       clearInterval(activeRidePollRef.current);
+      clearTimeout(searchTimeoutRef.current);
       setTimeout(() => {
         navigate('/parcel/tracking', { state: nextRide });
       }, 1400);
@@ -169,7 +208,7 @@ const ParcelSearchingDriver = () => {
         ...withUserAuthorization(token),
         params: { t: Date.now() },
       });
-      const activeDelivery = activeResponse?.data || activeResponse;
+      const activeDelivery = unwrap(activeResponse);
       if (!activeDelivery?.rideId) return null;
       return activeDelivery;
     };
@@ -211,11 +250,13 @@ const ParcelSearchingDriver = () => {
       setBookingError(reason || 'No drivers accepted the parcel request.');
       setSearchStatus(reason || 'No drivers accepted the parcel request.');
       setStage(STAGES.SEARCHING);
+      clearTimeout(searchTimeoutRef.current);
     };
 
     const onError = ({ message }) => {
       setBookingError(message || 'Could not create parcel booking.');
       setSearchStatus(message || 'Could not create parcel booking.');
+      clearTimeout(searchTimeoutRef.current);
     };
 
     socketService.on('rideSearchUpdate', onRideSearchUpdate);
@@ -242,12 +283,16 @@ const ParcelSearchingDriver = () => {
         }
 
         setSearchStatus('Loading delivery vehicle type...');
-        const vehicleCatalogResponse = await api.get('/admin/types/vehicle-types');
+        const vehicleCatalogResponse = await api.get('/users/vehicle-types');
         const vehicleCatalog = unwrap(vehicleCatalogResponse);
         const vehicleTypes = vehicleCatalog?.vehicle_types || vehicleCatalog?.results || (Array.isArray(vehicleCatalog) ? vehicleCatalog : []);
-        const selectedVehicleType = pickParcelVehicle(vehicleTypes, preferredVehicleType);
+        const selectedVehicleTypes = pickParcelVehicles(vehicleTypes, preferredVehicleType);
+        const selectedVehicleType = selectedVehicleTypes[0];
+        const selectedVehicleTypeIds = selectedVehicleTypes
+          .map((type) => type?._id || type?.id)
+          .filter(Boolean);
 
-        if (!selectedVehicleType?._id && !selectedVehicleType?.id) {
+        if (selectedVehicleTypeIds.length === 0) {
           throw new Error('No active vehicle type available for parcel dispatch.');
         }
 
@@ -264,22 +309,26 @@ const ParcelSearchingDriver = () => {
           goodsTypeFor: preferredVehicleType || routeState.parcel?.goodsTypeFor || 'both',
         };
 
+        const socket = socketService.connect({ role: 'user', token: userToken });
+
         const response = await api.post('/deliveries', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
+          pickupAddress: routeState.pickup || '',
+          dropAddress: routeState.drop || '',
           fare: routeState.fare || routeState.estimatedFare?.min || 45,
-          vehicleTypeId: selectedVehicleType._id || selectedVehicleType.id,
+          vehicleTypeId: selectedVehicleTypeIds[0],
+          vehicleTypeIds: selectedVehicleTypeIds,
           vehicleIconType: selectedVehicleType.icon_types || 'bike',
           paymentMethod: routeState.paymentMethod || 'Cash',
           type: 'parcel',
           parcel: parcelPayload,
         }, rideRequestConfig);
 
-        const payload = response?.data || response;
+        const payload = unwrap(response);
         const rideId = payload?.rideId || payload?.realtime?.rideId || payload?.ride?._id || payload?._id || payload?.id;
         activeRideIdRef.current = String(rideId || '');
 
-        const socket = socketService.connect({ role: 'user', token: userToken });
         if (socket && rideId) {
           socketService.emit('joinRide', { rideId });
           socketService.emit('ride:join', { rideId });
@@ -288,13 +337,28 @@ const ParcelSearchingDriver = () => {
         const pollActiveRide = async () => {
           try {
             const activeRide = await hydrateAcceptedDelivery(userToken);
-            if (!activeRide?.rideId) return;
+            if (!activeRide?.rideId) {
+              if (activeRideIdRef.current && !trackingStartedRef.current) {
+                clearInterval(activeRidePollRef.current);
+                setBookingError('No drivers accepted the parcel request.');
+                setSearchStatus('No drivers accepted the parcel request.');
+              }
+              return;
+            }
+
             const isThisRide = String(activeRide.rideId || '') === String(rideId || '');
+            const rideState = String(activeRide.status || activeRide.liveStatus || '').toLowerCase();
             const isAcceptedRide = ['accepted', 'arriving', 'started', 'ongoing'].includes(String(activeRide.status || activeRide.liveStatus || '').toLowerCase());
+
+            if (isThisRide && ['searching', 'pending'].includes(rideState)) {
+              setStage(STAGES.SEARCHING);
+              setSearchStatus('Parcel booking created. Searching nearby drivers...');
+            }
+
             if (isThisRide && isAcceptedRide) {
               moveToTracking({ acceptedDriver: activeRide.driver || driverRef.current, rideId: activeRide.rideId, rideSnapshot: activeRide });
             }
-          } catch (_error) {
+          } catch {
             // Socket path stays primary.
           }
         };
@@ -304,15 +368,45 @@ const ParcelSearchingDriver = () => {
         activeRidePollRef.current = setInterval(pollActiveRide, ACTIVE_DELIVERY_POLL_MS);
         pollActiveRide();
         setSearchStatus('Parcel booking created. Searching nearby drivers...');
+        clearTimeout(searchTimeoutRef.current);
+        searchTimeoutRef.current = setTimeout(async () => {
+          if (trackingStartedRef.current) {
+            return;
+          }
+
+          const activeRide = await hydrateAcceptedDelivery(userToken).catch(() => null);
+          const rideState = String(activeRide?.status || activeRide?.liveStatus || '').toLowerCase();
+
+          if (!activeRide?.rideId || rideState === 'cancelled') {
+            setBookingError('No drivers accepted the parcel request.');
+            setSearchStatus('No drivers accepted the parcel request.');
+            clearInterval(activeRidePollRef.current);
+            return;
+          }
+
+          if (['accepted', 'arriving', 'started', 'ongoing'].includes(rideState)) {
+            moveToTracking({
+              acceptedDriver: activeRide.driver || driverRef.current,
+              rideId: activeRide.rideId,
+              rideSnapshot: activeRide,
+            });
+            return;
+          }
+
+          setBookingError('Still searching. Try again or keep waiting for a driver.');
+          setSearchStatus('Still searching. Try again or keep waiting for a driver.');
+        }, SEARCH_TIMEOUT_MS);
       } catch (error) {
         const message = error?.message || 'Could not create parcel booking.';
         setBookingError(message);
         setSearchStatus(message);
+        clearTimeout(searchTimeoutRef.current);
       }
     })();
 
     return () => {
       clearInterval(activeRidePollRef.current);
+      clearTimeout(searchTimeoutRef.current);
       socketService.off('rideSearchUpdate', onRideSearchUpdate);
       socketService.off('rideAccepted', onRideAccepted);
       socketService.off('ride:state', onRideState);
@@ -339,18 +433,18 @@ const ParcelSearchingDriver = () => {
 
       <AnimatePresence>
         {isSearching && (
-          <motion.div key="pulse" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
+          <Motion.div key="pulse" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="absolute inset-0 flex items-center justify-center z-10 pointer-events-none">
             <div className="relative">
               {[1.5, 2].map((scaleValue, index) => (
-                <motion.div key={index} animate={{ scale: [1, scaleValue, 1], opacity: [0.5, 0, 0.5] }} transition={{ repeat: Infinity, duration: 2 + index * 0.5, delay: index * 0.5 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-orange-400/20 rounded-full" />
+                <Motion.div key={index} animate={{ scale: [1, scaleValue, 1], opacity: [0.5, 0, 0.5] }} transition={{ repeat: Infinity, duration: 2 + index * 0.5, delay: index * 0.5 }} className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-40 h-40 bg-orange-400/20 rounded-full" />
               ))}
               <div className="relative w-16 h-16 bg-white/95 rounded-full shadow-xl flex items-center justify-center border-4 border-orange-100">
-                <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 6, ease: 'linear' }}>
+                <Motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 6, ease: 'linear' }}>
                   <Package size={28} className="text-orange-500" strokeWidth={2.5} />
-                </motion.div>
+                </Motion.div>
               </div>
             </div>
-          </motion.div>
+          </Motion.div>
         )}
       </AnimatePresence>
 
@@ -359,22 +453,22 @@ const ParcelSearchingDriver = () => {
         <p className="text-[12px] font-black text-slate-900 leading-tight truncate">{routeState.pickup || 'Pickup'} ? {routeState.drop || 'Drop'}</p>
       </div>
       {isSearching && (
-        <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowCancelConfirm(true)} className="absolute top-8 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-md rounded-[12px] shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80 flex items-center justify-center">
+        <Motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowCancelConfirm(true)} className="absolute top-8 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-md rounded-[12px] shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80 flex items-center justify-center">
           <X size={16} className="text-slate-900" strokeWidth={2.5} />
-        </motion.button>
+        </Motion.button>
       )}
 
       <div className="absolute bottom-8 left-4 right-4 z-20">
         <AnimatePresence mode="wait">
           {isSearching && (
-            <motion.div key="searching" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="rounded-[20px] border border-white/80 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.14)] px-5 py-4 space-y-3">
+            <Motion.div key="searching" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }} className="rounded-[20px] border border-white/80 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.14)] px-5 py-4 space-y-3">
               <div className="text-center space-y-0.5">
                 <h1 className="text-[17px] font-black text-slate-900 tracking-tight">Finding a delivery agent...</h1>
                 <p className="text-[11px] font-bold text-slate-400">{searchStatus}</p>
               </div>
               <div className="flex justify-center gap-1.5">
                 {[0, 1, 2, 3].map((index) => (
-                  <motion.div key={index} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.2, delay: index * 0.2 }} className="w-2 h-2 bg-orange-400 rounded-full" />
+                  <Motion.div key={index} animate={{ opacity: [0.3, 1, 0.3] }} transition={{ repeat: Infinity, duration: 1.2, delay: index * 0.2 }} className="w-2 h-2 bg-orange-400 rounded-full" />
                 ))}
               </div>
               <div className="flex items-center justify-center gap-4 py-2 border-y border-slate-50">
@@ -384,11 +478,11 @@ const ParcelSearchingDriver = () => {
               </div>
               {bookingError && <p className="text-center text-[11px] font-black text-red-500">{bookingError}</p>}
               <button onClick={() => setShowCancelConfirm(true)} className="w-full py-2 text-[11px] font-black text-slate-400 uppercase tracking-widest">Cancel My Search</button>
-            </motion.div>
+            </Motion.div>
           )}
 
           {isAssigned && (
-            <motion.div key="assigned" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
+            <Motion.div key="assigned" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
               <DriverCard driver={driver} bannerGradient="bg-gradient-to-r from-blue-500 to-blue-600" banner={<><CheckCircle2 size={16} className="text-white shrink-0" strokeWidth={2.5} /><div className="flex-1"><p className="text-white font-black text-[13px] leading-tight">Delivery Agent Found!</p><p className="text-blue-100 text-[10px] font-bold">Waiting for agent to accept request...</p></div></>}>
                 <div className="flex gap-2">
                   <ActionBtn icon={Phone} label="Call" onClick={() => window.open(`tel:${driver.phone}`)} />
@@ -396,18 +490,18 @@ const ParcelSearchingDriver = () => {
                   <ActionBtn icon={Shield} label="Safety" onClick={() => navigate('/support')} />
                 </div>
               </DriverCard>
-            </motion.div>
+            </Motion.div>
           )}
 
           {isAccepted && (
-            <motion.div key="accepted" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
+            <Motion.div key="accepted" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
               <DriverCard driver={driver} bannerGradient="bg-gradient-to-r from-orange-500 to-orange-400" banner={<><Navigation size={16} className="text-white shrink-0" strokeWidth={2.5} /><div><p className="text-white font-black text-[13px] leading-tight">Delivery Confirmed!</p><p className="text-orange-100 text-[10px] font-bold">Your agent will arrive shortly.</p></div></>}>
                 <div className="flex gap-2">
                   <ActionBtn icon={Phone} label="Call" onClick={() => window.open(`tel:${driver.phone}`)} />
                   <ActionBtn icon={MessageCircle} label="Chat" onClick={() => navigate('/ride/chat', { state: { driver } })} />
                   <ActionBtn icon={Shield} label="Safety" onClick={() => navigate('/support')} />
                 </div>
-                <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="rounded-[14px] border border-orange-100 bg-orange-50/60 px-3 py-2.5 flex items-center justify-between gap-2">
+                <Motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="rounded-[14px] border border-orange-100 bg-orange-50/60 px-3 py-2.5 flex items-center justify-between gap-2">
                   <div>
                     <p className="text-[9px] font-black text-orange-500 uppercase tracking-wider">Share OTP on Pickup</p>
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">Used to verify parcel handover.</p>
@@ -417,9 +511,9 @@ const ParcelSearchingDriver = () => {
                       <div key={index} className="w-8 h-9 bg-white rounded-[8px] border-2 border-orange-200 flex items-center justify-center shadow-sm"><span className="text-[17px] font-black text-slate-900">{digit}</span></div>
                     ))}
                   </div>
-                </motion.div>
+                </Motion.div>
               </DriverCard>
-            </motion.div>
+            </Motion.div>
           )}
         </AnimatePresence>
       </div>
@@ -427,16 +521,16 @@ const ParcelSearchingDriver = () => {
       <AnimatePresence>
         {showCancelConfirm && (
           <>
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCancelConfirm(false)} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto" />
-            <motion.div initial={{ scale: 0.92, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0, y: 40 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[82%] max-w-sm bg-white rounded-[28px] p-7 z-[101] shadow-2xl text-center">
+            <Motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} onClick={() => setShowCancelConfirm(false)} className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[100] max-w-lg mx-auto" />
+            <Motion.div initial={{ scale: 0.92, opacity: 0, y: 40 }} animate={{ scale: 1, opacity: 1, y: 0 }} exit={{ scale: 0.92, opacity: 0, y: 40 }} className="fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[82%] max-w-sm bg-white rounded-[28px] p-7 z-[101] shadow-2xl text-center">
               <div className="w-14 h-14 bg-red-50 rounded-[18px] flex items-center justify-center mx-auto mb-4"><AlertTriangle size={26} className="text-red-400" strokeWidth={2} /></div>
               <h3 className="text-[18px] font-black text-slate-900 mb-1.5">Cancel parcel booking?</h3>
               <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">We're currently searching for an agent. Stop search?</p>
               <div className="space-y-2.5">
-                <motion.button whileTap={{ scale: 0.97 }} onClick={handleCancel} className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest">Yes, Cancel</motion.button>
+                <Motion.button whileTap={{ scale: 0.97 }} onClick={handleCancel} className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest">Yes, Cancel</Motion.button>
                 <button onClick={() => setShowCancelConfirm(false)} className="w-full py-3.5 text-[13px] font-black text-slate-400 uppercase tracking-widest">Keep Searching</button>
               </div>
-            </motion.div>
+            </Motion.div>
           </>
         )}
       </AnimatePresence>

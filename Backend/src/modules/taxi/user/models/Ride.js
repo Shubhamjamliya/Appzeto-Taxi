@@ -85,6 +85,49 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    promo: {
+      code: {
+        type: String,
+        default: '',
+        trim: true,
+        uppercase: true,
+      },
+      promo_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiPromoCode',
+        default: null,
+      },
+      discount_amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_before_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_after_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      service_location_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiServiceLocation',
+        default: null,
+      },
+      transport_type: {
+        type: String,
+        enum: ['taxi', 'delivery', 'all'],
+        default: 'taxi',
+        trim: true,
+      },
+      applied_at: {
+        type: Date,
+        default: null,
+      },
+    },
     lastDriverLocation: {
       type: {
         type: String,

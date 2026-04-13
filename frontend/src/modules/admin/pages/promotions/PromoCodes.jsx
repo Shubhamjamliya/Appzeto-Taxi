@@ -1,38 +1,113 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import { 
-  Plus, Search, Filter, ChevronRight, Edit, Trash2, 
-  ChevronDown, LayoutGrid, List, Loader2, Calendar, Ticket,
-  MapPin, Users, Zap, Percent, Clock, ArrowLeft, Save, HelpCircle
+import React, { useCallback, useEffect, useState } from 'react';
+import {
+  Plus,
+  Filter,
+  ChevronRight,
+  Trash2,
+  Loader2,
+  Ticket,
+  MapPin,
+  Users,
+  Zap,
+  Percent,
+  ArrowLeft,
+  Save,
+  IndianRupee,
+  Calendar,
+  ShieldCheck,
+  Hash,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useLocation, useNavigate } from 'react-router-dom';
 
 const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos';
+const LIST_PATH = '/admin/promotions/promo-codes';
+const CREATE_PATH = '/admin/promotions/promo-codes/create';
 const Motion = motion;
 
+const formatPromoDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return String(value);
+  return date.toISOString().slice(0, 10);
+};
+
+const inputClass =
+  'w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors disabled:bg-gray-50 disabled:text-gray-400 disabled:cursor-not-allowed';
+const labelClass = 'block text-xs font-semibold text-gray-500 mb-1.5';
+
+const createInitialFormData = () => ({
+  service_location_id: '',
+  transport_type: '',
+  user_specific: false,
+  user_id: '',
+  code: '',
+  minimum_trip_amount: '',
+  maximum_discount_amount: '',
+  cumulative_max_discount_amount: '',
+  discount_percentage: '',
+  from: '',
+  to: '',
+  uses_per_user: '1',
+  active: true,
+});
+
+const HeaderBlock = ({ isCreateRoute, onBack }) => (
+  <div className="mb-6">
+    <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+      <span>Promotions</span>
+      <ChevronRight size={12} />
+      <span className="text-gray-700">{isCreateRoute ? 'Create Promo Code' : 'Promo Code'}</span>
+    </div>
+    <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+      <h1 className="text-xl font-semibold text-gray-900">{isCreateRoute ? 'Create Promo Code' : 'Promo Code'}</h1>
+      {isCreateRoute ? (
+        <button
+          type="button"
+          onClick={onBack}
+          className="inline-flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+        >
+          <ArrowLeft size={16} /> Back
+        </button>
+      ) : null}
+    </div>
+  </div>
+);
+
+const SectionCard = ({ icon: Icon, title, description, children }) => (
+  <div className="bg-white rounded-xl border border-gray-200 p-6">
+    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
+      <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+        <Icon size={18} />
+      </div>
+      <div>
+        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
+        <p className="text-xs text-gray-400">{description}</p>
+      </div>
+    </div>
+    {children}
+  </div>
+);
+
+const FieldLabel = ({ icon: Icon, children, required = false }) => (
+  <label className={labelClass}>
+    <Icon size={12} className="inline mr-1 text-gray-400" />
+    {children}
+    {required ? ' *' : ''}
+  </label>
+);
+
 const PromoCodes = () => {
-  const [view, setView] = useState('list');
+  const navigate = useNavigate();
+  const location = useLocation();
+  const isCreateRoute = location.pathname === CREATE_PATH;
+
   const [promos, setPromos] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  
-  // States for dynamic data
   const [locations, setLocations] = useState([]);
   const [usersList, setUsersList] = useState([]);
-
-  const [formData, setFormData] = useState({
-    service_location_id: '',
-    transport_type: '',
-    user_id: '',
-    code: '',
-    minimum_trip_amount: '',
-    maximum_discount_amount: '',
-    cumulative_max_discount_amount: '',
-    discount_percentage: '',
-    from: '',
-    to: '',
-    uses_per_user: '1',
-    active: true
-  });
+  const [formData, setFormData] = useState(createInitialFormData);
 
   const token = localStorage.getItem('adminToken') || '';
 
@@ -40,7 +115,7 @@ const PromoCodes = () => {
     setIsLoading(true);
     try {
       const bootstrapRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/promotions/bootstrap`, {
-        headers: { 'Authorization': `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       if (bootstrapRes.ok) {
@@ -54,9 +129,13 @@ const PromoCodes = () => {
       }
 
       const [promosRes, locRes, usersRes] = await Promise.all([
-        fetch(BASE, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos/users', { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(BASE, { headers: { Authorization: `Bearer ${token}` } }),
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/service-locations', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
+        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/promos/users', {
+          headers: { Authorization: `Bearer ${token}` },
+        }),
       ]);
 
       const pData = await promosRes.json();
@@ -64,9 +143,8 @@ const PromoCodes = () => {
       const uData = await usersRes.json();
 
       if (pData.success) setPromos(pData.data?.results || []);
-      if (lData.success) setLocations(Array.isArray(lData.data) ? lData.data : (lData.data?.results || []));
+      if (lData.success) setLocations(Array.isArray(lData.data) ? lData.data : lData.data?.results || []);
       if (uData.success) setUsersList(uData.data?.results || []);
-
     } catch (err) {
       console.error(err);
     } finally {
@@ -74,360 +152,409 @@ const PromoCodes = () => {
     }
   }, [token]);
 
-  useEffect(() => { fetchData(); }, [fetchData]);
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  useEffect(() => {
+    if (!isCreateRoute) {
+      setFormData(createInitialFormData());
+    }
+  }, [isCreateRoute]);
+
+  const handleFieldChange = (key, value) => {
+    setFormData((current) => ({ ...current, [key]: value }));
+  };
+
+  const handleUserSpecificChange = (checked) => {
+    setFormData((current) => ({
+      ...current,
+      user_specific: checked,
+      user_id: checked ? current.user_id : '',
+    }));
+  };
 
   const handleSave = async (e) => {
     e.preventDefault();
     setSubmitting(true);
+
     try {
+      const payload = {
+        ...formData,
+        user_id: formData.user_specific ? formData.user_id : '',
+      };
+
       const res = await fetch(BASE, {
         method: 'POST',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(payload),
       });
       const data = await res.json();
+
       if (data.success) {
-        setView('list');
-        fetchData();
-        setFormData({
-            service_location_id: '', transport_type: '', user_id: '', code: '',
-            minimum_trip_amount: '', maximum_discount_amount: '', cumulative_max_discount_amount: '',
-            discount_percentage: '', from: '', to: '', uses_per_user: '1', active: true
-        });
+        setFormData(createInitialFormData());
+        await fetchData();
+        navigate(LIST_PATH);
       } else {
-        alert(data.message || "Failed to create promo");
+        alert(data.message || 'Failed to create promo');
       }
-    } catch {
-      alert("Network Error");
+    } catch (error) {
+      console.error(error);
+      alert('Network Error');
+    } finally {
+      setSubmitting(false);
     }
-    finally { setSubmitting(false); }
   };
 
   const filteredPromos = promos;
 
   return (
-    <div className="space-y-6 p-1 animate-in fade-in duration-500 font-sans text-gray-950 pb-20">
-      {/* HEADER */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-[17px] font-black text-[#2D3A6E] uppercase tracking-tight italic leading-none mb-1">
-             {view === 'list' ? 'PROMO CODE' : 'CREATE PROMO'}
-          </h1>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">
-             <span>Promo Code</span>
-             <ChevronRight size={12} className="opacity-50" />
-             <span className="text-gray-900">{view === 'list' ? 'Promo Code' : 'Create'}</span>
-          </div>
-        </div>
-      </div>
+    <div className="min-h-full bg-gray-50 text-gray-900">
+      <HeaderBlock isCreateRoute={isCreateRoute} onBack={() => navigate(LIST_PATH)} />
 
       <AnimatePresence mode="wait">
-        {view === 'list' ? (
-            <Motion.div 
+        {!isCreateRoute ? (
+          <Motion.div
             key="list"
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, scale: 0.98 }}
+            exit={{ opacity: 0, y: -10 }}
             className="space-y-6"
           >
-            {/* TOOLBAR */}
-            <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm p-8 flex flex-col md:flex-row items-center justify-between gap-6">
-              <div className="flex items-center gap-4">
-                 <div className="flex items-center gap-2 text-[12px] font-black text-gray-400 uppercase tracking-widest whitespace-nowrap">
-                   show 
-                   <select className="bg-white border border-gray-100 rounded-xl px-4 py-2 mx-2 text-gray-950 font-black outline-none shadow-sm appearance-none pr-10 relative">
-                      <option>10</option>
-                      <option>25</option>
-                      <option>50</option>
-                   </select> 
-                   entries
-                 </div>
-              </div>
-
-              <div className="flex items-center gap-3">
-                 <button className="h-14 px-8 bg-rose-500 text-white rounded-[24px] text-[12px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-rose-600 transition-all shadow-xl shadow-rose-200 active:scale-95">
-                    <Filter size={18} /> Filters
-                 </button>
-                 <button 
-                   onClick={() => setView('create')}
-                   className="h-14 px-8 bg-[#2D3A6E] text-white rounded-[24px] text-[12px] font-black uppercase tracking-widest flex items-center gap-2 hover:bg-[#1e2a5a] transition-all shadow-xl shadow-indigo-200 active:scale-95"
-                 >
-                    <Plus size={18} /> Add Promo Code
-                 </button>
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+                <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                  <span className="font-medium text-gray-600">Promo codes management</span>
+                  <span className="hidden sm:inline text-gray-300">|</span>
+                  <span>Total: {filteredPromos.length}</span>
+                </div>
+                <div className="flex flex-col gap-3 sm:flex-row">
+                  <button
+                    type="button"
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                  >
+                    <Filter size={16} /> Filters
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => navigate(CREATE_PATH)}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
+                  >
+                    <Plus size={16} /> Add Promo Code
+                  </button>
+                </div>
               </div>
             </div>
 
-            {/* TABLE */}
-            <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden border-b-8 border-b-indigo-50/20 min-h-[500px]">
-               <div className="overflow-x-auto">
-                  <table className="w-full text-left">
-                     <thead>
-                        <tr className="border-b border-gray-50 uppercase tracking-[0.1em] text-[11px] font-black text-gray-400">
-                           <th className="px-10 py-7 italic">Code</th>
-                           <th className="px-10 py-7 italic">Transport Type</th>
-                           <th className="px-10 py-7 italic">From - To Date</th>
-                           <th className="px-10 py-7 italic">Status</th>
-                           <th className="px-10 py-7 italic text-right">Action</th>
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50">
+                    <tr className="text-xs font-semibold text-gray-500">
+                      <th className="px-6 py-4">Code</th>
+                      <th className="px-6 py-4">Transport Type</th>
+                      <th className="px-6 py-4">Service Location</th>
+                      <th className="px-6 py-4">From - To Date</th>
+                      <th className="px-6 py-4">Status</th>
+                      <th className="px-6 py-4 text-right">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {isLoading ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-16 text-center text-sm text-gray-400">
+                          Accessing Promotions Vault...
+                        </td>
+                      </tr>
+                    ) : filteredPromos.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-16 text-center">
+                          <div className="flex flex-col items-center gap-3 text-gray-400">
+                            <Ticket size={44} strokeWidth={1.5} />
+                            <p className="text-sm font-medium">No promo codes found.</p>
+                          </div>
+                        </td>
+                      </tr>
+                    ) : (
+                      filteredPromos.map((promo) => (
+                        <tr key={promo._id} className="hover:bg-gray-50 transition-colors">
+                          <td className="px-6 py-4">
+                            <span className="inline-flex rounded-lg bg-indigo-50 px-3 py-1.5 text-sm font-semibold text-indigo-700">
+                              {promo.code}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4 text-sm text-gray-700 capitalize">{promo.transport_type}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">{promo.service_location_name || '-'}</td>
+                          <td className="px-6 py-4 text-sm text-gray-600">
+                            {formatPromoDate(promo.from)} to {formatPromoDate(promo.to)}
+                          </td>
+                          <td className="px-6 py-4">
+                            <span
+                              className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold ${
+                                promo.active ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                              }`}
+                            >
+                              {promo.active ? 'Active' : 'Disabled'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-4">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-gray-200 text-gray-500 hover:bg-gray-50 hover:text-rose-600 transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-50">
-                        {isLoading ? (
-                           <tr><td colSpan="5" className="py-32 text-center text-gray-300 font-bold uppercase tracking-widest">Accessing Promotions Vault...</td></tr>
-                        ) : filteredPromos.length === 0 ? (
-                           <tr>
-                              <td colSpan="5" className="py-32 text-center">
-                                 <div className="flex flex-col items-center gap-6 opacity-30">
-                                    <Ticket size={100} strokeWidth={1} />
-                                    <div className="space-y-1">
-                                       <p className="text-[14px] font-black uppercase tracking-widest text-[#2D3A6E]">No Data Found</p>
-                                    </div>
-                                 </div>
-                              </td>
-                           </tr>
-                        ) : (
-                           filteredPromos.map(p => (
-                             <tr key={p._id} className="group hover:bg-indigo-50/10 transition-all border-l-4 border-l-transparent hover:border-l-[#2D3A6E]">
-                               <td className="px-10 py-7">
-                                  <span className="bg-indigo-50 text-[#2D3A6E] px-4 py-2 rounded-xl text-[14px] font-black tracking-tighter shadow-sm border border-indigo-100">
-                                     {p.code}
-                                  </span>
-                               </td>
-                               <td className="px-10 py-7">
-                                  <span className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">{p.transport_type}</span>
-                               </td>
-                               <td className="px-10 py-7">
-                                  <div className="flex flex-col">
-                                     <span className="text-[12px] font-black text-gray-900">{p.from}</span>
-                                     <span className="text-[10px] font-bold text-gray-300 uppercase italic">To {p.to}</span>
-                                  </div>
-                               </td>
-                               <td className="px-10 py-7">
-                                  <span className={`px-4 py-2 rounded-2xl text-[10px] font-black italic uppercase tracking-widest border border-current ${p.active ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
-                                     {p.active ? 'Active' : 'Disabled'}
-                                  </span>
-                               </td>
-                               <td className="px-10 py-7 text-right">
-                                  <div className="flex items-center justify-end gap-2 pr-2">
-                                     <button className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-300 hover:text-indigo-600 hover:bg-white/50 transition-all shadow-sm active:scale-95"><Edit size={18} /></button>
-                                     <button className="p-3 bg-white border border-gray-100 rounded-2xl text-gray-300 hover:text-rose-600 hover:bg-white/50 transition-all shadow-sm active:scale-95"><Trash2 size={18} /></button>
-                                  </div>
-                               </td>
-                             </tr>
-                           ))
-                        )}
-                     </tbody>
-                  </table>
-               </div>
-               
-               <div className="p-10 bg-gray-50/10 border-t border-gray-50 flex items-center justify-between">
-                  <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest italic leading-none">Showing 0 to 0 of 0 entries</span>
-                  <div className="flex items-center gap-1.5 leading-none">
-                     <button className="px-8 py-3.5 bg-white border border-gray-100 rounded-2xl text-[11px] font-black text-gray-300 uppercase tracking-widest hover:text-gray-900 transition-colors shadow-sm disabled:opacity-20" disabled>PREV</button>
-                     <button className="h-12 w-12 bg-[#2D3A6E] text-white rounded-2xl text-[14px] font-black shadow-xl ring-8 ring-indigo-50/50">1</button>
-                     <button className="px-8 py-3.5 bg-white border border-gray-100 rounded-2xl text-[11px] font-black text-gray-300 uppercase tracking-widest hover:text-gray-900 transition-colors shadow-sm disabled:opacity-20" disabled>NEXT</button>
-                  </div>
-               </div>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </Motion.div>
         ) : (
-          <Motion.div 
+          <Motion.form
             key="form"
-            initial={{ opacity: 0, scale: 0.98 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.98 }}
-            className="pb-10"
+            onSubmit={handleSave}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="grid grid-cols-1 gap-6 xl:grid-cols-[minmax(0,1fr)_280px]"
           >
-            <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden">
-               <div className="p-10 border-b border-gray-50 flex items-center justify-between bg-gray-50/10">
-                  <div className="flex items-center gap-6">
-                     <button onClick={() => setView('list')} className="p-4 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-gray-950 transition-all shadow-sm active:scale-95">
-                        <ArrowLeft size={20} />
-                     </button>
-                     <div>
-                        <h2 className="text-[20px] font-black text-gray-950 uppercase tracking-tight italic leading-none mb-1">Configuration</h2>
-                        <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">Create a redemption incentive</p>
-                     </div>
-                  </div>
-                  <button className="text-[13px] font-black text-indigo-400 flex items-center gap-2 hover:text-[#2D3A6E] transition-all underline decoration-2 decoration-indigo-100 underline-offset-4">
-                     How It Works
-                  </button>
-               </div>
-
-               <form onSubmit={handleSave} className="p-12">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-                     {/* SERVICE LOCATIONS */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Service Locations <span className="text-rose-500">*</span></label>
-                        <div className="relative group">
-                           <MapPin className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#2D3A6E] transition-colors" size={20} />
-                           <select 
-                             required
-                             value={formData.service_location_id}
-                             onChange={(e) => setFormData({...formData, service_location_id: e.target.value})}
-                             className="w-full h-16 pl-16 pr-10 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none appearance-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           >
-                              <option value="">Select Service Locations</option>
-                              {locations.map(l => <option key={l._id} value={l._id}>{l.name}</option>)}
-                           </select>
-                           <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-200 pointer-events-none" size={18} />
-                        </div>
-                     </div>
-
-                     {/* TRANSPORT TYPE */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Transport Type <span className="text-rose-500">*</span></label>
-                        <div className="relative group">
-                           <Zap className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#2D3A6E] transition-colors" size={20} />
-                           <select 
-                             required
-                             value={formData.transport_type}
-                             onChange={(e) => setFormData({...formData, transport_type: e.target.value})}
-                             className="w-full h-16 pl-16 pr-10 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none appearance-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           >
-                              <option value="">Select</option>
-                              <option value="taxi">Taxi</option>
-                              <option value="delivery">Delivery</option>
-                              <option value="all">All</option>
-                           </select>
-                           <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-200 pointer-events-none" size={18} />
-                        </div>
-                     </div>
-
-                     {/* USERS */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Users <span className="text-rose-500">*</span></label>
-                        <div className="relative group">
-                           <Users className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#2D3A6E] transition-colors" size={20} />
-                           <select 
-                             required
-                             value={formData.user_id}
-                             onChange={(e) => setFormData({...formData, user_id: e.target.value})}
-                             className="w-full h-16 pl-16 pr-10 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none appearance-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           >
-                              <option value="">Select Users</option>
-                              {usersList.map(u => <option key={u._id} value={u._id}>{u.name}</option>)}
-                           </select>
-                           <ChevronDown className="absolute right-6 top-1/2 -translate-y-1/2 text-gray-200 pointer-events-none" size={18} />
-                        </div>
-                     </div>
-
-                     {/* CODE */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Code <span className="text-rose-500">*</span></label>
-                        <div className="relative group">
-                           <Ticket className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#2D3A6E] transition-colors" size={20} />
-                           <input 
-                              type="text" 
-                              placeholder="Enter Code"
-                              required
-                              value={formData.code}
-                              onChange={(e) => setFormData({...formData, code: e.target.value})}
-                              className="w-full h-16 pl-16 pr-6 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           />
-                        </div>
-                     </div>
-
-                     {/* MAX DISCOUNT */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Maximum Discount Amount <span className="text-rose-500">*</span></label>
-                        <input 
-                           type="text" 
-                           placeholder="Enter Maximum Discount Amount"
-                           required
-                           value={formData.maximum_discount_amount}
-                           onChange={(e) => setFormData({...formData, maximum_discount_amount: e.target.value})}
-                           className="w-full h-16 px-8 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                        />
-                     </div>
-
-                     {/* CUMULATIVE MAX DISCOUNT */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Cumulative Maximum Discount Amount <span className="text-rose-500">*</span></label>
-                        <input 
-                           type="text" 
-                           placeholder="Enter Cumulative Maximum Discount Amount"
-                           required
-                           value={formData.cumulative_max_discount_amount}
-                           onChange={(e) => setFormData({...formData, cumulative_max_discount_amount: e.target.value})}
-                           className="w-full h-16 px-8 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                        />
-                     </div>
-
-                     {/* DISCOUNT PERCENTAGE */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">Discount Percentage <span className="text-rose-500">*</span></label>
-                        <div className="relative group">
-                           <Percent className="absolute left-6 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-[#2D3A6E] transition-colors" size={20} />
-                           <input 
-                              type="text" 
-                              placeholder="Enter Discount Percentage"
-                              required
-                              value={formData.discount_percentage}
-                              onChange={(e) => setFormData({...formData, discount_percentage: e.target.value})}
-                              className="w-full h-16 pl-16 pr-6 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           />
-                        </div>
-                     </div>
-
-                     {/* FROM - TO DATE */}
-                     <div className="space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">From - To Date <span className="text-rose-500">*</span></label>
-                        <div className="flex gap-4">
-                           <input 
-                              type="date"
-                              required
-                              value={formData.from}
-                              onChange={(e) => setFormData({...formData, from: e.target.value})}
-                              className="flex-1 h-16 px-8 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           />
-                           <input 
-                              type="date" 
-                              required
-                              value={formData.to}
-                              onChange={(e) => setFormData({...formData, to: e.target.value})}
-                              className="flex-1 h-16 px-8 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                           />
-                        </div>
-                     </div>
-
-                     {/* USES PER USER */}
-                     <div className="md:col-span-1 space-y-3">
-                        <label className="text-[11px] font-black text-gray-950 uppercase tracking-widest italic flex items-center gap-2">How many times the user can use Same promo code? <span className="text-rose-500">*</span></label>
-                        <input 
-                           type="number" 
-                           placeholder="Enter count"
-                           required
-                           min="1"
-                           value={formData.uses_per_user}
-                           onChange={(e) => setFormData({...formData, uses_per_user: e.target.value})}
-                           className="w-full h-16 px-8 bg-gray-50/50 border border-transparent rounded-[24px] text-[15px] font-bold text-gray-950 outline-none focus:bg-white focus:border-[#2D3A6E]/10 transition-all shadow-inner"
-                        />
-                     </div>
+            <div className="space-y-6">
+              <SectionCard
+                icon={Ticket}
+                title="Promo Configuration"
+                description="Create and target a redemption incentive without changing backend fields."
+              >
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                  <div>
+                    <FieldLabel icon={MapPin} required>
+                      Service Locations
+                    </FieldLabel>
+                    <select
+                      required
+                      value={formData.service_location_id}
+                      onChange={(e) => handleFieldChange('service_location_id', e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Select Service Locations</option>
+                      {locations.map((locationItem) => (
+                        <option key={locationItem._id} value={locationItem._id}>
+                          {locationItem.name}
+                        </option>
+                      ))}
+                    </select>
                   </div>
 
-                  <div className="mt-12 pt-10 border-t border-gray-50 flex items-center justify-end gap-5">
-                      <button 
-                         type="button"
-                         onClick={() => setView('list')}
-                         className="h-16 px-10 rounded-[28px] text-[13px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-950 transition-colors"
-                      >
-                         Cancel
-                      </button>
-                      <button 
-                         type="submit"
-                         disabled={submitting}
-                         className="h-16 px-14 bg-[#2D3A6E] text-white rounded-[28px] text-[13px] font-black uppercase tracking-[0.3em] shadow-2xl shadow-indigo-200 hover:bg-[#1e2a5a] transition-all flex items-center gap-3 active:scale-95 disabled:opacity-50"
-                      >
-                         {submitting ? <Loader2 className="animate-spin" size={18} /> : <Save size={18} />}
-                         Save
-                      </button>
+                  <div>
+                    <FieldLabel icon={Zap} required>
+                      Transport Type
+                    </FieldLabel>
+                    <select
+                      required
+                      value={formData.transport_type}
+                      onChange={(e) => handleFieldChange('transport_type', e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">Select</option>
+                      <option value="taxi">Taxi</option>
+                      <option value="delivery">Delivery</option>
+                      <option value="all">All</option>
+                    </select>
                   </div>
-               </form>
+
+                  <div>
+                    <FieldLabel icon={Users} required={formData.user_specific}>
+                      Users
+                    </FieldLabel>
+                    <select
+                      required={formData.user_specific}
+                      disabled={!formData.user_specific}
+                      value={formData.user_id}
+                      onChange={(e) => handleFieldChange('user_id', e.target.value)}
+                      className={inputClass}
+                    >
+                      <option value="">{formData.user_specific ? 'Select Users' : 'All Users'}</option>
+                      {usersList.map((user) => (
+                        <option key={user._id} value={user._id}>
+                          {user.name}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={ShieldCheck}>User Specific</FieldLabel>
+                    <label className="flex items-start gap-3 rounded-lg border border-gray-200 bg-white px-4 py-3">
+                      <input
+                        type="checkbox"
+                        checked={formData.user_specific}
+                        onChange={(e) => handleUserSpecificChange(e.target.checked)}
+                        className="mt-0.5 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                      />
+                      <div>
+                        <p className="text-sm font-medium text-gray-800">Apply for selected user only</p>
+                        <p className="text-xs text-gray-400">Unchecked rehne par promo all users ke liye available rahega.</p>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={Ticket} required>
+                      Code
+                    </FieldLabel>
+                    <input
+                      type="text"
+                      placeholder="Enter Code"
+                      required
+                      value={formData.code}
+                      onChange={(e) => handleFieldChange('code', e.target.value.toUpperCase())}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={IndianRupee} required>
+                      Minimum Trip Amount
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Enter Minimum Trip Amount"
+                      required
+                      value={formData.minimum_trip_amount}
+                      onChange={(e) => handleFieldChange('minimum_trip_amount', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={IndianRupee} required>
+                      Maximum Discount Amount
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Enter Maximum Discount Amount"
+                      required
+                      value={formData.maximum_discount_amount}
+                      onChange={(e) => handleFieldChange('maximum_discount_amount', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={IndianRupee} required>
+                      Cumulative Maximum Discount Amount
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Enter Cumulative Maximum Discount Amount"
+                      required
+                      value={formData.cumulative_max_discount_amount}
+                      onChange={(e) => handleFieldChange('cumulative_max_discount_amount', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={Percent} required>
+                      Discount Percentage
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="Enter Discount Percentage"
+                      required
+                      value={formData.discount_percentage}
+                      onChange={(e) => handleFieldChange('discount_percentage', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={Calendar} required>
+                      From Date
+                    </FieldLabel>
+                    <input
+                      type="date"
+                      required
+                      value={formData.from}
+                      onChange={(e) => handleFieldChange('from', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div>
+                    <FieldLabel icon={Calendar} required>
+                      To Date
+                    </FieldLabel>
+                    <input
+                      type="date"
+                      required
+                      value={formData.to}
+                      onChange={(e) => handleFieldChange('to', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+
+                  <div className="md:col-span-2">
+                    <FieldLabel icon={Hash} required>
+                      How many times the user can use Same promo code?
+                    </FieldLabel>
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Enter how many times the user can use same promo code"
+                      required
+                      value={formData.uses_per_user}
+                      onChange={(e) => handleFieldChange('uses_per_user', e.target.value)}
+                      className={inputClass}
+                    />
+                  </div>
+                </div>
+              </SectionCard>
             </div>
-          </Motion.div>
+
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
+                <button
+                  type="submit"
+                  disabled={submitting}
+                  className="w-full py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+                >
+                  {submitting ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                  Save Promo Code
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate(LIST_PATH)}
+                  className="w-full py-3 bg-gray-50 text-gray-600 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-100 transition-colors"
+                >
+                  Cancel
+                </button>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-2">How It Works</h3>
+                <p className="text-xs leading-5 text-gray-500">
+                  Service location, user targeting, discount limits, trip minimum, date range, and uses-per-user sab fields active hain.
+                </p>
+              </div>
+            </div>
+          </Motion.form>
         )}
       </AnimatePresence>
     </div>
@@ -435,4 +562,3 @@ const PromoCodes = () => {
 };
 
 export default PromoCodes;
-

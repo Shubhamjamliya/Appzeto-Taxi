@@ -16,7 +16,7 @@ import {
 import { startDispatchFlow } from '../../services/dispatchService.js';
 
 export const createRide = async (req, res) => {
-  const { pickup, drop, fare, vehicleTypeId, vehicleIconType } = req.body;
+  const { pickup, drop, fare, vehicleTypeId, vehicleIconType, promo_code, service_location_id, transport_type } = req.body;
 
   if (!pickup || !drop) {
     throw new ApiError(400, 'pickup and drop are required');
@@ -29,6 +29,9 @@ export const createRide = async (req, res) => {
     fare: Number(fare || 0),
     vehicleTypeId,
     vehicleIconType,
+    promo_code,
+    service_location_id,
+    transport_type,
   });
 
   await startDispatchFlow(ride);

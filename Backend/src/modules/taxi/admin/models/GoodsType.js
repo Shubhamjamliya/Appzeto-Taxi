@@ -37,6 +37,11 @@ const goodsTypeSchema = new mongoose.Schema(
       type: [mongoose.Schema.Types.Mixed],
       default: [],
     },
+    icon: {
+      type: String,
+      default: '',
+      trim: true,
+    },
   },
   { timestamps: true },
 );

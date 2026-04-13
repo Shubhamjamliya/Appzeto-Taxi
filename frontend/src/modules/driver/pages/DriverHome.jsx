@@ -41,7 +41,7 @@ import SuvIcon from '@/assets/icons/SUV.png';
 
 import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
-import { getCurrentDriver } from '../services/registrationService';
+import { getCurrentDriver, getLocalDriverToken } from '../services/registrationService';
 
 const containerStyle = {
     width: '100%',
@@ -105,6 +105,17 @@ const formatPoint = (point, fallback) => {
     return fallback;
 };
 
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const withDriverAuthorization = (token) => (
+    token
+        ? {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+        : {}
+);
+
 const mapStyles = [
   { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
   { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
@@ -149,6 +160,17 @@ const DriverHome = () => {
     );
 
     const { isLoaded } = useAppGoogleMapsLoader();
+
+    const fetchActiveJob = useCallback(async (type = 'ride') => {
+        const normalizedType = String(type || 'ride').toLowerCase();
+        const endpoint = normalizedType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
+        const driverToken = getLocalDriverToken();
+        const response = await api.get(endpoint, {
+            ...withDriverAuthorization(driverToken),
+            params: { t: Date.now(), type: normalizedType },
+        });
+        return unwrapApiPayload(response);
+    }, []);
 
     const onLoad = useCallback(function callback(map) {
         setMap(map);
@@ -211,22 +233,72 @@ const DriverHome = () => {
 
         setIsHydratingDriver(true);
 
-        hydrateDriverState()
-            .catch(() => {
+        (async () => {
+            try {
+                await hydrateDriverState();
+
+                const [activeDelivery, activeRide] = await Promise.allSettled([
+                    fetchActiveJob('parcel'),
+                    fetchActiveJob('ride'),
+                ]);
+
+                if (!active) {
+                    return;
+                }
+
+                const deliveryPayload =
+                    activeDelivery.status === 'fulfilled' ? activeDelivery.value : null;
+                const ridePayload =
+                    activeRide.status === 'fulfilled' ? activeRide.value : null;
+
+                const currentJob = deliveryPayload?.rideId
+                    ? deliveryPayload
+                    : ridePayload?.rideId
+                        ? ridePayload
+                        : null;
+
+                if (currentJob?.rideId) {
+                    const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
+                        ? 'parcel'
+                        : 'ride';
+
+                    navigate('/taxi/driver/active-trip', {
+                        replace: true,
+                        state: {
+                            type: currentType,
+                            rideId: currentJob.rideId,
+                            request: {
+                                type: currentType,
+                                title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                                fare: `Rs ${currentJob.fare || 0}`,
+                                payment: currentJob.paymentMethod || 'Cash',
+                                pickup: formatPoint(currentJob.pickupLocation, 'Pickup Location'),
+                                drop: formatPoint(currentJob.dropLocation, 'Drop Location'),
+                                distance: 'active',
+                                requestId: currentJob.rideId,
+                                rideId: currentJob.rideId,
+                                raw: currentJob,
+                            },
+                            currentDriverCoords: driverCoordsRef.current || currentJob.lastDriverLocation?.coordinates || null,
+                        },
+                    });
+                    return;
+                }
+            } catch (_error) {
                 if (active) {
                     setStatusMessage('Could not restore driver status.');
                 }
-            })
-            .finally(() => {
+            } finally {
                 if (active) {
                     setIsHydratingDriver(false);
                 }
-            });
+            }
+        })();
 
         return () => {
             active = false;
         };
-    }, [hydrateDriverState]);
+    }, [fetchActiveJob, hydrateDriverState, navigate]);
 
     useEffect(() => {
         if (map && driverCoords) {
@@ -341,9 +413,18 @@ const DriverHome = () => {
                 setAcceptingRideId('');
             };
 
-            const openAcceptedRide = (payload) => {
+            const openAcceptedRide = async (payload) => {
                 if (!payload?.rideId || payload.rideId !== acceptingRideIdRef.current) {
                     return;
+                }
+
+                const nextType = currentRequest?.type || 'ride';
+                let currentJob = null;
+
+                try {
+                    currentJob = await fetchActiveJob(nextType);
+                } catch (_error) {
+                    currentJob = null;
                 }
 
                 setShowRequest(false);
@@ -352,12 +433,12 @@ const DriverHome = () => {
                 setCompletedRides(prev => prev + 1);
                 navigate('/taxi/driver/active-trip', {
                     state: {
-                        type: currentRequest?.type || 'ride',
-                        rideId: payload.rideId,
+                        type: nextType,
+                        rideId: currentJob?.rideId || payload.rideId,
                         request: {
                             ...currentRequest,
-                            rideId: payload.rideId,
-                            raw: {
+                            rideId: currentJob?.rideId || payload.rideId,
+                            raw: currentJob || {
                                 ...(currentRequest?.raw || {}),
                                 status: payload.status,
                                 liveStatus: payload.liveStatus,
@@ -410,7 +491,7 @@ const DriverHome = () => {
             socketService.disconnect();
         }
         return undefined;
-    }, [currentRequest, driverCoords, isOnline, navigate]);
+    }, [currentRequest, driverCoords, fetchActiveJob, isOnline, navigate]);
     
     useEffect(() => {
         let interval;

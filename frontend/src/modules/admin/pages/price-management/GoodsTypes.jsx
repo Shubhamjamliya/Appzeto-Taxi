@@ -13,7 +13,8 @@ import {
   Globe,
   Package,
   CheckCircle2,
-  Loader2
+  Loader2,
+  Upload
 } from 'lucide-react';
 import { motion, AnimatePresence } from "framer-motion";
 import { useNavigate, useParams } from 'react-router-dom';
@@ -27,11 +28,34 @@ const StatusToggle = ({ active, onToggle }) => (
   </button>
 );
 
+const formatVehicleOption = (vehicle) => {
+  const rawName = String(vehicle?.name || vehicle?.vehicle_type || vehicle?.title || '').trim();
+  const transportType = String(vehicle?.transport_type || '').trim();
+  const label = transportType
+    ? `${rawName} (${transportType.replace(/_/g, ' ')})`
+    : rawName;
+
+  return {
+    id: String(vehicle?._id || vehicle?.id || rawName),
+    value: rawName,
+    label: label || rawName,
+  };
+};
+
+const readFileAsDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = () => reject(new Error('Failed to read icon file'));
+    reader.readAsDataURL(file);
+  });
+
 const GoodsTypes = ({ mode }) => {
   const navigate = useNavigate();
   const { id } = useParams();
   
   const [goods, setGoods] = useState([]);
+  const [vehicleOptions, setVehicleOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('English');
@@ -40,15 +64,17 @@ const GoodsTypes = ({ mode }) => {
 
   const [formData, setFormData] = useState({
     name: '',
-    goods_type_for: 'both',
-    active: 1
+    goods_type_for: '',
+    active: 1,
+    icon: '',
+    iconFile: null,
   });
 
   const baseUrl = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
   const token = localStorage.getItem('adminToken');
 
   useEffect(() => {
-    fetchGoods();
+    fetchInitialData();
   }, []);
 
   useEffect(() => {
@@ -58,27 +84,58 @@ const GoodsTypes = ({ mode }) => {
         setFormData({
           name: item.name || item.goods_type_name || '',
           goods_type_for: item.goods_types_for || item.goods_type_for || 'both',
-          active: item.active !== undefined ? Number(item.active) : 1
+          active: item.active !== undefined ? Number(item.active) : 1,
+          icon: item.icon || '',
+          iconFile: null,
         });
       }
     } else if (mode === 'create') {
-      setFormData({ name: '', goods_type_for: 'both', active: 1 });
+      setFormData({ name: '', goods_type_for: '', active: 1, icon: '', iconFile: null });
     }
   }, [mode, id, goods]);
 
-  const fetchGoods = async () => {
+  useEffect(() => {
+    if (mode === 'create' && !formData.goods_type_for && vehicleOptions.length > 0) {
+      setFormData((current) => ({
+        ...current,
+        goods_type_for: vehicleOptions[0].value,
+      }));
+    }
+  }, [mode, formData.goods_type_for, vehicleOptions]);
+
+  const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const res = await fetch(`${baseUrl}/goods-types`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        const items = data.results || data.data?.results || data.data?.goods_types || [];
+      const [goodsRes, vehicleRes] = await Promise.all([
+        fetch(`${baseUrl}/goods-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }),
+        fetch(`${baseUrl}/types/vehicle-types`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })
+      ]);
+
+      const [goodsData, vehicleData] = await Promise.all([goodsRes.json(), vehicleRes.json()]);
+
+      if (goodsData.success) {
+        const items = goodsData.results || goodsData.data?.results || goodsData.data?.goods_types || [];
         setGoods(items);
       }
+
+      if (vehicleData.success) {
+        const rawVehicles = vehicleData.results || vehicleData.data?.vehicle_types || vehicleData.data || [];
+        const items = Array.isArray(rawVehicles)
+          ? rawVehicles
+          : (rawVehicles?.results || rawVehicles?.vehicle_types || []);
+        const safeItems = Array.isArray(items) ? items.filter((item) => item && typeof item === 'object') : [];
+        const mappedOptions = safeItems
+          .map(formatVehicleOption)
+          .filter((item) => item.value);
+
+        setVehicleOptions(mappedOptions);
+      }
     } catch (error) {
-      console.error("Error fetching goods:", error);
+      console.error("Error fetching goods types form data:", error);
     } finally {
       setLoading(false);
     }
@@ -91,6 +148,14 @@ const GoodsTypes = ({ mode }) => {
       const isEdit = mode === 'edit' && id;
       const method = isEdit ? 'PATCH' : 'POST';
       const url = isEdit ? `${baseUrl}/goods-types/${id}` : `${baseUrl}/goods-types`;
+      const icon = formData.iconFile ? await readFileAsDataUrl(formData.iconFile) : formData.icon;
+      const payload = {
+        name: formData.name,
+        goods_type_for: formData.goods_type_for,
+        active: formData.active,
+        goods_type_name: formData.name,
+        icon,
+      };
       
       const res = await fetch(url, {
         method,
@@ -98,16 +163,13 @@ const GoodsTypes = ({ mode }) => {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({
-          ...formData,
-          goods_type_name: formData.name
-        })
+        body: JSON.stringify(payload)
       });
 
       const data = await res.json();
       if (data.success) {
         navigate('/admin/pricing/goods-types');
-        fetchGoods();
+        fetchInitialData();
       } else {
         alert(data.message || "Failed to save goods type");
       }
@@ -152,7 +214,7 @@ const GoodsTypes = ({ mode }) => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
-      if (data.success) fetchGoods();
+      if (data.success) fetchInitialData();
     } catch (error) {
       console.error("Error deleting:", error);
     }
@@ -160,6 +222,22 @@ const GoodsTypes = ({ mode }) => {
 
   const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors shadow-sm";
   const labelClass = "block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider";
+  const previewIcon = formData.iconFile ? URL.createObjectURL(formData.iconFile) : formData.icon;
+  const availableForOptions = (() => {
+    const dynamicOptions = vehicleOptions.map((option) => ({
+      value: option.value,
+      label: option.label,
+    }));
+
+    if (mode === 'edit' && formData.goods_type_for && !dynamicOptions.some((option) => option.value === formData.goods_type_for)) {
+      dynamicOptions.unshift({
+        value: formData.goods_type_for,
+        label: `${formData.goods_type_for} (Current)`,
+      });
+    }
+
+    return dynamicOptions;
+  })();
 
   if (!mode) {
     return (
@@ -366,13 +444,76 @@ const GoodsTypes = ({ mode }) => {
                         onChange={(e) => setFormData({...formData, goods_type_for: e.target.value})}
                         className={`${inputClass} appearance-none cursor-pointer`}
                       >
-                        <option value="both">Both (Truck & Motor Bike)</option>
-                        <option value="truck">Truck Only</option>
-                        <option value="motor_bike">Motor Bike Only</option>
+                        {availableForOptions.length > 0 ? (
+                          availableForOptions.map((option) => (
+                            <option key={option.value} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))
+                        ) : (
+                          <option value={formData.goods_type_for || ''}>
+                            {loading ? 'Loading vehicle types...' : 'No vehicle types found'}
+                          </option>
+                        )}
                       </select>
                       <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-colors" />
                     </div>
-                 </div>
+                    <p className="text-[10px] font-medium text-gray-400">
+                      Vehicle types are loaded from the admin vehicle type catalog.
+                    </p>
+                  </div>
+               </div>
+
+               <div className="mt-8 border-t border-gray-100 pt-8">
+                  <label className={labelClass}>Goods Icon</label>
+                  <div className="flex flex-col gap-5 md:flex-row md:items-start">
+                    <div className="flex h-36 w-full max-w-[220px] items-center justify-center overflow-hidden rounded-2xl border-2 border-dashed border-gray-200 bg-white">
+                      {previewIcon ? (
+                        <img src={previewIcon} alt="Goods icon preview" className="h-full w-full object-contain p-4" />
+                      ) : (
+                        <div className="text-center text-gray-400">
+                          <Package size={28} className="mx-auto mb-2" />
+                          <p className="text-[11px] font-semibold uppercase tracking-wider">No Icon</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex-1 space-y-3">
+                      <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700">
+                        <Upload size={15} />
+                        Upload Icon
+                        <input
+                          type="file"
+                          className="hidden"
+                          accept="image/*"
+                          onChange={(e) =>
+                            setFormData((current) => ({
+                              ...current,
+                              iconFile: e.target.files?.[0] || null,
+                            }))
+                          }
+                        />
+                      </label>
+                      <p className="text-[11px] text-gray-500">
+                        This icon will be shown on the parcel type screen in the user app.
+                      </p>
+                      {(formData.icon || formData.iconFile) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setFormData((current) => ({
+                              ...current,
+                              icon: '',
+                              iconFile: null,
+                            }))
+                          }
+                          className="text-[11px] font-semibold text-rose-500 transition-colors hover:text-rose-600"
+                        >
+                          Remove current icon
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
                </div>
             </div>
 

@@ -7,6 +7,7 @@ import { ensureDriverWalletCanAcceptRide, settleCompletedRideWallet } from '../d
 import { Delivery } from '../user/models/Delivery.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
+import { applyPromoToRideInTransaction } from './promoService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -126,6 +127,9 @@ export const createRideRecord = async ({
   paymentMethod,
   serviceType,
   parcel,
+  promo_code,
+  service_location_id,
+  transport_type,
 }) => {
   const user = await User.findById(userId);
 
@@ -145,25 +149,92 @@ export const createRideRecord = async ({
     throw new ApiError(400, 'vehicleTypeId is invalid');
   }
 
-  const ride = await Ride.create({
-    userId,
-    vehicleTypeId: vehicleTypeId || null,
-    vehicleIconType: vehicleIconType || '',
-    serviceType: normalizeServiceType(serviceType),
-    pickupLocation: toPoint(pickupCoords, 'pickup'),
-    dropLocation: toPoint(dropCoords, 'drop'),
-    fare: safeFare,
-    paymentMethod: normalizeRidePaymentMethod(paymentMethod),
-    parcel: normalizeParcelPayload(parcel),
-    status: RIDE_STATUS.SEARCHING,
-    liveStatus: RIDE_LIVE_STATUS.SEARCHING,
-  });
+  const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
 
-  user.currentRideId = ride._id;
-  await user.save();
-  await syncDeliveryWithRide(ride);
+  if (!promoCode) {
+    const ride = await Ride.create({
+      userId,
+      vehicleTypeId: vehicleTypeId || null,
+      vehicleIconType: vehicleIconType || '',
+      serviceType: normalizeServiceType(serviceType),
+      pickupLocation: toPoint(pickupCoords, 'pickup'),
+      dropLocation: toPoint(dropCoords, 'drop'),
+      fare: safeFare,
+      paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+      parcel: normalizeParcelPayload(parcel),
+      status: RIDE_STATUS.SEARCHING,
+      liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+    });
 
-  return ride;
+    user.currentRideId = ride._id;
+    await user.save();
+    await syncDeliveryWithRide(ride);
+
+    return ride;
+  }
+
+  let lastError = null;
+
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const session = await mongoose.startSession();
+
+    try {
+      session.startTransaction();
+
+      const ride = await Ride.create(
+        [
+          {
+            userId,
+            vehicleTypeId: vehicleTypeId || null,
+            vehicleIconType: vehicleIconType || '',
+            serviceType: normalizeServiceType(serviceType),
+            pickupLocation: toPoint(pickupCoords, 'pickup'),
+            dropLocation: toPoint(dropCoords, 'drop'),
+            fare: safeFare,
+            paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+            parcel: normalizeParcelPayload(parcel),
+            status: RIDE_STATUS.SEARCHING,
+            liveStatus: RIDE_LIVE_STATUS.SEARCHING,
+          },
+        ],
+        { session },
+      );
+
+      const rideDoc = ride[0];
+
+      user.currentRideId = rideDoc._id;
+      await user.save({ session });
+
+      await applyPromoToRideInTransaction({
+        session,
+        ride: rideDoc,
+        userId,
+        code: promoCode,
+        fare: safeFare,
+        service_location_id,
+        transport_type: transport_type || 'taxi',
+      });
+
+      await session.commitTransaction();
+      await syncDeliveryWithRide(rideDoc);
+      return rideDoc;
+    } catch (error) {
+      lastError = error;
+      await session.abortTransaction();
+
+      const isTransient =
+        typeof error?.hasErrorLabel === 'function' &&
+        (error.hasErrorLabel('TransientTransactionError') || error.hasErrorLabel('UnknownTransactionCommitResult'));
+
+      if (!isTransient || attempt === 2) {
+        throw error;
+      }
+    } finally {
+      session.endSession();
+    }
+  }
+
+  throw lastError || new ApiError(500, 'Failed to create ride with promo');
 };
 
 export const getRideDetails = async (rideId) => {
@@ -202,6 +273,7 @@ export const serializeRideRealtime = (ride) => ({
   parcel: ride.deliveryId?.parcel || ride.parcel || null,
   commissionAmount: ride.commissionAmount,
   driverEarnings: ride.driverEarnings,
+  promo: ride.promo?.code ? ride.promo : null,
   pickupLocation: ride.pickupLocation,
   dropLocation: ride.dropLocation,
   acceptedAt: ride.acceptedAt,

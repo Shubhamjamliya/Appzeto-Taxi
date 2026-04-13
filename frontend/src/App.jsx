@@ -523,8 +523,11 @@ function App() {
                
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
+               <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />
                <Route path="promotions/send-notification" element={<AdminSendNotification />} />
+               <Route path="promotions/send-notification/create" element={<AdminSendNotification />} />
                <Route path="promotions/banner-image" element={<AdminBannerImage />} />
+               <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
               
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />

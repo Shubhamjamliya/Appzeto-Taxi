@@ -27,6 +27,9 @@ export const createRide = async (req, res) => {
     type,
     serviceType,
     parcel,
+    promo_code,
+    service_location_id,
+    transport_type,
   } = req.body;
 
   if (!pickup || !drop) {
@@ -43,6 +46,9 @@ export const createRide = async (req, res) => {
     paymentMethod,
     serviceType: type || serviceType,
     parcel,
+    promo_code,
+    service_location_id,
+    transport_type,
   });
 
   await startDispatchFlow(ride);

@@ -164,6 +164,9 @@ export const getOngoingRides = asyncHandler(async (req, res) =>
 export const getDeliveries = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDeliveries(req.query)),
 );
+export const getIntercityTrips = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listIntercityTrips(req.query)),
+);
 export const deleteOngoingRide = asyncHandler(async (req, res) =>
   ok(res, await adminService.deleteOngoingRide(req.params.id)),
 );

@@ -63,6 +63,7 @@ import {
   getDeletedDrivers,
   getFirebaseSettings,
   getGoodsTypes,
+  getIntercityTrips,
   getRentalPackageTypes,
   getGeneralSettingsCategory,
   getLanguages,
@@ -233,6 +234,7 @@ adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 adminRouter.get('/admin/deliveries', getDeliveries);
+adminRouter.get('/admin/trips', getIntercityTrips);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);
 

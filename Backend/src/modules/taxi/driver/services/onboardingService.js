@@ -6,6 +6,7 @@ import { Driver } from '../models/Driver.js';
 import { DriverRegistrationSession } from '../models/DriverRegistrationSession.js';
 import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
+import { listDriverDocumentUploadFields } from '../../admin/services/adminService.js';
 import { hashPassword, signAccessToken } from './authService.js';
 import { findZoneByPickup } from './locationService.js';
 
@@ -391,10 +392,17 @@ export const saveDriverDocuments = async ({ registrationId, phone, documents = {
     }
   }
 
+  session.documents = {
+    ...(session.documents || {}),
+    ...updatedDocuments,
+  };
+  session.status = 'documents_saved';
+  await session.save();
+
   return {
     message: 'Documents uploaded successfully',
     uploadedDocumentKeys,
-    documents: updatedDocuments,
+    documents: session.documents,
     session: publicSessionPayload(session),
   };
 };
@@ -431,7 +439,10 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
     normalizedDocuments[documentKey] = normalizeStoredDocument(value);
   }
 
-  const requiredDocuments = ['aadharFront', 'aadharBack', 'drivingLicense', 'vehicleRC'];
+  const configuredUploadFields = await listDriverDocumentUploadFields({ activeOnly: true });
+  const requiredDocuments = configuredUploadFields
+    .filter((field) => field.required)
+    .map((field) => field.key);
   const missingDocuments = requiredDocuments.filter((key) => !normalizedDocuments?.[key]);
 
   if (missingDocuments.length > 0) {

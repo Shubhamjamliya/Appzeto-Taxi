@@ -19,6 +19,27 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    owner_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiOwner',
+      default: null,
+      index: true,
+    },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiServiceLocation',
+      default: null,
+      index: true,
+    },
+    country: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    profile_picture: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     gender: {
       type: String,
       default: '',

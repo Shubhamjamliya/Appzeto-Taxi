@@ -7,6 +7,17 @@ const serviceLocationSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    legacy_id: {
+      type: String,
+      default: '',
+      trim: true,
+      index: true,
+    },
+    company_key: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     service_location_name: {
       type: String,
       required: true,
@@ -18,8 +29,12 @@ const serviceLocationSchema = new mongoose.Schema(
       trim: true,
     },
     country: {
-      type: String,
+      type: mongoose.Schema.Types.Mixed,
       default: 'India',
+    },
+    translation_dataset: {
+      type: String,
+      default: '',
       trim: true,
     },
     currency_name: {
@@ -41,6 +56,11 @@ const serviceLocationSchema = new mongoose.Schema(
     timezone: {
       type: String,
       default: 'Asia/Kolkata',
+      trim: true,
+    },
+    currency_pointer: {
+      type: String,
+      default: 'ltr',
       trim: true,
     },
     unit: {

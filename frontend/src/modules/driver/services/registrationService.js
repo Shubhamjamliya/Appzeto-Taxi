@@ -87,3 +87,4 @@ export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   });
 
 export const getDriverServiceLocations = () => api.get('/drivers/service-locations');
+export const getDriverDocumentTemplates = () => api.get('/drivers/document-templates');

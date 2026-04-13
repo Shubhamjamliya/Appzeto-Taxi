@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   ArrowLeft,
   AlertCircle,
@@ -17,24 +17,17 @@ import {
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
-
-const REQUIRED_DOCUMENTS = [
-  { key: 'aadharFront', name: 'Aadhar Card - Front' },
-  { key: 'aadharBack', name: 'Aadhar Card - Back' },
-  { key: 'drivingLicense', name: 'Driving License' },
-  { key: 'vehicleRC', name: 'Vehicle RC' },
-];
-
-const getPreviewUrl = (documentValue) => {
-  if (!documentValue) return '';
-  if (typeof documentValue === 'string') return documentValue;
-  return documentValue.previewUrl || documentValue.secureUrl || '';
-};
+import {
+  flattenDriverDocumentFields,
+  getDocumentPreviewUrl,
+  normalizeDriverDocumentTemplates,
+} from '../../../driver/utils/documentTemplates';
 
 const DriverAudit = () => {
   const navigate = useNavigate();
   const { id } = useParams();
   const [driver, setDriver] = useState(null);
+  const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
@@ -44,8 +37,15 @@ const DriverAudit = () => {
     setError('');
 
     try {
-      const response = await adminService.getDriver(id);
-      setDriver(response?.data || null);
+      const [driverResponse, templateResponse] = await Promise.all([
+        adminService.getDriver(id),
+        adminService.getDriverNeededDocuments(),
+      ]);
+
+      setDriver(driverResponse?.data || null);
+      setTemplates(
+        normalizeDriverDocumentTemplates(templateResponse?.data?.results || []),
+      );
     } catch (err) {
       setError(err?.message || 'Failed to fetch driver audit data');
       setDriver(null);
@@ -78,6 +78,25 @@ const DriverAudit = () => {
     }
   };
 
+  const mappedDocs = useMemo(() => {
+    const fields = flattenDriverDocumentFields(templates);
+
+    return fields.map((doc) => {
+      const value = driver?.documents?.[doc.key];
+      const previewUrl = getDocumentPreviewUrl(value);
+
+      return {
+        id: doc.key,
+        name: doc.label,
+        number: value?.fileName || 'N/A',
+        expiry: doc.hasExpiryDate ? 'Not captured' : 'N/A',
+        status: previewUrl ? 'Verified' : 'Pending',
+        comment: previewUrl ? `Uploaded under ${doc.templateName}` : 'Missing',
+        image: previewUrl,
+      };
+    });
+  }, [driver?.documents, templates]);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
@@ -92,10 +111,7 @@ const DriverAudit = () => {
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center px-6">
         <AlertCircle size={28} className="text-rose-500" />
         <p className="text-sm font-bold text-rose-500">{error}</p>
-        <button
-          onClick={fetchDriverData}
-          className="px-5 py-2 rounded-xl bg-gray-950 text-white text-xs font-black uppercase tracking-widest"
-        >
+        <button onClick={fetchDriverData} className="px-5 py-2 rounded-xl bg-gray-950 text-white text-xs font-black uppercase tracking-widest">
           Retry
         </button>
       </div>
@@ -105,21 +121,6 @@ const DriverAudit = () => {
   if (!driver) {
     return null;
   }
-
-  const mappedDocs = REQUIRED_DOCUMENTS.map((doc) => {
-    const value = driver.documents?.[doc.key];
-    const previewUrl = getPreviewUrl(value);
-
-    return {
-      id: doc.key,
-      name: doc.name,
-      number: value?.fileName || 'N/A',
-      expiry: 'N/A',
-      status: previewUrl ? 'Verified' : 'Pending',
-      comment: previewUrl ? 'Uploaded from onboarding' : 'Missing',
-      image: previewUrl,
-    };
-  });
 
   return (
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-700 max-w-7xl mx-auto pb-20 font-sans text-gray-950">
@@ -242,11 +243,7 @@ const DriverAudit = () => {
                       <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.number}</td>
                       <td className="px-5 py-5 text-[12px] font-bold text-gray-500">{doc.expiry}</td>
                       <td className="px-5 py-5 text-center">
-                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${
-                          doc.status === 'Verified'
-                            ? 'bg-emerald-50 text-emerald-600 border-emerald-100'
-                            : 'bg-amber-50 text-amber-600 border-amber-100'
-                        }`}>
+                        <span className={`px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-widest border shadow-sm ${doc.status === 'Verified' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
                           {doc.status}
                         </span>
                       </td>

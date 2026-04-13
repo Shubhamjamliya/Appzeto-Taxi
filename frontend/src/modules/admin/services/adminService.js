@@ -28,9 +28,15 @@ export const adminService = {
   getDrivers: (page = 1, limit = 50) => api.get(`/admin/drivers?page=${page}&limit=${limit}`),
   bulkImportDrivers: (payload) => api.post('/admin/drivers/bulk-import', payload),
   getDriver: (id) => api.get(`/admin/drivers/${id}`),
+  createDriver: (driverData) => api.post('/admin/drivers', driverData),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),
+  getDriverNeededDocuments: () => api.get('/admin/owner-management/driver-needed-document'),
+  getDriverNeededDocument: (id) => api.get(`/admin/owner-management/driver-needed-document/${id}`),
+  createDriverNeededDocument: (data) => api.post('/admin/owner-management/driver-needed-document', data),
+  updateDriverNeededDocument: (id, data) => api.patch(`/admin/owner-management/driver-needed-document/${id}`, data),
+  deleteDriverNeededDocument: (id) => api.delete(`/admin/owner-management/driver-needed-document/${id}`),
 
   /**
    * Subscription Management
@@ -53,6 +59,7 @@ export const adminService = {
    * Owner Management
    */
   getOwners: () => api.get('/admin/owner-management/manage-owners'),
+  getOwner: (id) => api.get(`/admin/owner-management/manage-owners/${id}`),
   createOwner: (ownerData) => api.post('/admin/owner-management/manage-owners', ownerData),
   updateOwner: (id, ownerData) => api.patch(`/admin/owner-management/manage-owners/${id}`, ownerData),
   deleteOwner: (id) => api.delete(`/admin/owner-management/manage-owners/${id}`),

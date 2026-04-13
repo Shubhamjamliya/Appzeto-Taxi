@@ -66,10 +66,8 @@ const driverRegistrationSessionSchema = new mongoose.Schema(
       taxNumber: { type: String, default: '' },
     },
     documents: {
-      aadharFront: { type: mongoose.Schema.Types.Mixed, default: null },
-      aadharBack: { type: mongoose.Schema.Types.Mixed, default: null },
-      drivingLicense: { type: mongoose.Schema.Types.Mixed, default: null },
-      vehicleRC: { type: mongoose.Schema.Types.Mixed, default: null },
+      type: mongoose.Schema.Types.Mixed,
+      default: {},
     },
     finalDriverId: {
       type: mongoose.Schema.Types.ObjectId,

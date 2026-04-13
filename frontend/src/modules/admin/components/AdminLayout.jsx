@@ -67,9 +67,7 @@ const resolvePageTitle = (pathname, sections) => {
 
   const label = findLabel(flattenItems(sections));
   if (label) return label;
-  if (pathname === '/owner/create') return 'Add Fleet Owner';
   if (pathname.includes('/owners')) return 'Owner Management';
-  if (pathname.includes('/owner')) return 'Owner Management';
   if (pathname.includes('/fleet')) return 'Fleet Management';
   if (pathname.includes('/settings')) return 'Settings';
   if (pathname.includes('/reports')) return 'Reports';
@@ -364,8 +362,7 @@ const AdminLayout = () => {
             icon: UserCog,
             label: 'Admin Management',
             subItems: [
-              { label: 'Manage Admins', path: '/admin/management/admins' },
-              { label: 'Admin Roles', path: '/admin/masters/roles' },
+              { label: 'Admins', path: '/admin/management/admins' },
             ],
           },
           { icon: Briefcase, label: 'Owner Management', path: '/admin/owners/dashboard' },
@@ -485,10 +482,7 @@ const AdminLayout = () => {
     []
   );
 
-  const isOwnerRoute =
-    location.pathname.startsWith('/admin/owners') ||
-    location.pathname.startsWith('/admin/fleet') ||
-    location.pathname.startsWith('/owner');
+  const isOwnerRoute = location.pathname.startsWith('/admin/owners') || location.pathname.startsWith('/admin/fleet');
   const mode = isOwnerRoute ? OWNER_MODE : ADMIN_MODE;
   const sidebarSections = mode === OWNER_MODE ? ownerSections : adminSections;
   const pageTitle = resolvePageTitle(location.pathname, sidebarSections);

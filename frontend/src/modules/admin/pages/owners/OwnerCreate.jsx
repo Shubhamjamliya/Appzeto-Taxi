@@ -104,18 +104,16 @@ const OwnerCreate = () => {
   }
 
   return (
-    <div className="min-h-screen bg-transparent p-1 font-sans">
-      <OwnerFormPanel
-        mode="create"
-        formData={formData}
-        setFormData={setFormData}
-        areas={areas}
-        transportTypes={transportTypes}
-        submitting={submitting}
-        onSubmit={handleSave}
-        onCancel={() => navigate('/admin/owners')}
-      />
-    </div>
+    <OwnerFormPanel
+      mode="create"
+      formData={formData}
+      setFormData={setFormData}
+      areas={areas}
+      transportTypes={transportTypes}
+      submitting={submitting}
+      onSubmit={handleSave}
+      onCancel={() => navigate('/admin/owners')}
+    />
   );
 };
 

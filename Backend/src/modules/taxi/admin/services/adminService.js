@@ -7,6 +7,7 @@ import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 // AppModule import removed
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
+import { DriverNeededDocument } from '../models/DriverNeededDocument.js';
 import { GoodsType } from '../models/GoodsType.js';
 import { OwnerNeededDocument } from '../models/OwnerNeededDocument.js';
 import { OwnerBooking } from '../models/OwnerBooking.js';
@@ -28,6 +29,7 @@ import { NotificationChannel } from '../models/NotificationChannel.js';
 import { UserPreference } from '../models/UserPreference.js';
 import { AdminRole } from '../models/AdminRole.js';
 import { PaymentGateway } from '../models/PaymentGateway.js';
+import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
@@ -71,6 +73,47 @@ const normalizeBoolean = (value) => {
   if (typeof value === 'boolean') return value;
   if (value === 1 || value === '1' || value === 'true') return true;
   return false;
+};
+
+const normalizeDriverAccountType = (value) => {
+  const normalized = String(value || 'individual').trim().toLowerCase();
+
+  if (normalized === 'fleet drivers' || normalized === 'fleet_drivers' || normalized === 'fleetdrivers') {
+    return 'fleet_drivers';
+  }
+
+  if (normalized === 'both') {
+    return 'both';
+  }
+
+  return 'individual';
+};
+
+const slugify = (value = '') =>
+  String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '') || `document-${Date.now()}`;
+
+const toDocumentKey = (value = '') => {
+  const normalized = String(value || '')
+    .trim()
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim();
+
+  if (!normalized) {
+    return `document${Date.now()}`;
+  }
+
+  return normalized
+    .split(/\s+/)
+    .map((part, index) =>
+      index === 0
+        ? part.toLowerCase()
+        : `${part.charAt(0).toUpperCase()}${part.slice(1).toLowerCase()}`,
+    )
+    .join('');
 };
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -247,6 +290,93 @@ const serializeOwnerNeededDocument = (item) => ({
   updatedAt: item.updatedAt,
 });
 
+const buildDriverDocumentFields = (item) => {
+  if (item.image_type === 'front_back') {
+    return [
+      {
+        key: item.front_key,
+        label: `${item.name} Front`,
+        side: 'front',
+        required: item.is_required !== false,
+      },
+      {
+        key: item.back_key,
+        label: `${item.name} Back`,
+        side: 'back',
+        required: item.is_required !== false,
+      },
+    ].filter((field) => Boolean(field.key));
+  }
+
+  return [
+    {
+      key: item.key,
+      label:
+        item.image_type === 'front'
+          ? `${item.name} Front`
+          : item.image_type === 'back'
+            ? `${item.name} Back`
+            : item.name,
+      side: item.image_type === 'front' ? 'front' : item.image_type === 'back' ? 'back' : 'single',
+      required: item.is_required !== false,
+    },
+  ].filter((field) => Boolean(field.key));
+};
+
+const serializeDriverNeededDocument = (item) => ({
+  _id: item._id,
+  id: item._id,
+  name: item.name || '',
+  account_type: item.account_type || 'individual',
+  image_type: item.image_type || 'front_back',
+  has_expiry_date: Boolean(item.has_expiry_date),
+  has_identify_number: Boolean(item.has_identify_number),
+  identify_number_key: item.identify_number_key || '',
+  is_editable: Boolean(item.is_editable),
+  is_required: Boolean(item.is_required),
+  active: item.active !== false,
+  status: item.active === false ? 'inactive' : 'active',
+  createdAt: item.createdAt,
+  updatedAt: item.updatedAt,
+});
+
+const serializeDriverNeededDocumentTemplate = (item) => ({
+  ...serializeDriverNeededDocument(item),
+  fields: buildDriverDocumentFields(item),
+});
+
+const LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES = [
+  { slug: 'aadhar-card', front_key: 'aadharFront', back_key: 'aadharBack', key: '' },
+  { slug: 'driving-license', key: 'drivingLicense', front_key: '', back_key: '' },
+  { slug: 'vehicle-rc', key: 'vehicleRC', front_key: '', back_key: '' },
+];
+
+const cleanupLegacySeededDriverNeededDocuments = async () => {
+  const items = await DriverNeededDocument.find().lean();
+
+  if (items.length !== LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.length) {
+    return;
+  }
+
+  const isLegacySeedSet = items.every((item) =>
+    LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.some(
+      (seed) =>
+        seed.slug === item.slug &&
+        String(seed.key || '') === String(item.key || '') &&
+        String(seed.front_key || '') === String(item.front_key || '') &&
+        String(seed.back_key || '') === String(item.back_key || ''),
+    ),
+  );
+
+  if (!isLegacySeedSet) {
+    return;
+  }
+
+  await DriverNeededDocument.deleteMany({
+    slug: { $in: LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.map((item) => item.slug) },
+  });
+};
+
 const serializeAirport = (item) => ({
   _id: item._id,
   id: item._id,
@@ -279,21 +409,79 @@ const serializeAirport = (item) => ({
   updatedAt: item.updatedAt,
 });
 
-const serializeOwner = (owner) => ({
-  _id: owner._id,
-  company_name: owner.company_name || '',
-  name: owner.name || '',
-  mobile: owner.mobile || '',
-  email: owner.email || '',
-  service_location_id: owner.service_location_id?._id || owner.service_location_id || '',
-  service_location: owner.service_location_id?.service_location_name || owner.service_location_id?.name || '',
-  transport_type: owner.transport_type || '',
-  active: owner.active !== false,
-  approve: Boolean(owner.approve),
-  status: owner.status || (owner.approve ? 'approved' : 'pending'),
-  createdAt: owner.createdAt,
-  updatedAt: owner.updatedAt,
-});
+const toIsoString = (value) => (value instanceof Date ? value.toISOString() : value || null);
+
+const serializeServiceLocationSnapshot = (serviceLocation, fallback = null) => {
+  if (!serviceLocation && !fallback) return null;
+
+  const source = serviceLocation || fallback;
+  return {
+    id: source.legacy_id || source.id || source._id || '',
+    company_key: source.company_key ?? null,
+    name: source.name || source.service_location_name || '',
+    translation_dataset: source.translation_dataset || '',
+    currency_name: source.currency_name || 'Indian rupee',
+    currency_code: source.currency_code || 'INR',
+    currency_symbol: source.currency_symbol || '₹',
+    currency_pointer: source.currency_pointer || 'ltr',
+    timezone: source.timezone || 'Asia/Kolkata',
+    country: source.country ?? 102,
+    active: source.active === false ? 0 : 1,
+    created_at: toIsoString(source.createdAt || source.created_at),
+    updated_at: toIsoString(source.updatedAt || source.updated_at),
+    deleted_at: source.deleted_at || null,
+  };
+};
+
+const serializeOwner = (owner) => {
+  const area = serializeServiceLocationSnapshot(owner.service_location_id, owner.area_snapshot);
+  const mobile = owner.mobile || '';
+  const mobileNumber = mobile ? (mobile.startsWith('+') ? mobile : `+91${mobile}`) : '';
+
+  return {
+    _id: owner._id,
+    id: owner.legacy_id || owner._id,
+    user_id: owner.user_id ?? null,
+    transport_type: owner.transport_type || '',
+    service_location_id:
+      owner.legacy_service_location_id ||
+      owner.service_location_id?.legacy_id ||
+      owner.service_location_id?._id ||
+      owner.service_location_id ||
+      '',
+    company_name: owner.company_name || '',
+    owner_name: owner.owner_name ?? null,
+    name: owner.name || '',
+    surname: owner.surname ?? null,
+    email: owner.email || '',
+    mobile,
+    phone: owner.phone ?? null,
+    address: owner.address ?? null,
+    postal_code: owner.postal_code ?? null,
+    city: owner.city ?? null,
+    expiry_date: owner.expiry_date ?? null,
+    no_of_vehicles: Number(owner.no_of_vehicles || 0),
+    tax_number: owner.tax_number ?? null,
+    bank_name: owner.bank_name ?? null,
+    ifsc: owner.ifsc ?? null,
+    account_no: owner.account_no ?? null,
+    iban: owner.iban ?? null,
+    bic: owner.bic ?? null,
+    active: owner.active === false ? 0 : 1,
+    approve: owner.approve ? 1 : 0,
+    status: owner.status || (owner.approve ? 'approved' : 'pending'),
+    created_at: toIsoString(owner.createdAt),
+    updated_at: toIsoString(owner.updatedAt),
+    deleted_at: null,
+    area_name: area?.name || '',
+    mobile_number: mobileNumber,
+    converted_deleted_at: null,
+    area,
+    user: owner.user_snapshot || null,
+    createdAt: owner.createdAt,
+    updatedAt: owner.updatedAt,
+  };
+};
 
 const serializeOwnerBooking = (item) => ({
   _id: item._id,
@@ -329,6 +517,10 @@ const serializeDriver = (driver) => ({
   phone: driver.phone || '',
   mobile: driver.phone || '',
   email: driver.email || '',
+  owner_id: driver.owner_id || null,
+  service_location_id: driver.service_location_id || null,
+  country: driver.country || null,
+  profile_picture: driver.profile_picture || '',
   city: driver.city || '',
   service_location_name: driver.city || '',
   transport_type: driver.registerFor || driver.vehicleType || '',
@@ -484,6 +676,239 @@ const syncDefaultAdminRecord = async () => {
   );
 };
 
+const LEGACY_OWNER_SERVICE_LOCATION = {
+  legacy_id: '53027f5a-dad1-47fa-8417-b958dd520821',
+  company_key: null,
+  name: 'India',
+  service_location_name: 'India',
+  translation_dataset: '{"en":{"locale":"en","name":"India"}}',
+  currency_name: 'Indian rupee',
+  currency_code: 'INR',
+  currency_symbol: '₹',
+  currency_pointer: 'ltr',
+  timezone: 'Asia/Kolkata',
+  country: 102,
+  active: true,
+  status: 'active',
+  createdAt: new Date('2026-02-02T11:57:30.000Z'),
+  updatedAt: new Date('2026-02-02T11:57:30.000Z'),
+};
+
+const LEGACY_OWNER_ROLE = {
+  id: 3,
+  slug: 'owner',
+  name: 'Normal Owner',
+  description: 'Normal Owner with standard access',
+  all: 0,
+  locked: 1,
+  created_by: 1,
+  created_at: '2026-02-02T11:36:54.000000Z',
+  updated_at: '2026-02-07T15:55:24.000000Z',
+};
+
+const buildLegacyOwnerSeeds = (serviceLocationId) => [
+  {
+    legacy_id: '08e4823f-33df-480b-8419-91e8f49aa204',
+    user_id: 55,
+    transport_type: 'taxi',
+    service_location_id: serviceLocationId,
+    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+    company_name: 'Zyder',
+    owner_name: null,
+    name: 'Demo owner',
+    surname: null,
+    email: 'owner@gmail.com',
+    password: '$2y$10$5P1q/uu.og/yMK1y5fHstuHPW1u7rD5x0CoGGvDoSW6Okjv1v/B0m',
+    mobile: '7470311227',
+    phone: null,
+    address: null,
+    postal_code: null,
+    city: null,
+    expiry_date: null,
+    no_of_vehicles: 0,
+    tax_number: null,
+    bank_name: null,
+    ifsc: null,
+    account_no: null,
+    iban: null,
+    bic: null,
+    active: true,
+    approve: true,
+    status: 'approved',
+    createdAt: new Date('2026-03-20T07:42:58.000Z'),
+    updatedAt: new Date('2026-04-09T07:47:17.000Z'),
+    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
+    user_snapshot: {
+      id: 55,
+      name: 'Demo owner',
+      company_key: null,
+      username: null,
+      map_type: null,
+      email: 'owner@gmail.com',
+      mobile: '7470311227',
+      ride_otp: null,
+      gender: null,
+      profile_picture: 'https://zyder.co.in/assets/images/Male_default_image.png',
+      stripe_customer_id: null,
+      is_deleted_at: null,
+      country: 102,
+      timezone: null,
+      active: 1,
+      email_confirmed: 0,
+      mobile_confirmed: 0,
+      fcm_token: null,
+      apn_token: null,
+      refferal_code: null,
+      referred_by: null,
+      rating: 0,
+      lang: null,
+      zone_id: null,
+      current_lat: null,
+      current_lng: null,
+      rating_total: 0,
+      no_of_ratings: 0,
+      login_by: null,
+      last_known_ip: null,
+      last_login_at: null,
+      social_provider: null,
+      is_bid_app: 0,
+      social_nickname: null,
+      social_id: null,
+      social_token: null,
+      social_token_secret: null,
+      social_refresh_token: null,
+      social_expires_in: null,
+      social_avatar: null,
+      social_avatar_original: null,
+      created_at: '2026-03-20T07:42:58.000000Z',
+      updated_at: '2026-04-09T07:47:17.000000Z',
+      authorization_code: null,
+      deleted_at: null,
+      service_location_id: null,
+      country_name: 'India',
+      mobile_number: '+917470311227',
+      role_name: 'owner',
+      converted_deleted_at: null,
+      country_detail: {
+        id: 102,
+        name: 'India',
+        dial_code: '+91',
+        dial_min_length: 7,
+        dial_max_length: 14,
+        code: 'IN',
+        currency_name: 'Indian rupee',
+        currency_code: 'INR',
+        currency_symbol: '₹',
+        flag: 'https://zyder.co.in/image/country/flags/IN.png',
+        active: 1,
+        created_at: null,
+        updated_at: null,
+      },
+      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 55, role_id: 3 } }],
+    },
+  },
+  {
+    legacy_id: '941bb56f-2775-4685-818e-8326b44ead94',
+    user_id: 39,
+    transport_type: 'Both',
+    service_location_id: serviceLocationId,
+    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+    company_name: 'itc',
+    owner_name: 'princess',
+    name: 'princess',
+    surname: null,
+    email: 'indra@gmail.com',
+    password: null,
+    mobile: '8072694803',
+    phone: null,
+    address: 'hgxbnmkchcufjbjbivjnvjv',
+    postal_code: '908899',
+    city: 'd6hf hmm kb',
+    expiry_date: null,
+    no_of_vehicles: 0,
+    tax_number: '578999bcv8988',
+    bank_name: null,
+    ifsc: null,
+    account_no: null,
+    iban: null,
+    bic: null,
+    active: true,
+    approve: true,
+    status: 'approved',
+    createdAt: new Date('2026-02-28T12:34:16.000Z'),
+    updatedAt: new Date('2026-02-28T13:36:28.000Z'),
+    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
+    user_snapshot: {
+      id: 39,
+      name: 'princess',
+      company_key: null,
+      username: null,
+      map_type: null,
+      email: 'indra@gmail.com',
+      mobile: '8072694803',
+      ride_otp: null,
+      gender: 'female',
+      profile_picture: 'https://zyder.co.in/assets/images/Female_default_image.png',
+      stripe_customer_id: null,
+      is_deleted_at: null,
+      country: 102,
+      timezone: 'Asia/Kolkata',
+      active: 1,
+      email_confirmed: 0,
+      mobile_confirmed: 1,
+      fcm_token: 'dqw_CwtrSXa0l9p5oMxCLl:APA91bH1ZbjCzaE-crPxlDOfbU8LBDXg1gerLnzsrWB5Ky6hy9gRvT7LPZb2OSdK9AHh1w2RBSyj-fnuNIofm9FF6GfkdcfusbSMy2lmmjBQ2omVAXlgJQE',
+      apn_token: null,
+      refferal_code: 'v7CmOw',
+      referred_by: null,
+      rating: 0,
+      lang: 'en',
+      zone_id: '8d426929-591a-4bb7-bc60-256abb196363',
+      current_lat: 11.9190793,
+      current_lng: 79.8034286,
+      rating_total: 0,
+      no_of_ratings: 0,
+      login_by: 'android',
+      last_known_ip: null,
+      last_login_at: null,
+      social_provider: null,
+      is_bid_app: 0,
+      social_nickname: null,
+      social_id: null,
+      social_token: null,
+      social_token_secret: null,
+      social_refresh_token: null,
+      social_expires_in: null,
+      social_avatar: null,
+      social_avatar_original: null,
+      created_at: '2026-02-28T12:34:16.000000Z',
+      updated_at: '2026-02-28T13:10:44.000000Z',
+      authorization_code: null,
+      deleted_at: null,
+      service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+      country_name: 'India',
+      mobile_number: '+918072694803',
+      role_name: 'owner',
+      converted_deleted_at: null,
+      country_detail: {
+        id: 102,
+        name: 'India',
+        dial_code: '+91',
+        dial_min_length: 7,
+        dial_max_length: 14,
+        code: 'IN',
+        currency_name: 'Indian rupee',
+        currency_code: 'INR',
+        currency_symbol: '₹',
+        flag: 'https://zyder.co.in/image/country/flags/IN.png',
+        active: 1,
+        created_at: null,
+        updated_at: null,
+      },
+      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 39, role_id: 3 } }],
+    },
+  },
+];
+
 const seedInitialData = async () => {
   const defaults = createDefaultAdminState();
 
@@ -543,12 +968,67 @@ const seedInitialData = async () => {
   if (await OnboardingScreen.countDocuments() === 0) {
     await OnboardingScreen.insertMany(defaults.onboardingScreens);
   }
+
+  await ensureFleetOwnersSeeded();
 };
 
 export const ensureServiceLocationsSeeded = async () => {
   if (await ServiceLocation.countDocuments() === 0) {
     const defaults = createDefaultAdminState();
     await ServiceLocation.insertMany(defaults.serviceLocations);
+  }
+};
+
+export const ensureFleetOwnersSeeded = async () => {
+  const now = new Date();
+
+  const serviceLocation = await ServiceLocation.findOneAndUpdate(
+    {
+      $or: [
+        { legacy_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id },
+        { name: LEGACY_OWNER_SERVICE_LOCATION.name },
+      ],
+    },
+    {
+      $set: {
+        ...LEGACY_OWNER_SERVICE_LOCATION,
+        updatedAt: LEGACY_OWNER_SERVICE_LOCATION.updatedAt || now,
+      },
+      $setOnInsert: {
+        createdAt: LEGACY_OWNER_SERVICE_LOCATION.createdAt || now,
+      },
+    },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+  );
+
+  const ownerSeeds = buildLegacyOwnerSeeds(serviceLocation._id);
+
+  for (const seed of ownerSeeds) {
+    const existingOwner = await Owner.findOne({
+      $or: [
+        { legacy_id: seed.legacy_id },
+        { email: seed.email },
+        { mobile: seed.mobile },
+      ],
+    }).lean();
+
+    if (existingOwner) {
+      await Owner.updateOne(
+        { _id: existingOwner._id },
+        {
+          $set: {
+            ...seed,
+            updatedAt: seed.updatedAt || now,
+          },
+          $setOnInsert: {
+            createdAt: seed.createdAt || now,
+          },
+        },
+      );
+      continue;
+    }
+
+    await Owner.create(seed);
   }
 };
 
@@ -1156,7 +1636,13 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
   const start = (safePage - 1) * safeLimit;
 
   const [drivers, total] = await Promise.all([
-    Driver.find({ deletedAt: null }).sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.find({ deletedAt: null })
+      .populate('owner_id', 'company_name owner_name name email mobile')
+      .populate('service_location_id', 'service_location_name name country')
+      .sort({ createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
     Driver.countDocuments({ deletedAt: null }),
   ]);
 
@@ -1169,6 +1655,271 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
       last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
   };
+};
+
+export const listDriverRatings = async ({ page = 1, limit = 50, search = '' }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+  const term = String(search || '').trim();
+
+  const query = { deletedAt: null };
+  if (term) {
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { phone: regex }, { email: regex }];
+  }
+
+  const [drivers, total] = await Promise.all([
+    Driver.find(query).sort({ rating: -1, createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.countDocuments(query),
+  ]);
+
+  return {
+    results: drivers.map((driver) => ({
+      _id: driver._id,
+      name: driver.name || '',
+      mobile: driver.phone || '',
+      phone: driver.phone || '',
+      email: driver.email || '',
+      rating: Number(driver.rating || 0),
+      transport_type: driver.registerFor || driver.vehicleType || '',
+    })),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const getDriverRatingDetail = async (id) => {
+  const driver = await Driver.findById(id).lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const rides = await Ride.find({ driverId: driver._id }).sort({ createdAt: -1 }).lean();
+
+  return {
+    driver: {
+      _id: driver._id,
+      name: driver.name || '',
+      phone: driver.phone || '',
+      email: driver.email || '',
+      rating: Number(driver.rating || 0),
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      vehicle_make: driver.vehicleMake || '',
+      vehicle_model: driver.vehicleModel || '',
+      vehicle_number: driver.vehicleNumber || '',
+      image: driver.profile_image || driver.avatar || 'https://i.pravatar.cc/200?img=12',
+      vehicle_image: 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
+    },
+    reviews: rides.map((ride) => ({
+      _id: ride._id,
+      request_id: String(ride._id),
+      date: ride.createdAt,
+      pickup_location: ride.pickupLocation?.coordinates
+        ? `${ride.pickupLocation.coordinates[1]}, ${ride.pickupLocation.coordinates[0]}`
+        : 'N/A',
+      rating: Number(driver.rating || 0),
+    })),
+  };
+};
+
+export const listNegativeBalanceDrivers = async ({ page = 1, limit = 50, search = '' }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+  const term = String(search || '').trim();
+
+  const query = { deletedAt: null, 'wallet.balance': { $lt: 0 } };
+  if (term) {
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { phone: regex }, { email: regex }];
+  }
+
+  const [drivers, total, totals] = await Promise.all([
+    Driver.find(query)
+      .sort({ 'wallet.balance': 1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    Driver.countDocuments(query),
+    Driver.aggregate([
+      { $match: query },
+      { $group: { _id: null, total_outstanding: { $sum: { $abs: '$wallet.balance' } } } },
+    ]),
+  ]);
+
+  const totalOutstanding = Number(totals?.[0]?.total_outstanding || 0);
+
+  return {
+    results: drivers.map((driver) => ({
+      _id: driver._id,
+      name: driver.name || '',
+      service_location_name: driver.city || '',
+      email: driver.email || '',
+      mobile: driver.phone || '',
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      approve: Boolean(driver.approve),
+      status: driver.status || (driver.approve ? 'approved' : 'pending'),
+      balance: Number(driver.wallet?.balance || 0),
+    })),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+    summary: {
+      total_outstanding: totalOutstanding,
+    },
+  };
+};
+
+export const listDriverWithdrawalSummaries = async ({ page = 1, limit = 50, search = '' }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+  const term = String(search || '').trim();
+
+  const match = { status: 'pending' };
+  let matchedDriverIds = null;
+
+  if (term) {
+    const regex = new RegExp(term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    const drivers = await Driver.find({ deletedAt: null, $or: [{ name: regex }, { phone: regex }, { email: regex }] })
+      .select('_id')
+      .lean();
+    matchedDriverIds = drivers.map((d) => d._id);
+    if (matchedDriverIds.length === 0) {
+      return {
+        results: [],
+        paginator: { current_page: safePage, per_page: safeLimit, total: 0, last_page: 1 },
+      };
+    }
+    match.driver_id = { $in: matchedDriverIds };
+  }
+
+  const groupPipeline = [
+    { $match: match },
+    {
+      $group: {
+        _id: '$driver_id',
+        pending_count: { $sum: 1 },
+        pending_amount: { $sum: '$amount' },
+        last_request_at: { $max: '$createdAt' },
+      },
+    },
+  ];
+
+  const [groups, countRows] = await Promise.all([
+    WithdrawalRequest.aggregate([
+      ...groupPipeline,
+      { $sort: { last_request_at: -1 } },
+      { $skip: start },
+      { $limit: safeLimit },
+    ]),
+    WithdrawalRequest.aggregate([...groupPipeline, { $count: 'total' }]),
+  ]);
+
+  const total = Number(countRows?.[0]?.total || 0);
+  const driverIds = groups.map((g) => g._id).filter(Boolean);
+  const drivers = await Driver.find({ _id: { $in: driverIds } }).lean();
+  const byId = new Map(drivers.map((d) => [String(d._id), d]));
+
+  return {
+    results: groups.map((row) => {
+      const driver = byId.get(String(row._id));
+      return {
+        driver_id: row._id,
+        last_request_at: row.last_request_at,
+        pending_count: Number(row.pending_count || 0),
+        pending_amount: Number(row.pending_amount || 0),
+        driver: driver
+          ? {
+              _id: driver._id,
+              name: driver.name || '',
+              mobile: driver.phone || '',
+              email: driver.email || '',
+            }
+          : null,
+      };
+    }),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const listDriverWithdrawals = async ({ driverId, page = 1, limit = 50 }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const driver = await Driver.findById(driverId).lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const [items, total] = await Promise.all([
+    WithdrawalRequest.find({ driver_id: driver._id }).sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    WithdrawalRequest.countDocuments({ driver_id: driver._id }),
+  ]);
+
+  return {
+    driver: {
+      _id: driver._id,
+      name: driver.name || '',
+      mobile: driver.phone || '',
+      email: driver.email || '',
+    },
+    results: items.map((item) => ({
+      _id: item._id,
+      amount: Number(item.amount || 0),
+      requested_currency: 'INR',
+      status: item.status || 'pending',
+      payment_method: item.payment_method || '',
+      createdAt: item.createdAt,
+    })),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const adjustDriverWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const driver = await Driver.findById(id);
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const currentBalance = Number(driver.wallet?.balance || 0);
+  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
+
+  driver.wallet = driver.wallet || {};
+  driver.wallet.balance = nextBalance;
+  driver.markModified('wallet');
+  await driver.save();
+
+  return { balance: Number(nextBalance.toFixed(2)) };
 };
 
 export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
@@ -1255,6 +2006,11 @@ export const createDriver = async (payload = {}) => {
     name,
     phone,
     email,
+    owner_id: payload.owner_id && mongoose.isValidObjectId(payload.owner_id) ? toObjectId(payload.owner_id) : null,
+    service_location_id:
+      serviceLocationId && mongoose.isValidObjectId(serviceLocationId) ? toObjectId(serviceLocationId) : null,
+    country: payload.country || null,
+    profile_picture: String(payload.profile_picture || payload.profilePicture || '').trim(),
     gender: String(payload.gender || '').trim(),
     password: await hashPassword(password),
     vehicleType,
@@ -1963,12 +2719,36 @@ export const deleteSetPrice = async (id) => {
 };
 
 export const listOwners = async () => {
+  await ensureFleetOwnersSeeded();
+
   const owners = await Owner.find()
-    .populate('service_location_id', 'name service_location_name')
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
     .sort({ createdAt: -1 })
     .lean();
 
   return owners.map(serializeOwner);
+};
+
+export const getOwnerById = async (id) => {
+  await ensureFleetOwnersSeeded();
+
+  const ownerId = String(id || '').trim();
+  if (!ownerId) throw new ApiError(400, 'Owner id is required');
+
+  const owner = await Owner.findOne(
+    mongoose.isValidObjectId(ownerId) ? { _id: ownerId } : { legacy_id: ownerId },
+  )
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
+    .lean();
+
+  if (!owner) throw new ApiError(404, 'Owner not found');
+  return serializeOwner(owner);
 };
 
 export const createOwner = async (payload) => {
@@ -1993,6 +2773,10 @@ export const createOwner = async (payload) => {
 
   const normalizedEmail = String(payload.email).trim().toLowerCase();
   const normalizedMobile = String(payload.mobile).trim();
+  const serviceLocationId =
+    payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)
+      ? toObjectId(payload.service_location_id)
+      : null;
 
   const existingOwner = await Owner.findOne({
     $or: [{ email: normalizedEmail }, { mobile: normalizedMobile }],
@@ -2004,19 +2788,30 @@ export const createOwner = async (payload) => {
 
   const owner = await Owner.create({
     company_name: String(payload.company_name).trim(),
+    owner_name: payload.owner_name ? String(payload.owner_name).trim() : null,
     name: String(payload.name).trim(),
     mobile: normalizedMobile,
     email: normalizedEmail,
     password: await hashPassword(String(payload.password)),
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+    service_location_id: serviceLocationId,
+    legacy_service_location_id:
+      payload.legacy_service_location_id || (serviceLocationId ? '' : payload.service_location_id || ''),
     transport_type: payload.transport_type || 'taxi',
+    phone: payload.phone || null,
+    address: payload.address || null,
+    postal_code: payload.postal_code || null,
+    city: payload.city || null,
+    tax_number: payload.tax_number || null,
     active: normalizeBoolean(payload.active ?? true),
     approve: normalizeBoolean(payload.approve ?? false),
     status: normalizeBoolean(payload.approve ?? false) ? 'approved' : 'pending',
   });
 
   const populatedOwner = await Owner.findById(owner._id)
-    .populate('service_location_id', 'name service_location_name')
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
     .lean();
 
   return serializeOwner(populatedOwner);
@@ -2049,7 +2844,13 @@ export const updateOwner = async (id, payload) => {
     owner.email = email;
   }
   if (payload.service_location_id !== undefined) {
-    owner.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
+    if (payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)) {
+      owner.service_location_id = toObjectId(payload.service_location_id);
+      owner.legacy_service_location_id = '';
+    } else {
+      owner.service_location_id = null;
+      owner.legacy_service_location_id = payload.service_location_id || '';
+    }
   }
   if (payload.transport_type !== undefined) {
     owner.transport_type = payload.transport_type || 'taxi';
@@ -2071,10 +2872,21 @@ export const updateOwner = async (id, payload) => {
     owner.password = await hashPassword(String(payload.password));
   }
 
+  if (payload.owner_name !== undefined) owner.owner_name = payload.owner_name || null;
+  if (payload.phone !== undefined) owner.phone = payload.phone || null;
+  if (payload.address !== undefined) owner.address = payload.address || null;
+  if (payload.postal_code !== undefined) owner.postal_code = payload.postal_code || null;
+  if (payload.city !== undefined) owner.city = payload.city || null;
+  if (payload.tax_number !== undefined) owner.tax_number = payload.tax_number || null;
+  if (payload.no_of_vehicles !== undefined) owner.no_of_vehicles = Number(payload.no_of_vehicles || 0);
+
   await owner.save();
 
   const populatedOwner = await Owner.findById(owner._id)
-    .populate('service_location_id', 'name service_location_name')
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
     .lean();
 
   return serializeOwner(populatedOwner);
@@ -2645,6 +3457,166 @@ export const deleteRentalPackageType = async (id) => {
   return true;
 };
 
+const buildDriverNeededDocumentKeys = (payload = {}, existing = null) => {
+  const imageType = String(payload.image_type || existing?.image_type || 'front_back').trim();
+  const baseKey = toDocumentKey(payload.name || existing?.name || 'document');
+
+  if (imageType === 'front_back') {
+    return {
+      key: '',
+      front_key:
+        existing?.front_key ||
+        String(payload.front_key || '').trim() ||
+        `${baseKey}Front`,
+      back_key:
+        existing?.back_key ||
+        String(payload.back_key || '').trim() ||
+        `${baseKey}Back`,
+    };
+  }
+
+  const suffix = imageType === 'front' ? 'Front' : imageType === 'back' ? 'Back' : '';
+
+  return {
+    key:
+      existing?.key ||
+      String(payload.key || '').trim() ||
+      `${baseKey}${suffix}`,
+    front_key: '',
+    back_key: '',
+  };
+};
+
+export const listDriverNeededDocuments = async ({ activeOnly = false, includeFields = false } = {}) => {
+  await cleanupLegacySeededDriverNeededDocuments();
+
+  const query = activeOnly ? { active: true } : {};
+  const items = await DriverNeededDocument.find(query).sort({ createdAt: -1 }).lean();
+  return items.map(includeFields ? serializeDriverNeededDocumentTemplate : serializeDriverNeededDocument);
+};
+
+export const getDriverNeededDocumentById = async (id) => {
+  await cleanupLegacySeededDriverNeededDocuments();
+
+  const item = await DriverNeededDocument.findById(id).lean();
+  if (!item) {
+    throw new ApiError(404, 'Driver needed document not found');
+  }
+
+  return serializeDriverNeededDocument(item);
+};
+
+export const listDriverDocumentUploadFields = async ({ activeOnly = true } = {}) => {
+  const items = await listDriverNeededDocuments({ activeOnly, includeFields: true });
+  return items.flatMap((item) =>
+    item.fields.map((field) => ({
+      ...field,
+      template_id: item.id,
+      template_name: item.name,
+      image_type: item.image_type,
+      has_expiry_date: item.has_expiry_date,
+      has_identify_number: item.has_identify_number,
+    })),
+  );
+};
+
+export const createDriverNeededDocument = async (payload) => {
+  if (!payload.name?.trim()) {
+    throw new ApiError(400, 'Document name is required');
+  }
+
+  await cleanupLegacySeededDriverNeededDocuments();
+
+  const name = String(payload.name).trim();
+  const slug = slugify(payload.slug || name);
+  const existing = await DriverNeededDocument.findOne({ slug });
+  if (existing) {
+    throw new ApiError(409, 'A driver document with this name already exists');
+  }
+
+  const keys = buildDriverNeededDocumentKeys(payload);
+  const item = await DriverNeededDocument.create({
+    name,
+    slug,
+    account_type: normalizeDriverAccountType(payload.account_type),
+    image_type: String(payload.image_type || 'front_back').trim(),
+    has_expiry_date: normalizeBoolean(payload.has_expiry_date),
+    has_identify_number: normalizeBoolean(payload.has_identify_number),
+    identify_number_key: normalizeBoolean(payload.has_identify_number)
+      ? String(payload.identify_number_key || '').trim()
+      : '',
+    is_editable: normalizeBoolean(payload.is_editable),
+    is_required: normalizeBoolean(payload.is_required),
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+    ...keys,
+  });
+
+  return serializeDriverNeededDocument(item.toObject());
+};
+
+export const updateDriverNeededDocument = async (id, payload) => {
+  const item = await DriverNeededDocument.findById(id);
+  if (!item) {
+    throw new ApiError(404, 'Driver needed document not found');
+  }
+
+  if (payload.name !== undefined) {
+    item.name = String(payload.name || '').trim();
+  }
+  if (payload.account_type !== undefined) {
+    item.account_type = normalizeDriverAccountType(payload.account_type);
+  }
+  if (payload.image_type !== undefined) {
+    item.image_type = String(payload.image_type || 'front_back').trim();
+  }
+  if (payload.has_expiry_date !== undefined) {
+    item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
+  }
+  if (payload.has_identify_number !== undefined) {
+    item.has_identify_number = normalizeBoolean(payload.has_identify_number);
+  }
+  if (payload.identify_number_key !== undefined || payload.has_identify_number !== undefined) {
+    item.identify_number_key = item.has_identify_number
+      ? String(payload.identify_number_key ?? item.identify_number_key ?? '').trim()
+      : '';
+  }
+  if (payload.is_editable !== undefined) {
+    item.is_editable = normalizeBoolean(payload.is_editable);
+  }
+  if (payload.is_required !== undefined) {
+    item.is_required = normalizeBoolean(payload.is_required);
+  }
+  if (payload.active !== undefined) {
+    item.active = normalizeBoolean(payload.active);
+  }
+
+  const keys = buildDriverNeededDocumentKeys(
+    {
+      ...item.toObject(),
+      ...payload,
+      name: item.name,
+      image_type: item.image_type,
+    },
+    item.toObject(),
+  );
+
+  item.key = keys.key;
+  item.front_key = keys.front_key;
+  item.back_key = keys.back_key;
+
+  await item.save();
+  return serializeDriverNeededDocument(item.toObject());
+};
+
+export const deleteDriverNeededDocument = async (id) => {
+  const deleted = await DriverNeededDocument.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Driver needed document not found');
+  }
+
+  return true;
+};
+
 export const listOwnerNeededDocuments = async () => {
   const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
   return items.map(serializeOwnerNeededDocument);
@@ -2776,6 +3748,82 @@ export const toggleChannelMail = async (id, status) => {
 };
 
 export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
+
+export const listPaymentMethods = async () =>
+  PaymentMethod.find().sort({ createdAt: -1 }).lean();
+
+export const createPaymentMethod = async (payload = {}) => {
+  const name = String(payload.method_name ?? payload.name ?? '').trim();
+  if (!name) {
+    throw new ApiError(400, 'Method name is required');
+  }
+
+  const fields = Array.isArray(payload.fields)
+    ? payload.fields
+        .map((field) => ({
+          type: String(field?.type || 'text'),
+          name: String(field?.name || '').trim(),
+          placeholder: String(field?.placeholder || '').trim(),
+          is_required: Boolean(field?.is_required),
+        }))
+        .filter((field) => field.name)
+    : [];
+
+  const method = await PaymentMethod.create({
+    name,
+    fields,
+    active: payload.active !== undefined ? Boolean(payload.active) : true,
+  });
+
+  return method.toObject();
+};
+
+export const updatePaymentMethod = async (id, payload = {}) => {
+  const update = {};
+
+  if (payload.method_name !== undefined || payload.name !== undefined) {
+    const name = String(payload.method_name ?? payload.name ?? '').trim();
+    if (!name) {
+      throw new ApiError(400, 'Method name is required');
+    }
+    update.name = name;
+  }
+
+  if (payload.fields !== undefined) {
+    const fields = Array.isArray(payload.fields)
+      ? payload.fields
+          .map((field) => ({
+            type: String(field?.type || 'text'),
+            name: String(field?.name || '').trim(),
+            placeholder: String(field?.placeholder || '').trim(),
+            is_required: Boolean(field?.is_required),
+          }))
+          .filter((field) => field.name)
+      : [];
+    update.fields = fields;
+  }
+
+  if (payload.active !== undefined) {
+    update.active = Boolean(payload.active);
+  }
+
+  const method = await PaymentMethod.findByIdAndUpdate(id, update, {
+    new: true,
+    runValidators: true,
+  });
+  if (!method) {
+    throw new ApiError(404, 'Payment method not found');
+  }
+  return method.toObject();
+};
+
+export const deletePaymentMethod = async (id) => {
+  const deleted = await PaymentMethod.findByIdAndDelete(id);
+  if (!deleted) {
+    throw new ApiError(404, 'Payment method not found');
+  }
+  return true;
+};
 
 export const getPaymentSettings = async () => {
   const settings = await ensureThirdPartySettings();

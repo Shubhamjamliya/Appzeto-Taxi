@@ -87,6 +87,34 @@ export const getDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDrivers(req.query)),
 );
 
+export const getDriverRatings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverRatings(req.query)),
+);
+
+export const getDriverRatingDetail = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverRatingDetail(req.params.id)),
+);
+
+export const getNegativeBalanceDrivers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listNegativeBalanceDrivers(req.query)),
+);
+
+export const getDriverWithdrawalSummaries = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverWithdrawalSummaries(req.query)),
+);
+
+export const getDriverWithdrawals = asyncHandler(async (req, res) =>
+  ok(
+    res,
+    await adminService.listDriverWithdrawals({
+      driverId: req.params.id,
+      page: req.query.page,
+      limit: req.query.limit,
+    }),
+  ),
+);
+
+
 export const getDeletedDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDeletedDrivers(req.query)),
 );
@@ -192,6 +220,9 @@ export const deleteVehicleType = asyncHandler(async (req, res) => {
 
 export const getOwners = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listOwners() }),
+);
+export const getOwner = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getOwnerById(req.params.id)),
 );
 export const createOwner = asyncHandler(async (req, res) =>
   ok(res, await adminService.createOwner(req.body)),
@@ -317,6 +348,22 @@ export const deleteRentalPackageType = asyncHandler(async (req, res) => {
 export const getOwnerNeededDocuments = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listOwnerNeededDocuments() }),
 );
+export const getDriverNeededDocuments = asyncHandler(async (_req, res) =>
+  ok(res, { results: await adminService.listDriverNeededDocuments() }),
+);
+export const getDriverNeededDocument = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverNeededDocumentById(req.params.id)),
+);
+export const createDriverNeededDocument = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createDriverNeededDocument(req.body)),
+);
+export const updateDriverNeededDocument = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateDriverNeededDocument(req.params.id, req.body)),
+);
+export const deleteDriverNeededDocument = asyncHandler(async (req, res) => {
+  await adminService.deleteDriverNeededDocument(req.params.id);
+  ok(res, { deleted: true });
+});
 export const createOwnerNeededDocument = asyncHandler(async (req, res) =>
   ok(res, await adminService.createOwnerNeededDocument(req.body)),
 );
@@ -410,6 +457,19 @@ export const toggleChannelMail = asyncHandler(async (req, res) =>
 export const getPaymentGateways = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listPaymentGateways() }),
 );
+export const getPaymentMethods = asyncHandler(async (_req, res) =>
+  ok(res, { results: await adminService.listPaymentMethods() }),
+);
+export const createPaymentMethod = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createPaymentMethod(req.body)),
+);
+export const updatePaymentMethod = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updatePaymentMethod(req.params.id, req.body)),
+);
+export const deletePaymentMethod = asyncHandler(async (req, res) => {
+  await adminService.deletePaymentMethod(req.params.id);
+  ok(res, { deleted: true });
+});
 export const getPaymentSettings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getPaymentSettings()),
 );

@@ -1,672 +1,645 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
-import { 
-  User, 
-  MapPin, 
-  Phone, 
-  Calendar, 
-  Car, 
-  FileText, 
-  IndianRupee, 
-  History, 
-  Star, 
-  ShieldCheck, 
-  ChevronRight, 
+import {
   ArrowLeft,
-  LayoutDashboard,
-  Wallet,
-  Settings,
-  MoreVertical,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  TrendingUp,
-  CreditCard,
-  Banknote,
-  Navigation,
+  Calendar,
+  ChevronRight,
+  Download,
   Eye,
-  AlertCircle,
-  ArrowUpRight,
-  ArrowDownRight
+  Mail,
+  MapPin,
+  Phone,
 } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
-import { DELHI_CENTER, getLatLng, HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
+import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { DELHI_CENTER, HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../utils/googleMaps';
 
 const mapContainerStyle = { width: '100%', height: '100%' };
 
 const DriverDetails = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
-  const [activeTab, setActiveTab] = useState('General Report');
-  const [driver, setDriver] = useState(null);
-  const [requests, setRequests] = useState([]);
-  const [walletHistory, setWalletHistory] = useState([]);
-  const [reviews, setReviews] = useState([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState('');
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
+  const [activeTab, setActiveTab] = useState('Driver Profile');
+  const [profile, setProfile] = useState(null);
+  const [walletForm, setWalletForm] = useState({ amount: '', operation: 'credit', isSubmitting: false });
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const fetchData = async () => {
+  const tabs = [
+    'Driver Profile',
+    'Request List',
+    'Payment History',
+    'Withdrawal History',
+    'Review History',
+    'Documents',
+    'Subscription',
+  ];
+
+  const fetchProfile = async () => {
     setIsLoading(true);
+    setError('');
     try {
-      const token = localStorage.getItem('adminToken') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzdiZTZhYmJlOTJlYjYwMGYwMmQxNiIsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwibW9iaWxlIjoiOTk5OTk5OTk5OSIsInJvbGUiOiJzdXBlci1hZG1pbiIsImlhdCI6MTc3NTA0OTExNywiZXhwIjoxODA2NTg1MTE3fQ.5KJmXJwaVefWhnc97EqtArkA1z7ZOhsJwA9fbyRVPdQ';
-      const headers = { 'Authorization': `Bearer ${token}` };
-
-      // Driver Profile
-      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, { headers });
+      const token = localStorage.getItem('adminToken');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      const res = await fetch(
+        `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/profile`,
+        { headers },
+      );
       const data = await res.json();
-
-      if (data.success) {
-        const d = data.data;
-        setDriver({
-          id: d._id,
-          name: d.name || d.user_id?.name || 'Unknown',
-          mobile: d.mobile || 'N/A',
-          email: d.user_id?.email || 'N/A',
-          city: d.city || d.service_location?.name || 'Global',
-          rating: d.rating || 0,
-          vehicle: d.transport_type || 'N/A',
-          plate: d.car_number || 'N/A',
-          rides: d.total_rides || 0,
-          wallet: d.wallet_balance || 0,
-          joined: d.createdAt ? new Date(d.createdAt).toLocaleDateString() : 'N/A',
-          image: d.user_id?.profile_picture || 'https://via.placeholder.com/200x200',
-          coordinates: getLatLng(d, DELHI_CENTER),
-          locationLabel: d.current_address || d.address || d.city || d.service_location?.name || 'Live location'
-        });
+      if (res.ok && data.success) {
+        setProfile(data.data);
+      } else {
+        setError(data.message || 'Unable to load driver profile');
       }
-
-      // Driver Requests
-      const reqRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/requests`, { headers });
-      const reqData = await reqRes.json();
-      if (reqData.success) {
-        setRequests(reqData.data?.results || []);
-      }
-
-      // Driver Wallet History
-      const walletRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/wallet-history`, { headers });
-      const walletData = await walletRes.json();
-      if (walletData.success) {
-        setWalletHistory(walletData.data?.results || []);
-      }
-
-      // Driver Review History
-      const reviewRes = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}/review-history`, { headers });
-      const reviewData = await reviewRes.json();
-      if (reviewData.success) {
-        setReviews(reviewData.data?.results || []);
-      }
-
     } catch (err) {
-      console.error('Driver Fetch Error:', err);
-      setError('Failed to load driver details');
+      setError('Unable to load driver profile');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchData();
+    fetchProfile();
   }, [id]);
 
-  const handleWalletAction = async (type) => {
-    const amount = prompt(`Enter amount to ${type}:`);
-    if (!amount || isNaN(amount)) return;
-    
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('adminToken');
-      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/wallet/drivers/${id}/adjust`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          amount: parseFloat(amount),
-          payment_type: type,
-          remarks: `Admin ${type} adjustment`
-        })
-      });
-
-      const result = await res.json();
-      if (result.success) {
-        alert(`${type.toUpperCase()} successful!`);
-        fetchData();
-      } else {
-        alert(result.message || 'Operation failed');
-      }
-    } catch (err) {
-      console.error('Wallet error', err);
-    } finally {
-      setIsSubmitting(false);
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const tab = params.get('tab');
+    if (tab && tabs.includes(tab)) {
+      setActiveTab(tab);
     }
-  };
+  }, [location.search]);
 
-  const tripsByStatus = (status) => requests.filter(r => r.status === status).length;
-  const driverCoordinates = driver?.coordinates || DELHI_CENTER;
-  
-  const stats = [
-    { label: 'Total Trips', value: requests.length, icon: Car, color: 'text-blue-500' },
-    { label: 'Completed', value: tripsByStatus('Completed'), icon: CheckCircle2, color: 'text-emerald-500' },
-    { label: 'Cancelled', value: tripsByStatus('Cancelled'), icon: XCircle, color: 'text-rose-500' },
-    { label: 'Ongoing', value: tripsByStatus('Ongoing'), icon: Clock, color: 'text-indigo-500' },
-    { label: 'Total Wallet', value: `₹ ${driver?.wallet || '0'}`, icon: Wallet, color: 'text-amber-500' },
-  ];
+  const mapCenter = useMemo(() => {
+    if (!profile?.location?.lat || !profile?.location?.lng) return DELHI_CENTER;
+    return { lat: profile.location.lat, lng: profile.location.lng };
+  }, [profile]);
 
-  // TAB CONTENT COMPONENTS
-  const TabContent = () => {
-    switch (activeTab) {
-      case 'Request List':
-        return (
-          <div className="bg-white rounded-[40px] border border-gray-50 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[400px]">
-             <div className="p-8 border-b border-gray-50 bg-gray-50/20"><h4 className="text-[14px] font-black uppercase tracking-widest text-gray-950">Recent Driver Requests</h4></div>
-             <div className="overflow-x-auto no-scrollbar">
-                <table className="w-full text-left">
-                   <thead>
-                      <tr className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
-                         <th className="px-8 py-5">Request ID</th>
-                         <th className="px-5 py-5">Location Details</th>
-                         <th className="px-5 py-5 text-center">Amount</th>
-                         <th className="px-5 py-5 text-center">Status</th>
-                         <th className="px-8 py-5 text-right">Action</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-50">
-                      {requests.length === 0 ? (
-                        <tr><td colSpan="5" className="px-8 py-20 text-center text-gray-400 font-bold uppercase tracking-widest italic opacity-50 text-[10px]">No requests found for this captain</td></tr>
-                      ) : (
-                        requests.map((r, i) => (
-                           <tr key={r._id || i} className="hover:bg-gray-50/20 transition-all group">
-                              <td className="px-8 py-6 text-[12px] font-bold text-gray-950 uppercase tracking-tight italic">{r.request_number || 'N/A'}</td>
-                              <td className="px-5 py-6">
-                                 <p className="text-[13px] font-black text-gray-950 uppercase tracking-tight leading-none mb-1">{r.pick_location || 'Pick-up Location'}</p>
-                                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{r.createdAt ? new Date(r.createdAt).toLocaleString() : 'N/A'}</p>
-                              </td>
-                              <td className="px-5 py-6 text-center font-black text-[13px] text-gray-900 tracking-tight italic">₹ {r.total_amount || '0.00'}</td>
-                              <td className="px-5 py-6 text-center">
-                                 <span className={`px-2.5 py-1 ${r.status === 'Completed' ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'} rounded-lg text-[9px] font-black uppercase tracking-widest border italic`}>{r.status}</span>
-                              </td>
-                              <td className="px-8 py-6 text-right"><button className="p-2 text-gray-300 hover:text-indigo-600 hover:bg-white rounded-lg transition-all shadow-sm"><Eye size={16} /></button></td>
-                           </tr>
-                        ))
-                      )}
-                   </tbody>
-                </table>
-             </div>
-             <div className="p-8 text-center text-gray-400 italic font-bold uppercase text-[10px] tracking-widest">End of results</div>
-          </div>
-        );
-      case 'Payment History':
-        return (
-          <div className="bg-white rounded-[40px] border border-gray-50 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="p-8 border-b border-gray-50 bg-gray-50/20 flex items-center justify-between">
-                <div>
-                   <h4 className="text-[14px] font-black uppercase tracking-widest text-gray-950">Earnings & Payments</h4>
-                   <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase tracking-wider">Current Balance: ₹ {driver?.wallet || '0'}</p>
-                </div>
-                <div className="flex gap-2">
-                   <button 
-                    disabled={isSubmitting}
-                    onClick={() => handleWalletAction('credit')}
-                    className="flex items-center gap-1.5 bg-emerald-50 text-emerald-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-emerald-100 hover:bg-emerald-100 transition-all"
-                   >
-                     <ArrowUpRight size={14} /> Credit Amount
-                   </button>
-                   <button 
-                    disabled={isSubmitting}
-                    onClick={() => handleWalletAction('debit')}
-                    className="flex items-center gap-1.5 bg-rose-50 text-rose-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest border border-rose-100 hover:bg-rose-100 transition-all"
-                   >
-                     <ArrowDownRight size={14} /> Debit Amount
-                   </button>
-                </div>
-             </div>
-             <div className="overflow-x-auto no-scrollbar">
-                <table className="w-full text-left">
-                   <thead>
-                      <tr className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
-                         <th className="px-8 py-5">Transaction ID</th>
-                         <th className="px-5 py-5">Type / Description</th>
-                         <th className="px-5 py-5 text-center">Amount</th>
-                         <th className="px-8 py-5 text-right">Date</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-50">
-                      {walletHistory.length === 0 ? (
-                        <tr><td colSpan="4" className="px-8 py-20 text-center text-gray-400 font-bold uppercase tracking-widest italic opacity-50 text-[10px]">No wallet transactions found</td></tr>
-                      ) : (
-                        walletHistory.map((w, i) => {
-                          const isCredit = w.transaction_alias === 'ADMIN_CREDIT' || w.amount > 0;
-                          return (
-                            <tr key={w._id || i} className="hover:bg-gray-50/20 transition-all group">
-                               <td className="px-8 py-6 text-[12px] font-bold text-gray-900 uppercase tracking-tight italic">TRX-{w._id?.slice(-6).toUpperCase() || 'N/A'}</td>
-                               <td className="px-5 py-6">
-                                  <div className="flex items-center gap-3">
-                                     <div className={`p-2 ${isCredit ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'} rounded-lg`}>
-                                        {isCredit ? <ArrowUpRight size={14} /> : <ArrowDownRight size={14} />}
-                                     </div>
-                                     <div>
-                                        <p className="text-[13px] font-black text-gray-950 uppercase tracking-tight">{w.remarks || (isCredit ? 'Admin Credit' : 'Admin Debit')}</p>
-                                        <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest italic">{isCredit ? 'Credit' : 'Debit'}</p>
-                                     </div>
-                                  </div>
-                               </td>
-                               <td className={`px-5 py-6 text-center font-black text-[14px] italic ${isCredit ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                 {isCredit ? '+' : '-'} ₹ {Math.abs(w.amount || 0).toFixed(2)}
-                               </td>
-                               <td className="px-8 py-6 text-right text-[11px] font-bold text-gray-400 tracking-widest uppercase italic">
-                                 {w.createdAt ? new Date(w.createdAt).toLocaleString('en-IN', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'N/A'}
-                               </td>
-                            </tr>
-                          );
-                        })
-                      )}
-                   </tbody>
-                </table>
-             </div>
-          </div>
-        );
-      case 'Withdrawal History':
-        return (
-          <div className="bg-white rounded-[40px] border border-gray-50 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="p-8 border-b border-gray-50 bg-gray-50/20"><h4 className="text-[14px] font-black uppercase tracking-widest text-gray-950">Cash-out History</h4></div>
-             <div className="overflow-x-auto no-scrollbar">
-                <table className="w-full text-left">
-                   <thead>
-                      <tr className="bg-gray-50/50 text-[10px] font-black text-gray-400 uppercase tracking-widest border-b border-gray-50">
-                         <th className="px-8 py-5">Ref ID</th>
-                         <th className="px-5 py-5">Payout Method</th>
-                         <th className="px-5 py-5 text-center">Requested Amount</th>
-                         <th className="px-5 py-5 text-center">Settlement Status</th>
-                         <th className="px-8 py-5 text-right">Requested At</th>
-                      </tr>
-                   </thead>
-                   <tbody className="divide-y divide-gray-50">
-                      {[1, 2].map((_, i) => (
-                         <tr key={i} className="hover:bg-gray-50/20 transition-all group">
-                            <td className="px-8 py-6 text-[12px] font-bold text-gray-950 uppercase tracking-tight italic">WDR-0102{i}</td>
-                            <td className="px-5 py-6">
-                               <div className="flex items-center gap-2">
-                                  <div className="p-2 bg-indigo-50 text-indigo-600 rounded-lg"><Banknote size={14} /></div>
-                                  <p className="text-[13px] font-black text-gray-950 uppercase tracking-tight">Bank Transfer</p>
-                               </div>
-                            </td>
-                            <td className="px-5 py-6 text-center font-black text-[13px] text-indigo-600">₹ 2,500.00</td>
-                            <td className="px-5 py-6 text-center">
-                               <span className="px-2.5 py-1 bg-amber-50 text-amber-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-amber-100">In Review</span>
-                            </td>
-                            <td className="px-8 py-6 text-right text-[11px] font-bold text-gray-400 tracking-widest uppercase italic">Mar {24+i} | 09:20 AM</td>
-                         </tr>
-                      ))}
-                   </tbody>
-                </table>
-             </div>
-          </div>
-        );
-      case 'Review History':
-        return (
-          <div className="bg-white rounded-[40px] border border-gray-50 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500 min-h-[400px]">
-             <div className="p-8 border-b border-gray-50 bg-gray-50/20 flex items-center justify-between">
-                <h4 className="text-[14px] font-black uppercase tracking-widest text-gray-950">Passenger Feedback</h4>
-                <div className="flex items-center gap-1.5 px-4 py-2 bg-amber-50 text-amber-600 rounded-2xl text-[12px] font-black uppercase tracking-widest border border-amber-100 shadow-sm">
-                   <Star size={14} fill="currentColor" /> {(reviews.reduce((acc, curr) => acc + curr.rating, 0) / (reviews.length || 1)).toFixed(1)} Avg Rating
-                </div>
-             </div>
-             <div className="p-10 grid grid-cols-1 md:grid-cols-2 gap-8">
-                {reviews.length > 0 ? (
-                  reviews.map((rev, i) => (
-                    <div key={rev._id || i} className="p-8 bg-gray-50/30 rounded-[32px] border border-gray-100 flex gap-6 group hover:bg-white transition-all shadow-sm">
-                       <div className="w-14 h-14 rounded-2xl bg-white border border-gray-100 flex items-center justify-center font-black text-gray-400 text-xl uppercase shadow-inner group-hover:scale-105 transition-transform flex-shrink-0">
-                          {rev.user_id?.name?.charAt(0) || 'U'}
-                       </div>
-                       <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between mb-3">
-                             <p className="text-[14px] font-black text-gray-950 uppercase tracking-tight leading-none italic">{rev.user_id?.name || 'Verified Rider'}</p>
-                             <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest italic">{rev.createdAt ? new Date(rev.createdAt).toLocaleDateString() : 'N/A'}</span>
-                          </div>
-                          <div className="flex items-center gap-1 text-amber-500 mb-4">
-                             {[1,2,3,4,5].map(s => (
-                               <Star 
-                                 key={s} 
-                                 size={12} 
-                                 fill={s <= rev.rating ? 'currentColor' : 'none'} 
-                                 className={s <= rev.rating ? 'text-amber-500' : 'text-gray-200'}
-                               />
-                             ))}
-                          </div>
-                          <p className="text-[13px] font-bold text-gray-500 leading-relaxed italic opacity-90">"{rev.comment || 'Smooth ride, no issues reported.'}"</p>
-                          <div className="mt-5 pt-5 border-t border-gray-100/50 flex gap-2">
-                             <span className="px-3 py-1 bg-white border border-gray-100 rounded-xl text-[8px] font-black uppercase tracking-widest text-gray-400 italic shadow-sm">Trip Reference</span>
-                             <span className="px-3 py-1 bg-amber-50/50 border border-amber-100/50 rounded-xl text-[8px] font-black uppercase tracking-widest text-amber-600/60 italic shadow-sm">Rating: {rev.rating}/5</span>
-                          </div>
-                       </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="col-span-1 md:col-span-2 py-20 flex flex-col items-center justify-center text-center opacity-40">
-                    <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center text-gray-300 mb-6 border border-gray-50 shadow-inner">
-                      <Star size={40} />
-                    </div>
-                    <p className="text-[16px] font-black uppercase tracking-[0.2em] text-gray-950 mb-2">Pristine Reputation</p>
-                    <p className="text-[11px] font-bold uppercase tracking-[0.1em] text-gray-400 italic">No reviews recorded for this captain yet</p>
-                  </div>
-                )}
-             </div>
-          </div>
-        );
-      case 'Documents':
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             {[
-               { name: 'Aadhar Card', status: 'Verified', color: 'emerald' },
-               { name: 'Driving License', status: 'Verified', color: 'emerald' },
-               { name: 'Vehicle RC', status: 'Verified', color: 'emerald' },
-               { name: 'Vehicle Insurance', status: 'Expiring', color: 'amber' },
-               { name: 'Pollution Certificate', status: 'Verified', color: 'emerald' },
-             ].map((doc, i) => (
-                <div key={i} className="bg-white p-8 rounded-[40px] border border-gray-50 shadow-sm relative overflow-hidden group">
-                   <div className="absolute top-0 right-0 p-8 opacity-5 scale-[2] -rotate-12 translate-x-4"><FileText size={80} strokeWidth={1} /></div>
-                   <div className="flex items-start justify-between mb-8 relative z-10">
-                      <div className="p-3 bg-gray-50 text-indigo-600 rounded-2xl group-hover:scale-110 transition-transform"><FileText size={24} /></div>
-                      <span className={`px-3 py-1 bg-${doc.color}-50 text-${doc.color}-600 rounded-lg text-[9px] font-black uppercase tracking-widest border border-${doc.color}-100`}>{doc.status}</span>
-                   </div>
-                   <h5 className="text-[16px] font-black text-gray-950 uppercase tracking-tight mb-2 relative z-10">{doc.name}</h5>
-                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest italic mb-8 relative z-10">Updated: 01 Apr 2024</p>
-                   <button className="w-full py-4 bg-gray-50 hover:bg-gray-950 hover:text-white rounded-2xl text-[11px] font-black uppercase tracking-widest text-gray-600 transition-all shadow-sm focus:ring-4 focus:ring-gray-100">View Document</button>
-                </div>
-             ))}
-          </div>
-        );
-      default: // General Report
-        return (
-          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-                <div className="lg:col-span-2 bg-white rounded-[40px] border border-gray-50 shadow-sm p-10">
-                   <div className="flex items-center gap-3 mb-10">
-                      <div className="p-3 bg-indigo-50 text-indigo-600 rounded-2xl scale-125"><History size={20} /></div>
-                      <h4 className="text-[14px] font-black text-gray-950 uppercase tracking-widest">Fleet Operations Audit</h4>
-                   </div>
-                   <div className="grid grid-cols-2 gap-12">
-                      <div className="space-y-8">
-                         {[
-                           { label: 'Total Completed Trips', value: '432', color: 'text-emerald-500' },
-                           { label: 'System Uptime Rate', value: '98.4%', color: 'text-indigo-500' },
-                           { label: 'Average Trip Rating', value: '4.8/5', color: 'text-amber-500' },
-                         ].map((item, i) => (
-                           <div key={i} className="flex flex-col">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5">{item.label}</span>
-                              <span className={`text-3xl font-black ${item.color} tracking-tighter`}>{item.value}</span>
-                           </div>
-                         ))}
-                      </div>
-                      <div className="space-y-8">
-                         {[
-                           { label: 'Active Subscription', value: 'Pro Monthly', color: 'text-gray-950' },
-                           { label: 'KYC Verification Status', value: 'Fully Audited', color: 'text-emerald-600' },
-                           { label: 'Commission Tier', value: 'Bronze (15%)', color: 'text-amber-600' },
-                         ].map((item, i) => (
-                           <div key={i} className="flex flex-col">
-                              <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1.5 focus:outline-none">{item.label}</span>
-                              <span className={`text-xl font-black ${item.color} uppercase italic tracking-tight`}>{item.value}</span>
-                           </div>
-                         ))}
-                      </div>
-                   </div>
-                </div>
-                <div className="bg-gray-900 rounded-[40px] p-10 text-white relative overflow-hidden flex flex-col justify-between shadow-2xl">
-                   <div className="absolute top-0 right-0 p-10 opacity-10 rotate-12 translate-x-4"><ShieldCheck size={140} strokeWidth={1} /></div>
-                   <div className="relative z-10">
-                      <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 mb-8 italic">Security Intelligence</h4>
-                      <p className="text-[15px] font-black leading-relaxed italic text-gray-300">"Driver account is in good standing. No critical violations found in the last 30 days of telemetry audit."</p>
-                   </div>
-                   <div className="pt-10 relative z-10 flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-white/10 flex items-center justify-center text-indigo-400 border border-white/5 shadow-inner"><AlertCircle size={24} /></div>
-                      <div>
-                         <p className="text-[11px] font-black text-gray-500 uppercase tracking-widest">Next Audit Date</p>
-                         <p className="text-[14px] font-black text-white italic uppercase">12th May 2024</p>
-                      </div>
-                   </div>
-                </div>
-             </div>
-          </div>
-        );
-    }
-  };
+  const stats = profile?.stats || {};
+  const earnings = profile?.earnings || {};
+  const requests = profile?.requests || [];
+  const withdrawals = profile?.withdrawals || [];
+  const documents = profile?.documents || [];
+  const chart = profile?.chart || { months: [], earnings: [], trips: { completed: [], cancelled: [] } };
 
-  const tabs = [
-    'Request List',
-    'Payment History',
-    'Withdrawal History',
-    'Review History',
-    'Documents',
-    'General Report'
-  ];
+  const acceptanceRate = requests.length
+    ? Math.round((stats.completed_trips / requests.length) * 100)
+    : 0;
+  const cancellationRate = requests.length
+    ? Math.round((stats.cancelled_trips / requests.length) * 100)
+    : 0;
 
   if (isLoading) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-        <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
-        <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest">Loading Profile...</p>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <p className="text-sm text-gray-500">Loading driver profile...</p>
+        </div>
       </div>
     );
   }
 
-  if (error || !driver) {
+  if (error || !profile) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4 text-center">
-        <div className="p-4 bg-rose-50 text-rose-500 rounded-full"><AlertCircle size={40} /></div>
-        <p className="text-[14px] font-black text-gray-950 uppercase tracking-widest">{error || 'Driver Not Found'}</p>
-        <button onClick={() => navigate(-1)} className="px-6 py-2 bg-gray-950 text-white rounded-xl text-[11px] font-black uppercase tracking-widest">Go Back</button>
+      <div className="min-h-[60vh] flex items-center justify-center">
+        <div className="text-center space-y-3">
+          <p className="text-sm font-semibold text-rose-600">{error || 'Driver not found'}</p>
+          <button
+            onClick={() => navigate(-1)}
+            className="px-4 py-2 text-sm text-white bg-indigo-600 rounded-lg"
+          >
+            Go Back
+          </button>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="space-y-8 p-1 animate-in fade-in duration-700 font-sans text-gray-900 max-w-[1600px] mx-auto pb-20">
-      {/* HEADER & TOP INFO */}
-      <div className="flex flex-col lg:flex-row gap-8">
-        {/* Profile Card */}
-        <div className="w-full lg:w-[400px] bg-white rounded-[40px] border border-gray-50 shadow-sm p-10 flex flex-col items-center text-center relative overflow-hidden group">
-           <div className="absolute top-0 right-0 p-8 opacity-5 scale-[2] -rotate-12 translate-x-4"><User size={120} strokeWidth={1} /></div>
-           
-           <div className="relative w-48 h-48 mb-6 ring-[12px] ring-gray-50 rounded-[48px] overflow-hidden group-hover:scale-105 transition-all duration-500 shadow-2xl">
-              <img src={driver.image} alt="Driver" className="w-full h-full object-cover" />
-           </div>
-           
-           <h2 className="text-3xl font-black tracking-tight text-gray-950 uppercase leading-none mb-2">{driver.name}</h2>
-           <div className="flex items-center gap-2 text-gray-400 font-black text-[12px] uppercase tracking-widest mb-6 px-1.5 py-0.5">
-              <MapPin size={14} className="text-rose-500" /> {driver.city}
-           </div>
-
-           <div className="w-full space-y-4 mb-8">
-              <div className="flex items-center justify-center gap-3 px-6 py-4 bg-gray-50 rounded-[24px] border border-gray-100 group/item hover:bg-white transition-all cursor-pointer">
-                 <Phone size={18} className="text-indigo-500" />
-                 <span className="text-[15px] font-black tracking-tight">{driver.mobile}</span>
-              </div>
-              <div className="flex items-center justify-center gap-3 px-6 py-4 bg-gray-50 rounded-[24px] border border-gray-100 italic">
-                 <Calendar size={18} className="text-gray-400" />
-                 <span className="text-[13px] font-bold text-gray-500">Joined {driver.joined}</span>
-              </div>
-           </div>
-
-           {/* Vehicle Info */}
-           <div className="w-full pt-1 border-t border-gray-50 text-left">
-              <h3 className="text-[11px] font-black text-gray-400 uppercase tracking-widest mb-6 flex items-center gap-2 italic">
-                 <Car size={14} /> Registered Fleet Info
-              </h3>
-              <div className="flex gap-4">
-                 <div className="w-24 h-24 rounded-2xl bg-gray-50 border border-gray-100 p-2 overflow-hidden shrink-0">
-                    <img src="https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg" alt="Vehicle" className="w-full h-full object-cover rounded-xl" />
-                 </div>
-                 <div className="flex-1 space-y-2">
-                    <p className="text-[16px] font-black text-gray-950 uppercase leading-none italic">{driver.vehicle}</p>
-                    <div className="space-y-1">
-                       <p className="text-[11px] font-bold text-rose-500 uppercase tracking-tight">{driver.plate}</p>
-                       <p className="text-[11px] font-bold text-gray-400 uppercase tracking-tight">Verified Unit</p>
-                    </div>
-                 </div>
-              </div>
-           </div>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans text-gray-900">
+      <div className="mb-6">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Drivers</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Driver Profile</span>
         </div>
-
-        {/* Dynamic Content Panel */}
-        <div className="flex-1 space-y-8 min-w-0">
-           {/* Navigation Tabs */}
-           <div className="bg-white rounded-[32px] border border-gray-50 shadow-sm p-2 flex overflow-x-auto no-scrollbar">
-              {tabs.map((tab) => (
-                 <button 
-                  key={tab}
-                  onClick={() => setActiveTab(tab)}
-                  className={`flex-1 min-w-[140px] py-4 rounded-[24px] text-[12px] font-black uppercase tracking-widest transition-all duration-300 ${
-                    activeTab === tab 
-                      ? 'bg-gray-950 text-white shadow-lg shadow-gray-200' 
-                      : 'text-gray-400 hover:text-gray-950 hover:bg-gray-50'
-                  }`}
-                 >
-                    {tab}
-                 </button>
-              ))}
-           </div>
-
-           {/* Stats Cards */}
-           <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              {stats.map((stat, i) => (
-                 <div key={i} className="bg-white p-6 rounded-[32px] border border-gray-50 shadow-sm group hover:scale-[1.02] transition-all">
-                    <div className={`p-3 w-fit rounded-2xl bg-gray-50 mb-4 group-hover:scale-110 transition-transform ${stat.color}`}>
-                       <stat.icon size={20} />
-                    </div>
-                    <p className="text-2xl font-black text-gray-950 tracking-tighter leading-none mb-2 italic">{stat.value}</p>
-                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
-                 </div>
-              ))}
-           </div>
-
-           {/* TAB CONTENT AREA */}
-           <div className="min-h-[400px]">
-              {TabContent()}
-           </div>
-
-           {/* Section: Live Location & Financial Breakdown (ONLY ON GENERAL REPORT) */}
-           {activeTab === 'General Report' && (
-              <div className="grid grid-cols-12 gap-8 items-start animate-in fade-in duration-500">
-                 {/* Map & Live Tracking */}
-                 <div className="col-span-12 lg:col-span-8 bg-white rounded-[40px] border border-gray-50 shadow-sm overflow-hidden min-h-[500px] flex flex-col">
-                    <div className="p-8 border-b border-gray-50 flex items-center justify-between">
-                       <div className="flex items-center gap-3">
-                          <div className="px-3 py-1 bg-rose-50 text-rose-600 rounded-lg text-[10px] font-black uppercase tracking-widest animate-pulse">Live</div>
-                          <h4 className="text-[14px] font-black text-gray-950 uppercase tracking-widest leading-none">Driver Current Location</h4>
-                       </div>
-                       <button className="flex items-center gap-2 text-indigo-600 text-[11px] font-black uppercase tracking-widest bg-indigo-50 px-4 py-2 rounded-xl border border-indigo-100 hover:bg-indigo-100 transition-all opacity-80 italic">
-                          <Navigation size={14} /> Full Map view
-                       </button>
-                    </div>
-                    <div className="flex-1 bg-gray-100 relative group overflow-hidden">
-                       {loadError ? (
-                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-slate-50">
-                            <div>
-                               <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Map unavailable</p>
-                               <p className="text-sm text-gray-500 mt-2">Google Maps could not be loaded for this driver profile.</p>
-                            </div>
-                         </div>
-                       ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-                         <GoogleMap
-                           mapContainerStyle={mapContainerStyle}
-                           center={driverCoordinates}
-                           zoom={13}
-                           options={{
-                             streetViewControl: false,
-                             mapTypeControl: false,
-                             fullscreenControl: true
-                           }}
-                         >
-                           <MarkerF
-                             position={driverCoordinates}
-                             title={driver.name}
-                             icon={{
-                               path: window.google.maps.SymbolPath.CIRCLE,
-                               scale: 10,
-                               fillColor: '#E11D48',
-                               fillOpacity: 1,
-                               strokeColor: '#ffffff',
-                               strokeWeight: 3
-                             }}
-                           />
-                         </GoogleMap>
-                       ) : (
-                         <div className="absolute inset-0 flex items-center justify-center p-6 text-center bg-[linear-gradient(135deg,#ffe4e6_0%,#fff1f2_100%)]">
-                            <div>
-                               <p className="text-[12px] font-black text-rose-600 uppercase tracking-widest">Add Google Maps key</p>
-                               <p className="text-sm text-gray-500 mt-2">Driver live location will render here after `VITE_GOOGLE_MAPS_API_KEY` is configured.</p>
-                            </div>
-                         </div>
-                       )}
-
-                       <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                          <div className="relative">
-                             <div className="absolute inset-x-0 inset-y-0 w-12 h-12 bg-rose-500/20 rounded-full animate-ping"></div>
-                             <div className="relative w-12 h-12 bg-white rounded-full flex items-center justify-center shadow-2xl border-4 border-rose-500 scale-125">
-                                <Car size={24} className="text-rose-500" />
-                             </div>
-                             <div className="absolute top-full left-1/2 -translate-x-1/2 mt-3 whitespace-nowrap bg-gray-900 text-white text-[10px] font-black px-3 py-1.5 rounded-lg shadow-xl uppercase tracking-widest italic">
-                                {driver.locationLabel}
-                             </div>
-                          </div>
-                       </div>
-                    </div>
-                 </div>
-
-                 {/* Earnings Breakdown */}
-                 <div className="col-span-12 lg:col-span-4 space-y-8">
-                    <div className="bg-gray-950 rounded-[40px] p-8 text-white shadow-2xl space-y-8 relative overflow-hidden min-h-[500px] flex flex-col">
-                       <div className="absolute top-0 right-0 p-8 opacity-10 scale-[2] -rotate-12 translate-x-4 italic"><IndianRupee size={150} strokeWidth={1} /></div>
-                       <h4 className="text-[11px] font-black uppercase tracking-[0.2em] text-gray-500 italic">Earnings Breakdown</h4>
-                       
-                       <div className="space-y-6 relative z-10 flex-1">
-                          {[
-                            { label: 'Today Earnings', value: '₹ 0', color: 'text-white' },
-                            { label: 'GST Tax', value: '₹ 0', color: 'text-rose-400' },
-                            { label: 'Drivers Earnings', value: '₹ 0', color: 'text-emerald-400' },
-                          ].map((item, i) => (
-                             <div key={i} className={`flex items-center justify-between ${i<2?'border-b border-white/5 pb-6':''}`}>
-                                <span className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">{item.label}</span>
-                                <span className={`font-black tracking-tighter italic ${i===2?'text-4xl':'text-xl'} ${item.color}`}>{item.value}</span>
-                             </div>
-                          ))}
-                       </div>
-
-                       <div className="pt-8 border-t border-white/5 grid grid-cols-3 gap-2 relative z-10">
-                          {[
-                            { label: 'By Cash', icon: Banknote, value: '0', color: 'text-amber-400' },
-                            { label: 'By Wallet', icon: Wallet, value: '0', color: 'text-indigo-400' },
-                            { label: 'By Card', icon: CreditCard, value: '0', color: 'text-emerald-400' },
-                          ].map((item, i) => (
-                            <div key={i} className="text-center p-3 bg-white/5 rounded-2xl border border-white/5 shadow-inner">
-                               <item.icon size={16} className={`${item.color} mx-auto mb-2`} />
-                               <p className="text-[13px] font-black leading-none mb-1 italic">{item.value}</p>
-                               <p className="text-[7px] font-black uppercase tracking-widest text-gray-500 italic">{item.label}</p>
-                            </div>
-                          ))}
-                       </div>
-                    </div>
-                 </div>
-              </div>
-           )}
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900">Driver Profile</h1>
+          <button
+            onClick={() => navigate('/admin/drivers')}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
         </div>
       </div>
 
-      {/* FOOTER */}
-      <footer className="mt-12 flex items-center justify-between px-8 py-6 border-t border-gray-100 text-[10px] font-black text-gray-400 uppercase tracking-[0.2em]">
-         <div>2025 © REDIGO CAB Pvt Ltd.</div>
-         <div>Design & Develop by REDIGO Tech</div>
-         <div className="flex items-center gap-2">
-            App Version <span className="text-emerald-600 italic">V 3.4.1</span>
-         </div>
-      </footer>
+      <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[240px_1fr_280px] gap-6 items-center">
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-full overflow-hidden bg-gray-100 border border-gray-200">
+              <img src={profile.image} alt={profile.name} className="w-full h-full object-cover" />
+            </div>
+            <div>
+              <h2 className="text-lg font-semibold text-gray-900">{profile.name}</h2>
+              <p className="text-sm text-gray-500">{profile.city || 'India'}</p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm text-gray-600">
+            <div className="flex items-center gap-2">
+              <Phone size={14} className="text-gray-400" />
+              <span>{profile.phone || profile.mobile || 'N/A'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Mail size={14} className="text-gray-400" />
+              <span>{profile.email || 'N/A'}</span>
+            </div>
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-gray-400" />
+              <span>{profile.joined_at}</span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4">
+            <div className="w-20 h-20 rounded-xl overflow-hidden bg-gray-100 border border-gray-200">
+              <img
+                src={profile.vehicle_image}
+                alt="Vehicle"
+                className="w-full h-full object-cover"
+              />
+            </div>
+            <div className="text-sm text-gray-600">
+              <p className="text-gray-900 font-semibold">{profile.vehicle?.type || 'Vehicle'}</p>
+              <p>{profile.vehicle?.make}</p>
+              <p>{profile.vehicle?.model}</p>
+              <p>{profile.vehicle?.number}</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="bg-white rounded-xl border border-gray-200 p-2 flex flex-wrap gap-2 mb-6">
+        {tabs.map((tab) => (
+          <button
+            key={tab}
+            onClick={() => setActiveTab(tab)}
+            className={`px-4 py-2 text-xs font-semibold rounded-lg transition-colors ${
+              activeTab === tab
+                ? 'bg-indigo-600 text-white'
+                : 'text-gray-500 hover:bg-gray-50'
+            }`}
+          >
+            {tab}
+          </button>
+        ))}
+      </div>
+
+      {activeTab !== 'Driver Profile' ? (
+        <>
+          {activeTab === 'Request List' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Completed Rides</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.completed_trips || 0}</p>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Acceptance Rate</p>
+                    <p className="text-2xl font-semibold text-gray-900">{acceptanceRate}%</p>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Cancellation Rate</p>
+                    <p className="text-2xl font-semibold text-gray-900">{cancellationRate}%</p>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Cancelled Rides</p>
+                    <p className="text-2xl font-semibold text-gray-900">{stats.cancelled_trips || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                    <thead>
+                      <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+                        <th className="px-6 py-3">Request Id</th>
+                        <th className="px-4 py-3">Date</th>
+                        <th className="px-4 py-3">User Name</th>
+                        <th className="px-4 py-3">Driver Name</th>
+                        <th className="px-4 py-3">Trip Status</th>
+                        <th className="px-4 py-3">Paid</th>
+                        <th className="px-4 py-3">Payment Option</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                      {requests.length === 0 ? (
+                        <tr>
+                          <td colSpan="7" className="px-6 py-12 text-center text-gray-400">No data found.</td>
+                        </tr>
+                      ) : (
+                        requests.map((item) => (
+                          <tr key={item.request_id}>
+                            <td className="px-6 py-3">{item.request_id.slice(-8).toUpperCase()}</td>
+                            <td className="px-4 py-3">
+                              {item.date ? new Date(item.date).toLocaleString('en-IN') : 'N/A'}
+                            </td>
+                            <td className="px-4 py-3">{item.user_name}</td>
+                            <td className="px-4 py-3">{item.driver_name}</td>
+                            <td className="px-4 py-3 capitalize">{item.trip_status}</td>
+                            <td className="px-4 py-3">{item.paid ? 'Yes' : 'No'}</td>
+                            <td className="px-4 py-3 capitalize">{item.payment_option}</td>
+                          </tr>
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Payment History' && (
+            <div className="space-y-6">
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Total Amount</p>
+                    <p className="text-2xl font-semibold text-gray-900">₹ {earnings.total_earnings || 0}</p>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Spend Amount</p>
+                    <p className="text-2xl font-semibold text-gray-900">₹ {earnings.spend_amount || 0}</p>
+                  </div>
+                  <div className="border border-gray-100 rounded-lg p-4">
+                    <p className="text-sm text-gray-500">Balance Amount</p>
+                    <p className="text-2xl font-semibold text-gray-900">₹ {earnings.balance_amount || 0}</p>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-white rounded-xl border border-gray-200 p-6">
+                <h3 className="text-sm font-semibold text-gray-900 mb-4">Credit or Debit wallet</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5">Amount *</label>
+                    <input
+                      type="number"
+                      min="0"
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+                      placeholder="Enter Amount"
+                      value={walletForm.amount}
+                      onChange={(e) => setWalletForm((prev) => ({ ...prev, amount: e.target.value }))}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1.5">Operation *</label>
+                    <select
+                      className="w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+                      value={walletForm.operation}
+                      onChange={(e) => setWalletForm((prev) => ({ ...prev, operation: e.target.value }))}
+                    >
+                      <option value="credit">Credit</option>
+                      <option value="debit">Debit</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-4">
+                  <button
+                    type="button"
+                    disabled={walletForm.isSubmitting || !walletForm.amount}
+                    onClick={async () => {
+                      setWalletForm((prev) => ({ ...prev, isSubmitting: true }));
+                      try {
+                        const token = localStorage.getItem('adminToken');
+                        await fetch(
+                          `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/wallet/drivers/${id}/adjust`,
+                          {
+                            method: 'POST',
+                            headers: {
+                              ...(token ? { Authorization: `Bearer ${token}` } : {}),
+                              'Content-Type': 'application/json',
+                            },
+                            body: JSON.stringify({
+                              amount: Number(walletForm.amount),
+                              operation: walletForm.operation,
+                            }),
+                          },
+                        );
+                        setWalletForm({ amount: '', operation: 'credit', isSubmitting: false });
+                        await fetchProfile();
+                      } catch (err) {
+                        setWalletForm((prev) => ({ ...prev, isSubmitting: false }));
+                      }
+                    }}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors"
+                  >
+                    {walletForm.isSubmitting ? 'Saving...' : 'Submit'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Withdrawal History' && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+                      <th className="px-6 py-3">Date</th>
+                      <th className="px-4 py-3">Name</th>
+                      <th className="px-4 py-3">Mobile Number</th>
+                      <th className="px-4 py-3">Requested Amount</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                    {withdrawals.length === 0 ? (
+                      <tr>
+                        <td colSpan="6" className="px-6 py-12 text-center text-gray-400">No data found.</td>
+                      </tr>
+                    ) : (
+                      withdrawals.map((item) => (
+                        <tr key={item._id}>
+                          <td className="px-6 py-3">{item.date ? new Date(item.date).toLocaleString('en-IN') : 'N/A'}</td>
+                          <td className="px-4 py-3">{item.name}</td>
+                          <td className="px-4 py-3">{item.mobile}</td>
+                          <td className="px-4 py-3">₹ {item.requested_amount}</td>
+                          <td className="px-4 py-3 capitalize">{item.status}</td>
+                          <td className="px-4 py-3">-</td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Review History' && (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+              No reviews found.
+            </div>
+          )}
+
+          {activeTab === 'Documents' && (
+            <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead>
+                    <tr className="bg-gray-50 border-b border-gray-100 text-xs text-gray-500">
+                      <th className="px-6 py-3">Document Name</th>
+                      <th className="px-4 py-3">Identify Number</th>
+                      <th className="px-4 py-3">Expiry Date</th>
+                      <th className="px-4 py-3">Status</th>
+                      <th className="px-4 py-3">Comment</th>
+                      <th className="px-4 py-3">Document</th>
+                      <th className="px-4 py-3">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100 text-sm text-gray-700">
+                    {documents.length === 0 ? (
+                      <tr>
+                        <td colSpan="7" className="px-6 py-12 text-center text-gray-400">No documents found.</td>
+                      </tr>
+                    ) : (
+                      documents.map((doc, idx) => (
+                        <tr key={`${doc.name}-${idx}`}>
+                          <td className="px-6 py-3">{doc.name}</td>
+                          <td className="px-4 py-3">{doc.identify_number}</td>
+                          <td className="px-4 py-3">{doc.expiry_date}</td>
+                          <td className="px-4 py-3 capitalize">{doc.status}</td>
+                          <td className="px-4 py-3">{doc.comment}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-2">
+                              {(doc.images || []).slice(0, 1).map((url, i) => (
+                                <button
+                                  key={`view-${i}`}
+                                  onClick={() => window.open(url, '_blank')}
+                                  className="px-3 py-1.5 text-xs font-semibold text-indigo-600 bg-indigo-50 rounded-md hover:bg-indigo-100 transition-colors inline-flex items-center gap-1"
+                                >
+                                  <Eye size={12} /> View
+                                </button>
+                              ))}
+                              {(doc.images || []).slice(0, 1).map((url, i) => (
+                                <a
+                                  key={`download-${i}`}
+                                  href={url}
+                                  download
+                                  className="px-3 py-1.5 text-xs font-semibold text-emerald-600 bg-emerald-50 rounded-md hover:bg-emerald-100 transition-colors inline-flex items-center gap-1"
+                                >
+                                  <Download size={12} /> Download
+                                </a>
+                              ))}
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <button className="px-3 py-1.5 text-xs font-semibold text-rose-600 bg-rose-50 rounded-md hover:bg-rose-100 transition-colors">
+                              Decline
+                            </button>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {activeTab === 'Subscription' && (
+            <div className="bg-white rounded-xl border border-gray-200 p-8 text-center text-sm text-gray-500">
+              No subscription data available.
+            </div>
+          )}
+        </>
+      ) : (
+        <>
+          <div className="bg-white rounded-xl border border-gray-200 p-6 mb-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-4">General Report</h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
+              <div className="border border-gray-100 rounded-lg p-4">
+                <p className="text-sm text-gray-500">Today Trips</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.today_trips || 0}</p>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-4">
+                <p className="text-sm text-gray-500">Today Earnings</p>
+                <p className="text-2xl font-semibold text-gray-900">₹ {earnings.today_earnings || 0}</p>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-4">
+                <p className="text-sm text-gray-500">Total Trips</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.total_trips || 0}</p>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-4">
+                <p className="text-sm text-gray-500">Total Earnings</p>
+                <p className="text-2xl font-semibold text-gray-900">₹ {earnings.total_earnings || 0}</p>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-4">
+                <p className="text-sm text-gray-500">Today Cancelled</p>
+                <p className="text-2xl font-semibold text-gray-900">{stats.today_cancelled || 0}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-4">Driver Location</h3>
+              <div className="h-80 rounded-xl overflow-hidden border border-gray-100">
+                {loadError ? (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500 bg-gray-50">
+                    Map unavailable.
+                  </div>
+                ) : HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
+                  <GoogleMap
+                    mapContainerStyle={mapContainerStyle}
+                    center={mapCenter}
+                    zoom={13}
+                    options={{ streetViewControl: false, mapTypeControl: true, fullscreenControl: true }}
+                  >
+                    <MarkerF position={mapCenter} />
+                  </GoogleMap>
+                ) : (
+                  <div className="h-full flex items-center justify-center text-sm text-gray-500 bg-gray-50">
+                    Configure `VITE_GOOGLE_MAPS_API_KEY` to show map.
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 p-6">
+              <h3 className="text-base font-semibold text-gray-900 mb-4">Earnings</h3>
+              <div className="h-52 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
+                <div className="relative h-full">
+                  <ChartGrid height={170} />
+                  <svg viewBox="0 0 400 170" className="absolute inset-0 w-full h-full">
+                    <polyline
+                      fill="none"
+                      stroke="#10b981"
+                      strokeWidth="2.5"
+                      points={buildLinePoints(chart.earnings || [], 400, 170)}
+                    />
+                  </svg>
+                </div>
+                <div className="mt-3 grid grid-cols-4 text-xs text-gray-400">
+                  {(chart.months || []).map((m) => (
+                    <span key={m} className="text-center">{m}</span>
+                  ))}
+                </div>
+              </div>
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Today Earnings</p>
+                  <p className="text-lg font-semibold">₹ {earnings.today_earnings || 0}</p>
+                </div>
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Admin Commission</p>
+                  <p className="text-lg font-semibold">₹ {earnings.admin_commission || 0}</p>
+                </div>
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">Drivers Earnings</p>
+                  <p className="text-lg font-semibold">₹ {earnings.driver_earnings || 0}</p>
+                </div>
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">By Cash</p>
+                  <p className="text-lg font-semibold">₹ {earnings.by_cash || 0}</p>
+                </div>
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">By Wallet</p>
+                  <p className="text-lg font-semibold">₹ {earnings.by_wallet || 0}</p>
+                </div>
+                <div className="border border-gray-100 rounded-lg p-3">
+                  <p className="text-xs text-gray-500">By Card/Online</p>
+                  <p className="text-lg font-semibold">₹ {earnings.by_card || 0}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <h3 className="text-base font-semibold text-gray-900 mb-4">Trips</h3>
+            <div className="h-52 rounded-xl border border-dashed border-gray-200 bg-gray-50 p-4">
+              <div className="relative h-full">
+                <ChartGrid height={170} />
+                <svg viewBox="0 0 400 170" className="absolute inset-0 w-full h-full">
+                  <polyline
+                    fill="none"
+                    stroke="#10b981"
+                    strokeWidth="2.5"
+                    points={buildLinePoints(chart.trips?.completed || [], 400, 170)}
+                  />
+                  <polyline
+                    fill="none"
+                    stroke="#f97316"
+                    strokeWidth="2.5"
+                    points={buildLinePoints(chart.trips?.cancelled || [], 400, 170)}
+                  />
+                </svg>
+              </div>
+              <div className="mt-3 grid grid-cols-4 text-xs text-gray-400">
+                {(chart.months || []).map((m) => (
+                  <span key={m} className="text-center">{m}</span>
+                ))}
+              </div>
+              <div className="mt-2 flex items-center gap-4 text-xs text-gray-500">
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                  Completed
+                </span>
+                <span className="flex items-center gap-1">
+                  <span className="w-2 h-2 rounded-full bg-orange-500"></span>
+                  Cancelled
+                </span>
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              <div className="border border-gray-100 rounded-lg p-3">
+                <p className="text-xs text-gray-500">Completed Trips</p>
+                <p className="text-lg font-semibold">{stats.completed_trips || 0}</p>
+              </div>
+              <div className="border border-gray-100 rounded-lg p-3">
+                <p className="text-xs text-gray-500">Cancelled Trips</p>
+                <p className="text-lg font-semibold">{stats.cancelled_trips || 0}</p>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 };
 
 export default DriverDetails;
+  const buildLinePoints = (values, width, height, padding = 16) => {
+    if (!values.length) return '';
+    const maxValue = Math.max(...values, 1);
+    const stepX = (width - padding * 2) / (values.length - 1 || 1);
+    return values
+      .map((value, index) => {
+        const x = padding + index * stepX;
+        const y = height - padding - (Number(value) / maxValue) * (height - padding * 2);
+        return `${x},${y}`;
+      })
+      .join(' ');
+  };
 
+  const ChartGrid = ({ height = 180 }) => (
+    <svg viewBox={`0 0 400 ${height}`} className="w-full h-full">
+      {[0, 1, 2, 3].map((i) => (
+        <line
+          key={i}
+          x1="24"
+          x2="376"
+          y1={24 + i * ((height - 48) / 3)}
+          y2={24 + i * ((height - 48) / 3)}
+          stroke="#e5e7eb"
+          strokeDasharray="4 4"
+        />
+      ))}
+    </svg>
+  );

@@ -20,6 +20,9 @@ export const loginAdmin = asyncHandler(async (req, res) =>
 export const getUsers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listUsers(req.query)),
 );
+export const bulkImportUsers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.bulkImportUsers(req.body)),
+);
 export const createUser = asyncHandler(async (req, res) =>
   ok(res, await adminService.createUser(req.body)),
 );
@@ -52,11 +55,21 @@ export const getUserDeletionRequests = asyncHandler(async (req, res) =>
 );
 
 export const approveUserDeletionRequest = asyncHandler(async (req, res) =>
-  ok(res, await adminService.approveUserDeletionRequest(req.params.id, req.auth?.sub)),
+  ok(
+    res,
+    await adminService.approveUserDeletionRequest(req.params.id, req.auth?.sub),
+  ),
 );
 
 export const rejectUserDeletionRequest = asyncHandler(async (req, res) =>
-  ok(res, await adminService.rejectUserDeletionRequest(req.params.id, req.body, req.auth?.sub)),
+  ok(
+    res,
+    await adminService.rejectUserDeletionRequest(
+      req.params.id,
+      req.body,
+      req.auth?.sub,
+    ),
+  ),
 );
 
 export const getUserRequests = asyncHandler(async (req, res) =>
@@ -70,8 +83,37 @@ export const getUserWalletHistory = asyncHandler(async (req, res) =>
 export const getDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDrivers(req.query)),
 );
+
+export const getDeletedDrivers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDeletedDrivers(req.query)),
+);
+
+export const restoreDeletedDriver = asyncHandler(async (req, res) =>
+  ok(res, await adminService.restoreDeletedDriver(req.params.id)),
+);
+
+export const permanentlyDeleteDeletedDriver = asyncHandler(async (req, res) => {
+  await adminService.permanentlyDeleteDeletedDriver(req.params.id);
+  ok(res, { deleted: true });
+});
+
+export const createDriver = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createDriver(req.body)),
+);
 export const getDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.getDriverById(req.params.id)),
+);
+export const getDriverProfile = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverProfile(req.params.id)),
+);
+export const adjustDriverWallet = asyncHandler(async (req, res) =>
+  ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
+);
+export const getDriverRatings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverRatings(req.query)),
+);
+export const getDriverRatingDetail = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverRatingDetail(req.params.id)),
 );
 export const updateDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateDriver(req.params.id, req.body)),
@@ -120,6 +162,9 @@ export const getRideModules = asyncHandler(async (_req, res) =>
 );
 export const getOngoingRides = asyncHandler(async (req, res) =>
   ok(res, await adminService.listOngoingRides(req.query)),
+);
+export const getDeliveries = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDeliveries(req.query)),
 );
 export const deleteOngoingRide = asyncHandler(async (req, res) =>
   ok(res, await adminService.deleteOngoingRide(req.params.id)),
@@ -281,7 +326,10 @@ export const createOwnerNeededDocument = asyncHandler(async (req, res) =>
   ok(res, await adminService.createOwnerNeededDocument(req.body)),
 );
 export const updateOwnerNeededDocument = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateOwnerNeededDocument(req.params.id, req.body)),
+  ok(
+    res,
+    await adminService.updateOwnerNeededDocument(req.params.id, req.body),
+  ),
 );
 export const deleteOwnerNeededDocument = asyncHandler(async (req, res) => {
   await adminService.deleteOwnerNeededDocument(req.params.id);
@@ -451,5 +499,8 @@ export const getGeneralSettingsCategory = asyncHandler(async (req, res) =>
   ok(res, await adminService.getGeneralSettings(req.params.category)),
 );
 export const updateGeneralSettingsCategory = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateGeneralSettings(req.params.category, req.body)),
+  ok(
+    res,
+    await adminService.updateGeneralSettings(req.params.category, req.body),
+  ),
 );

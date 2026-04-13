@@ -1,10 +1,13 @@
 import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
+import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
+import { emitToDriver } from '../../services/dispatchService.js';
 import { findZoneByPickup } from '../services/locationService.js';
 import { listDriverServiceLocations } from '../services/serviceLocationService.js';
+import { serializeDriverWallet, topUpDriverWallet } from '../services/walletService.js';
 import {
   startDriverLoginOtp,
   verifyDriverLoginOtp,
@@ -167,6 +170,7 @@ export const getCurrentDriver = async (req, res) => {
       approve: driver.approve,
       status: driver.status,
       rating: driver.rating,
+      wallet: serializeDriverWallet(driver),
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
       location: driver.location,
@@ -174,6 +178,56 @@ export const getCurrentDriver = async (req, res) => {
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
     },
+  });
+};
+
+export const getMyWallet = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const transactions = await WalletTransaction.find({ driverId: req.auth.sub })
+    .sort({ createdAt: -1 })
+    .limit(50)
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      wallet: serializeDriverWallet(driver),
+      transactions,
+    },
+  });
+};
+
+export const topUpMyWallet = async (req, res) => {
+  const amount = Number(req.body.amount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'amount must be greater than zero');
+  }
+
+  const result = await topUpDriverWallet({
+    driverId: req.auth.sub,
+    amount,
+    metadata: {
+      source: req.body.source || 'manual',
+      referenceId: req.body.referenceId || null,
+    },
+  });
+
+  const payload = {
+    wallet: result.wallet,
+    transaction: result.transaction,
+  };
+
+  emitToDriver(req.auth.sub, 'driver:wallet:updated', payload);
+
+  res.json({
+    success: true,
+    data: payload,
   });
 };
 

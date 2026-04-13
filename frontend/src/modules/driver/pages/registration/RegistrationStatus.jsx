@@ -11,7 +11,6 @@ import {
 import Rydon24Logo from '@/assets/rydon24_logo.png';
 import { clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
 
-let lastPollingBootAt = 0;
 const APPROVAL_POLL_MS = 2500;
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response;
@@ -50,12 +49,6 @@ const RegistrationStatus = () => {
     };
 
     useEffect(() => {
-        const startedAt = Date.now();
-        if (startedAt - lastPollingBootAt < 1200) {
-            return () => {};
-        }
-        lastPollingBootAt = startedAt;
-
         if (location.state?.role) {
             localStorage.setItem('role', location.state.role);
         }

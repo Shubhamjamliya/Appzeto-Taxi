@@ -41,7 +41,7 @@ import SuvIcon from '@/assets/icons/SUV.png';
 
 import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
-import { getCurrentDriver } from '../services/registrationService';
+import { getCurrentDriver, getLocalDriverToken } from '../services/registrationService';
 
 const containerStyle = {
     width: '100%',
@@ -105,6 +105,17 @@ const formatPoint = (point, fallback) => {
     return fallback;
 };
 
+const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const withDriverAuthorization = (token) => (
+    token
+        ? {
+            headers: {
+                Authorization: `Bearer ${token}`,
+            },
+        }
+        : {}
+);
+
 const mapStyles = [
   { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
   { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
@@ -139,6 +150,7 @@ const DriverHome = () => {
     const [acceptingRideId, setAcceptingRideId] = useState('');
     const [isHydratingDriver, setIsHydratingDriver] = useState(true);
     const [vehicleIconType, setVehicleIconType] = useState('car');
+    const [walletSummary, setWalletSummary] = useState({ balance: 0, cashLimit: 500, isBlocked: false });
     const driverCoordsRef = useRef(null);
     const acceptingRideIdRef = useRef('');
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
@@ -148,6 +160,17 @@ const DriverHome = () => {
     );
 
     const { isLoaded } = useAppGoogleMapsLoader();
+
+    const fetchActiveJob = useCallback(async (type = 'ride') => {
+        const normalizedType = String(type || 'ride').toLowerCase();
+        const endpoint = normalizedType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
+        const driverToken = getLocalDriverToken();
+        const response = await api.get(endpoint, {
+            ...withDriverAuthorization(driverToken),
+            params: { t: Date.now(), type: normalizedType },
+        });
+        return unwrapApiPayload(response);
+    }, []);
 
     const onLoad = useCallback(function callback(map) {
         setMap(map);
@@ -193,6 +216,9 @@ const DriverHome = () => {
 
         setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
         setIsOnline(Boolean(driver?.isOnline));
+        if (driver?.wallet) {
+            setWalletSummary(driver.wallet);
+        }
 
         if (Array.isArray(savedCoords) && savedCoords.length === 2) {
             driverCoordsRef.current = savedCoords;
@@ -207,22 +233,72 @@ const DriverHome = () => {
 
         setIsHydratingDriver(true);
 
-        hydrateDriverState()
-            .catch(() => {
+        (async () => {
+            try {
+                await hydrateDriverState();
+
+                const [activeDelivery, activeRide] = await Promise.allSettled([
+                    fetchActiveJob('parcel'),
+                    fetchActiveJob('ride'),
+                ]);
+
+                if (!active) {
+                    return;
+                }
+
+                const deliveryPayload =
+                    activeDelivery.status === 'fulfilled' ? activeDelivery.value : null;
+                const ridePayload =
+                    activeRide.status === 'fulfilled' ? activeRide.value : null;
+
+                const currentJob = deliveryPayload?.rideId
+                    ? deliveryPayload
+                    : ridePayload?.rideId
+                        ? ridePayload
+                        : null;
+
+                if (currentJob?.rideId) {
+                    const currentType = String(currentJob.type || currentJob.serviceType || 'ride').toLowerCase() === 'parcel'
+                        ? 'parcel'
+                        : 'ride';
+
+                    navigate('/taxi/driver/active-trip', {
+                        replace: true,
+                        state: {
+                            type: currentType,
+                            rideId: currentJob.rideId,
+                            request: {
+                                type: currentType,
+                                title: currentType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                                fare: `Rs ${currentJob.fare || 0}`,
+                                payment: currentJob.paymentMethod || 'Cash',
+                                pickup: formatPoint(currentJob.pickupLocation, 'Pickup Location'),
+                                drop: formatPoint(currentJob.dropLocation, 'Drop Location'),
+                                distance: 'active',
+                                requestId: currentJob.rideId,
+                                rideId: currentJob.rideId,
+                                raw: currentJob,
+                            },
+                            currentDriverCoords: driverCoordsRef.current || currentJob.lastDriverLocation?.coordinates || null,
+                        },
+                    });
+                    return;
+                }
+            } catch (_error) {
                 if (active) {
                     setStatusMessage('Could not restore driver status.');
                 }
-            })
-            .finally(() => {
+            } finally {
                 if (active) {
                     setIsHydratingDriver(false);
                 }
-            });
+            }
+        })();
 
         return () => {
             active = false;
         };
-    }, [hydrateDriverState]);
+    }, [fetchActiveJob, hydrateDriverState, navigate]);
 
     useEffect(() => {
         if (map && driverCoords) {
@@ -302,11 +378,12 @@ const DriverHome = () => {
 
             const onRideRequest = (data) => {
                 console.info('[driver-home] rideRequest received', data);
+                const requestType = String(data.type || data.serviceType || 'ride').toLowerCase() === 'parcel' ? 'parcel' : 'ride';
                 const request = {
-                    type: 'ride',
-                    title: 'Taxi Ride',
-                    fare: `₹${data.fare || 0}`,
-                    payment: 'Cash',
+                    type: requestType,
+                    title: requestType === 'parcel' ? 'Delivery' : 'Taxi Ride',
+                    fare: `Rs ${data.fare || 0}`,
+                    payment: data.paymentMethod || 'Cash',
                     pickup: formatPoint(data.pickupLocation, 'Pickup Location'),
                     drop: formatPoint(data.dropLocation, 'Drop Location'),
                     distance: data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
@@ -336,9 +413,18 @@ const DriverHome = () => {
                 setAcceptingRideId('');
             };
 
-            const openAcceptedRide = (payload) => {
+            const openAcceptedRide = async (payload) => {
                 if (!payload?.rideId || payload.rideId !== acceptingRideIdRef.current) {
                     return;
+                }
+
+                const nextType = currentRequest?.type || 'ride';
+                let currentJob = null;
+
+                try {
+                    currentJob = await fetchActiveJob(nextType);
+                } catch (_error) {
+                    currentJob = null;
                 }
 
                 setShowRequest(false);
@@ -347,12 +433,12 @@ const DriverHome = () => {
                 setCompletedRides(prev => prev + 1);
                 navigate('/taxi/driver/active-trip', {
                     state: {
-                        type: currentRequest?.type || 'ride',
-                        rideId: payload.rideId,
+                        type: nextType,
+                        rideId: currentJob?.rideId || payload.rideId,
                         request: {
                             ...currentRequest,
-                            rideId: payload.rideId,
-                            raw: {
+                            rideId: currentJob?.rideId || payload.rideId,
+                            raw: currentJob || {
                                 ...(currentRequest?.raw || {}),
                                 status: payload.status,
                                 liveStatus: payload.liveStatus,
@@ -364,10 +450,17 @@ const DriverHome = () => {
                 });
             };
 
+            const onWalletUpdated = (payload) => {
+                if (payload?.wallet) {
+                    setWalletSummary(payload.wallet);
+                }
+            };
+
             socketService.on('rideRequest', onRideRequest);
             socketService.on('rideRequestClosed', onRideRequestClosed);
             socketService.on('errorMessage', onSocketError);
             socketService.on('rideAccepted', openAcceptedRide);
+            socketService.on('driver:wallet:updated', onWalletUpdated);
             console.info('[driver-home] socket listeners registered');
 
             const locationInterval = setInterval(() => {
@@ -390,6 +483,7 @@ const DriverHome = () => {
                 socketService.off('rideRequestClosed', onRideRequestClosed);
                 socketService.off('errorMessage', onSocketError);
                 socketService.off('rideAccepted', openAcceptedRide);
+                socketService.off('driver:wallet:updated', onWalletUpdated);
                 clearInterval(locationInterval);
             };
         } else {
@@ -397,7 +491,7 @@ const DriverHome = () => {
             socketService.disconnect();
         }
         return undefined;
-    }, [currentRequest, driverCoords, isOnline, navigate]);
+    }, [currentRequest, driverCoords, fetchActiveJob, isOnline, navigate]);
     
     useEffect(() => {
         let interval;
@@ -478,8 +572,10 @@ const DriverHome = () => {
                 <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
-                             <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Earnings</span></div>
-                             <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">₹0.00</p>
+                             <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Wallet</span></div>
+                             <p className={`text-xl font-bold tracking-tight leading-none ${walletSummary.isBlocked ? 'text-rose-600' : 'text-slate-900'}`}>
+                                Rs {Number(walletSummary.balance || 0).toFixed(2)}
+                             </p>
                         </div>
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
                              <div className="flex items-center gap-1 opacity-60"><Clock size={10} className="text-blue-500" /><span className="text-[10px] font-medium text-slate-500">Duty Time</span></div>

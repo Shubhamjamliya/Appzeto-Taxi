@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import { authenticate } from '../../../middlewares/authMiddleware.js';
 import {
   createBanner,
   createPromoCode,
@@ -19,6 +20,8 @@ import {
 } from '../controllers/promotionsController.js';
 
 export const promotionsRouter = Router();
+
+promotionsRouter.use(authenticate(['admin']));
 
 promotionsRouter.get('/admin/promotions/bootstrap', getPromotionsBootstrap);
 promotionsRouter.get('/admin/promos', getPromoCodes);

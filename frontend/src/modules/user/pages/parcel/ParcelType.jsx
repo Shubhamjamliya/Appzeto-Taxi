@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, ChevronRight, Package } from 'lucide-react';
+import { AlertCircle, ArrowLeft, ChevronRight, Loader2, Package } from 'lucide-react';
+import api from '../../../../shared/api/axiosInstance';
 
 import imgDocuments from '@/assets/3d images/documents.png';
 import imgGrocery from '@/assets/3d images/grocery.png';
@@ -10,7 +11,7 @@ import imgClothes from '@/assets/3d images/clothes.png';
 import imgElectronics from '@/assets/3d images/electronics.png';
 import imgOthers from '@/assets/3d images/others.png';
 
-const categories = [
+const fallbackCategories = [
   {
     id: '1',
     title: 'Documents',
@@ -55,11 +56,101 @@ const categories = [
   },
 ];
 
+const accentClasses = [
+  'bg-[linear-gradient(135deg,#FFF7ED_0%,#FFE5C2_100%)]',
+  'bg-[linear-gradient(135deg,#F0FDF4_0%,#BBF7D0_100%)]',
+  'bg-[linear-gradient(135deg,#FDF4FF_0%,#F3E8FF_100%)]',
+  'bg-[linear-gradient(135deg,#EFF6FF_0%,#DBEAFE_100%)]',
+  'bg-[linear-gradient(135deg,#FEFCE8_0%,#FDE68A_100%)]',
+  'bg-[linear-gradient(135deg,#F8FAFC_0%,#E2E8F0_100%)]',
+];
+
+const imageMatchers = [
+  { pattern: /(document|file|paper|certificate|passport)/i, img: imgDocuments },
+  { pattern: /(grocery|food|vegetable|fruit|kitchen|meal|perishable)/i, img: imgGrocery },
+  { pattern: /(gift|flower|cake|surprise|toy)/i, img: imgGifts },
+  { pattern: /(cloth|laundry|dress|fashion|garment|shoe|apparel)/i, img: imgClothes },
+  { pattern: /(electronic|phone|laptop|device|charger|computer|gadget)/i, img: imgElectronics },
+];
+
+const resolveCategoryImage = (name = '') =>
+  imageMatchers.find((entry) => entry.pattern.test(name))?.img || imgOthers;
+
+const formatGoodsType = (item, index) => {
+  const title = String(item?.name || item?.goods_type_name || '').trim();
+  const rawModuleAccess = String(item?.goods_types_for || item?.goods_type_for || 'both').trim();
+  const moduleAccess = rawModuleAccess
+    .replace(/_/g, ' ')
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+  const savedIcon = String(item?.icon || '').trim();
+
+  return {
+    id: String(item?._id || item?.id || index + 1),
+    title: title || `Category ${index + 1}`,
+    img: savedIcon || resolveCategoryImage(title),
+    desc: moduleAccess === 'Both' ? 'Available for all delivery types' : `${moduleAccess} delivery`,
+    accentClass: accentClasses[index % accentClasses.length],
+    goodsTypeFor: rawModuleAccess || 'both',
+    raw: item,
+  };
+};
+
 const ParcelType = () => {
-  const [selectedType, setSelectedType] = useState('Documents');
+  const [categories, setCategories] = useState(fallbackCategories);
+  const [selectedType, setSelectedType] = useState(fallbackCategories[0]?.title || '');
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const navigate = useNavigate();
 
-  const selected = categories.find((c) => c.title === selectedType);
+  useEffect(() => {
+    let isMounted = true;
+
+    const fetchGoodsTypes = async () => {
+      setLoading(true);
+      setLoadError('');
+
+      try {
+        const response = await api.get('/admin/goods-types');
+        const items = response?.results || response?.data?.results || response?.data?.goods_types || [];
+        const activeItems = items.filter((item) => Number(item?.active ?? 1) === 1);
+        const mappedCategories = (activeItems.length ? activeItems : items).map(formatGoodsType);
+
+        if (!isMounted) return;
+
+        if (mappedCategories.length > 0) {
+          setCategories(mappedCategories);
+          setSelectedType((current) =>
+            mappedCategories.some((category) => category.title === current)
+              ? current
+              : mappedCategories[0].title
+          );
+        } else {
+          setCategories(fallbackCategories);
+          setSelectedType(fallbackCategories[0]?.title || '');
+        }
+      } catch (_error) {
+        if (!isMounted) return;
+        setLoadError('Unable to load goods types right now.');
+        setCategories(fallbackCategories);
+        setSelectedType((current) => current || fallbackCategories[0]?.title || '');
+      } finally {
+        if (isMounted) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchGoodsTypes();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const selected = useMemo(
+    () => categories.find((category) => category.title === selectedType) || categories[0],
+    [categories, selectedType]
+  );
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto flex flex-col font-sans relative overflow-hidden">
@@ -106,73 +197,97 @@ const ParcelType = () => {
           <p className="mt-0.5 text-[11px] font-bold text-slate-500">Tap a category that best describes your item.</p>
         </motion.div>
 
+        {loadError ? (
+          <motion.div
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="mb-4 flex items-center gap-2 rounded-[16px] border border-amber-200 bg-amber-50/90 px-3.5 py-3 text-[11px] font-bold text-amber-700"
+          >
+            <AlertCircle size={15} className="shrink-0" />
+            <span>{loadError} Showing saved defaults for now.</span>
+          </motion.div>
+        ) : null}
+
         {/* Category Grid */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.45, delay: 0.12, ease: 'easeOut' }}
-          className="grid grid-cols-3 gap-3"
+          className="grid grid-cols-2 gap-3 sm:grid-cols-3"
         >
-          {categories.map((cat, i) => {
-            const isSelected = selectedType === cat.title;
-            return (
-              <motion.button
-                key={cat.id}
-                type="button"
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.35, delay: 0.1 + i * 0.05, ease: 'easeOut' }}
-                whileTap={{ scale: 0.96 }}
-                onClick={() => setSelectedType(cat.title)}
-                className={`relative flex flex-col items-center justify-center gap-2.5 rounded-[20px] p-4 border transition-all text-center ${
-                  isSelected
-                    ? 'border-orange-200 bg-white shadow-[0_8px_24px_rgba(249,115,22,0.15)]'
-                    : 'border-white/80 bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:border-slate-200'
-                }`}
+          {loading ? (
+            [...Array(6)].map((_, index) => (
+              <div
+                key={`loading-${index}`}
+                className="rounded-[20px] border border-white/80 bg-white/75 p-4 shadow-[0_4px_14px_rgba(15,23,42,0.05)]"
               >
-                {/* Selected indicator dot */}
-                <AnimatePresence>
-                  {isSelected && (
-                    <motion.div
-                      initial={{ scale: 0, opacity: 0 }}
-                      animate={{ scale: 1, opacity: 1 }}
-                      exit={{ scale: 0, opacity: 0 }}
-                      transition={{ duration: 0.2 }}
-                      className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-orange-500"
+                <div className="mx-auto h-14 w-14 animate-pulse rounded-[16px] bg-slate-100" />
+                <div className="mt-3 h-3 animate-pulse rounded-full bg-slate-100" />
+                <div className="mx-auto mt-2 h-2.5 w-3/4 animate-pulse rounded-full bg-slate-100" />
+              </div>
+            ))
+          ) : (
+            categories.map((cat, i) => {
+              const isSelected = selectedType === cat.title;
+              return (
+                <motion.button
+                  key={cat.id}
+                  type="button"
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.35, delay: 0.1 + i * 0.05, ease: 'easeOut' }}
+                  whileTap={{ scale: 0.96 }}
+                  onClick={() => setSelectedType(cat.title)}
+                  className={`relative flex min-h-[172px] flex-col items-center justify-start gap-2.5 rounded-[20px] p-4 border transition-all text-center ${
+                    isSelected
+                      ? 'border-orange-200 bg-white shadow-[0_8px_24px_rgba(249,115,22,0.15)]'
+                      : 'border-white/80 bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.05)] hover:border-slate-200'
+                  }`}
+                >
+                  {/* Selected indicator dot */}
+                  <AnimatePresence>
+                    {isSelected && (
+                      <motion.div
+                        initial={{ scale: 0, opacity: 0 }}
+                        animate={{ scale: 1, opacity: 1 }}
+                        exit={{ scale: 0, opacity: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="absolute top-2.5 right-2.5 w-2 h-2 rounded-full bg-orange-500"
+                      />
+                    )}
+                  </AnimatePresence>
+
+                  {/* 3D image container */}
+                  <div className={`w-14 h-14 rounded-[16px] flex items-center justify-center transition-all overflow-visible ${
+                    isSelected ? 'shadow-lg scale-110' : ''
+                  } ${cat.accentClass}`}>
+                    <img
+                      src={cat.img}
+                      alt={cat.title}
+                      className="w-12 h-12 object-contain drop-shadow-md"
                     />
-                  )}
-                </AnimatePresence>
+                  </div>
 
-                {/* 3D image container */}
-                <div className={`w-14 h-14 rounded-[16px] flex items-center justify-center transition-all overflow-visible ${
-                  isSelected ? 'shadow-lg scale-110' : ''
-                } ${cat.accentClass}`}>
-                  <img
-                    src={cat.img}
-                    alt={cat.title}
-                    className="w-12 h-12 object-contain drop-shadow-md"
-                  />
-                </div>
-
-                {/* Labels */}
-                <div>
-                  <span className={`text-[12px] font-black tracking-tight block leading-tight ${
-                    isSelected ? 'text-slate-900' : 'text-slate-600'
-                  }`}>
-                    {cat.title}
-                  </span>
-                  <span className="text-[9.5px] font-bold text-slate-400 leading-tight mt-0.5 block">
-                    {cat.desc}
-                  </span>
-                </div>
-              </motion.button>
-            );
-          })}
+                  {/* Labels */}
+                  <div className="w-full">
+                    <span className={`block min-h-[40px] break-words text-[11px] font-black leading-[1.15] tracking-tight sm:text-[12px] ${
+                      isSelected ? 'text-slate-900' : 'text-slate-600'
+                    }`}>
+                      {cat.title}
+                    </span>
+                    <span className="mt-1 block break-words text-[9px] font-bold leading-[1.2] text-slate-400 sm:text-[9.5px]">
+                      {cat.desc}
+                    </span>
+                  </div>
+                </motion.button>
+              );
+            })
+          )}
         </motion.div>
 
         {/* Selected preview card */}
         <AnimatePresence mode="wait">
-          {selected && (
+          {!loading && selected && (
             <motion.div
               key={selected.title}
               initial={{ opacity: 0, y: 8 }}
@@ -204,11 +319,29 @@ const ParcelType = () => {
         <motion.button
           type="button"
           whileTap={{ scale: 0.98 }}
-          onClick={() => navigate('/parcel/details', { state: { parcelType: selectedType } })}
+          onClick={() =>
+            navigate('/parcel/details', {
+              state: {
+                parcelType: selectedType,
+                selectedGoodsType: selected,
+                goodsTypeFor: selected?.goodsTypeFor || 'both',
+              },
+            })
+          }
+          disabled={loading || !selectedType}
           className="pointer-events-auto w-full bg-slate-900 py-4 rounded-[18px] text-[15px] font-black text-white shadow-[0_8px_24px_rgba(15,23,42,0.18)] active:bg-black transition-all flex items-center justify-center gap-2"
         >
-          <span>Next: Item Details</span>
-          <ChevronRight size={17} className="opacity-50" strokeWidth={3} />
+          {loading ? (
+            <>
+              <Loader2 size={17} className="animate-spin opacity-70" strokeWidth={2.5} />
+              <span>Loading Categories</span>
+            </>
+          ) : (
+            <>
+              <span>Next: Item Details</span>
+              <ChevronRight size={17} className="opacity-50" strokeWidth={3} />
+            </>
+          )}
         </motion.button>
       </div>
     </div>

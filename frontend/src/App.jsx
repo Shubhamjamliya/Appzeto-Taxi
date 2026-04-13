@@ -143,6 +143,7 @@ const AdminUserCreate = lazy(() => import('./modules/admin/pages/users/UserCreat
 const AdminUserDetails = lazy(() => import('./modules/admin/pages/users/UserDetails'));
 const AdminDeleteRequestUsers = lazy(() => import('./modules/admin/pages/users/DeleteRequestUsers'));
 const AdminUserBulkUpload = lazy(() => import('./modules/admin/pages/users/UserBulkUpload'));
+const AdminUserImportCreate = lazy(() => import('./modules/admin/pages/users/UserImportCreate'));
 
 // DRIVER MANAGEMENT IMPORTS
 const AdminDriverList = lazy(() => import('./modules/admin/pages/drivers/DriverList'));
@@ -284,7 +285,8 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const isAdminPath = location.pathname.startsWith('/admin');
+  const isAdminPath =
+    location.pathname.startsWith('/admin') || location.pathname.startsWith('/user-import');
 
   if (isAdminPath) {
     return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
@@ -313,6 +315,7 @@ const UserAccountInvalidationListener = () => {
   useEffect(() => {
     const isUserRoute =
       !location.pathname.startsWith('/admin') &&
+      !location.pathname.startsWith('/user-import') &&
       !location.pathname.startsWith('/taxi/driver');
 
     if (!isUserRoute) {
@@ -537,6 +540,9 @@ function App() {
 
             {/* Admin Module Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/user-import/create" element={<AdminLayout />}>
+              <Route index element={<AdminUserImportCreate />} />
+            </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" />} />
               <Route path="dashboard" element={<AdminDashboard />} />
@@ -550,6 +556,7 @@ function App() {
               <Route path="users/:id" element={<AdminUserDetails />} />
               <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
               <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />
+              <Route path="user-import/create" element={<AdminUserImportCreate />} />
               
               <Route path="drivers" element={<AdminDriverList />} />
               <Route path="drivers/create" element={<AdminDriverCreate />} />
@@ -577,8 +584,11 @@ function App() {
                
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
+               <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />
                <Route path="promotions/send-notification" element={<AdminSendNotification />} />
+               <Route path="promotions/send-notification/create" element={<AdminSendNotification />} />
                <Route path="promotions/banner-image" element={<AdminBannerImage />} />
+               <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
               
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />

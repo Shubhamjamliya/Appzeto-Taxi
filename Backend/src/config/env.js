@@ -43,4 +43,12 @@ export const env = {
     serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
   },
+  driverWallet: {
+    defaultCashLimit: Number.isFinite(Number(process.env.DRIVER_WALLET_DEFAULT_CASH_LIMIT))
+      ? Number(process.env.DRIVER_WALLET_DEFAULT_CASH_LIMIT)
+      : 500,
+    commissionPercent: Number.isFinite(Number(process.env.DRIVER_COMMISSION_PERCENT))
+      ? Number(process.env.DRIVER_COMMISSION_PERCENT)
+      : 20,
+  },
 };

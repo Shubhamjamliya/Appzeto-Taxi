@@ -20,6 +20,7 @@ import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { Ride } from '../../user/models/Ride.js';
+import { Delivery } from '../../user/models/Delivery.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
 import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
@@ -30,7 +31,7 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
-import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
@@ -209,6 +210,7 @@ const serializeGoodsType = (item) => ({
   id: item.external_id || item.id || 1,
   name: item.goods_type_name || item.name || '',
   goods_type_name: item.goods_type_name || item.name || '',
+  icon: item.icon || '',
   translation_dataset: item.translation_dataset || '',
   goods_types_for: item.goods_types_for || 'both',
   company_key: item.company_key || null,
@@ -329,6 +331,7 @@ const serializeDriver = (driver) => ({
   mobile: driver.phone || '',
   email: driver.email || '',
   city: driver.city || '',
+  service_location_name: driver.city || '',
   transport_type: driver.registerFor || driver.vehicleType || '',
   register_for: driver.registerFor || '',
   vehicle_type: driver.vehicleType || '',
@@ -338,11 +341,79 @@ const serializeDriver = (driver) => ({
   approve: Boolean(driver.approve),
   status: driver.status || (driver.approve ? 'approved' : 'pending'),
   active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
+  deletedAt: driver.deletedAt || null,
   documents: driver.documents || {},
   onboarding: driver.onboarding || {},
   createdAt: driver.createdAt,
   updatedAt: driver.updatedAt,
 });
+
+const formatAdminDateTime = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const day = date.getDate();
+  const suffix =
+    day % 10 === 1 && day !== 11
+      ? 'st'
+      : day % 10 === 2 && day !== 12
+        ? 'nd'
+        : day % 10 === 3 && day !== 13
+          ? 'rd'
+          : 'th';
+
+  const month = date.toLocaleString('en-IN', { month: 'short' });
+  const time = date.toLocaleString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return `${day}${suffix} ${month} ${time}`;
+};
+
+const toAdminDeliveryRow = (delivery) => {
+  const statusMap = {
+    searching: 'UPCOMING',
+    accepted: 'UPCOMING',
+    ongoing: 'ON_TRIP',
+    completed: 'COMPLETED',
+    cancelled: 'CANCELLED',
+  };
+
+  const liveStatus = String(delivery.liveStatus || delivery.status || 'searching').toLowerCase();
+  const transportLabel = String(delivery.vehicleIconType || '').toLowerCase().includes('bike')
+    ? 'Delivery - Bike'
+    : 'Delivery - Parcel';
+
+  return {
+    id: String(delivery._id),
+    requestId: `REQ_${String(delivery._id).slice(-10)}`,
+    rideId: delivery.rideId ? String(delivery.rideId._id || delivery.rideId) : '',
+    date: formatAdminDateTime(delivery.createdAt),
+    userName: delivery.userId?.name || delivery.parcel?.senderName || 'Unknown User',
+    driverName: delivery.driverId?.name || '-----',
+    transportType: transportLabel,
+    tripStatus: statusMap[liveStatus] || String(delivery.status || 'UPCOMING').toUpperCase(),
+    paymentOption: String(delivery.paymentMethod || 'cash').toUpperCase(),
+    senderName: delivery.parcel?.senderName || '',
+    senderMobile: delivery.parcel?.senderMobile || '',
+    receiverName: delivery.parcel?.receiverName || '',
+    receiverMobile: delivery.parcel?.receiverMobile || '',
+    parcelCategory: delivery.parcel?.category || '',
+    parcelWeight: delivery.parcel?.weight || '',
+    description: delivery.parcel?.description || '',
+    pickupCoords: delivery.pickupLocation?.coordinates || [],
+    dropCoords: delivery.dropLocation?.coordinates || [],
+  };
+};
 
 const serializeUser = (user) => ({
   _id: user._id,
@@ -573,6 +644,80 @@ export const listUsers = async ({ page = 1, limit = 50 }) => {
       total,
       last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
+  };
+};
+
+export const bulkImportUsers = async (payload = {}) => {
+  const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
+
+  if (!incomingUsers.length) {
+    throw new ApiError(400, 'users array is required');
+  }
+
+  if (incomingUsers.length > 2000) {
+    throw new ApiError(400, 'Too many users in one import (max 2000)');
+  }
+
+  const errors = [];
+  const created = [];
+  const skipped = [];
+
+  for (let index = 0; index < incomingUsers.length; index += 1) {
+    const raw = incomingUsers[index] || {};
+    const name = String(raw.name || '').trim();
+    const phone = String(raw.phone || raw.mobile || '').replace(/\D/g, '');
+    const email = String(raw.email || '').trim().toLowerCase();
+    const gender = String(raw.gender || '').trim().toLowerCase();
+    const countryCode = String(raw.countryCode || raw.country_code || raw.country || '').trim();
+
+    if (!name) {
+      errors.push({ index, field: 'name', message: 'Name is required' });
+      continue;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      errors.push({ index, field: 'phone', message: 'A valid 10-digit phone number is required' });
+      continue;
+    }
+
+    if (email && !EMAIL_REGEX.test(email)) {
+      errors.push({ index, field: 'email', message: 'A valid email address is required' });
+      continue;
+    }
+
+    const normalizedGender = VALID_USER_GENDERS.has(gender) ? gender : '';
+    const normalizedCountryCode = countryCode && countryCode.startsWith('+') ? countryCode : '+91';
+
+    const existingUser = await User.findOne({ phone }).lean();
+    if (existingUser) {
+      skipped.push({ index, phone, id: String(existingUser._id) });
+      continue;
+    }
+
+    try {
+      const user = await User.create({
+        name,
+        phone,
+        email,
+        gender: normalizedGender,
+        countryCode: normalizedCountryCode,
+        isVerified: true,
+        active: raw.active ?? true,
+      });
+      created.push(serializeUser(user.toObject()));
+    } catch (error) {
+      const message = error?.message || 'Failed to create user';
+      errors.push({ index, message });
+    }
+  }
+
+  return {
+    created_count: created.length,
+    skipped_count: skipped.length,
+    error_count: errors.length,
+    created,
+    skipped: skipped.slice(0, 200),
+    errors: errors.slice(0, 200),
   };
 };
 
@@ -911,8 +1056,8 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
   const start = (safePage - 1) * safeLimit;
 
   const [drivers, total] = await Promise.all([
-    Driver.find().sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
-    Driver.countDocuments(),
+    Driver.find({ deletedAt: null }).sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.countDocuments({ deletedAt: null }),
   ]);
 
   return {
@@ -926,10 +1071,152 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
   };
 };
 
-export const updateDriver = async (id, payload) => {
-  const update = {
-    ...payload,
+export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [drivers, total] = await Promise.all([
+    Driver.find({ deletedAt: { $ne: null } })
+      .sort({ deletedAt: -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    Driver.countDocuments({ deletedAt: { $ne: null } }),
+  ]);
+
+  return {
+    results: drivers.map(serializeDriver),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
   };
+};
+
+export const restoreDeletedDriver = async (id) => {
+  const driver = await Driver.findOneAndUpdate(
+    { _id: id, deletedAt: { $ne: null } },
+    { $set: { deletedAt: null } },
+    { new: true },
+  );
+
+  if (!driver) {
+    throw new ApiError(404, 'Deleted driver not found');
+  }
+
+  return serializeDriver(driver.toObject ? driver.toObject() : driver);
+};
+
+export const permanentlyDeleteDeletedDriver = async (id) => {
+  const deleted = await Driver.findOneAndDelete({ _id: id, deletedAt: { $ne: null } });
+  if (!deleted) {
+    throw new ApiError(404, 'Deleted driver not found');
+  }
+  return true;
+};
+
+export const createDriver = async (payload = {}) => {
+  const name = String(payload.name || '').trim();
+  const phone = String(payload.phone || payload.mobile || '').trim();
+  const password = String(payload.password || '').trim();
+  const email = String(payload.email || '').trim();
+
+  if (!name) throw new ApiError(400, 'Driver name is required');
+  if (!phone) throw new ApiError(400, 'Driver phone is required');
+  if (!password || password.length < 6) {
+    throw new ApiError(400, 'Password must be at least 6 characters');
+  }
+
+  const existing = await Driver.findOne({ phone }).lean();
+  if (existing) throw new ApiError(409, 'Driver phone already exists');
+
+  const rawVehicleType = String(
+    payload.vehicle_type || payload.vehicleType || payload.car_type || 'car',
+  ).toLowerCase();
+  const vehicleType = VEHICLE_TYPES.includes(rawVehicleType) ? rawVehicleType : 'car';
+
+  const registerFor = String(
+    payload.transport_type || payload.transportType || payload.register_for || payload.registerFor || vehicleType,
+  ).toLowerCase();
+
+  let city = String(payload.city || '').trim();
+  const serviceLocationId = payload.service_location_id || payload.area || payload.service_location;
+  if (serviceLocationId) {
+    const location = await ServiceLocation.findById(serviceLocationId).lean();
+    if (location) {
+      city = location.service_location_name || location.name || city;
+    }
+  }
+
+  const driver = await Driver.create({
+    name,
+    phone,
+    email,
+    gender: String(payload.gender || '').trim(),
+    password: await hashPassword(password),
+    vehicleType,
+    vehicleTypeId: payload.vehicle_type_id || payload.vehicleTypeId || null,
+    vehicleMake: String(payload.vehicle_make || payload.vehicleMake || payload.car_make || '').trim(),
+    vehicleModel: String(payload.vehicle_model || payload.vehicleModel || payload.car_model || '').trim(),
+    vehicleColor: String(payload.vehicle_color || payload.vehicleColor || payload.car_color || '').trim(),
+    vehicleNumber: String(payload.vehicle_number || payload.vehicleNumber || payload.car_number || '').trim(),
+    registerFor,
+    city,
+    approve: payload.approve !== undefined ? Boolean(payload.approve) : true,
+    status: payload.status || (payload.approve === false ? 'pending' : 'approved'),
+  });
+
+  return serializeDriver(driver.toObject());
+};
+
+export const updateDriver = async (id, payload) => {
+  const update = { ...payload };
+
+  if (payload.mobile && !payload.phone) {
+    update.phone = payload.mobile;
+  }
+
+  if (payload.transport_type) {
+    update.registerFor = String(payload.transport_type).toLowerCase();
+  }
+
+  if (payload.vehicle_type || payload.car_type) {
+    const rawVehicle = String(payload.vehicle_type || payload.car_type).toLowerCase();
+    update.vehicleType = VEHICLE_TYPES.includes(rawVehicle) ? rawVehicle : rawVehicle;
+  }
+
+  if (payload.vehicle_make || payload.car_make) {
+    update.vehicleMake = String(payload.vehicle_make || payload.car_make);
+  }
+  if (payload.vehicle_model || payload.car_model) {
+    update.vehicleModel = String(payload.vehicle_model || payload.car_model);
+  }
+  if (payload.vehicle_color || payload.car_color) {
+    update.vehicleColor = String(payload.vehicle_color || payload.car_color);
+  }
+  if (payload.vehicle_number || payload.car_number) {
+    update.vehicleNumber = String(payload.vehicle_number || payload.car_number);
+  }
+
+  if (payload.gender) {
+    update.gender = String(payload.gender);
+  }
+  if (payload.email) {
+    update.email = String(payload.email);
+  }
+  if (payload.name) {
+    update.name = String(payload.name);
+  }
+
+  if (payload.service_location_id) {
+    const location = await ServiceLocation.findById(payload.service_location_id).lean();
+    if (location) {
+      update.city = location.service_location_name || location.name || update.city;
+    }
+  }
 
   if ('approve' in payload) {
     update.approve = Boolean(payload.approve);
@@ -981,6 +1268,269 @@ export const getDriverById = async (id) => {
     throw new ApiError(404, 'Driver not found');
   }
   return serializeDriver(driver);
+};
+
+export const getDriverProfile = async (id) => {
+  const driver = await Driver.findById(id).lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const rides = await Ride.find({ driverId: driver._id })
+    .populate('userId', 'name phone email')
+    .sort({ createdAt: -1 })
+    .lean();
+  const now = new Date();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const isCompleted = (ride) => String(ride.status || '').toLowerCase() === 'completed';
+  const isCancelled = (ride) => String(ride.status || '').toLowerCase() === 'cancelled';
+  const isOngoing = (ride) => !isCompleted(ride) && !isCancelled(ride);
+
+  const completedRides = rides.filter(isCompleted);
+  const cancelledRides = rides.filter(isCancelled);
+  const ongoingRides = rides.filter(isOngoing);
+  const todayRides = rides.filter((ride) => ride.createdAt && ride.createdAt >= startOfDay);
+  const todayCompleted = completedRides.filter((ride) =>
+    (ride.completedAt || ride.createdAt) >= startOfDay
+  );
+  const todayCancelled = cancelledRides.filter((ride) =>
+    (ride.completedAt || ride.createdAt) >= startOfDay
+  );
+
+  const sum = (items, field) =>
+    items.reduce((total, item) => total + Number(item?.[field] || 0), 0);
+
+  const totalEarnings = sum(completedRides, 'fare');
+  const todayEarnings = sum(todayCompleted, 'fare');
+  const driverEarnings = sum(completedRides, 'driverEarnings');
+  const adminCommission = sum(completedRides, 'commissionAmount');
+  const byCash = sum(completedRides.filter((r) => r.paymentMethod === 'cash'), 'fare');
+  const byCard = sum(completedRides.filter((r) => r.paymentMethod === 'online'), 'fare');
+  const walletBalance = Number(driver.wallet?.balance || 0);
+
+  const driverLocation = driver.location?.coordinates || [];
+  const lastRideLocation = rides.find((ride) => Array.isArray(ride.lastDriverLocation?.coordinates));
+  const coordinates = driverLocation.length === 2 ? driverLocation : (lastRideLocation?.lastDriverLocation?.coordinates || []);
+
+  const [lng, lat] = coordinates;
+  const hasValidLocation = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+
+  const documents = normalizeDriverDocuments(driver.documents);
+  const withdrawals = await WithdrawalRequest.find({ driver_id: driver._id })
+    .sort({ createdAt: -1 })
+    .lean();
+  const chart = buildDriverCharts(rides, now);
+
+  return {
+    ...serializeDriver(driver),
+    joined_at: driver.createdAt ? new Date(driver.createdAt).toLocaleString('en-IN') : 'N/A',
+    vehicle: {
+      type: driver.vehicleType || driver.registerFor || '',
+      make: driver.vehicleMake || '',
+      model: driver.vehicleModel || '',
+      color: driver.vehicleColor || '',
+      number: driver.vehicleNumber || '',
+    },
+    image: driver.profile_image || driver.avatar || 'https://i.pravatar.cc/200?img=12',
+    vehicle_image: 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
+    stats: {
+      total_trips: rides.length,
+      completed_trips: completedRides.length,
+      cancelled_trips: cancelledRides.length,
+      ongoing_trips: ongoingRides.length,
+      today_trips: todayRides.length,
+      today_cancelled: todayCancelled.length,
+    },
+    earnings: {
+      today_earnings: Number(todayEarnings.toFixed(2)),
+      total_earnings: Number(totalEarnings.toFixed(2)),
+      driver_earnings: Number(driverEarnings.toFixed(2)),
+      admin_commission: Number(adminCommission.toFixed(2)),
+      by_cash: Number(byCash.toFixed(2)),
+      by_wallet: 0,
+      by_card: Number(byCard.toFixed(2)),
+      balance_amount: Number(walletBalance.toFixed(2)),
+      spend_amount: Number(adminCommission.toFixed(2)),
+    },
+    location: hasValidLocation ? { lat, lng } : null,
+    requests: rides.map((ride) => ({
+      request_id: String(ride._id),
+      date: ride.createdAt,
+      user_name: ride.userId?.name || 'User',
+      driver_name: driver.name,
+      trip_status: ride.status,
+      paid: ride.paymentMethod === 'online' || ride.paymentMethod === 'cash',
+      payment_option: ride.paymentMethod || 'cash',
+      fare: ride.fare || 0,
+    })),
+    withdrawals: withdrawals.map((item) => ({
+      _id: item._id,
+      date: item.createdAt,
+      name: driver.name,
+      mobile: driver.phone,
+      requested_amount: item.amount || 0,
+      status: item.status || 'pending',
+    })),
+    documents,
+    subscription: null,
+    chart,
+  };
+};
+
+function normalizeDriverDocuments(documents) {
+  if (!documents) return [];
+
+  if (Array.isArray(documents)) {
+    return documents.map((doc) => ({
+      name: doc.name || doc.document_name || 'Document',
+      identify_number: doc.identify_number || doc.number || 'N/A',
+      expiry_date: doc.expiry_date || doc.expiry || 'N/A',
+      status: doc.status || 'pending',
+      comment: doc.comment || 'N/A',
+      images: [doc.front, doc.back, doc.image].filter(Boolean),
+    }));
+  }
+
+  if (typeof documents === 'object') {
+    return Object.entries(documents).map(([key, value]) => ({
+      name: value?.name || key.replace(/_/g, ' '),
+      identify_number: value?.identify_number || value?.number || 'N/A',
+      expiry_date: value?.expiry_date || value?.expiry || 'N/A',
+      status: value?.status || 'pending',
+      comment: value?.comment || 'N/A',
+      images: [value?.front, value?.back, value?.image].filter(Boolean),
+    }));
+  }
+
+  return [];
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+const buildDriverCharts = (rides, now) => {
+  const months = [];
+  const earnings = [];
+  const completedTrips = [];
+  const cancelledTrips = [];
+
+  for (let i = 3; i >= 0; i -= 1) {
+    const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
+    const monthIndex = date.getMonth();
+    const year = date.getFullYear();
+
+    const inMonth = rides.filter((ride) => {
+      if (!ride.createdAt) return false;
+      const rideDate = new Date(ride.createdAt);
+      return rideDate.getFullYear() === year && rideDate.getMonth() === monthIndex;
+    });
+
+    const completed = inMonth.filter((ride) => String(ride.status || '').toLowerCase() === 'completed');
+    const cancelled = inMonth.filter((ride) => String(ride.status || '').toLowerCase() === 'cancelled');
+
+    months.push(MONTHS[monthIndex]);
+    earnings.push(
+      completed.reduce((total, ride) => total + Number(ride.fare || 0), 0),
+    );
+    completedTrips.push(completed.length);
+    cancelledTrips.push(cancelled.length);
+  }
+
+  return {
+    months,
+    earnings,
+    trips: {
+      completed: completedTrips,
+      cancelled: cancelledTrips,
+    },
+  };
+};
+
+export const adjustDriverWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const driver = await Driver.findById(id);
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const currentBalance = Number(driver.wallet?.balance || 0);
+  const nextBalance = operation === 'credit' ? currentBalance + amount : Math.max(0, currentBalance - amount);
+
+  driver.wallet = driver.wallet || {};
+  driver.wallet.balance = nextBalance;
+  await driver.save();
+
+  return { balance: Number(nextBalance.toFixed(2)) };
+};
+
+export const listDriverRatings = async ({ page = 1, limit = 50 } = {}) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [drivers, total] = await Promise.all([
+    Driver.find().sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.countDocuments(),
+  ]);
+
+  return {
+    results: drivers.map((driver) => ({
+      _id: driver._id,
+      name: driver.name || '',
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      mobile: driver.phone || '',
+      rating: driver.rating || 0,
+    })),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const getDriverRatingDetail = async (id) => {
+  const driver = await Driver.findById(id).lean();
+  if (!driver) throw new ApiError(404, 'Driver not found');
+
+  const rides = await Ride.find({ driverId: driver._id })
+    .populate('userId', 'name phone email')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    driver: {
+      _id: driver._id,
+      name: driver.name || '',
+      phone: driver.phone || '',
+      email: driver.email || '',
+      rating: driver.rating || 0,
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      vehicle_make: driver.vehicleMake || '',
+      vehicle_model: driver.vehicleModel || '',
+      vehicle_number: driver.vehicleNumber || '',
+      image: driver.profile_image || driver.avatar || 'https://i.pravatar.cc/200?img=12',
+      vehicle_image: 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
+    },
+    reviews: rides.map((ride) => ({
+      _id: ride._id,
+      request_id: `REQ_${String(ride._id).slice(-12).toUpperCase()}`,
+      date: ride.createdAt,
+      pickup_location: formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+      rating: driver.rating || 0,
+    })),
+  };
 };
 
 export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id service_location_id').lean();
@@ -1217,6 +1767,48 @@ export const listOngoingRides = async (query = {}) => {
         row.transportType,
         row.pickupLabel,
         row.dropLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
+export const listDeliveries = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const deliveries = await Delivery.find()
+    .sort({ createdAt: -1 })
+    .populate('rideId', '_id')
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = deliveries.map(toAdminDeliveryRow);
+
+  if (tab === 'completed') {
+    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
+  } else if (tab === 'cancelled') {
+    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ontrip') {
+    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.senderName,
+        row.receiverName,
+        row.parcelCategory,
       ].some((value) => String(value || '').toLowerCase().includes(search)),
     );
   }
@@ -2100,6 +2692,7 @@ export const createGoodsType = async (payload) => {
     status: payload.status || (active === 1 ? 'active' : 'inactive'),
     active: active,
     translation_dataset: payload.translation_dataset || '',
+    icon: payload.icon || '',
   });
 
   return serializeGoodsType(item.toObject());
@@ -2131,6 +2724,10 @@ export const updateGoodsType = async (id, payload) => {
 
   if (payload.translation_dataset !== undefined) {
     item.translation_dataset = payload.translation_dataset;
+  }
+
+  if (payload.icon !== undefined) {
+    item.icon = payload.icon || '';
   }
 
   await item.save();

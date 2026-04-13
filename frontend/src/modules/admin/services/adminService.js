@@ -11,6 +11,8 @@ export const adminService = {
    */
   getUsers: (page = 1, limit = 50) => api.get(`/admin/users?page=${page}&limit=${limit}`),
   
+  bulkImportUsers: (payload) => api.post('/admin/users/bulk-import', payload),
+
   createUser: (userData) => api.post('/admin/users', userData),
   
   updateUser: (id, userData) => api.patch(`/admin/users/${id}`, userData),
@@ -99,6 +101,8 @@ export const adminService = {
   getCancelChart: () => api.get('/admin/dashboard/cancel-chart'),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getDeliveries: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
+    api.get(`/admin/deliveries?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   deleteOngoingRide: (id) => api.delete(`/admin/ongoing-rides/${id}`),
 
   /**

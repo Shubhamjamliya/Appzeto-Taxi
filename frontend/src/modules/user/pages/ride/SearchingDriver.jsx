@@ -236,6 +236,7 @@ const SearchingDriver = () => {
           fare: routeState.fare || routeState.vehicle?.price || 22,
           vehicleTypeId: selectedVehicleTypeId,
           vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
+          paymentMethod: routeState.paymentMethod || 'Cash',
         }, rideRequestConfig);
 
         const payload = response?.data || response;

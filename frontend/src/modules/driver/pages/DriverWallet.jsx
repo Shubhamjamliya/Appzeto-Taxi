@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+﻿import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
     Wallet, 
@@ -20,45 +20,150 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
+import api from '../../../shared/api/axiosInstance';
+import { socketService } from '../../../shared/api/socket';
+
+const formatMoney = (value) => {
+    const amount = Number(value || 0);
+    const sign = amount < 0 ? '-' : '';
+    return `${sign}Rs ${Math.abs(amount).toFixed(2)}`;
+};
+
+const formatTransactionType = (type = '') => {
+    const labels = {
+        ride_earning: 'Ride Earning',
+        commission_deduction: 'Commission Deduction',
+        top_up: 'Wallet Top Up',
+        adjustment: 'Wallet Adjustment',
+    };
+
+    return labels[type] || String(type || 'Wallet Activity').replace(/_/g, ' ');
+};
+
+const formatDate = (value) => {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return 'Now';
+    return date.toLocaleDateString('en-IN', { day: '2-digit', month: 'short' });
+};
+
+const formatTime = (value) => {
+    const date = value ? new Date(value) : null;
+    if (!date || Number.isNaN(date.getTime())) return '';
+    return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
+};
+
+const normalizeWalletResponse = (payload) => {
+    const data = payload?.data || payload || {};
+    return {
+        wallet: data.wallet || { balance: 0, cashLimit: 500, isBlocked: false },
+        transactions: Array.isArray(data.transactions) ? data.transactions : [],
+    };
+};
 
 const DriverWallet = () => {
     const navigate = useNavigate();
     const [period, setPeriod] = useState('Weekly');
     const [showWithdraw, setShowWithdraw] = useState(false);
-    const [withdrawAmount] = useState('4890');
+    const [topUpAmount, setTopUpAmount] = useState('500');
     const [isProcessing, setIsProcessing] = useState(false);
     const [isSuccess, setIsSuccess] = useState(false);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [wallet, setWallet] = useState({ balance: 0, cashLimit: 500, isBlocked: false });
+    const [transactions, setTransactions] = useState([]);
+    const [walletError, setWalletError] = useState('');
+
+    const loadWallet = useCallback(async ({ quiet = false } = {}) => {
+        if (!quiet) setIsRefreshing(true);
+        setWalletError('');
+
+        try {
+            const response = await api.get('/drivers/wallet');
+            const next = normalizeWalletResponse(response);
+            setWallet(next.wallet);
+            setTransactions(next.transactions);
+        } catch (error) {
+            setWalletError(error?.message || 'Could not load wallet.');
+        } finally {
+            if (!quiet) setIsRefreshing(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        loadWallet({ quiet: true });
+
+        const socket = socketService.connect({ role: 'driver' });
+        const onWalletUpdated = (payload) => {
+            if (payload?.wallet) {
+                setWallet(payload.wallet);
+            }
+            if (payload?.transaction) {
+                setTransactions((prev) => [payload.transaction, ...prev.filter((tx) => tx._id !== payload.transaction._id)].slice(0, 50));
+            }
+        };
+
+        if (socket) {
+            socketService.on('driver:wallet:updated', onWalletUpdated);
+        }
+
+        return () => {
+            socketService.off('driver:wallet:updated', onWalletUpdated);
+        };
+    }, [loadWallet]);
 
     const handleRefresh = () => {
-        setIsRefreshing(true);
-        setTimeout(() => setIsRefreshing(false), 1500);
+        loadWallet();
     };
 
-    const handleWithdraw = () => {
+    const handleTopUp = async () => {
+        const amount = Number(topUpAmount);
+        if (!Number.isFinite(amount) || amount <= 0) {
+            setWalletError('Enter a valid top-up amount.');
+            return;
+        }
+
         setIsProcessing(true);
-        setTimeout(() => {
+        setWalletError('');
+
+        try {
+            const response = await api.post('/drivers/wallet/top-up', {
+                amount,
+                source: 'driver-wallet-page',
+            });
+            const data = response?.data || response || {};
+            if (data.wallet) {
+                setWallet(data.wallet);
+            }
+            if (data.transaction) {
+                setTransactions((prev) => [data.transaction, ...prev.filter((tx) => tx._id !== data.transaction._id)].slice(0, 50));
+            }
             setIsProcessing(false);
             setIsSuccess(true);
             setTimeout(() => {
                 setIsSuccess(false);
                 setShowWithdraw(false);
             }, 2000);
-        }, 1500);
+        } catch (error) {
+            setWalletError(error?.message || 'Top-up failed.');
+            setIsProcessing(false);
+        }
     };
 
-    const transactions = [
-        { id: 'TID-9080', type: 'Ride Earning', amount: '₹120', time: '10:30 AM', date: 'Today', status: 'Success', mode: 'Online' },
-        { id: 'TID-9079', type: 'Bonus Incentive', amount: '₹450', time: '08:00 AM', date: 'Today', status: 'Success', mode: 'Wallet' },
-        { id: 'TID-9078', type: 'Ride Earning', amount: '₹85', time: 'Yesterday', date: '21 Mar', status: 'Success', mode: 'Cash' },
-        { id: 'TID-9077', type: 'Settlement', amount: '-₹2,500', time: 'Yesterday', date: '21 Mar', status: 'Success', mode: 'Bank' },
-        { id: 'TID-9076', type: 'Ride Earning', amount: '₹210', time: '20 Mar', date: '20 Mar', status: 'Pending', mode: 'Online' }
-    ];
+    const filteredTransactions = useMemo(() => {
+        const cutoff = new Date();
+        cutoff.setDate(cutoff.getDate() - (period === 'Weekly' ? 7 : 30));
+
+        return transactions.filter((tx) => {
+            const createdAt = tx.createdAt ? new Date(tx.createdAt) : null;
+            return !createdAt || Number.isNaN(createdAt.getTime()) || createdAt >= cutoff;
+        });
+    }, [period, transactions]);
+
+    const remainingCashLimit = Number(wallet.cashLimit || 0) + Number(wallet.balance || 0);
 
     return (
         <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-x-hidden p-5 pb-28 pt-6 flex flex-col">
             
-            {/* Withdraw Modal */}
+            {/* Top-up Modal */}
             <AnimatePresence>
                 {showWithdraw && (
                     <div className="fixed inset-0 z-[100] flex items-end justify-center bg-slate-900/40 backdrop-blur-md">
@@ -69,7 +174,7 @@ const DriverWallet = () => {
                             className="bg-white w-full rounded-t-[2.5rem] p-7 pb-10 space-y-6 shadow-premium border-t border-slate-50"
                          >
                              <div className="flex justify-between items-center">
-                                 <h3 className="text-xl font-display font-bold text-slate-900">Withdraw Funds</h3>
+                                 <h3 className="text-xl font-display font-bold text-slate-900">Top Up Wallet</h3>
                                  <button onClick={() => setShowWithdraw(false)} className="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-slate-400 active:scale-90 transition-all"><X size={18} /></button>
                              </div>
 
@@ -79,32 +184,38 @@ const DriverWallet = () => {
                                          <CheckCircle2 size={40} strokeWidth={3} />
                                      </div>
                                      <div className="text-center">
-                                         <p className="text-lg font-bold text-slate-900">Transfer Initiated!</p>
-                                         <p className="text-[11px] font-medium text-slate-400 mt-2 uppercase tracking-widest">Will reflect in 24 hours</p>
+                                         <p className="text-lg font-bold text-slate-900">Wallet Updated!</p>
+                                         <p className="text-[11px] font-medium text-slate-400 mt-2 uppercase tracking-widest">Balance refreshed instantly</p>
                                      </div>
                                  </div>
                              ) : (
                                  <div className="space-y-6">
                                      <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 text-center">
-                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Payout Amount</p>
-                                         <h4 className="text-4xl font-display font-bold text-slate-900 tracking-tight">₹{withdrawAmount}</h4>
+                                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">Top-up Amount</p>
+                                         <input
+                                             type="number"
+                                             min="1"
+                                             value={topUpAmount}
+                                             onChange={(event) => setTopUpAmount(event.target.value)}
+                                             className="w-full bg-transparent text-center text-4xl font-display font-bold text-slate-900 tracking-tight outline-none"
+                                         />
                                      </div>
                                      <div className="bg-emerald-50 p-4 rounded-2xl flex items-center gap-3 border border-emerald-100">
                                          <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-soft"><Wallet size={20} /></div>
                                          <div className="leading-tight">
-                                             <p className="text-[13px] font-bold text-slate-900">Zeto Bank Savings</p>
-                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">Primary Method</p>
+                                             <p className="text-[13px] font-bold text-slate-900">Cash ride limit</p>
+                                             <p className="text-[10px] font-bold text-emerald-600 uppercase tracking-widest">{formatMoney(remainingCashLimit)} remaining</p>
                                          </div>
                                      </div>
                                      <motion.button 
                                          whileTap={{ scale: 0.98 }}
-                                         onClick={handleWithdraw}
+                                         onClick={handleTopUp}
                                          disabled={isProcessing}
                                          className={`w-full h-14 rounded-2xl text-[15px] font-display font-bold shadow-premium flex items-center justify-center gap-2 ${
                                             isProcessing ? 'bg-slate-100 text-slate-400' : 'bg-slate-900 text-white'
                                          }`}
                                      >
-                                         {isProcessing ? <RefreshCw className="animate-spin" size={18} /> : 'Confirm Withdrawal'}
+                                         {isProcessing ? <RefreshCw className="animate-spin" size={18} /> : 'Confirm Top Up'}
                                          {!isProcessing && <ArrowUpRight size={18} strokeWidth={3} />}
                                      </motion.button>
                                  </div>
@@ -143,10 +254,13 @@ const DriverWallet = () => {
                     
                     <div className="flex justify-between items-start relative z-10 mb-8 px-1">
                         <div className="space-y-1">
-                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em]">Balance Available</p>
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.2em]">{wallet.isBlocked ? 'Wallet Blocked' : 'Wallet Balance'}</p>
                             <div className="flex items-baseline gap-1">
-                                <h2 className="text-4xl font-display font-bold tracking-tight">₹4,890<span className="text-2xl text-white/30">.50</span></h2>
+                                <h2 className="text-4xl font-display font-bold tracking-tight">{formatMoney(wallet.balance)}</h2>
                             </div>
+                            <p className="text-[10px] font-bold text-white/40 uppercase tracking-[0.16em]">
+                                Cash limit {formatMoney(wallet.cashLimit)} · {formatMoney(remainingCashLimit)} left
+                            </p>
                         </div>
                         <div className="w-12 h-12 bg-white/10 rounded-2xl flex items-center justify-center border border-white/10 shadow-soft">
                              <Wallet size={24} className="text-primary" />
@@ -158,7 +272,7 @@ const DriverWallet = () => {
                             onClick={() => setShowWithdraw(true)}
                             className="flex-1 h-12 bg-primary text-white rounded-xl flex items-center justify-center gap-2 text-[13px] font-display font-bold shadow-soft active:scale-98 transition-all uppercase tracking-wider"
                          >
-                            Withdraw <ArrowUpRight size={16} strokeWidth={3} />
+                            Top Up <ArrowUpRight size={16} strokeWidth={3} />
                         </button>
                          <button 
                             onClick={() => navigate('/taxi/driver/payout-methods')}
@@ -187,33 +301,49 @@ const DriverWallet = () => {
                                      {p}
                                  </button>
                              ))}
-                         </div>
+                    </div>
                     </div>
 
+                    {walletError && (
+                        <p className="rounded-xl bg-rose-50 px-4 py-3 text-center text-[11px] font-black uppercase tracking-wider text-rose-500">
+                            {walletError}
+                        </p>
+                    )}
+
                     <div className="space-y-3">
-                        {transactions.map((tx, idx) => (
+                        {filteredTransactions.length === 0 && (
+                            <div className="bg-white p-8 rounded-2xl border border-white shadow-premium text-center">
+                                <History size={28} className="mx-auto text-slate-300" />
+                                <p className="mt-3 text-[12px] font-black uppercase tracking-widest text-slate-400">No wallet transactions yet</p>
+                            </div>
+                        )}
+                        {filteredTransactions.map((tx, idx) => {
+                            const isDebit = Number(tx.amount || 0) < 0;
+                            const paymentMode = tx.metadata?.paymentMethod || tx.metadata?.source || 'Wallet';
+                            return (
                             <motion.div 
-                                key={tx.id}
+                                key={tx._id || tx.id}
                                 initial={{ opacity: 0, y: 10 }}
                                 animate={{ opacity: 1, y: 0 }}
                                 transition={{ delay: idx * 0.05 }}
                                 className="bg-white p-4 rounded-2xl border border-white shadow-premium flex items-center justify-between group active:scale-[0.99] transition-all w-full"
                             >
                                 <div className="flex items-center gap-4">
-                                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center border border-slate-50 ${tx.amount.startsWith('-') ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
-                                        {tx.mode === 'Online' ? <CreditCard size={18} strokeWidth={2} /> : <ArrowUpRight size={18} strokeWidth={2} />}
+                                    <div className={`w-11 h-11 rounded-xl flex items-center justify-center border border-slate-50 ${isDebit ? 'bg-rose-50 text-rose-500' : 'bg-emerald-50 text-emerald-500'}`}>
+                                        {tx.type === 'ride_earning' ? <CreditCard size={18} strokeWidth={2} /> : isDebit ? <ArrowDownLeft size={18} strokeWidth={2} /> : <ArrowUpRight size={18} strokeWidth={2} />}
                                     </div>
                                     <div className="leading-tight">
-                                        <h4 className="text-[14px] font-bold text-slate-900 tracking-tight">{tx.type}</h4>
-                                        <p className="text-[10px] font-medium text-slate-400">{tx.date} • {tx.mode}</p>
+                                        <h4 className="text-[14px] font-bold text-slate-900 tracking-tight">{formatTransactionType(tx.type)}</h4>
+                                        <p className="text-[10px] font-medium text-slate-400">{formatDate(tx.createdAt)} · {formatTime(tx.createdAt)} · {paymentMode}</p>
                                     </div>
                                 </div>
                                 <div className="text-right leading-tight">
-                                    <h5 className={`text-[16px] font-display font-bold ${tx.amount.startsWith('-') ? 'text-rose-500' : 'text-emerald-600'}`}>{tx.amount}</h5>
-                                    <p className={`text-[9px] font-bold uppercase tracking-wider ${tx.status === 'Success' ? 'text-emerald-500' : 'text-amber-500'}`}>{tx.status}</p>
+                                    <h5 className={`text-[16px] font-display font-bold ${isDebit ? 'text-rose-500' : 'text-emerald-600'}`}>{formatMoney(tx.amount)}</h5>
+                                    <p className={`text-[9px] font-bold uppercase tracking-wider ${tx.isBlockedAfter ? 'text-rose-500' : 'text-emerald-500'}`}>{tx.isBlockedAfter ? 'Blocked' : 'Success'}</p>
                                 </div>
                             </motion.div>
-                        ))}
+                            );
+                        })}
                     </div>
                 </div>
             </main>

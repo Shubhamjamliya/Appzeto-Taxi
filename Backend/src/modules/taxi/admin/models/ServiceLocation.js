@@ -77,7 +77,9 @@ const serviceLocationSchema = new mongoose.Schema(
       default: true,
     },
   },
-  { timestamps: true },
+  { 
+    timestamps: true,
+  },
 );
 
 serviceLocationSchema.index({ location: '2dsphere' });

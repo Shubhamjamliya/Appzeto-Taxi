@@ -8,6 +8,7 @@ import {
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
+import { Delivery } from '../user/models/Delivery.js';
 import { getRideRoom } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
 
@@ -48,7 +49,7 @@ const emitToRoom = (room, event, payload) => {
   }
 };
 
-const emitToDriver = (driverId, event, payload) => {
+export const emitToDriver = (driverId, event, payload) => {
   if (driverId) {
     emitToRoom(getDriverRoom(driverId), event, payload);
   }
@@ -76,6 +77,13 @@ const closeRideAsUnmatched = async (rideId) => {
 
   if (!ride) {
     return;
+  }
+
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, {
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
   }
 
   await User.findByIdAndUpdate(ride.userId, { currentRideId: null });
@@ -110,6 +118,14 @@ export const cancelRideByAdmin = async (rideId) => {
   ride.status = RIDE_STATUS.CANCELLED;
   ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
   await ride.save();
+
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, {
+      driverId: ride.driverId || null,
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
+  }
 
   await Promise.all([
     User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
@@ -180,12 +196,16 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
     for (const driver of targetDrivers) {
       emitToDriver(driver._id, 'rideRequest', {
         rideId: String(ride._id),
+        type: ride.serviceType || 'ride',
+        serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
         dropLocation: ride.dropLocation,
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
         vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
+        paymentMethod: ride.paymentMethod,
+        parcel: ride.parcel || null,
         radius,
         zoneId: zone?._id ? String(zone._id) : null,
       });
@@ -245,17 +265,26 @@ export const notifyRideAccepted = async (ride) => {
   emitToRoom(getUserRoom(populatedRide.userId), 'rideAccepted', {
     rideId: String(populatedRide._id),
     room: getRideRoom(populatedRide._id),
+    type: populatedRide.serviceType || 'ride',
+    serviceType: populatedRide.serviceType || 'ride',
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     driver: populatedRide.driverId,
+    parcel: populatedRide.parcel || null,
   });
 
   emitToRoom(getUserRoom(populatedRide.userId), SOCKET_EVENTS.RIDE_STATE, {
     rideId: String(populatedRide._id),
     room: getRideRoom(populatedRide._id),
+    type: populatedRide.serviceType || 'ride',
+    serviceType: populatedRide.serviceType || 'ride',
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     fare: populatedRide.fare,
+    paymentMethod: populatedRide.paymentMethod,
+    parcel: populatedRide.parcel || null,
+    commissionAmount: populatedRide.commissionAmount,
+    driverEarnings: populatedRide.driverEarnings,
     pickupLocation: populatedRide.pickupLocation,
     dropLocation: populatedRide.dropLocation,
     acceptedAt: populatedRide.acceptedAt,

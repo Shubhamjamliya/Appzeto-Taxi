@@ -3,6 +3,8 @@ import { ApiError } from '../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
 import { Driver } from '../driver/models/Driver.js';
+import { ensureDriverWalletCanAcceptRide, settleCompletedRideWallet } from '../driver/services/walletService.js';
+import { Delivery } from '../user/models/Delivery.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 import { applyPromoToRideInTransaction } from './promoService.js';
@@ -29,6 +31,7 @@ const clearUserActiveRideIfPresent = async (user) => {
   activeRide.status = RIDE_STATUS.CANCELLED;
   activeRide.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
   await activeRide.save();
+  await syncDeliveryWithRide(activeRide);
 
   await Promise.all([
     activeRide.driverId ? Driver.findByIdAndUpdate(activeRide.driverId, { isOnRide: false }) : Promise.resolve(),
@@ -63,6 +66,57 @@ export const clearDriverActiveRideIfStale = async (driverOrId) => {
   return driver;
 };
 
+const normalizeRidePaymentMethod = (paymentMethod) => (
+  !paymentMethod || String(paymentMethod).trim().toLowerCase() === 'cash' ? 'cash' : 'online'
+);
+
+const normalizeServiceType = (serviceType) => (
+  String(serviceType || 'ride').trim().toLowerCase() === 'parcel' ? 'parcel' : 'ride'
+);
+
+const normalizeParcelPayload = (parcel = {}) => ({
+  category: String(parcel.category || '').trim(),
+  weight: String(parcel.weight || '').trim(),
+  description: String(parcel.description || '').trim(),
+  senderName: String(parcel.senderName || '').trim(),
+  senderMobile: String(parcel.senderMobile || '').trim(),
+  receiverName: String(parcel.receiverName || '').trim(),
+  receiverMobile: String(parcel.receiverMobile || '').trim(),
+});
+
+const syncDeliveryWithRide = async (ride) => {
+  if (!ride || (ride.serviceType || 'ride') !== 'parcel') {
+    return null;
+  }
+
+  const payload = {
+    rideId: ride._id,
+    userId: ride.userId,
+    driverId: ride.driverId || null,
+    vehicleTypeId: ride.vehicleTypeId || null,
+    vehicleIconType: ride.vehicleIconType || '',
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    fare: ride.fare,
+    paymentMethod: ride.paymentMethod,
+    parcel: normalizeParcelPayload(ride.parcel),
+    acceptedAt: ride.acceptedAt || null,
+    startedAt: ride.startedAt || null,
+    completedAt: ride.completedAt || null,
+  };
+
+  if (ride.deliveryId) {
+    return Delivery.findByIdAndUpdate(ride.deliveryId, payload, { new: true });
+  }
+
+  const delivery = await Delivery.create(payload);
+  ride.deliveryId = delivery._id;
+  await ride.save();
+  return delivery;
+};
+
 export const createRideRecord = async ({
   userId,
   pickupCoords,
@@ -70,6 +124,9 @@ export const createRideRecord = async ({
   fare,
   vehicleTypeId,
   vehicleIconType,
+  paymentMethod,
+  serviceType,
+  parcel,
   promo_code,
   service_location_id,
   transport_type,
@@ -99,15 +156,19 @@ export const createRideRecord = async ({
       userId,
       vehicleTypeId: vehicleTypeId || null,
       vehicleIconType: vehicleIconType || '',
+      serviceType: normalizeServiceType(serviceType),
       pickupLocation: toPoint(pickupCoords, 'pickup'),
       dropLocation: toPoint(dropCoords, 'drop'),
       fare: safeFare,
+      paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+      parcel: normalizeParcelPayload(parcel),
       status: RIDE_STATUS.SEARCHING,
       liveStatus: RIDE_LIVE_STATUS.SEARCHING,
     });
 
     user.currentRideId = ride._id;
     await user.save();
+    await syncDeliveryWithRide(ride);
 
     return ride;
   }
@@ -126,9 +187,12 @@ export const createRideRecord = async ({
             userId,
             vehicleTypeId: vehicleTypeId || null,
             vehicleIconType: vehicleIconType || '',
+            serviceType: normalizeServiceType(serviceType),
             pickupLocation: toPoint(pickupCoords, 'pickup'),
             dropLocation: toPoint(dropCoords, 'drop'),
             fare: safeFare,
+            paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+            parcel: normalizeParcelPayload(parcel),
             status: RIDE_STATUS.SEARCHING,
             liveStatus: RIDE_LIVE_STATUS.SEARCHING,
           },
@@ -152,6 +216,7 @@ export const createRideRecord = async ({
       });
 
       await session.commitTransaction();
+      await syncDeliveryWithRide(rideDoc);
       return rideDoc;
     } catch (error) {
       lastError = error;
@@ -174,6 +239,7 @@ export const createRideRecord = async ({
 
 export const getRideDetails = async (rideId) => {
   const ride = await Ride.findById(rideId)
+    .populate('deliveryId')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
 
@@ -190,15 +256,23 @@ const activeRideStatuses = [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_ST
 
 const populateRideRealtime = async (rideId) =>
   Ride.findById(rideId)
+    .populate('deliveryId')
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating');
 
 export const serializeRideRealtime = (ride) => ({
   rideId: String(ride._id),
   room: getRideRoom(ride._id),
+  deliveryId: ride.deliveryId?._id ? String(ride.deliveryId._id) : ride.deliveryId ? String(ride.deliveryId) : null,
+  type: ride.serviceType || 'ride',
+  serviceType: ride.serviceType || 'ride',
   status: ride.status,
   liveStatus: ride.liveStatus,
   fare: ride.fare,
+  paymentMethod: ride.paymentMethod,
+  parcel: ride.deliveryId?.parcel || ride.parcel || null,
+  commissionAmount: ride.commissionAmount,
+  driverEarnings: ride.driverEarnings,
   promo: ride.promo?.code ? ride.promo : null,
   pickupLocation: ride.pickupLocation,
   dropLocation: ride.dropLocation,
@@ -277,14 +351,22 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
   const rides = await Ride.find({ userId: entityId })
     .sort({ createdAt: -1 })
     .limit(safeLimit)
+    .populate('deliveryId')
     .populate('driverId', 'name phone vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating')
     .lean();
 
   return rides.map((ride) => ({
     rideId: String(ride._id),
+    deliveryId: ride.deliveryId?._id ? String(ride.deliveryId._id) : ride.deliveryId ? String(ride.deliveryId) : null,
+    type: ride.serviceType || 'ride',
+    serviceType: ride.serviceType || 'ride',
     status: ride.status,
     liveStatus: ride.liveStatus,
     fare: ride.fare,
+    paymentMethod: ride.paymentMethod,
+    parcel: ride.deliveryId?.parcel || ride.parcel || null,
+    commissionAmount: ride.commissionAmount,
+    driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
@@ -317,12 +399,15 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
       _id: driverId,
       isOnline: true,
       isOnRide: false,
+      'wallet.isBlocked': { $ne: true },
       ...(ride.vehicleTypeId ? { vehicleTypeId: ride.vehicleTypeId } : {}),
     }).session(session);
 
     if (!driver) {
       throw new ApiError(409, 'Driver is unavailable to accept this ride');
     }
+
+    await ensureDriverWalletCanAcceptRide(driver, { session });
 
     ride.driverId = driver._id;
     ride.status = RIDE_STATUS.ACCEPTED;
@@ -333,6 +418,7 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
     await ride.save({ session });
     await driver.save({ session });
     await session.commitTransaction();
+    await syncDeliveryWithRide(ride);
 
     return ride;
   } catch (error) {
@@ -391,15 +477,23 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus }) => {
   }
 
   await ride.save();
+  await syncDeliveryWithRide(ride);
+
+  let walletUpdate = null;
 
   if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
     await Promise.all([
       User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
       Driver.findByIdAndUpdate(driverId, { isOnRide: false }),
     ]);
+
+    walletUpdate = await settleCompletedRideWallet({ rideId: ride._id });
   }
 
-  return populateRideRealtime(ride._id);
+  const populatedRide = await populateRideRealtime(ride._id);
+  populatedRide.$locals.walletUpdate = walletUpdate;
+
+  return populatedRide;
 };
 
 export const appendRideMessage = async ({ rideId, role, senderId, message }) => {

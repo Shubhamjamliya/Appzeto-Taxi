@@ -15,6 +15,7 @@ import {
   createSubscriptionPlan,
   createUser,
   createZone,
+  approveUserDeletionRequest,
   deleteAppModule,
   deleteDriver,
   deleteGoodsType,
@@ -75,8 +76,10 @@ import {
   getUser,
   getUsers,
   getDeletedUsers,
+  getUserDeletionRequests,
   restoreDeletedUser,
   permanentlyDeleteDeletedUser,
+  rejectUserDeletionRequest,
   getUserRequests,
   getUserWalletHistory,
   getVehiclePreferenceOptions,
@@ -127,6 +130,9 @@ adminRouter.post('/admin/users', createUser);
 adminRouter.get('/admin/users/deleted', getDeletedUsers);
 adminRouter.patch('/admin/users/deleted/:id/restore', restoreDeletedUser);
 adminRouter.delete('/admin/users/deleted/:id', permanentlyDeleteDeletedUser);
+adminRouter.get('/admin/users/delete-requests', getUserDeletionRequests);
+adminRouter.patch('/admin/users/delete-requests/:id/approve', approveUserDeletionRequest);
+adminRouter.patch('/admin/users/delete-requests/:id/reject', rejectUserDeletionRequest);
 adminRouter.get('/admin/users/:id', getUser);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);

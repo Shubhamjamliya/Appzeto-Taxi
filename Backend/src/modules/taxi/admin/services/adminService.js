@@ -31,7 +31,7 @@ import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
-import { cancelRideByAdmin } from '../../services/dispatchService.js';
+import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
   const result = { ...target };
@@ -71,6 +71,9 @@ const normalizeBoolean = (value) => {
   if (value === 1 || value === '1' || value === 'true') return true;
   return false;
 };
+
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_USER_GENDERS = new Set(['male', 'female', 'other', 'prefer-not-to-say']);
 
 const findById = (items, id) => items.find((item) => String(item._id) === String(id));
 
@@ -346,12 +349,15 @@ const serializeUser = (user) => ({
   id: user._id,
   name: user.name || '',
   email: user.email || '',
+  gender: user.gender || '',
+  profileImage: user.profileImage || '',
   mobile: user.phone || user.mobile || '',
   phone: user.phone || user.mobile || '',
   wallet_balance: Number(user.wallet_balance || 0),
   active: user.active !== false && !user.deletedAt,
   deletedAt: user.deletedAt || null,
   deletion_reason: user.deletion_reason || '',
+  deletionRequest: user.deletionRequest || { status: 'none' },
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
@@ -572,13 +578,22 @@ export const listUsers = async ({ page = 1, limit = 50 }) => {
 
 export const createUser = async (payload) => {
   const name = String(payload.name || '').trim();
-  const phone = String(payload.phone || payload.mobile || '').trim();
-  const email = String(payload.email || '').trim();
-  const password = String(payload.password || '').trim();
+  const phone = String(payload.phone || payload.mobile || '').replace(/\D/g, '');
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const passwordConfirmation = String(payload.password_confirmation ?? payload.confirmPassword ?? '');
+  const gender = String(payload.gender || '').trim().toLowerCase();
+  const profileImage = String(payload.profileImage || '').trim();
 
   if (!name) throw new ApiError(400, 'User name is required');
-  if (!phone) throw new ApiError(400, 'Phone is required');
-  if (!password) throw new ApiError(400, 'Password is required');
+  if (!/^\d{10}$/.test(phone)) throw new ApiError(400, 'A valid 10-digit phone number is required');
+  if (!email) throw new ApiError(400, 'Email is required');
+  if (!EMAIL_REGEX.test(email)) throw new ApiError(400, 'A valid email address is required');
+  if (!gender || !VALID_USER_GENDERS.has(gender)) throw new ApiError(400, 'A valid gender is required');
+  if (!password.trim()) throw new ApiError(400, 'Password is required');
+  if (password.length < 5) throw new ApiError(400, 'Password must be at least 5 characters');
+  if (!passwordConfirmation) throw new ApiError(400, 'Confirm password is required');
+  if (password !== passwordConfirmation) throw new ApiError(400, 'Passwords do not match');
 
   const existingUser = await User.findOne({ phone });
   if (existingUser) {
@@ -589,6 +604,8 @@ export const createUser = async (payload) => {
     name,
     phone,
     email,
+    gender,
+    profileImage,
     password: await hashPassword(password),
     wallet_balance: Number(payload.wallet_balance || 0),
     active: payload.active ?? true,
@@ -647,9 +664,24 @@ export const updateUser = async (id, payload) => {
 
   if (payload.name !== undefined) update.name = String(payload.name || '').trim();
   if (payload.phone !== undefined || payload.mobile !== undefined) {
-    update.phone = String(payload.phone || payload.mobile || '').trim();
+    update.phone = String(payload.phone || payload.mobile || '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(update.phone)) {
+      throw new ApiError(400, 'A valid 10-digit phone number is required');
+    }
   }
-  if (payload.email !== undefined) update.email = String(payload.email || '').trim();
+  if (payload.email !== undefined) {
+    update.email = String(payload.email || '').trim().toLowerCase();
+    if (update.email && !EMAIL_REGEX.test(update.email)) {
+      throw new ApiError(400, 'A valid email address is required');
+    }
+  }
+  if (payload.gender !== undefined) {
+    update.gender = String(payload.gender || '').trim().toLowerCase();
+    if (update.gender && !VALID_USER_GENDERS.has(update.gender)) {
+      throw new ApiError(400, 'A valid gender is required');
+    }
+  }
+  if (payload.profileImage !== undefined) update.profileImage = String(payload.profileImage || '').trim();
   if (payload.wallet_balance !== undefined) update.wallet_balance = Number(payload.wallet_balance || 0);
   if (payload.active !== undefined) update.active = Boolean(payload.active);
   if (payload.password) {
@@ -737,6 +769,86 @@ export const permanentlyDeleteDeletedUser = async (id) => {
     throw new ApiError(404, 'Deleted user not found');
   }
   return true;
+};
+
+export const listUserDeletionRequests = async ({ page = 1, limit = 50, status = 'pending' } = {}) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const requestedStatus = String(status || 'pending').toLowerCase();
+  const start = (safePage - 1) * safeLimit;
+  const statusQuery =
+    requestedStatus === 'all'
+      ? { $in: ['pending', 'approved', 'rejected'] }
+      : requestedStatus;
+  const query = {
+    'deletionRequest.status': statusQuery,
+    deletedAt: null,
+  };
+
+  const [users, total] = await Promise.all([
+    User.find(query)
+      .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    User.countDocuments(query),
+  ]);
+
+  return {
+    results: users.map(serializeUser),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const approveUserDeletionRequest = async (id, adminId) => {
+  const now = new Date();
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        deletedAt: now,
+        active: false,
+        isActive: false,
+        deletion_reason: 'user_delete_request',
+        'deletionRequest.status': 'approved',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': adminId || null,
+        'deletionRequest.adminNote': '',
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
+  notifyUserAccountDeleted(user._id);
+  return serializeUser(user.toObject());
+};
+
+export const rejectUserDeletionRequest = async (id, payload = {}, adminId) => {
+  const now = new Date();
+  const adminNote = String(payload.adminNote || payload.note || '').trim();
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        active: true,
+        isActive: true,
+        'deletionRequest.status': 'rejected',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': adminId || null,
+        'deletionRequest.adminNote': adminNote,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
+  return serializeUser(user.toObject());
 };
 
 export const getUserById = async (id) => {

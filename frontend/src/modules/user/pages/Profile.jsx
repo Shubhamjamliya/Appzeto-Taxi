@@ -1,9 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift } from 'lucide-react';
+import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift, Trash2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
 import { userAuthService } from '../services/authService';
+
+const MotionDiv = motion.div;
+const MotionButton = motion.button;
 
 const menuItems = [
   { icon: User,        title: 'Profile Settings',  sub: 'Manage your personal info',        path: '/taxi/user/profile/settings',      bg: 'bg-orange-50',  color: 'text-orange-500' },
@@ -15,31 +18,35 @@ const menuItems = [
   { icon: Gift,        title: 'Refer & Earn',       sub: 'Invite friends & get rewards',     path: '/taxi/user/referral',              bg: 'bg-amber-50',   color: 'text-amber-500' },
   { icon: HelpCircle,  title: 'Support',            sub: 'Help center & ticketing',          path: '/taxi/user/support/tickets',       bg: 'bg-slate-50',   color: 'text-slate-500'  },
   { icon: Wrench,      title: 'Workshop & RSA',     sub: 'Quick roadside assistance',        path: '/taxi/user/services/workshop-rsa', bg: 'bg-sky-50',     color: 'text-sky-500'  },
+  { icon: Trash2,      title: 'Delete Account',     sub: 'Request account deletion',         path: '/taxi/user/profile/delete-account', bg: 'bg-red-50',     color: 'text-red-500'  },
 ];
 
 const Profile = () => {
   const navigate = useNavigate();
-  const [profile, setProfile] = useState({
-    name: '',
-    phone: '',
-    profileImage: '',
-  });
-
-  useEffect(() => {
+  const [profile, setProfile] = useState(() => {
     let stored = {};
     try {
       stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
     } catch {
       stored = {};
     }
-    setProfile({
+
+    return {
       name: stored?.name || '',
       phone: stored?.phone || '',
       profileImage: stored?.profileImage || '',
-    });
+    };
+  });
 
+  useEffect(() => {
     const loadProfile = async () => {
       try {
+        let stored = {};
+        try {
+          stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
+        } catch {
+          stored = {};
+        }
         const response = await userAuthService.getCurrentUser();
         const user = response?.data?.user || {};
         setProfile({
@@ -48,7 +55,7 @@ const Profile = () => {
           profileImage: user.profileImage || stored?.profileImage || '',
         });
         localStorage.setItem('userInfo', JSON.stringify(user));
-      } catch (error) {
+      } catch {
         // Keep the local fallback if the network is unavailable.
       }
     };
@@ -85,7 +92,7 @@ const Profile = () => {
         </div>
 
         {/* Hero Profile Card */}
-        <motion.div 
+        <MotionDiv
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-[28px] bg-white border border-slate-100 shadow-xl shadow-slate-900/5 p-5 flex items-center gap-5"
@@ -115,7 +122,7 @@ const Profile = () => {
             </div>
             <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Active</span>
           </div>
-        </motion.div>
+        </MotionDiv>
       </div>
 
       {/* Menu Options */}
@@ -124,21 +131,21 @@ const Profile = () => {
         
         <div className="rounded-[28px] border border-slate-100 bg-white shadow-sm overflow-hidden divide-y divide-slate-50">
           {menuItems.map(({ icon: Icon, title, sub, path, bg, color }, idx) => (
-            <motion.button 
+            <MotionButton
               key={idx}
               whileTap={{ backgroundColor: '#F8FAFC' }}
               onClick={() => navigate(path)}
               className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors"
             >
               <div className={`w-10 h-10 rounded-[18px] flex items-center justify-center shrink-0 ${bg}`}>
-                <Icon size={18} className={color} strokeWidth={2} />
+                {React.createElement(Icon, { size: 18, className: color, strokeWidth: 2 })}
               </div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-slate-900 leading-tight">{title}</p>
                 <p className="text-[11px] font-medium text-slate-400 mt-1">{sub}</p>
               </div>
               <ChevronRight size={16} className="text-slate-200" strokeWidth={3} />
-            </motion.button>
+            </MotionButton>
           ))}
         </div>
 

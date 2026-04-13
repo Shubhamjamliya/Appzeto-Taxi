@@ -66,6 +66,13 @@ export const authenticate = (allowedRoles = []) => async (req, _res, next) => {
     }
 
     if (
+      payload.role === 'user' &&
+      (entity.deletedAt || entity.isActive === false || entity.active === false)
+    ) {
+      throw new ApiError(401, 'User account is not active');
+    }
+
+    if (
       payload.role === 'driver' &&
       (entity.approve === false || String(entity.status || '').toLowerCase() === 'pending')
     ) {

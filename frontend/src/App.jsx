@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { socketService } from './shared/api/socket';
 import './App.css';
 
 
@@ -138,6 +139,7 @@ const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deli
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
 const AdminPaymentHistory = lazy(() => import('./modules/admin/pages/wallet/PaymentHistory'));
 const AdminUserList = lazy(() => import('./modules/admin/pages/users/UserList'));
+const AdminUserCreate = lazy(() => import('./modules/admin/pages/users/UserCreate'));
 const AdminUserDetails = lazy(() => import('./modules/admin/pages/users/UserDetails'));
 const AdminDeleteRequestUsers = lazy(() => import('./modules/admin/pages/users/DeleteRequestUsers'));
 const AdminUserBulkUpload = lazy(() => import('./modules/admin/pages/users/UserBulkUpload'));
@@ -297,9 +299,60 @@ const MainLayout = ({ children }) => {
   );
 };
 
+const clearUserSession = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('userToken');
+  localStorage.removeItem('userInfo');
+  localStorage.removeItem('chatRole');
+};
+
+const UserAccountInvalidationListener = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const isUserRoute =
+      !location.pathname.startsWith('/admin') &&
+      !location.pathname.startsWith('/taxi/driver');
+
+    if (!isUserRoute) {
+      return undefined;
+    }
+
+    const handleLogout = () => {
+      clearUserSession();
+      socketService.disconnect();
+      navigate('/taxi/user/login', { replace: true });
+    };
+
+    const socket = socketService.connect({ role: 'user' });
+    socketService.on('account:deleted', handleLogout);
+
+    const handleAuthStale = (event) => {
+      if (event.detail?.role === 'user') {
+        handleLogout();
+      }
+    };
+
+    window.addEventListener('app:auth-stale', handleAuthStale);
+
+    return () => {
+      socketService.off('account:deleted', handleLogout);
+      window.removeEventListener('app:auth-stale', handleAuthStale);
+
+      if (socket) {
+        socketService.disconnect();
+      }
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
+};
+
 function App() {
   return (
     <Router>
+      <UserAccountInvalidationListener />
       <MainLayout>
         <Suspense fallback={
           <div className="flex items-center justify-center min-h-screen bg-white">
@@ -493,6 +546,7 @@ function App() {
               <Route path="ongoing" element={<AdminOngoing />} />
               <Route path="wallet/payment" element={<AdminPaymentHistory />} />
               <Route path="users" element={<AdminUserList />} />
+              <Route path="users/create" element={<AdminUserCreate />} />
               <Route path="users/:id" element={<AdminUserDetails />} />
               <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
               <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />

@@ -28,7 +28,7 @@ const getTokenPayload = (token) => {
     }
 
     return JSON.parse(atob(decodeBase64Url(payload)));
-  } catch (_error) {
+  } catch {
     return null;
   }
 };
@@ -127,17 +127,23 @@ api.interceptors.response.use(
   },
   (error) => {
     if (error.response) {
-      // Global error handling: e.g. 401 logout
-      if (error.response.status === 401) {
+      // Global error handling: e.g. deleted or inactive account logout
+      if (error.response.status === 401 || error.response.status === 403) {
         console.warn('Unauthorized! Logging out...');
         const serverMessage = String(error.response.data?.message || '');
         const authHeader = error.config?.headers?.Authorization || error.config?.headers?.authorization || '';
         const token = String(authHeader).startsWith('Bearer ') ? String(authHeader).slice(7) : '';
         const tokenRole = getTokenPayload(token)?.role || '';
 
-        if (serverMessage === 'Authenticated account no longer exists') {
+        const shouldClearAuth =
+          serverMessage === 'Authenticated account no longer exists' ||
+          (tokenRole === 'user' && serverMessage === 'User account is not active');
+
+        if (shouldClearAuth) {
           clearStaleAuthState(tokenRole);
-          window.dispatchEvent(new CustomEvent('app:auth-stale', { detail: { role: tokenRole || null } }));
+          window.dispatchEvent(new CustomEvent('app:auth-stale', {
+            detail: { role: tokenRole || null, message: serverMessage },
+          }));
         }
       }
       return Promise.reject({ ...error.response.data, status: error.response.status });

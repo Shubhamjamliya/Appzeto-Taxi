@@ -7,6 +7,7 @@ import {
   goOnline,
   getCurrentDriver,
   getDriverApprovalStatus,
+  getDriverDocumentTemplates,
   getMyWallet,
   getOnboardingSession,
   getServiceLocations,
@@ -38,6 +39,7 @@ driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUp
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
+driverRouter.get('/document-templates', asyncHandler(getDriverDocumentTemplates));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));
 driverRouter.post('/onboarding/verify-otp', asyncHandler(verifyOnboardingOtp));
 driverRouter.patch('/onboarding/personal', asyncHandler(saveOnboardingPersonal));

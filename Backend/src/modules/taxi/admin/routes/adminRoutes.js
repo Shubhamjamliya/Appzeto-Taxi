@@ -6,12 +6,14 @@ import {
   createAppModule,
   createGoodsType,
   createDriver,
+  createDriverNeededDocument,
   createRentalPackageType,
   createOwner,
   createOwnerBooking,
   createOwnerNeededDocument,
   createPreference,
   createRole,
+  createPaymentMethod,
   createServiceLocation,
   createSetPrice,
   createSubscriptionPlan,
@@ -19,6 +21,7 @@ import {
   createZone,
   deleteAppModule,
   deleteDriver,
+  deleteDriverNeededDocument,
   deleteGoodsType,
   deleteRentalPackageType,
   deleteLanguage,
@@ -28,6 +31,7 @@ import {
   deleteOwnerNeededDocument,
   deletePreference,
   deleteRole,
+  deletePaymentMethod,
   deleteSetPrice,
   deleteServiceLocation,
   deleteUser,
@@ -45,9 +49,16 @@ import {
   getCountries,
   getDashboardData,
   getDriver,
+  getDriverNeededDocument,
+  getDriverNeededDocuments,
   getDriverProfile,
   getDriverOnboarding,
   getDrivers,
+  getDriverRatings,
+  getDriverRatingDetail,
+  getNegativeBalanceDrivers,
+  getDriverWithdrawalSummaries,
+  getDriverWithdrawals,
   getDeletedDrivers,
   getFirebaseSettings,
   getGoodsTypes,
@@ -66,6 +77,7 @@ import {
   getOwnerDashboardData,
   getOwnerNeededDocuments,
   getPaymentGateways,
+  getPaymentMethods,
   getPaymentSettings,
   getPreferences,
   getRideModules,
@@ -98,6 +110,7 @@ import {
   updateAppModule,
   updateAirport,
   updateDriver,
+  updateDriverNeededDocument,
   updateDriverPassword,
   updateFirebaseSettings,
   updateGoodsType,
@@ -110,6 +123,7 @@ import {
   updateOwnerBooking,
   updateOwnerNeededDocument,
   updatePaymentSettings,
+  updatePaymentMethod,
   updatePreferenceStatus,
   updateSetPrice,
   updateServiceLocation,
@@ -151,6 +165,11 @@ adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);
 adminRouter.post('/admin/wallet/drivers/:id/adjust', adjustDriverWallet);
+adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']), getNegativeBalanceDrivers);
+adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);
+adminRouter.get('/admin/wallet/drivers/:id/withdrawals', authenticate(['admin']), getDriverWithdrawals);
+adminRouter.get('/admin/driver-ratings', authenticate(['admin']), getDriverRatings);
+adminRouter.get('/admin/driver-ratings/:id', authenticate(['admin']), getDriverRatingDetail);
 
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
@@ -200,6 +219,11 @@ adminRouter.get('/admin/owner-management/owner-needed-document', getOwnerNeededD
 adminRouter.post('/admin/owner-management/owner-needed-document', createOwnerNeededDocument);
 adminRouter.patch('/admin/owner-management/owner-needed-document/:id', updateOwnerNeededDocument);
 adminRouter.delete('/admin/owner-management/owner-needed-document/:id', deleteOwnerNeededDocument);
+adminRouter.get('/admin/owner-management/driver-needed-document', getDriverNeededDocuments);
+adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverNeededDocument);
+adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);
+adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDriverNeededDocument);
+adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
@@ -241,6 +265,12 @@ adminRouter.patch('/admin/notification-channels/:id/mail', toggleChannelMail);
 adminRouter.get('/admin/integration-settings/payment-gateways', getPaymentGateways);
 adminRouter.get('/admin/integration-settings/payment-settings', getPaymentSettings);
 adminRouter.patch('/admin/integration-settings/payment-settings', updatePaymentSettings);
+
+adminRouter.get('/admin/payment-methods', authenticate(['admin']), getPaymentMethods);
+adminRouter.post('/admin/payment-methods', authenticate(['admin']), createPaymentMethod);
+adminRouter.patch('/admin/payment-methods/:id', authenticate(['admin']), updatePaymentMethod);
+adminRouter.delete('/admin/payment-methods/:id', authenticate(['admin']), deletePaymentMethod);
+
 adminRouter.get('/admin/integration-settings/sms', getSmsSettings);
 adminRouter.patch('/admin/integration-settings/sms', updateSmsSettings);
 adminRouter.get('/admin/integration-settings/firebase', getFirebaseSettings);

@@ -155,6 +155,7 @@ const AdminWithdrawalRequestDrivers = lazy(() => import('./modules/admin/pages/d
 const AdminWithdrawalRequestDetail = lazy(() => import('./modules/admin/pages/drivers/WithdrawalRequestDetail'));
 const AdminDriverDeleteRequests = lazy(() => import('./modules/admin/pages/drivers/DriverDeleteRequests'));
 const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/GlobalDocuments'));
+const AdminDriverDocumentForm = lazy(() => import('./modules/admin/pages/drivers/DriverDocumentForm'));
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
 const AdminDriverAudit = lazy(() => import('./modules/admin/pages/drivers/DriverAudit'));
 const AdminPaymentMethods = lazy(() => import('./modules/admin/pages/drivers/PaymentMethods'));
@@ -234,7 +235,10 @@ const AdminFleetFinanceReport = lazy(() => import('./modules/admin/pages/reports
 // Masters Management
 const AdminLanguages = lazy(() => import('./modules/admin/pages/masters/Languages'));
 const AdminPreferences = lazy(() => import('./modules/admin/pages/masters/Preferences'));
-const AdminRoles = lazy(() => import('./modules/admin/pages/masters/Roles'));
+
+// Admin Management
+const AdminAdmins = lazy(() => import('./modules/admin/pages/management/Admins'));
+const AdminAdminCreate = lazy(() => import('./modules/admin/pages/management/AdminCreate'));
 
 const AdminReportPlaceholder = ({ title }) => (
   <div className="flex flex-col items-center justify-center min-h-[500px] text-gray-400 bg-white rounded-[32px] border border-gray-100 shadow-sm p-10 mx-6">
@@ -510,6 +514,8 @@ function App() {
               <Route path="drivers/wallet/withdrawals/:id" element={<AdminWithdrawalRequestDetail />} />
               <Route path="drivers/delete-requests" element={<AdminDriverDeleteRequests />} />
               <Route path="drivers/documents" element={<AdminGlobalDocuments />} />
+              <Route path="drivers/documents/create" element={<AdminDriverDocumentForm />} />
+              <Route path="drivers/documents/edit/:id" element={<AdminDriverDocumentForm />} />
               <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
               <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
                <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
@@ -527,6 +533,10 @@ function App() {
                <Route path="promotions/banner-image" element={<AdminBannerImage />} />
                <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
               
+              {/* Admin Management */}
+              <Route path="management/admins" element={<AdminAdmins />} />
+              <Route path="management/admins/create" element={<AdminAdminCreate />} />
+
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />
               <Route path="owners" element={<AdminManageOwners />} />
@@ -587,7 +597,7 @@ function App() {
               <Route path="masters/languages" element={<AdminLanguages />} />
               <Route path="masters/countries" element={<AdminCountryManagement />} />
               <Route path="masters/preferences" element={<AdminPreferences />} />
-              <Route path="masters/roles" element={<AdminRoles />} />
+              <Route path="masters/roles" element={<Navigate to="/admin/management/admins" replace />} />
 
               <Route path="settings/business/general" element={<AdminGeneralSettings />} />
               <Route path="settings/business/customization" element={<AdminCustomizationSettings />} />

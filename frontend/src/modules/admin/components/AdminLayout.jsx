@@ -362,8 +362,7 @@ const AdminLayout = () => {
             icon: UserCog,
             label: 'Admin Management',
             subItems: [
-              { label: 'Manage Admins', path: '/admin/management/admins' },
-              { label: 'Admin Roles', path: '/admin/masters/roles' },
+              { label: 'Admins', path: '/admin/management/admins' },
             ],
           },
           { icon: Briefcase, label: 'Owner Management', path: '/admin/owners/dashboard' },

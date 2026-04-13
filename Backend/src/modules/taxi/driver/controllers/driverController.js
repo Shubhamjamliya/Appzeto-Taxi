@@ -14,6 +14,7 @@ import {
 } from '../services/loginOtpService.js';
 import { verifyAccessToken } from '../../services/tokenService.js';
 import { clearDriverActiveRideIfStale } from '../../services/rideService.js';
+import { listDriverNeededDocuments } from '../../admin/services/adminService.js';
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -381,6 +382,15 @@ export const getDriverApprovalStatus = async (req, res) => {
 
 export const getServiceLocations = async (_req, res) => {
   const results = await listDriverServiceLocations();
+
+  res.json({
+    success: true,
+    data: { results },
+  });
+};
+
+export const getDriverDocumentTemplates = async (_req, res) => {
+  const results = await listDriverNeededDocuments({ activeOnly: true, includeFields: true });
 
   res.json({
     success: true,

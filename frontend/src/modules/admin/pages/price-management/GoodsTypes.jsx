@@ -7,17 +7,17 @@ import {
   Trash2, 
   Edit2, 
   Layers,
-  ChevronDown,
   ArrowLeft,
-  Filter,
   Globe,
   Package,
   CheckCircle2,
   Loader2,
   Upload
 } from 'lucide-react';
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useNavigate, useParams } from 'react-router-dom';
+
+const Motion = motion;
 
 const StatusToggle = ({ active, onToggle }) => (
   <button
@@ -42,6 +42,22 @@ const formatVehicleOption = (vehicle) => {
   };
 };
 
+const normalizeGoodsTypeFor = (value) => {
+  if (Array.isArray(value)) {
+    return value.map((entry) => String(entry || '').trim()).filter(Boolean);
+  }
+
+  return String(value || '')
+    .split(',')
+    .map((entry) => entry.trim())
+    .filter(Boolean);
+};
+
+const formatGoodsTypeForDisplay = (value) => {
+  const items = normalizeGoodsTypeFor(value);
+  return items.length > 0 ? items.join(', ') : 'BOTH';
+};
+
 const readFileAsDataUrl = (file) =>
   new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -64,7 +80,7 @@ const GoodsTypes = ({ mode }) => {
 
   const [formData, setFormData] = useState({
     name: '',
-    goods_type_for: '',
+    goods_type_for: [],
     active: 1,
     icon: '',
     iconFile: null,
@@ -83,25 +99,25 @@ const GoodsTypes = ({ mode }) => {
       if (item) {
         setFormData({
           name: item.name || item.goods_type_name || '',
-          goods_type_for: item.goods_types_for || item.goods_type_for || 'both',
+          goods_type_for: normalizeGoodsTypeFor(item.goods_types_for || item.goods_type_for || 'both'),
           active: item.active !== undefined ? Number(item.active) : 1,
           icon: item.icon || '',
           iconFile: null,
         });
       }
     } else if (mode === 'create') {
-      setFormData({ name: '', goods_type_for: '', active: 1, icon: '', iconFile: null });
+      setFormData({ name: '', goods_type_for: [], active: 1, icon: '', iconFile: null });
     }
   }, [mode, id, goods]);
 
   useEffect(() => {
-    if (mode === 'create' && !formData.goods_type_for && vehicleOptions.length > 0) {
+    if (mode === 'create' && formData.goods_type_for.length === 0 && vehicleOptions.length > 0) {
       setFormData((current) => ({
         ...current,
-        goods_type_for: vehicleOptions[0].value,
+        goods_type_for: [vehicleOptions[0].value],
       }));
     }
-  }, [mode, formData.goods_type_for, vehicleOptions]);
+  }, [mode, formData.goods_type_for.length, vehicleOptions]);
 
   const fetchInitialData = async () => {
     setLoading(true);
@@ -143,6 +159,13 @@ const GoodsTypes = ({ mode }) => {
 
   const handleSave = async (e) => {
     e.preventDefault();
+    const selectedVehicles = normalizeGoodsTypeFor(formData.goods_type_for);
+
+    if (selectedVehicles.length === 0) {
+      alert('Select at least one available vehicle type.');
+      return;
+    }
+
     setSaving(true);
     try {
       const isEdit = mode === 'edit' && id;
@@ -151,7 +174,8 @@ const GoodsTypes = ({ mode }) => {
       const icon = formData.iconFile ? await readFileAsDataUrl(formData.iconFile) : formData.icon;
       const payload = {
         name: formData.name,
-        goods_type_for: formData.goods_type_for,
+        goods_type_for: selectedVehicles.join(','),
+        goods_types_for: selectedVehicles.join(','),
         active: formData.active,
         goods_type_name: formData.name,
         icon,
@@ -229,15 +253,50 @@ const GoodsTypes = ({ mode }) => {
       label: option.label,
     }));
 
-    if (mode === 'edit' && formData.goods_type_for && !dynamicOptions.some((option) => option.value === formData.goods_type_for)) {
-      dynamicOptions.unshift({
-        value: formData.goods_type_for,
-        label: `${formData.goods_type_for} (Current)`,
-      });
-    }
+    formData.goods_type_for.forEach((selectedValue) => {
+      if (selectedValue && !dynamicOptions.some((option) => option.value === selectedValue)) {
+        dynamicOptions.unshift({
+          value: selectedValue,
+          label: `${selectedValue} (Current)`,
+        });
+      }
+    });
 
     return dynamicOptions;
   })();
+
+  const toggleAvailableVehicle = (value) => {
+    setFormData((current) => {
+      const currentValues = normalizeGoodsTypeFor(current.goods_type_for);
+      const exists = currentValues.includes(value);
+      const nextValues = exists
+        ? currentValues.filter((entry) => entry !== value)
+        : [...currentValues, value];
+
+      return {
+        ...current,
+        goods_type_for: nextValues,
+      };
+    });
+  };
+
+  const selectAllAvailableVehicles = () => {
+    const selectableValues = vehicleOptions.length > 0
+      ? vehicleOptions.map((option) => option.value)
+      : availableForOptions.map((option) => option.value);
+
+    setFormData((current) => ({
+      ...current,
+      goods_type_for: selectableValues,
+    }));
+  };
+
+  const clearAvailableVehicles = () => {
+    setFormData((current) => ({
+      ...current,
+      goods_type_for: [],
+    }));
+  };
 
   if (!mode) {
     return (
@@ -309,7 +368,7 @@ const GoodsTypes = ({ mode }) => {
                       </td>
                       <td className="px-6 py-5">
                         <span className="px-2.5 py-1 bg-indigo-50 text-indigo-600 rounded-md text-[10px] font-bold uppercase tracking-wider">
-                          {item.goods_types_for || item.goods_type_for || 'BOTH'}
+                          {formatGoodsTypeForDisplay(item.goods_types_for || item.goods_type_for || 'BOTH')}
                         </span>
                       </td>
                       <td className="px-6 py-5">
@@ -398,7 +457,7 @@ const GoodsTypes = ({ mode }) => {
               >
                 {lang}
                 {activeTab === lang && (
-                  <motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
+                  <Motion.div layoutId="tab-underline" className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600" />
                 )}
               </button>
             ))}
@@ -437,29 +496,62 @@ const GoodsTypes = ({ mode }) => {
                       <Plus size={11} className="inline mr-1 text-gray-400" />
                       Available For *
                     </label>
-                    <div className="relative group">
-                      <select 
-                        required
-                        value={formData.goods_type_for}
-                        onChange={(e) => setFormData({...formData, goods_type_for: e.target.value})}
-                        className={`${inputClass} appearance-none cursor-pointer`}
-                      >
-                        {availableForOptions.length > 0 ? (
-                          availableForOptions.map((option) => (
-                            <option key={option.value} value={option.value}>
-                              {option.label}
-                            </option>
-                          ))
-                        ) : (
-                          <option value={formData.goods_type_for || ''}>
-                            {loading ? 'Loading vehicle types...' : 'No vehicle types found'}
-                          </option>
-                        )}
-                      </select>
-                      <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none transition-colors" />
+                    <div className="rounded-xl border border-gray-200 bg-white p-3 shadow-sm">
+                      {availableForOptions.length > 0 ? (
+                        <>
+                          <div className="mb-3 flex items-center justify-between gap-3">
+                            <span className="text-[10px] font-bold uppercase tracking-wider text-gray-400">
+                              {formData.goods_type_for.length} selected
+                            </span>
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                onClick={selectAllAvailableVehicles}
+                                className="rounded-lg bg-indigo-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-indigo-600 transition-all hover:bg-indigo-100"
+                              >
+                                Select All
+                              </button>
+                              <button
+                                type="button"
+                                onClick={clearAvailableVehicles}
+                                className="rounded-lg bg-gray-50 px-3 py-1.5 text-[10px] font-bold uppercase tracking-wider text-gray-500 transition-all hover:bg-gray-100"
+                              >
+                                Clear
+                              </button>
+                            </div>
+                          </div>
+                          <div className="grid max-h-52 grid-cols-1 gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                            {availableForOptions.map((option) => {
+                              const checked = formData.goods_type_for.includes(option.value);
+                              return (
+                                <label
+                                  key={option.value}
+                                  className={`flex cursor-pointer items-center gap-2 rounded-lg border px-3 py-2 text-xs font-bold transition-all ${
+                                    checked
+                                      ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
+                                      : 'border-gray-100 bg-gray-50 text-gray-500 hover:border-gray-200'
+                                  }`}
+                                >
+                                  <input
+                                    type="checkbox"
+                                    checked={checked}
+                                    onChange={() => toggleAvailableVehicle(option.value)}
+                                    className="h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                                  />
+                                  <span className="truncate">{option.label}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        </>
+                      ) : (
+                        <p className="px-2 py-3 text-xs font-semibold text-gray-400">
+                          {loading ? 'Loading vehicle types...' : 'No vehicle types found'}
+                        </p>
+                      )}
                     </div>
                     <p className="text-[10px] font-medium text-gray-400">
-                      Vehicle types are loaded from the admin vehicle type catalog.
+                      Select one or more active vehicle types from the admin vehicle type catalog.
                     </p>
                   </div>
                </div>

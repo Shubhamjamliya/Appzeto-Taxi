@@ -6,9 +6,14 @@ import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
+import carIcon from '../../../../assets/icons/car.png';
+import bikeIcon from '../../../../assets/icons/bike.png';
+import autoIcon from '../../../../assets/icons/auto.png';
+import deliveryIcon from '../../../../assets/icons/Delivery.png';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
+const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
 
 const toLatLng = (coords, fallback = DEFAULT_CENTER) => {
   const [lng, lat] = coords || [];
@@ -24,6 +29,16 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
   Math.abs(Number(first?.lat ?? 0) - Number(second?.lat ?? 0)) < threshold &&
   Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
+
+const getTrackingVehicleIcon = (ride, driver) => {
+  const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
+  const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
+
+  if (serviceType === 'parcel') return deliveryIcon;
+  if (iconType.includes('bike')) return bikeIcon;
+  if (iconType.includes('auto')) return autoIcon;
+  return carIcon;
+};
 
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -62,12 +77,28 @@ const RideTracking = () => {
     () => toLatLng(rideRealtime?.driverLocation?.coordinates, pickupPosition),
     [pickupPosition, rideRealtime?.driverLocation?.coordinates],
   );
-  const tripStatus = String(rideRealtime?.status || 'accepted').toLowerCase();
+  const tripStatus = String(rideRealtime?.status || state.liveStatus || state.status || 'accepted').toLowerCase();
+  const serviceType = String(state.serviceType || state.type || 'ride').toLowerCase();
   const activeDestination = useMemo(
     () => (tripStatus === 'started' ? dropPosition : pickupPosition),
     [dropPosition, pickupPosition, tripStatus],
   );
   const driver = rideRealtime?.driver || fallbackDriver;
+  const vehicleIcon = getTrackingVehicleIcon(state, driver);
+  const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
+
+  useEffect(() => {
+    if (!TERMINAL_STATUSES.has(tripStatus)) {
+      return;
+    }
+
+    clearCurrentRide();
+    const timeoutId = window.setTimeout(() => {
+      navigate(location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/');
+    }, 700);
+
+    return () => window.clearTimeout(timeoutId);
+  }, [location.pathname, navigate, tripStatus]);
 
   useEffect(() => {
     if (!rideId) {
@@ -383,6 +414,9 @@ const RideTracking = () => {
                   alt="Driver"
                 />
               </div>
+              <div className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-[9px] border-2 border-white bg-slate-900 shadow-sm">
+                <img src={vehicleIcon} alt={vehicleLabel} className="h-5 w-5 object-contain" draggable={false} />
+              </div>
               <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-[8px] border-2 border-white flex items-center gap-0.5 shadow-sm">
                 <Star size={9} className="text-slate-900 fill-slate-900" />
                 <span className="text-[9px] font-black text-slate-900">{driver.rating || '4.9'}</span>
@@ -391,7 +425,7 @@ const RideTracking = () => {
             <div className="flex-1 min-w-0">
               <h3 className="text-[17px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
               <p className="text-[12px] font-black text-orange-500 mt-0.5">
-                {tripStatus === 'started' ? 'Trip started' : 'Captain is on the way'}
+                {tripStatus === 'started' ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started') : serviceType === 'parcel' ? 'Delivery agent is on the way' : 'Captain is on the way'}
               </p>
               <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} · {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
             </div>

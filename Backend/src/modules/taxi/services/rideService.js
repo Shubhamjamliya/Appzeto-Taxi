@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
+import { Vehicle } from '../admin/models/Vehicle.js';
 import { Driver } from '../driver/models/Driver.js';
 import { ensureDriverWalletCanAcceptRide, settleCompletedRideWallet } from '../driver/services/walletService.js';
 import { Delivery } from '../user/models/Delivery.js';
@@ -84,6 +85,52 @@ const normalizeParcelPayload = (parcel = {}) => ({
   receiverMobile: String(parcel.receiverMobile || '').trim(),
 });
 
+const normalizeVehicleTypeIds = (vehicleTypeIds = [], vehicleTypeId = null) => {
+  const values = Array.isArray(vehicleTypeIds) ? vehicleTypeIds : [vehicleTypeIds];
+
+  if (vehicleTypeId) {
+    values.push(vehicleTypeId);
+  }
+
+  return [...new Set(values.map((value) => String(value || '').trim()).filter(Boolean))];
+};
+
+const normalizeVehicleKey = (value = '') => String(value || '').trim().toLowerCase();
+
+const normalizeVehicleKeys = (vehicles = []) => {
+  const keys = vehicles.flatMap((vehicle) => [
+    vehicle?.name,
+    vehicle?.vehicle_type,
+    vehicle?.icon_types,
+    String(vehicle?.name || '').replace(/\s+/g, '_'),
+    String(vehicle?.icon_types || '').replace(/\s+/g, '_'),
+  ]);
+
+  return [...new Set(keys.map(normalizeVehicleKey).filter(Boolean))];
+};
+
+const buildDriverVehicleAcceptFilter = async (ride) => {
+  const vehicleTypeIds = normalizeVehicleTypeIds(ride.dispatchVehicleTypeIds || [], ride.vehicleTypeId);
+
+  if (vehicleTypeIds.length === 0) {
+    return {};
+  }
+
+  const vehicles = await Vehicle.find({ _id: { $in: vehicleTypeIds } }).select('name vehicle_type icon_types').lean();
+  const vehicleTypeKeys = normalizeVehicleKeys(vehicles);
+  const clauses = [
+    { vehicleTypeId: { $in: vehicleTypeIds } },
+    ...(vehicleTypeKeys.length
+      ? [
+          { vehicleType: { $in: vehicleTypeKeys } },
+          { vehicleIconType: { $in: vehicleTypeKeys } },
+        ]
+      : []),
+  ];
+
+  return clauses.length > 1 ? { $or: clauses } : clauses[0];
+};
+
 const syncDeliveryWithRide = async (ride) => {
   if (!ride || (ride.serviceType || 'ride') !== 'parcel') {
     return null;
@@ -123,6 +170,7 @@ export const createRideRecord = async ({
   dropCoords,
   fare,
   vehicleTypeId,
+  vehicleTypeIds,
   vehicleIconType,
   paymentMethod,
   serviceType,
@@ -145,16 +193,21 @@ export const createRideRecord = async ({
     throw new ApiError(400, 'fare must be a positive number or zero');
   }
 
-  if (vehicleTypeId && !mongoose.Types.ObjectId.isValid(vehicleTypeId)) {
+  const dispatchVehicleTypeIds = normalizeVehicleTypeIds(vehicleTypeIds, vehicleTypeId);
+
+  if (dispatchVehicleTypeIds.some((id) => !mongoose.Types.ObjectId.isValid(id))) {
     throw new ApiError(400, 'vehicleTypeId is invalid');
   }
+
+  const primaryVehicleTypeId = dispatchVehicleTypeIds[0] || null;
 
   const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
 
   if (!promoCode) {
     const ride = await Ride.create({
       userId,
-      vehicleTypeId: vehicleTypeId || null,
+      vehicleTypeId: primaryVehicleTypeId,
+      dispatchVehicleTypeIds,
       vehicleIconType: vehicleIconType || '',
       serviceType: normalizeServiceType(serviceType),
       pickupLocation: toPoint(pickupCoords, 'pickup'),
@@ -185,7 +238,8 @@ export const createRideRecord = async ({
         [
           {
             userId,
-            vehicleTypeId: vehicleTypeId || null,
+            vehicleTypeId: primaryVehicleTypeId,
+            dispatchVehicleTypeIds,
             vehicleIconType: vehicleIconType || '',
             serviceType: normalizeServiceType(serviceType),
             pickupLocation: toPoint(pickupCoords, 'pickup'),
@@ -395,12 +449,13 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
       throw new ApiError(409, 'Ride is no longer available for acceptance');
     }
 
+    const driverVehicleFilter = await buildDriverVehicleAcceptFilter(ride);
     const driver = await Driver.findOne({
       _id: driverId,
       isOnline: true,
       isOnRide: false,
       'wallet.isBlocked': { $ne: true },
-      ...(ride.vehicleTypeId ? { vehicleTypeId: ride.vehicleTypeId } : {}),
+      ...driverVehicleFilter,
     }).session(session);
 
     if (!driver) {

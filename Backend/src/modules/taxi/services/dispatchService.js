@@ -37,6 +37,15 @@ export const addSocketSubscriptions = (socket, { role, entityId }) => {
   }
 };
 
+const getDispatchVehicleTypeIds = (ride) => {
+  const ids = [
+    ...(Array.isArray(ride.dispatchVehicleTypeIds) ? ride.dispatchVehicleTypeIds : []),
+    ride.vehicleTypeId,
+  ];
+
+  return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
+};
+
 const emitToSocket = (socketId, event, payload) => {
   if (ioInstance && socketId) {
     ioInstance.to(socketId).emit(event, payload);
@@ -69,6 +78,7 @@ export const stopDispatchFlow = (rideId) => {
 };
 
 const closeRideAsUnmatched = async (rideId) => {
+  const dispatchState = activeDispatches.get(String(rideId));
   const ride = await Ride.findOneAndUpdate(
     { _id: rideId, status: RIDE_STATUS.SEARCHING },
     { status: RIDE_STATUS.CANCELLED, liveStatus: RIDE_LIVE_STATUS.CANCELLED },
@@ -98,6 +108,13 @@ const closeRideAsUnmatched = async (rideId) => {
     rideId: String(ride._id),
     reason: 'unmatched',
   });
+
+  for (const driverId of dispatchState?.driverIds || []) {
+    emitToDriver(driverId, 'rideRequestClosed', {
+      rideId: String(ride._id),
+      reason: 'unmatched',
+    });
+  }
 
   emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
     rideId: String(ride._id),
@@ -180,9 +197,11 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
 
   try {
     const radius = DISPATCH_RADII[radiusIndex];
+    const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
+      vehicleTypeIds: dispatchVehicleTypeIds,
     });
 
     const targetDrivers = drivers;
@@ -202,6 +221,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         pickupLocation: ride.pickupLocation,
         dropLocation: ride.dropLocation,
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
+        vehicleTypeIds: dispatchVehicleTypeIds,
         vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
         paymentMethod: ride.paymentMethod,

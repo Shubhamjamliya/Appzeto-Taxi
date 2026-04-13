@@ -43,6 +43,15 @@ const rideSchema = new mongoose.Schema(
       ref: 'TaxiVehicle',
       default: null,
     },
+    dispatchVehicleTypeIds: {
+      type: [
+        {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: 'TaxiVehicle',
+        },
+      ],
+      default: [],
+    },
     vehicleIconType: {
       type: String,
       default: '',

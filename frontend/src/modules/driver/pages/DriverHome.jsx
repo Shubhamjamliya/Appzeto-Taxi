@@ -43,6 +43,8 @@ import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { getCurrentDriver, getLocalDriverToken } from '../services/registrationService';
 
+const Motion = motion;
+
 const containerStyle = {
     width: '100%',
     height: '100%'
@@ -176,7 +178,7 @@ const DriverHome = () => {
         setMap(map);
     }, []);
 
-    const onUnmount = useCallback(function callback(map) {
+    const onUnmount = useCallback(function callback() {
         setMap(null);
     }, []);
 
@@ -284,7 +286,7 @@ const DriverHome = () => {
                     });
                     return;
                 }
-            } catch (_error) {
+            } catch {
                 if (active) {
                     setStatusMessage('Could not restore driver status.');
                 }
@@ -409,6 +411,10 @@ const DriverHome = () => {
             const onSocketError = ({ message }) => {
                 console.error('[driver-home] socket errorMessage received', message);
                 setStatusMessage(message || 'Socket error.');
+                if (String(message || '').toLowerCase().includes('no longer available')) {
+                    setShowRequest(false);
+                    setCurrentRequest(null);
+                }
                 acceptingRideIdRef.current = '';
                 setAcceptingRideId('');
             };
@@ -423,7 +429,7 @@ const DriverHome = () => {
 
                 try {
                     currentJob = await fetchActiveJob(nextType);
-                } catch (_error) {
+                } catch {
                     currentJob = null;
                 }
 
@@ -569,7 +575,7 @@ const DriverHome = () => {
             </div>
 
             <div className="absolute bottom-[5.5rem] left-0 right-0 px-4 z-30">
-                <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
+                <Motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
                     <div className="grid grid-cols-2 gap-3 mb-3">
                         <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
                              <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Wallet</span></div>
@@ -595,10 +601,10 @@ const DriverHome = () => {
                     {statusMessage && (
                         <p className="px-2 pb-3 text-[11px] font-medium text-slate-400 text-center">{statusMessage}</p>
                     )}
-                    <motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
+                    <Motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
                          <Power size={18} strokeWidth={2.5} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status...' : isOnline ? 'End Your Duty' : 'Go Online Now'}
-                    </motion.button>
-                </motion.div>
+                    </Motion.button>
+                </Motion.div>
             </div>
 
             <DriverBottomNav />

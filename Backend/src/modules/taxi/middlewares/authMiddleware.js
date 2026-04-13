@@ -82,8 +82,9 @@ export const authenticate = (allowedRoles = []) => async (req, _res, next) => {
 
 export const authenticateOrResolveUser = (allowedRoles = ['user']) => async (req, res, next) => {
   const authorization = req.headers.authorization || '';
+  const [, token] = authorization.split(' ');
 
-  if (authorization.trim()) {
+  if (token) {
     return authenticate(allowedRoles)(req, res, next);
   }
 

@@ -45,8 +45,39 @@ export const saveDriverDocuments = (payload) => api.patch('/drivers/onboarding/d
 
 export const completeDriverOnboarding = (payload) => api.post('/drivers/onboarding/complete', payload);
 
-const readLocalDriverToken = () =>
-  localStorage.getItem('driverToken') || localStorage.getItem('token') || '';
+const decodeBase64Url = (value) => {
+  const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
+  const padding = (4 - (normalized.length % 4)) % 4;
+  return normalized + '='.repeat(padding);
+};
+
+const getTokenPayload = (token) => {
+  if (!token || typeof token !== 'string') {
+    return null;
+  }
+
+  try {
+    const payload = token.split('.')[1];
+    if (!payload) {
+      return null;
+    }
+    return JSON.parse(atob(decodeBase64Url(payload)));
+  } catch {
+    return null;
+  }
+};
+
+const readLocalDriverToken = () => {
+  const direct = localStorage.getItem('driverToken');
+  if (direct) return direct;
+
+  const fallback = localStorage.getItem('token');
+  if (getTokenPayload(fallback)?.role === 'driver') {
+    return fallback;
+  }
+
+  return '';
+};
 
 export const getLocalDriverToken = readLocalDriverToken;
 

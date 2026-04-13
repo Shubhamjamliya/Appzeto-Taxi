@@ -332,7 +332,7 @@ const SelectVehicle = () => {
       setVehicleLoadError('');
 
       try {
-        const response = await api.get('/admin/types/vehicle-types');
+        const response = await api.get('/users/vehicle-types');
 
         if (!active) {
           return;

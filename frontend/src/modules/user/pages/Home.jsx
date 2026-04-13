@@ -10,13 +10,19 @@ import PromoBanners from '../components/PromoBanners';
 import ExplorerSection from '../components/ExplorerSection';
 import BottomNavbar from '../components/BottomNavbar';
 import carIcon from '../../../assets/icons/car.png';
+import bikeIcon from '../../../assets/icons/bike.png';
+import autoIcon from '../../../assets/icons/auto.png';
+import deliveryIcon from '../../../assets/icons/Delivery.png';
 import api from '../../../shared/api/axiosInstance';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
+  clearCurrentRide,
   getCurrentRide,
   isActiveCurrentRide,
   saveCurrentRide,
 } from '../services/currentRideService';
+
+const Motion = motion;
 
 const normalizeActiveRide = (ride) => {
   if (!ride?.rideId) {
@@ -26,14 +32,37 @@ const normalizeActiveRide = (ride) => {
   return {
     rideId: ride.rideId,
     status: ride.status || ride.liveStatus || 'accepted',
+    liveStatus: ride.liveStatus || ride.status || 'accepted',
+    type: ride.type || ride.serviceType || 'ride',
+    serviceType: ride.serviceType || ride.type || 'ride',
     driver: ride.driver || null,
     fare: ride.fare || 22,
+    vehicleIconType: ride.vehicleIconType || ride.driver?.vehicleIconType || '',
     pickupCoords: ride.pickupLocation?.coordinates,
     dropCoords: ride.dropLocation?.coordinates,
     pickup: 'Pickup location',
     drop: 'Drop location',
     paymentMethod: 'Cash',
   };
+};
+
+const getCurrentRideIcon = (ride) => {
+  const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
+  const iconType = String(ride?.vehicleIconType || ride?.driver?.vehicleIconType || ride?.driver?.vehicleType || '').toLowerCase();
+
+  if (serviceType === 'parcel') {
+    return deliveryIcon;
+  }
+
+  if (iconType.includes('bike')) {
+    return bikeIcon;
+  }
+
+  if (iconType.includes('auto')) {
+    return autoIcon;
+  }
+
+  return carIcon;
 };
 
 const Home = () => {
@@ -65,16 +94,26 @@ const Home = () => {
 
     const loadActiveRide = async () => {
       try {
-        const response = await api.get('/rides/active/me');
-        const ride = normalizeActiveRide(response?.data || response);
+        const [rideResponse, parcelResponse] = await Promise.allSettled([
+          api.get('/rides/active/me'),
+          api.get('/deliveries/active/me'),
+        ]);
+        const activeResponse = parcelResponse.status === 'fulfilled' && parcelResponse.value?.data
+          ? parcelResponse.value
+          : rideResponse.status === 'fulfilled'
+            ? rideResponse.value
+            : null;
+        const ride = normalizeActiveRide(activeResponse?.data || activeResponse);
 
         if (!active || !isActiveCurrentRide(ride)) {
+          clearCurrentRide();
+          setCurrentRide(null);
           return;
         }
 
         saveCurrentRide(ride);
         setCurrentRide(ride);
-      } catch (_error) {
+      } catch {
         // Local storage remains the fallback; missing auth should not break the home page.
       }
     };
@@ -88,7 +127,10 @@ const Home = () => {
 
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const driverName = currentRide?.driver?.name || 'Captain';
-  const vehicleLabel = currentRide?.driver?.vehicle || currentRide?.driver?.vehicleType || 'Taxi';
+  const serviceType = String(currentRide?.serviceType || currentRide?.type || 'ride').toLowerCase();
+  const vehicleLabel = currentRide?.driver?.vehicle || currentRide?.driver?.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
+  const currentRideIcon = getCurrentRideIcon(currentRide);
+  const trackingPath = serviceType === 'parcel' ? `${routePrefix}/parcel/tracking` : `${routePrefix}/ride/tracking`;
 
   const footerIllustrationBg = {
     backgroundImage: 'url(/home_footer_gemini.png)',
@@ -192,23 +234,23 @@ const Home = () => {
 
       <AnimatePresence>
         {currentRide && (
-          <motion.button
+          <Motion.button
             type="button"
             initial={{ y: 24, opacity: 0, scale: 0.96 }}
             animate={{ y: 0, opacity: 1, scale: 1 }}
             exit={{ y: 18, opacity: 0, scale: 0.96 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`${routePrefix}/ride/tracking`, { state: currentRide })}
+            onClick={() => navigate(trackingPath, { state: currentRide })}
             className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[18px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
           >
             <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900">
-              <img src={carIcon} alt="Taxi" className="h-8 w-8 object-contain" draggable={false} />
+              <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-full bg-emerald-500" />
                 <p className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-600">
-                  Current Ride
+                  {serviceType === 'parcel' ? 'Current Parcel' : 'Current Ride'}
                 </p>
               </div>
               <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
@@ -222,7 +264,7 @@ const Home = () => {
             <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[12px] bg-orange-500 text-white">
               <ChevronRight size={18} strokeWidth={3} />
             </div>
-          </motion.button>
+          </Motion.button>
         )}
       </AnimatePresence>
 

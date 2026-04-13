@@ -12,6 +12,7 @@ import { GoodsType } from '../models/GoodsType.js';
 import { OwnerNeededDocument } from '../models/OwnerNeededDocument.js';
 import { OwnerBooking } from '../models/OwnerBooking.js';
 import { Owner } from '../models/Owner.js';
+import { ReferralTranslation } from '../models/ReferralTranslation.js';
 import { AdminThirdPartySetting } from '../models/AdminThirdPartySetting.js';
 import { createDefaultThirdPartySettings } from '../data/defaultThirdPartySettings.js';
 import { RentalPackageType } from '../models/RentalPackageType.js';
@@ -372,6 +373,65 @@ const cleanupLegacySeededDriverNeededDocuments = async () => {
   await DriverNeededDocument.deleteMany({
     slug: { $in: LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.map((item) => item.slug) },
   });
+};
+
+const REFERRAL_TRANSLATION_DEFAULTS = {
+  instant_referrer_user: '',
+  instant_referrer_user_and_new_user: '',
+  conditional_referrer_user_ride_count: '',
+  conditional_referrer_user_earnings: '',
+  dual_conditional_referrer_user_and_new_user_ride_count: '',
+  dual_conditional_referrer_user_and_new_user_earnings: '',
+  banner_text: '',
+};
+
+const normalizeReferralTranslationSection = (payload = {}) => ({
+  instant_referrer_user: String(payload.instant_referrer_user || ''),
+  instant_referrer_user_and_new_user: String(payload.instant_referrer_user_and_new_user || ''),
+  conditional_referrer_user_ride_count: String(payload.conditional_referrer_user_ride_count || ''),
+  conditional_referrer_user_earnings: String(payload.conditional_referrer_user_earnings || ''),
+  dual_conditional_referrer_user_and_new_user_ride_count: String(
+    payload.dual_conditional_referrer_user_and_new_user_ride_count || '',
+  ),
+  dual_conditional_referrer_user_and_new_user_earnings: String(
+    payload.dual_conditional_referrer_user_and_new_user_earnings || '',
+  ),
+  banner_text: String(payload.banner_text || ''),
+});
+
+const serializeReferralTranslation = ({ language, translation }) => ({
+  _id: translation?._id || null,
+  language_code: String(language?.code || translation?.language_code || '').toLowerCase(),
+  language_name: language?.name || translation?.language_name || '',
+  active: Number(language?.active ?? 1) === 1,
+  default_status: Number(language?.default_status ?? 0) === 1,
+  user_referral: {
+    ...REFERRAL_TRANSLATION_DEFAULTS,
+    ...normalizeReferralTranslationSection(translation?.user_referral),
+  },
+  driver_referral: {
+    ...REFERRAL_TRANSLATION_DEFAULTS,
+    ...normalizeReferralTranslationSection(translation?.driver_referral),
+  },
+  createdAt: translation?.createdAt || null,
+  updatedAt: translation?.updatedAt || null,
+});
+
+const resolveReferralTranslationLanguage = async (languageCode = '') => {
+  const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
+  const languages = await AppLanguage.find().sort({ default_status: -1, code: 1 }).lean();
+
+  const preferredLanguage =
+    languages.find((item) => String(item.code || '').toLowerCase() === normalizedLanguageCode) ||
+    languages.find((item) => Number(item.default_status) === 1) ||
+    languages[0] ||
+    null;
+
+  return {
+    languages,
+    preferredLanguage,
+    normalizedLanguageCode,
+  };
 };
 
 const serializeAirport = (item) => ({
@@ -1445,7 +1505,27 @@ export const getDriverProfile = async (id) => {
   };
 };
 
-export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id service_location_id').lean();
+export const getSubscriptionSettings = async () => {
+  const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
+  return setting?.subscription || { mode: 'commissionOnly' };
+};
+
+export const updateSubscriptionSettings = async (payload) => {
+  const { mode } = payload;
+  if (!['commissionOnly', 'subscriptionOnly', 'both'].includes(mode)) {
+    throw new ApiError(400, 'Invalid subscription mode');
+  }
+
+  const setting = await AdminBusinessSetting.findOneAndUpdate(
+    { scope: 'default' },
+    { $set: { 'subscription.mode': mode } },
+    { new: true, upsert: true },
+  );
+
+  return setting.subscription;
+};
+
+export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
 
 export const createSubscriptionPlan = async (payload) => {
   const plan = await SubscriptionPlan.create({
@@ -1705,10 +1785,9 @@ export const deleteOngoingRide = async (rideId) => {
   };
 };
 
-export const listVehicleTypes = async (locationId, transportType) => {
+export const listVehicleTypes = async (queryParams = {}) => {
   const query = {};
-  if (locationId) query.location_id = locationId;
-  if (transportType) query.transport_type = transportType;
+  if (queryParams.transport_type) query.transport_type = queryParams.transport_type;
   const items = await Vehicle.find(query).sort({ createdAt: -1 }).lean();
   return {
     results: items,
@@ -2903,6 +2982,125 @@ export const deleteOwnerNeededDocument = async (id) => {
   const deleted = await OwnerNeededDocument.findByIdAndDelete(id);
   if (!deleted) throw new ApiError(404, 'Owner needed document not found');
   return true;
+};
+
+export const listReferralTranslations = async () => {
+  const [languages, translations] = await Promise.all([
+    AppLanguage.find().sort({ default_status: -1, code: 1 }).lean(),
+    ReferralTranslation.find().sort({ language_code: 1 }).lean(),
+  ]);
+
+  const translationMap = new Map(
+    translations.map((item) => [String(item.language_code || '').toLowerCase(), item]),
+  );
+
+  const languageRows = languages.map((language) =>
+    serializeReferralTranslation({
+      language,
+      translation: translationMap.get(String(language.code || '').toLowerCase()) || null,
+    }),
+  );
+
+  const existingCodes = new Set(languageRows.map((item) => item.language_code));
+
+  const orphanRows = translations
+    .filter((item) => !existingCodes.has(String(item.language_code || '').toLowerCase()))
+    .map((item) =>
+      serializeReferralTranslation({
+        language: null,
+        translation: item,
+      }),
+    );
+
+  return [...languageRows, ...orphanRows];
+};
+
+export const updateReferralTranslation = async (languageCode, payload = {}) => {
+  const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
+
+  if (!normalizedLanguageCode) {
+    throw new ApiError(400, 'languageCode is required');
+  }
+
+  const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
+
+  const item = await ReferralTranslation.findOneAndUpdate(
+    { language_code: normalizedLanguageCode },
+    {
+      $set: {
+        language_code: normalizedLanguageCode,
+        language_name: language?.name || String(payload.language_name || ''),
+        user_referral: normalizeReferralTranslationSection(payload.user_referral),
+        driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
+      },
+    },
+    {
+      new: true,
+      upsert: true,
+      setDefaultsOnInsert: true,
+    },
+  ).lean();
+
+  return serializeReferralTranslation({
+    language,
+    translation: item,
+  });
+};
+
+export const getReferralTranslationContent = async (languageCode = '') => {
+  const { languages, preferredLanguage, normalizedLanguageCode } =
+    await resolveReferralTranslationLanguage(languageCode);
+
+  const codesToTry = [
+    normalizedLanguageCode,
+    preferredLanguage?.code,
+    languages.find((item) => Number(item.default_status) === 1)?.code,
+    'en',
+  ]
+    .map((item) => String(item || '').trim().toLowerCase())
+    .filter(Boolean);
+
+  let translation = null;
+  let resolvedLanguage = preferredLanguage;
+
+  if (codesToTry.length > 0) {
+    translation = await ReferralTranslation.findOne({
+      language_code: { $in: codesToTry },
+    })
+      .sort({ updatedAt: -1 })
+      .lean();
+
+    if (translation) {
+      resolvedLanguage =
+        languages.find(
+          (item) =>
+            String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
+        ) || resolvedLanguage;
+    }
+  }
+
+  return {
+    language_code: String(
+      resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
+    )
+      .trim()
+      .toLowerCase(),
+    language_name: resolvedLanguage?.name || translation?.language_name || '',
+    user_referral: {
+      ...REFERRAL_TRANSLATION_DEFAULTS,
+      ...normalizeReferralTranslationSection(translation?.user_referral),
+    },
+    driver_referral: {
+      ...REFERRAL_TRANSLATION_DEFAULTS,
+      ...normalizeReferralTranslationSection(translation?.driver_referral),
+    },
+    available_languages: languages.map((item) => ({
+      code: String(item.code || '').toLowerCase(),
+      name: item.name || '',
+      active: Number(item.active ?? 1) === 1,
+      default_status: Number(item.default_status ?? 0) === 1,
+    })),
+  };
 };
 
 export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();

@@ -134,6 +134,13 @@ export const createSubscriptionPlan = asyncHandler(async (req, res) =>
   ok(res, await adminService.createSubscriptionPlan(req.body)),
 );
 
+export const getSubscriptionSettings = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.getSubscriptionSettings()),
+);
+export const updateSubscriptionSettings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateSubscriptionSettings(req.body)),
+);
+
 export const getServiceLocations = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listServiceLocations()),
 );
@@ -165,13 +172,7 @@ export const deleteOngoingRide = asyncHandler(async (req, res) =>
   ok(res, await adminService.deleteOngoingRide(req.params.id)),
 );
 export const getVehicleTypes = asyncHandler(async (req, res) =>
-  ok(
-    res,
-    await adminService.listVehicleTypes(
-      req.params.locationId,
-      req.query.transport_type,
-    ),
-  ),
+  ok(res, await adminService.listVehicleTypes(req.query)),
 );
 export const getVehicleTypeCatalog = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listVehicleCatalog()),
@@ -333,6 +334,12 @@ export const deleteDriverNeededDocument = asyncHandler(async (req, res) => {
   await adminService.deleteDriverNeededDocument(req.params.id);
   ok(res, { deleted: true });
 });
+export const getReferralTranslations = asyncHandler(async (_req, res) =>
+  ok(res, { results: await adminService.listReferralTranslations() }),
+);
+export const updateReferralTranslation = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateReferralTranslation(req.params.languageCode, req.body)),
+);
 export const createOwnerNeededDocument = asyncHandler(async (req, res) =>
   ok(res, await adminService.createOwnerNeededDocument(req.body)),
 );

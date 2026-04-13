@@ -172,6 +172,7 @@ export const getCurrentDriver = async (req, res) => {
       status: driver.status,
       rating: driver.rating,
       wallet: serializeDriverWallet(driver),
+      referralCode: driver.referralCode || '',
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
       location: driver.location,

@@ -63,6 +63,7 @@ import {
   getFirebaseSettings,
   getGoodsTypes,
   getRentalPackageTypes,
+  getReferralTranslations,
   getGeneralSettingsCategory,
   getLanguages,
   getMailSettings,
@@ -86,6 +87,8 @@ import {
   getServiceLocations,
   getSmsSettings,
   getSubscriptionPlans,
+  getSubscriptionSettings,
+  updateSubscriptionSettings,
   getTodayEarnings,
   getUserOnboarding,
   getUser,
@@ -125,6 +128,7 @@ import {
   updatePaymentSettings,
   updatePaymentMethod,
   updatePreferenceStatus,
+  updateReferralTranslation,
   updateSetPrice,
   updateServiceLocation,
   updateSmsSettings,
@@ -173,6 +177,8 @@ adminRouter.get('/admin/driver-ratings/:id', authenticate(['admin']), getDriverR
 
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
+adminRouter.get('/admin/driver-subscriptions/settings', getSubscriptionSettings);
+adminRouter.post('/admin/driver-subscriptions/settings', updateSubscriptionSettings);
 
 adminRouter.get('/countries', getCountries);
 adminRouter.get('/admin/countries', getCountries);
@@ -182,7 +188,7 @@ adminRouter.post('/admin/service-locations', createServiceLocation);
 adminRouter.patch('/admin/service-locations/:id', updateServiceLocation);
 adminRouter.delete('/admin/service-locations/:id', deleteServiceLocation);
 adminRouter.get('/common/ride_modules', getRideModules);
-adminRouter.get('/types/:locationId', getVehicleTypes);
+adminRouter.get('/admin/types/vehicle-types/list', getVehicleTypes);
 adminRouter.get('/admin/types/vehicle-types', getVehicleTypeCatalog);
 adminRouter.post('/admin/types/vehicle-types', createVehicleType);
 adminRouter.patch('/admin/types/vehicle-types/:id', updateVehicleType);
@@ -224,6 +230,8 @@ adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverN
 adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);
 adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDriverNeededDocument);
 adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
+adminRouter.get('/admin/referrals/translation', getReferralTranslations);
+adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);

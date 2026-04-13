@@ -3,6 +3,7 @@ import { ApiError } from '../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
 import { Driver } from '../driver/models/Driver.js';
+import { ensureDriverWalletCanAcceptRide, settleCompletedRideWallet } from '../driver/services/walletService.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 
@@ -62,7 +63,35 @@ export const clearDriverActiveRideIfStale = async (driverOrId) => {
   return driver;
 };
 
-export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare, vehicleTypeId, vehicleIconType }) => {
+const normalizeRidePaymentMethod = (paymentMethod) => (
+  !paymentMethod || String(paymentMethod).trim().toLowerCase() === 'cash' ? 'cash' : 'online'
+);
+
+const normalizeServiceType = (serviceType) => (
+  String(serviceType || 'ride').trim().toLowerCase() === 'parcel' ? 'parcel' : 'ride'
+);
+
+const normalizeParcelPayload = (parcel = {}) => ({
+  category: String(parcel.category || '').trim(),
+  weight: String(parcel.weight || '').trim(),
+  description: String(parcel.description || '').trim(),
+  senderName: String(parcel.senderName || '').trim(),
+  senderMobile: String(parcel.senderMobile || '').trim(),
+  receiverName: String(parcel.receiverName || '').trim(),
+  receiverMobile: String(parcel.receiverMobile || '').trim(),
+});
+
+export const createRideRecord = async ({
+  userId,
+  pickupCoords,
+  dropCoords,
+  fare,
+  vehicleTypeId,
+  vehicleIconType,
+  paymentMethod,
+  serviceType,
+  parcel,
+}) => {
   const user = await User.findById(userId);
 
   if (!user) {
@@ -85,9 +114,12 @@ export const createRideRecord = async ({ userId, pickupCoords, dropCoords, fare,
     userId,
     vehicleTypeId: vehicleTypeId || null,
     vehicleIconType: vehicleIconType || '',
+    serviceType: normalizeServiceType(serviceType),
     pickupLocation: toPoint(pickupCoords, 'pickup'),
     dropLocation: toPoint(dropCoords, 'drop'),
     fare: safeFare,
+    paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+    parcel: normalizeParcelPayload(parcel),
     status: RIDE_STATUS.SEARCHING,
     liveStatus: RIDE_LIVE_STATUS.SEARCHING,
   });
@@ -122,9 +154,15 @@ const populateRideRealtime = async (rideId) =>
 export const serializeRideRealtime = (ride) => ({
   rideId: String(ride._id),
   room: getRideRoom(ride._id),
+  type: ride.serviceType || 'ride',
+  serviceType: ride.serviceType || 'ride',
   status: ride.status,
   liveStatus: ride.liveStatus,
   fare: ride.fare,
+  paymentMethod: ride.paymentMethod,
+  parcel: ride.parcel || null,
+  commissionAmount: ride.commissionAmount,
+  driverEarnings: ride.driverEarnings,
   pickupLocation: ride.pickupLocation,
   dropLocation: ride.dropLocation,
   acceptedAt: ride.acceptedAt,
@@ -207,9 +245,15 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
 
   return rides.map((ride) => ({
     rideId: String(ride._id),
+    type: ride.serviceType || 'ride',
+    serviceType: ride.serviceType || 'ride',
     status: ride.status,
     liveStatus: ride.liveStatus,
     fare: ride.fare,
+    paymentMethod: ride.paymentMethod,
+    parcel: ride.parcel || null,
+    commissionAmount: ride.commissionAmount,
+    driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
@@ -242,12 +286,15 @@ export const acceptRideAssignment = async ({ rideId, driverId }) => {
       _id: driverId,
       isOnline: true,
       isOnRide: false,
+      'wallet.isBlocked': { $ne: true },
       ...(ride.vehicleTypeId ? { vehicleTypeId: ride.vehicleTypeId } : {}),
     }).session(session);
 
     if (!driver) {
       throw new ApiError(409, 'Driver is unavailable to accept this ride');
     }
+
+    await ensureDriverWalletCanAcceptRide(driver, { session });
 
     ride.driverId = driver._id;
     ride.status = RIDE_STATUS.ACCEPTED;
@@ -317,14 +364,21 @@ export const updateRideLifecycle = async ({ rideId, driverId, nextStatus }) => {
 
   await ride.save();
 
+  let walletUpdate = null;
+
   if (nextStatus === RIDE_LIVE_STATUS.COMPLETED) {
     await Promise.all([
       User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
       Driver.findByIdAndUpdate(driverId, { isOnRide: false }),
     ]);
+
+    walletUpdate = await settleCompletedRideWallet({ rideId: ride._id });
   }
 
-  return populateRideRealtime(ride._id);
+  const populatedRide = await populateRideRealtime(ride._id);
+  populatedRide.$locals.walletUpdate = walletUpdate;
+
+  return populatedRide;
 };
 
 export const appendRideMessage = async ({ rideId, role, senderId, message }) => {

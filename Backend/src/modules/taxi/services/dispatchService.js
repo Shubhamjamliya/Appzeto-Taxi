@@ -48,7 +48,7 @@ const emitToRoom = (room, event, payload) => {
   }
 };
 
-const emitToDriver = (driverId, event, payload) => {
+export const emitToDriver = (driverId, event, payload) => {
   if (driverId) {
     emitToRoom(getDriverRoom(driverId), event, payload);
   }
@@ -180,12 +180,16 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
     for (const driver of targetDrivers) {
       emitToDriver(driver._id, 'rideRequest', {
         rideId: String(ride._id),
+        type: ride.serviceType || 'ride',
+        serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId),
         pickupLocation: ride.pickupLocation,
         dropLocation: ride.dropLocation,
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
         vehicleIconType: ride.vehicleIconType,
         fare: ride.fare,
+        paymentMethod: ride.paymentMethod,
+        parcel: ride.parcel || null,
         radius,
         zoneId: zone?._id ? String(zone._id) : null,
       });
@@ -245,17 +249,26 @@ export const notifyRideAccepted = async (ride) => {
   emitToRoom(getUserRoom(populatedRide.userId), 'rideAccepted', {
     rideId: String(populatedRide._id),
     room: getRideRoom(populatedRide._id),
+    type: populatedRide.serviceType || 'ride',
+    serviceType: populatedRide.serviceType || 'ride',
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     driver: populatedRide.driverId,
+    parcel: populatedRide.parcel || null,
   });
 
   emitToRoom(getUserRoom(populatedRide.userId), SOCKET_EVENTS.RIDE_STATE, {
     rideId: String(populatedRide._id),
     room: getRideRoom(populatedRide._id),
+    type: populatedRide.serviceType || 'ride',
+    serviceType: populatedRide.serviceType || 'ride',
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     fare: populatedRide.fare,
+    paymentMethod: populatedRide.paymentMethod,
+    parcel: populatedRide.parcel || null,
+    commissionAmount: populatedRide.commissionAmount,
+    driverEarnings: populatedRide.driverEarnings,
     pickupLocation: populatedRide.pickupLocation,
     dropLocation: populatedRide.dropLocation,
     acceptedAt: populatedRide.acceptedAt,

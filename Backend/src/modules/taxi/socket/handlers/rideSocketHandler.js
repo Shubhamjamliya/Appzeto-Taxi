@@ -1,5 +1,6 @@
 import { normalizePoint } from '../../../../utils/geo.js';
 import { RIDE_LIVE_STATUS } from '../../constants/index.js';
+import { getDriverRoom } from '../../services/dispatchService.js';
 import {
   appendRideMessage,
   getActiveRideForIdentity,
@@ -136,6 +137,13 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
       emitRideState(ride);
 
       if (status === RIDE_LIVE_STATUS.COMPLETED) {
+        const walletUpdate = ride.$locals?.walletUpdate;
+        if (walletUpdate) {
+          io.to(getDriverRoom(socket.auth.sub)).emit('driver:wallet:updated', {
+            wallet: walletUpdate.wallet,
+            transaction: walletUpdate.transaction,
+          });
+        }
         clearDriverRoute(socket.auth.sub);
       }
     }),

@@ -7,7 +7,6 @@ const subscriptionPlanSchema = new mongoose.Schema({
   duration: Number, // in days
   transport_type: String,
   vehicle_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiVehicle' },
-  service_location_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiServiceLocation' },
   how_it_works: String,
   active: { type: Boolean, default: true }
 }, { timestamps: true });

@@ -354,7 +354,6 @@ const AdminLayout = () => {
               { label: 'Referral Dashboard', path: '/admin/referrals/dashboard' },
               { label: 'User Referral Settings', path: '/admin/referrals/user-settings' },
               { label: 'Driver Referral Settings', path: '/admin/referrals/driver-settings' },
-              { label: 'Joining Bonus Settings', path: '/admin/referrals/joining-bonus' },
               { label: 'Referral Translation', path: '/admin/referrals/translation' },
             ],
           },
@@ -362,8 +361,7 @@ const AdminLayout = () => {
             icon: UserCog,
             label: 'Admin Management',
             subItems: [
-              { label: 'Manage Admins', path: '/admin/management/admins' },
-              { label: 'Admin Roles', path: '/admin/masters/roles' },
+              { label: 'Admins', path: '/admin/management/admins' },
             ],
           },
           { icon: Briefcase, label: 'Owner Management', path: '/admin/owners/dashboard' },

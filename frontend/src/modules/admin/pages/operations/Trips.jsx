@@ -4,7 +4,7 @@ import { motion } from 'framer-motion';
 import { adminService } from '../../services/adminService';
 
 const STATUS_STYLES = {
-  CANCELLED: 'bg-orange-500 text-white', // Matching image's red/orange tone
+  CANCELLED: 'bg-orange-500 text-white',
   COMPLETED: 'bg-teal-500 text-white',
   UPCOMING: 'bg-amber-400 text-white',
   ONGOING: 'bg-blue-500 text-white',
@@ -81,7 +81,7 @@ const Trips = () => {
                 className="h-9 w-16 border border-slate-200 rounded-md bg-white px-2 text-[13px] outline-none"
               >
                 <option value={10}>10</option>
-                <option value={20}>20</option>
+                <option value={25}>25</option>
                 <option value={50}>50</option>
               </select>
               <span>entries</span>
@@ -168,7 +168,7 @@ const Trips = () => {
             </table>
           </div>
 
-          {/* Floating Action Button from image */}
+          {/* Floating Action Button */}
           <button className="fixed bottom-10 right-10 w-14 h-14 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-xl hover:scale-105 transition-transform z-50">
             <Menu size={24} />
           </button>

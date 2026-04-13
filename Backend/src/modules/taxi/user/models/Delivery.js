@@ -5,24 +5,24 @@ const deliverySchema = new mongoose.Schema(
   {
     rideId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Ride',
+      ref: 'TaxiRide',
       required: true,
       index: true,
     },
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'TaxiUser',
       required: true,
       index: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Driver',
+      ref: 'TaxiDriver',
       default: null,
     },
     vehicleTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Vehicle',
+      ref: 'TaxiVehicle',
       default: null,
     },
     vehicleIconType: {
@@ -51,6 +51,11 @@ const deliverySchema = new mongoose.Schema(
         required: true,
       },
     },
+    pickupAddress: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     dropLocation: {
       type: {
         type: String,
@@ -61,6 +66,11 @@ const deliverySchema = new mongoose.Schema(
         type: [Number],
         required: true,
       },
+    },
+    dropAddress: {
+      type: String,
+      default: '',
+      trim: true,
     },
     fare: {
       type: Number,

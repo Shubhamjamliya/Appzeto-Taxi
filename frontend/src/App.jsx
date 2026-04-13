@@ -147,6 +147,7 @@ const AdminDriverList = lazy(() => import('./modules/admin/pages/drivers/DriverL
 const AdminDriverDetails = lazy(() => import('./modules/admin/pages/drivers/DriverDetails'));
 const AdminPendingDrivers = lazy(() => import('./modules/admin/pages/drivers/PendingDrivers'));
 const AdminDriverSubscriptions = lazy(() => import('./modules/admin/pages/drivers/DriverSubscriptions'));
+const AdminDriverSubscriptionCreate = lazy(() => import('./modules/admin/pages/drivers/DriverSubscriptionCreate'));
 const AdminDriverRatings = lazy(() => import('./modules/admin/pages/drivers/DriverRatings'));
 const AdminDriverRatingDetail = lazy(() => import('./modules/admin/pages/drivers/DriverRatingDetail'));
 const AdminDriverWallet = lazy(() => import('./modules/admin/pages/drivers/DriverWallet'));
@@ -155,6 +156,7 @@ const AdminWithdrawalRequestDrivers = lazy(() => import('./modules/admin/pages/d
 const AdminWithdrawalRequestDetail = lazy(() => import('./modules/admin/pages/drivers/WithdrawalRequestDetail'));
 const AdminDriverDeleteRequests = lazy(() => import('./modules/admin/pages/drivers/DriverDeleteRequests'));
 const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/GlobalDocuments'));
+const AdminDriverDocumentForm = lazy(() => import('./modules/admin/pages/drivers/DriverDocumentForm'));
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
 const AdminDriverAudit = lazy(() => import('./modules/admin/pages/drivers/DriverAudit'));
 const AdminPaymentMethods = lazy(() => import('./modules/admin/pages/drivers/PaymentMethods'));
@@ -163,7 +165,6 @@ const AdminDriverEdit = lazy(() => import('./modules/admin/pages/drivers/EditDri
 const AdminReferralDashboard = lazy(() => import('./modules/admin/pages/referrals/ReferralDashboard'));
 const AdminUserReferralSettings = lazy(() => import('./modules/admin/pages/referrals/UserReferralSettings'));
 const AdminDriverReferralSettings = lazy(() => import('./modules/admin/pages/referrals/DriverReferralSettings'));
-const AdminJoiningBonusSettings = lazy(() => import('./modules/admin/pages/referrals/JoiningBonusSettings'));
 const AdminReferralTranslation = lazy(() => import('./modules/admin/pages/referrals/ReferralTranslation'));
 
 const AdminPromoCodes = lazy(() => import('./modules/admin/pages/promotions/PromoCodes'));
@@ -234,7 +235,10 @@ const AdminFleetFinanceReport = lazy(() => import('./modules/admin/pages/reports
 // Masters Management
 const AdminLanguages = lazy(() => import('./modules/admin/pages/masters/Languages'));
 const AdminPreferences = lazy(() => import('./modules/admin/pages/masters/Preferences'));
-const AdminRoles = lazy(() => import('./modules/admin/pages/masters/Roles'));
+
+// Admin Management
+const AdminAdmins = lazy(() => import('./modules/admin/pages/management/Admins'));
+const AdminAdminCreate = lazy(() => import('./modules/admin/pages/management/AdminCreate'));
 
 const AdminReportPlaceholder = ({ title }) => (
   <div className="flex flex-col items-center justify-center min-h-[500px] text-gray-400 bg-white rounded-[32px] border border-gray-100 shadow-sm p-10 mx-6">
@@ -502,6 +506,7 @@ function App() {
               <Route path="drivers/:id" element={<AdminDriverDetails />} />
               <Route path="drivers/pending" element={<AdminPendingDrivers />} />
               <Route path="drivers/subscription" element={<AdminDriverSubscriptions />} />
+              <Route path="drivers/subscription/create" element={<AdminDriverSubscriptionCreate />} />
               <Route path="drivers/ratings" element={<AdminDriverRatings />} />
               <Route path="drivers/ratings/:id" element={<AdminDriverRatingDetail />} />
               <Route path="drivers/wallet" element={<AdminDriverWallet />} />
@@ -510,14 +515,16 @@ function App() {
               <Route path="drivers/wallet/withdrawals/:id" element={<AdminWithdrawalRequestDetail />} />
               <Route path="drivers/delete-requests" element={<AdminDriverDeleteRequests />} />
               <Route path="drivers/documents" element={<AdminGlobalDocuments />} />
+              <Route path="drivers/documents/create" element={<AdminDriverDocumentForm />} />
+              <Route path="drivers/documents/edit/:id" element={<AdminDriverDocumentForm />} />
               <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
               <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
                <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
               <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-              <Route path="referrals/joining-bonus" element={<AdminJoiningBonusSettings />} />
-               <Route path="referrals/translation" element={<AdminReferralTranslation />} />
+              <Route path="referrals/joining-bonus" element={<Navigate to="/admin/referrals/dashboard" replace />} />
+              <Route path="referrals/translation" element={<AdminReferralTranslation />} />
                
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
@@ -527,6 +534,10 @@ function App() {
                <Route path="promotions/banner-image" element={<AdminBannerImage />} />
                <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
               
+              {/* Admin Management */}
+              <Route path="management/admins" element={<AdminAdmins />} />
+              <Route path="management/admins/create" element={<AdminAdminCreate />} />
+
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />
               <Route path="owners" element={<AdminManageOwners />} />
@@ -589,7 +600,7 @@ function App() {
               <Route path="masters/languages" element={<AdminLanguages />} />
               <Route path="masters/countries" element={<AdminCountryManagement />} />
               <Route path="masters/preferences" element={<AdminPreferences />} />
-              <Route path="masters/roles" element={<AdminRoles />} />
+              <Route path="masters/roles" element={<Navigate to="/admin/management/admins" replace />} />
 
               <Route path="settings/business/general" element={<AdminGeneralSettings />} />
               <Route path="settings/business/customization" element={<AdminCustomizationSettings />} />

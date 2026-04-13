@@ -7,6 +7,7 @@ import {
   goOnline,
   getCurrentDriver,
   getDriverApprovalStatus,
+  getDriverDocumentTemplates,
   getMyWallet,
   getOnboardingSession,
   getServiceLocations,
@@ -19,6 +20,7 @@ import {
   registerDriver,
   startOnboarding,
   topUpMyWallet,
+  updateCurrentDriver,
   updateDriverVehicle,
   verifyOnboardingOtp,
   verifyDriverLoginOtpRequest,
@@ -31,11 +33,13 @@ driverRouter.post('/login', asyncHandler(loginDriver));
 driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
 driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
+driverRouter.patch('/me', authenticate(['driver']), asyncHandler(updateCurrentDriver));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
+driverRouter.get('/document-templates', asyncHandler(getDriverDocumentTemplates));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));
 driverRouter.post('/onboarding/verify-otp', asyncHandler(verifyOnboardingOtp));
 driverRouter.patch('/onboarding/personal', asyncHandler(saveOnboardingPersonal));

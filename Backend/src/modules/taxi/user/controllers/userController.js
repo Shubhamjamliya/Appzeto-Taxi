@@ -127,6 +127,8 @@ const toUserPayload = (user) => ({
   email: user.email || '',
   gender: user.gender || '',
   profileImage: user.profileImage || '',
+  referralCode: user.referralCode || '',
+  referralCount: Number(user.referralCount || 0),
   currentRideId: user.currentRideId || null,
 });
 
@@ -296,6 +298,8 @@ export const getCurrentUser = async (req, res) => {
         email: user.email || '',
         gender: user.gender || '',
         profileImage: user.profileImage || '',
+        referralCode: user.referralCode || '',
+        referralCount: Number(user.referralCount || 0),
         currentRideId: user.currentRideId || null,
         createdAt: user.createdAt || null,
       },

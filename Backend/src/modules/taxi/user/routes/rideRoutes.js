@@ -7,6 +7,7 @@ import {
   getRideById,
   listMyRides,
   listAvailableDrivers,
+  submitRideReview,
   updateRideStatus,
 } from '../controllers/rideController.js';
 
@@ -18,3 +19,4 @@ rideRouter.get('/available-drivers', asyncHandler(listAvailableDrivers));
 rideRouter.get('/active/me', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.get('/:rideId', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getRideById));
 rideRouter.patch('/:rideId/status', authenticate(['driver']), asyncHandler(updateRideStatus));
+rideRouter.patch('/:rideId/feedback', authenticate(['user']), asyncHandler(submitRideReview));

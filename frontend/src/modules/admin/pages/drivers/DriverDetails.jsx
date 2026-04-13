@@ -80,7 +80,52 @@ const DriverDetails = () => {
   const earnings = profile?.earnings || {};
   const requests = profile?.requests || [];
   const withdrawals = profile?.withdrawals || [];
-  const documents = profile?.documents || [];
+  const documents = useMemo(() => {
+    const raw = profile?.documents;
+    if (Array.isArray(raw)) {
+      return raw.map((doc) => {
+        const images = Array.isArray(doc?.images)
+          ? doc.images.filter(Boolean)
+          : doc?.image
+            ? [doc.image]
+            : doc?.url
+              ? [doc.url]
+              : [];
+        return {
+          name: doc?.name || '',
+          identify_number: doc?.identify_number ?? doc?.identifyNumber ?? doc?.number ?? doc?.id_number ?? '',
+          expiry_date: doc?.expiry_date ?? doc?.expiryDate ?? doc?.expiry ?? '',
+          status: doc?.status ?? '',
+          comment: doc?.comment ?? '',
+          images,
+        };
+      });
+    }
+    if (!raw || typeof raw !== 'object') {
+      return [];
+    }
+    return Object.entries(raw).flatMap(([key, value]) => {
+      if (!value) return [];
+      const normalizeOne = (doc) => {
+        const images = Array.isArray(doc?.images)
+          ? doc.images.filter(Boolean)
+          : doc?.image
+            ? [doc.image]
+            : doc?.url
+              ? [doc.url]
+              : [];
+        return {
+          name: doc?.name || key,
+          identify_number: doc?.identify_number ?? doc?.identifyNumber ?? doc?.number ?? doc?.id_number ?? '',
+          expiry_date: doc?.expiry_date ?? doc?.expiryDate ?? doc?.expiry ?? '',
+          status: doc?.status ?? '',
+          comment: doc?.comment ?? '',
+          images,
+        };
+      };
+      return Array.isArray(value) ? value.map(normalizeOne) : [normalizeOne(value)];
+    });
+  }, [profile]);
   const chart = profile?.chart || { months: [], earnings: [], trips: { completed: [], cancelled: [] } };
 
   const acceptanceRate = requests.length

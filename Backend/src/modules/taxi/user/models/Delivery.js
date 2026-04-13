@@ -1,63 +1,33 @@
 import mongoose from 'mongoose';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
 
-const rideMessageSchema = new mongoose.Schema(
+const deliverySchema = new mongoose.Schema(
   {
-    senderRole: {
-      type: String,
-      enum: ['user', 'driver'],
-      required: true,
-    },
-    senderId: {
+    rideId: {
       type: mongoose.Schema.Types.ObjectId,
+      ref: 'Ride',
       required: true,
+      index: true,
     },
-    message: {
-      type: String,
-      required: true,
-      trim: true,
-      maxlength: 1000,
-    },
-    sentAt: {
-      type: Date,
-      default: Date.now,
-    },
-  },
-  { _id: true },
-);
-
-const rideSchema = new mongoose.Schema(
-  {
     userId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'TaxiUser',
+      ref: 'User',
       required: true,
+      index: true,
     },
     driverId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'TaxiDriver',
+      ref: 'Driver',
       default: null,
     },
     vehicleTypeId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'TaxiVehicle',
+      ref: 'Vehicle',
       default: null,
     },
     vehicleIconType: {
       type: String,
       default: '',
-      trim: true,
-    },
-    deliveryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Delivery',
-      default: null,
-    },
-    serviceType: {
-      type: String,
-      enum: ['ride', 'parcel'],
-      default: 'ride',
-      lowercase: true,
       trim: true,
     },
     status: {
@@ -141,47 +111,6 @@ const rideSchema = new mongoose.Schema(
         trim: true,
       },
     },
-    commissionAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    driverEarnings: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    walletSettledAt: {
-      type: Date,
-      default: null,
-    },
-    lastDriverLocation: {
-      type: {
-        type: String,
-        enum: ['Point'],
-        default: 'Point',
-      },
-      coordinates: {
-        type: [Number],
-        default: undefined,
-      },
-      heading: {
-        type: Number,
-        default: null,
-      },
-      speed: {
-        type: Number,
-        default: null,
-      },
-      updatedAt: {
-        type: Date,
-        default: null,
-      },
-    },
-    messages: {
-      type: [rideMessageSchema],
-      default: [],
-    },
     acceptedAt: {
       type: Date,
       default: null,
@@ -195,9 +124,7 @@ const rideSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { 
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
-export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);
+export const Delivery = mongoose.models.Delivery || mongoose.model('Delivery', deliverySchema);

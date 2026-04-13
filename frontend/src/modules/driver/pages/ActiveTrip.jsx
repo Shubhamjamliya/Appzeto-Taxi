@@ -136,17 +136,24 @@ const ActiveTrip = () => {
     const activeDestination = phase === 'to_pickup' || phase === 'otp_verification' ? pickupPosition : dropPosition;
 
     const tripData = isParcel ? {
-        sender: { name: 'Hritik Raghuwanshi', rating: '5.0', phone: '+91 96913 2XXXX' },
-        receiver: { name: 'Vinay Kumar', phone: '+91 88712 1XXXX' },
+        sender: {
+            name: liveRaw.parcel?.senderName || 'Sender',
+            rating: '5.0',
+            phone: liveRaw.parcel?.senderMobile || '',
+        },
+        receiver: {
+            name: liveRaw.parcel?.receiverName || 'Receiver',
+            phone: liveRaw.parcel?.receiverMobile || '',
+        },
         pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
         drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
-        fare: '₹120',
+        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
         payment: location.state?.paymentMethod || 'Online'
     } : {
         user: { name: 'Vinay Kumar', rating: '4.8', phone: '+91 98765 43210' },
         pickup: liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
         drop: liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
-        fare: '₹120',
+        fare: `Rs ${liveRaw.fare || location.state?.fare || 120}`,
         payment: liveRequest?.payment || location.state?.paymentMethod || 'Online'
     };
 

@@ -7,6 +7,7 @@ import { Zone } from '../driver/models/Zone.js';
 const buildDriverMatchFilters = ({ zoneId, vehicleTypeId }) => ({
   isOnline: true,
   isOnRide: false,
+  'wallet.isBlocked': { $ne: true },
   ...(zoneId ? { zoneId } : {}),
   ...(vehicleTypeId ? { vehicleTypeId } : {}),
 });

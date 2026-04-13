@@ -107,6 +107,21 @@ const driverSchema = new mongoose.Schema(
       min: 0,
       max: 5,
     },
+    wallet: {
+      balance: {
+        type: Number,
+        default: 0,
+      },
+      cashLimit: {
+        type: Number,
+        default: 500,
+        min: 0,
+      },
+      isBlocked: {
+        type: Boolean,
+        default: false,
+      },
+    },
     zoneId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiZone',

@@ -23,6 +23,7 @@ import { Ride } from '../../user/models/Ride.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
 import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
+import { TaxiAppModule } from '../models/TaxiAppModule.js';
 import { NotificationChannel } from '../models/NotificationChannel.js';
 import { UserPreference } from '../models/UserPreference.js';
 import { AdminRole } from '../models/AdminRole.js';
@@ -2033,7 +2034,26 @@ export const deleteGoodsType = async (id) => {
 
 export const listRentalPackageTypes = async () => {
   const items = await RentalPackageType.find().sort({ createdAt: -1 }).lean();
-  return items.map(serializeRentalPackageType);
+  const results = items.map(serializeRentalPackageType);
+  
+  return {
+    results,
+    paginator: {
+      current_page: 1,
+      data: results,
+      total: results.length,
+      last_page: 1,
+      per_page: 50,
+      from: 1,
+      to: results.length,
+      links: [
+        { url: null, label: "&laquo; Previous", active: false },
+        { url: "http://localhost:5000/api/v1/admin/rental-package-types?page=1", label: "1", active: true },
+        { url: null, label: "Next &raquo;", active: false }
+      ],
+      path: "http://localhost:5000/api/v1/admin/rental-package-types"
+    }
+  };
 };
 
 export const createRentalPackageType = async (payload) => {
@@ -2465,61 +2485,87 @@ export const updateGeneralSettings = async (category, payload) => {
   return { settings: bizSettings[bizKey] };
 };
 
-export const listAppModules = async () => {
-  const settings = await ensureAppSettings();
-  const modules = settings.app_modules || [];
+export const listAppModules = async (query = {}) => {
+  const safePage = Number(query.page) || 1;
+  const safeLimit = Number(query.limit) || 10;
+  const start = (safePage - 1) * safeLimit;
+
+  const [modules, total] = await Promise.all([
+    TaxiAppModule.find()
+      .sort({ order_by: 1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    TaxiAppModule.countDocuments(),
+  ]);
+
+  const results = modules.map(m => ({
+    _id: m._id,
+    id: String(m._id),
+    name: m.name,
+    transport_type: m.transport_type,
+    service_type: m.service_type,
+    icon_types_for: m.icon_types_for,
+    order_by: m.order_by,
+    short_description: m.short_description,
+    description: m.description,
+    mobile_menu_icon: m.mobile_menu_icon,
+    mobile_menu_cover_image: m.mobile_menu_cover_image,
+    active: m.active,
+    created_at: m.createdAt,
+    updated_at: m.updatedAt
+  }));
+
   return {
-    results: modules.sort((a, b) => Number(a.order_by || 0) - Number(b.order_by || 0)),
+    results,
     paginator: {
-      total: modules.length,
-      current_page: 1,
-      last_page: 1,
+      total,
+      current_page: safePage,
+      per_page: safeLimit,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
   };
 };
 
 export const createAppModule = async (payload) => {
-  const settings = await ensureAppSettings();
-  const newModule = {
-    _id: nextId(),
-    ...payload,
-    order_by: Number(payload.order_by || 0),
-    active: normalizeBoolean(payload.active ?? true),
-  };
-  settings.app_modules.push(newModule);
-  settings.markModified('app_modules');
-  await settings.save();
-  return newModule;
+  const item = await TaxiAppModule.create({
+    name: String(payload.name || '').trim(),
+    transport_type: payload.transport_type || 'taxi',
+    service_type: payload.service_type || 'normal',
+    icon_types_for: payload.icon_types_for || null,
+    order_by: Number(payload.order_by || 1),
+    short_description: String(payload.short_description || '').trim(),
+    description: String(payload.description || '').trim(),
+    mobile_menu_icon: String(payload.mobile_menu_icon || '').trim(),
+    mobile_menu_cover_image: payload.mobile_menu_cover_image || null,
+    active: payload.active !== undefined ? (normalizeBoolean(payload.active) ? 1 : 0) : 1,
+    company_key: payload.company_key || null
+  });
+  return item.toObject();
 };
 
 export const updateAppModule = async (id, payload) => {
-  const settings = await ensureAppSettings();
-  const moduleIndex = settings.app_modules.findIndex((m) => String(m._id) === String(id));
-  if (moduleIndex === -1) throw new ApiError(404, 'App module not found');
+  const update = {};
+  if (payload.name !== undefined) update.name = String(payload.name).trim();
+  if (payload.transport_type !== undefined) update.transport_type = payload.transport_type;
+  if (payload.service_type !== undefined) update.service_type = payload.service_type;
+  if (payload.icon_types_for !== undefined) update.icon_types_for = payload.icon_types_for;
+  if (payload.order_by !== undefined) update.order_by = Number(payload.order_by);
+  if (payload.short_description !== undefined) update.short_description = String(payload.short_description);
+  if (payload.description !== undefined) update.description = String(payload.description);
+  if (payload.mobile_menu_icon !== undefined) update.mobile_menu_icon = String(payload.mobile_menu_icon);
+  if (payload.mobile_menu_cover_image !== undefined) update.mobile_menu_cover_image = payload.mobile_menu_cover_image;
+  if (payload.active !== undefined) update.active = normalizeBoolean(payload.active) ? 1 : 0;
+  if (payload.company_key !== undefined) update.company_key = payload.company_key;
 
-  settings.app_modules[moduleIndex] = {
-    ...settings.app_modules[moduleIndex],
-    ...payload,
-    order_by: payload.order_by !== undefined ? Number(payload.order_by) : settings.app_modules[moduleIndex].order_by,
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : settings.app_modules[moduleIndex].active,
-  };
-
-  settings.markModified('app_modules');
-  await settings.save();
-  return settings.app_modules[moduleIndex];
+  const item = await TaxiAppModule.findByIdAndUpdate(id, { $set: update }, { new: true });
+  if (!item) throw new ApiError(404, 'App module not found in database registry');
+  return item.toObject();
 };
 
 export const deleteAppModule = async (id) => {
-  const settings = await ensureAppSettings();
-  const initialCount = settings.app_modules.length;
-  settings.app_modules = settings.app_modules.filter((m) => String(m._id) !== String(id));
-  
-  if (settings.app_modules.length === initialCount) {
-    throw new ApiError(404, 'App module not found');
-  }
-
-  settings.markModified('app_modules');
-  await settings.save();
+  const deleted = await TaxiAppModule.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'App module registration not found');
   return true;
 };
 

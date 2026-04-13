@@ -48,6 +48,8 @@ export const completeDriverOnboarding = (payload) => api.post('/drivers/onboardi
 const readLocalDriverToken = () =>
   localStorage.getItem('driverToken') || localStorage.getItem('token') || '';
 
+export const getLocalDriverToken = readLocalDriverToken;
+
 const withDriverAuth = (config = {}) => {
   const token = readLocalDriverToken();
 

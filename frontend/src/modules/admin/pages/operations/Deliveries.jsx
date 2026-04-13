@@ -1,17 +1,6 @@
 import React from 'react';
-import { ChevronDown, Filter, MoreVertical, Search } from 'lucide-react';
-
-const ROWS = [
-  ['REQ_177563864023', '8th Apr 02:27 PM', 'Deepak Sharma', 'Genzo Pilot Pune', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177556660723', '7th Apr 06:26 PM', 'Rishi Dogne', 'Gojo', 'Delivery - Bike', 'COMPLETED', 'CASH'],
-  ['REQ_17754669539', '6th Apr 02:45 PM', 'Rishi Dogne', 'ajay', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177546207030', '6th Apr 01:24 PM', 'Rishi Dogne', 'driver', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177546189441', '6th Apr 01:21 PM', 'Rishi Dogne', 'driver', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177546069487', '6th Apr 01:01 PM', 'Rishi Dogne', 'driver', 'Delivery - Parcel', 'CANCELLED', 'CASH'],
-  ['REQ_177545891739', '6th Apr 12:31 PM', 'Rishi Dogne', 'driver', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177522036929', '3rd Apr 06:16 PM', 'John Mexton', 'Devid Mexton', 'Delivery - Parcel', 'COMPLETED', 'CASH'],
-  ['REQ_177521511085', '3rd Apr 04:48 PM', 'John Mexton', '-----', 'Delivery - Bike', 'CANCELLED', 'CASH'],
-];
+import { ChevronDown, Filter, LoaderCircle, MoreVertical, Search } from 'lucide-react';
+import { adminService } from '../../services/adminService';
 
 const TABS = ['All', 'Completed', 'Cancelled', 'Upcoming', 'On Trip'];
 
@@ -27,20 +16,61 @@ const PAYMENT_STYLES = {
   ONLINE: 'bg-[#4f46e5] text-white',
 };
 
-const normalizeTabKey = (value) => value.toUpperCase().replace(/\s+/g, '_');
+const unwrapResults = (response) => {
+  const payload = response?.data || response || {};
+  return {
+    results: payload?.results || [],
+    paginator: payload?.paginator || {},
+  };
+};
 
 const Deliveries = () => {
   const [activeTab, setActiveTab] = React.useState('All');
   const [pageSize, setPageSize] = React.useState('10');
+  const [search, setSearch] = React.useState('');
+  const [rows, setRows] = React.useState([]);
+  const [isLoading, setIsLoading] = React.useState(true);
+  const [error, setError] = React.useState('');
 
-  const filteredRows = React.useMemo(() => {
-    if (activeTab === 'All') {
-      return ROWS;
-    }
+  React.useEffect(() => {
+    let active = true;
 
-    const tabKey = normalizeTabKey(activeTab);
-    return ROWS.filter((row) => row[5] === tabKey);
-  }, [activeTab]);
+    const loadDeliveries = async () => {
+      setIsLoading(true);
+      setError('');
+
+      try {
+        const response = await adminService.getDeliveries({
+          page: 1,
+          limit: Number(pageSize) || 10,
+          tab: activeTab.toLowerCase(),
+          search,
+        });
+        const data = unwrapResults(response);
+
+        if (!active) {
+          return;
+        }
+
+        setRows(data.results);
+      } catch (loadError) {
+        if (active) {
+          setRows([]);
+          setError(loadError?.message || 'Could not load deliveries.');
+        }
+      } finally {
+        if (active) {
+          setIsLoading(false);
+        }
+      }
+    };
+
+    loadDeliveries();
+
+    return () => {
+      active = false;
+    };
+  }, [activeTab, pageSize, search]);
 
   return (
     <div className="min-h-screen bg-gray-50 font-['Inter',system-ui,sans-serif]">
@@ -85,12 +115,15 @@ const Deliveries = () => {
               </div>
 
               <div className="ml-auto flex items-center gap-3">
-                <button
-                  type="button"
-                  className="inline-flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-gray-600 transition hover:border-gray-400 hover:text-gray-900"
-                >
-                  <Search size={18} strokeWidth={2.1} />
-                </button>
+                <div className="relative">
+                  <Search size={18} strokeWidth={2.1} className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 text-gray-500" />
+                  <input
+                    value={search}
+                    onChange={(event) => setSearch(event.target.value)}
+                    placeholder="Search deliveries"
+                    className="h-12 rounded-full border border-gray-300 bg-white pl-11 pr-4 text-sm font-medium text-gray-700 outline-none transition focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  />
+                </div>
                 <button
                   type="button"
                   className="inline-flex items-center gap-2 rounded-md bg-[#f26a4b] px-5 py-3 text-sm font-semibold text-white transition hover:bg-[#eb5e3d]"
@@ -121,21 +154,48 @@ const Deliveries = () => {
             </thead>
 
             <tbody>
-              {filteredRows.map((row) => (
-                <tr key={row[0]} className="group">
-                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row[0]}</td>
-                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row[1]}</td>
-                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row[2]}</td>
-                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row[3]}</td>
-                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row[4]}</td>
+              {isLoading && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-14 text-center">
+                    <div className="inline-flex items-center gap-3 text-sm font-medium text-gray-500">
+                      <LoaderCircle size={18} className="animate-spin" />
+                      Loading deliveries
+                    </div>
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && error && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-14 text-center text-sm font-medium text-red-500">
+                    {error}
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && !error && rows.length === 0 && (
+                <tr>
+                  <td colSpan={8} className="px-4 py-14 text-center text-sm font-medium text-gray-500">
+                    No deliveries found.
+                  </td>
+                </tr>
+              )}
+
+              {!isLoading && !error && rows.map((row) => (
+                <tr key={row.id} className="group">
+                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row.requestId}</td>
+                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row.date || '-'}</td>
+                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row.userName}</td>
+                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row.driverName}</td>
+                  <td className="border-b border-gray-200 px-4 py-5 text-[14px] font-medium text-gray-900">{row.transportType}</td>
                   <td className="border-b border-gray-200 px-4 py-5">
-                    <span className={`inline-flex rounded-md px-3 py-1 text-[11px] font-bold uppercase leading-none ${STATUS_STYLES[row[5]] || 'bg-gray-200 text-gray-700'}`}>
-                      {row[5].replace('_', ' ')}
+                    <span className={`inline-flex rounded-md px-3 py-1 text-[11px] font-bold uppercase leading-none ${STATUS_STYLES[row.tripStatus] || 'bg-gray-200 text-gray-700'}`}>
+                      {String(row.tripStatus || '').replace('_', ' ')}
                     </span>
                   </td>
                   <td className="border-b border-gray-200 px-4 py-5">
-                    <span className={`inline-flex rounded-md px-3 py-1 text-[11px] font-bold uppercase leading-none ${PAYMENT_STYLES[row[6]] || 'bg-gray-200 text-gray-700'}`}>
-                      {row[6]}
+                    <span className={`inline-flex rounded-md px-3 py-1 text-[11px] font-bold uppercase leading-none ${PAYMENT_STYLES[row.paymentOption] || 'bg-gray-200 text-gray-700'}`}>
+                      {row.paymentOption}
                     </span>
                   </td>
                   <td className="border-b border-gray-200 px-4 py-5">

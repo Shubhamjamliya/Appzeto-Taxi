@@ -20,6 +20,7 @@ import { Vehicle } from '../models/Vehicle.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { Zone } from '../../driver/models/Zone.js';
 import { Ride } from '../../user/models/Ride.js';
+import { Delivery } from '../../user/models/Delivery.js';
 import { AppLanguage } from '../models/AppLanguage.js';
 import { RideModule } from '../models/RideModule.js';
 import { SubscriptionPlan } from '../models/SubscriptionPlan.js';
@@ -206,6 +207,7 @@ const serializeGoodsType = (item) => ({
   id: item.external_id || item.id || 1,
   name: item.goods_type_name || item.name || '',
   goods_type_name: item.goods_type_name || item.name || '',
+  icon: item.icon || '',
   translation_dataset: item.translation_dataset || '',
   goods_types_for: item.goods_types_for || 'both',
   company_key: item.company_key || null,
@@ -342,6 +344,73 @@ const serializeDriver = (driver) => ({
   createdAt: driver.createdAt,
   updatedAt: driver.updatedAt,
 });
+
+const formatAdminDateTime = (value) => {
+  if (!value) {
+    return '';
+  }
+
+  const date = new Date(value);
+
+  if (Number.isNaN(date.getTime())) {
+    return '';
+  }
+
+  const day = date.getDate();
+  const suffix =
+    day % 10 === 1 && day !== 11
+      ? 'st'
+      : day % 10 === 2 && day !== 12
+        ? 'nd'
+        : day % 10 === 3 && day !== 13
+          ? 'rd'
+          : 'th';
+
+  const month = date.toLocaleString('en-IN', { month: 'short' });
+  const time = date.toLocaleString('en-IN', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: true,
+  });
+
+  return `${day}${suffix} ${month} ${time}`;
+};
+
+const toAdminDeliveryRow = (delivery) => {
+  const statusMap = {
+    searching: 'UPCOMING',
+    accepted: 'UPCOMING',
+    ongoing: 'ON_TRIP',
+    completed: 'COMPLETED',
+    cancelled: 'CANCELLED',
+  };
+
+  const liveStatus = String(delivery.liveStatus || delivery.status || 'searching').toLowerCase();
+  const transportLabel = String(delivery.vehicleIconType || '').toLowerCase().includes('bike')
+    ? 'Delivery - Bike'
+    : 'Delivery - Parcel';
+
+  return {
+    id: String(delivery._id),
+    requestId: `REQ_${String(delivery._id).slice(-10)}`,
+    rideId: delivery.rideId ? String(delivery.rideId._id || delivery.rideId) : '',
+    date: formatAdminDateTime(delivery.createdAt),
+    userName: delivery.userId?.name || delivery.parcel?.senderName || 'Unknown User',
+    driverName: delivery.driverId?.name || '-----',
+    transportType: transportLabel,
+    tripStatus: statusMap[liveStatus] || String(delivery.status || 'UPCOMING').toUpperCase(),
+    paymentOption: String(delivery.paymentMethod || 'cash').toUpperCase(),
+    senderName: delivery.parcel?.senderName || '',
+    senderMobile: delivery.parcel?.senderMobile || '',
+    receiverName: delivery.parcel?.receiverName || '',
+    receiverMobile: delivery.parcel?.receiverMobile || '',
+    parcelCategory: delivery.parcel?.category || '',
+    parcelWeight: delivery.parcel?.weight || '',
+    description: delivery.parcel?.description || '',
+    pickupCoords: delivery.pickupLocation?.coordinates || [],
+    dropCoords: delivery.dropLocation?.coordinates || [],
+  };
+};
 
 const serializeUser = (user) => ({
   _id: user._id,
@@ -1519,6 +1588,48 @@ export const listOngoingRides = async (query = {}) => {
   return buildPaginator(rows, page, limit);
 };
 
+export const listDeliveries = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const deliveries = await Delivery.find()
+    .sort({ createdAt: -1 })
+    .populate('rideId', '_id')
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = deliveries.map(toAdminDeliveryRow);
+
+  if (tab === 'completed') {
+    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
+  } else if (tab === 'cancelled') {
+    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ontrip') {
+    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.senderName,
+        row.receiverName,
+        row.parcelCategory,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
 export const deleteOngoingRide = async (rideId) => {
   if (!mongoose.Types.ObjectId.isValid(String(rideId))) {
     throw new ApiError(400, 'Invalid ride id');
@@ -2395,6 +2506,7 @@ export const createGoodsType = async (payload) => {
     status: payload.status || (active === 1 ? 'active' : 'inactive'),
     active: active,
     translation_dataset: payload.translation_dataset || '',
+    icon: payload.icon || '',
   });
 
   return serializeGoodsType(item.toObject());
@@ -2426,6 +2538,10 @@ export const updateGoodsType = async (id, payload) => {
 
   if (payload.translation_dataset !== undefined) {
     item.translation_dataset = payload.translation_dataset;
+  }
+
+  if (payload.icon !== undefined) {
+    item.icon = payload.icon || '';
   }
 
   await item.save();

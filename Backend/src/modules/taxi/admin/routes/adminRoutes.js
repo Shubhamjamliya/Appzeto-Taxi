@@ -44,11 +44,8 @@ import {
   getCancelChart,
   getCountries,
   getDashboardData,
-  getDeliveries,
   getDriver,
   getDriverProfile,
-  getDriverRatingDetail,
-  getDriverRatings,
   getDriverOnboarding,
   getDrivers,
   getDeletedDrivers,
@@ -153,8 +150,6 @@ adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);
-adminRouter.get('/admin/driver-ratings', getDriverRatings);
-adminRouter.get('/admin/driver-ratings/:id', getDriverRatingDetail);
 adminRouter.post('/admin/wallet/drivers/:id/adjust', adjustDriverWallet);
 
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
@@ -211,7 +206,6 @@ adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
-adminRouter.get('/admin/deliveries', getDeliveries);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);

@@ -158,7 +158,6 @@ const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/Gl
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
 const AdminDriverAudit = lazy(() => import('./modules/admin/pages/drivers/DriverAudit'));
 const AdminPaymentMethods = lazy(() => import('./modules/admin/pages/drivers/PaymentMethods'));
-const AdminServiceConfig = lazy(() => import('./modules/admin/pages/drivers/ServiceConfig'));
 const AdminDriverCreate = lazy(() => import('./modules/admin/pages/drivers/CreateDriver'));
 const AdminDriverEdit = lazy(() => import('./modules/admin/pages/drivers/EditDriver'));
 const AdminReferralDashboard = lazy(() => import('./modules/admin/pages/referrals/ReferralDashboard'));
@@ -513,7 +512,6 @@ function App() {
               <Route path="drivers/documents" element={<AdminGlobalDocuments />} />
               <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
               <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
-              <Route path="drivers/service-config" element={<AdminServiceConfig />} />
                <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />

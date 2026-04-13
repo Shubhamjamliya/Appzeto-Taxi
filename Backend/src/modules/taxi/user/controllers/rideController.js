@@ -3,7 +3,6 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint } from '../../../../utils/geo.js';
 import { Driver } from '../../driver/models/Driver.js';
 import { RIDE_LIVE_STATUS } from '../../constants/index.js';
-import { emitToDriver } from '../../services/dispatchService.js';
 import {
   createRideRecord,
   ensureRideParticipantAccess,
@@ -17,20 +16,8 @@ import {
 import { startDispatchFlow } from '../../services/dispatchService.js';
 
 export const createRide = async (req, res) => {
-  const {
-    pickup,
-    drop,
-    fare,
-    vehicleTypeId,
-    vehicleIconType,
-    paymentMethod,
-    type,
-    serviceType,
-    parcel,
-    promo_code,
-    service_location_id,
-    transport_type,
-  } = req.body;
+  const { pickup, drop, fare, vehicleTypeId, vehicleIconType, promo_code, service_location_id, transport_type } =
+    req.body;
 
   if (!pickup || !drop) {
     throw new ApiError(400, 'pickup and drop are required');
@@ -43,9 +30,6 @@ export const createRide = async (req, res) => {
     fare: Number(fare || 0),
     vehicleTypeId,
     vehicleIconType,
-    paymentMethod,
-    serviceType: type || serviceType,
-    parcel,
     promo_code,
     service_location_id,
     transport_type,
@@ -124,14 +108,6 @@ export const updateRideStatus = async (req, res) => {
     driverId: req.auth.sub,
     nextStatus,
   });
-
-  const walletUpdate = ride.$locals?.walletUpdate;
-  if (walletUpdate) {
-    emitToDriver(req.auth.sub, 'driver:wallet:updated', {
-      wallet: walletUpdate.wallet,
-      transaction: walletUpdate.transaction,
-    });
-  }
 
   res.json({
     success: true,

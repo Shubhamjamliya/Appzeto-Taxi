@@ -58,32 +58,102 @@ const Wallet = () => {
     refreshWallet();
   }, []);
 
-  const handleAddMoney = () => {
-    if (!amount) return;
+  const loadRazorpayScript = () =>
+    new Promise((resolve) => {
+      if (window.Razorpay) {
+        resolve(true);
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+      script.async = true;
+      script.onload = () => resolve(true);
+      script.onerror = () => resolve(false);
+      document.body.appendChild(script);
+    });
+
+  const handleAddMoney = async () => {
+    const amountValue = Number(amount);
+    if (!Number.isFinite(amountValue) || amountValue <= 0) return;
+
     setIsAdding(true);
     setWalletError('');
-    userAuthService
-      .topupWallet(Number(amount))
-      .then((response) => {
-        const data = response?.data || {};
-        setWallet({
-          balance: Number(data.balance || 0),
-          currency: data.currency || 'INR',
-          recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
-        });
-        setIsSuccess(true);
-        setTimeout(() => {
-          setIsSuccess(false);
-          setShowAddMoney(false);
-          setAmount('');
-        }, 1400);
-      })
-      .catch((err) => {
-        setWalletError(err?.message || 'Topup failed');
-      })
-      .finally(() => {
+
+    try {
+      const scriptLoaded = await loadRazorpayScript();
+      if (!scriptLoaded) {
+        throw new Error('Razorpay SDK failed to load');
+      }
+
+      const orderResponse = await userAuthService.createWalletTopupOrder(amountValue);
+      const order = orderResponse?.data || {};
+
+      if (!order.keyId || !order.orderId) {
+        throw new Error('Unable to start payment');
+      }
+
+      let userInfo = {};
+      try {
+        userInfo = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      } catch {
+        userInfo = {};
+      }
+
+      const rzp = new window.Razorpay({
+        key: order.keyId,
+        amount: order.amount,
+        currency: order.currency || 'INR',
+        name: 'Rydon24',
+        description: 'Wallet Topup',
+        order_id: order.orderId,
+        prefill: {
+          name: userInfo?.name || '',
+          email: userInfo?.email || '',
+          contact: userInfo?.phone ? `+91${userInfo.phone}` : '',
+        },
+        modal: {
+          ondismiss: () => {
+            setIsAdding(false);
+          },
+        },
+        handler: async (response) => {
+          try {
+            const verifyResponse = await userAuthService.verifyWalletTopup(response);
+            const data = verifyResponse?.data || {};
+            setWallet({
+              balance: Number(data.balance || 0),
+              currency: data.currency || 'INR',
+              recentTransactions: Array.isArray(data.recentTransactions) ? data.recentTransactions : [],
+            });
+            setIsSuccess(true);
+            setTimeout(() => {
+              setIsSuccess(false);
+              setShowAddMoney(false);
+              setAmount('');
+            }, 1400);
+          } catch (err) {
+            setWalletError(err?.message || 'Payment verification failed');
+          } finally {
+            setIsAdding(false);
+          }
+        },
+        theme: {
+          color: '#E85D04',
+        },
+      });
+
+      rzp.on('payment.failed', (event) => {
+        const message = event?.error?.description || event?.error?.reason || 'Payment failed';
+        setWalletError(message);
         setIsAdding(false);
       });
+
+      rzp.open();
+    } catch (err) {
+      setWalletError(err?.message || 'Topup failed');
+      setIsAdding(false);
+    }
   };
 
   const handleSend = () => {

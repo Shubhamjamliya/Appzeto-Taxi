@@ -5,4 +5,4 @@ const rideModuleSchema = new mongoose.Schema({
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 
-export const RideModule = mongoose.models.RideModule || mongoose.model('RideModule', rideModuleSchema);
+export const RideModule = mongoose.models.TaxiRideModule || mongoose.model('TaxiRideModule', rideModuleSchema);

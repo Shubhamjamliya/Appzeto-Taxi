@@ -45,12 +45,12 @@ const airportSchema = new mongoose.Schema(
     },
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'ServiceLocation',
+      ref: 'TaxiServiceLocation',
       default: null,
     },
     zone_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Zone',
+      ref: 'TaxiZone',
       default: null,
     },
     terminal: {
@@ -103,4 +103,4 @@ airportSchema.index({ service_location_id: 1, status: 1 });
 airportSchema.index({ location: '2dsphere' });
 airportSchema.index({ boundary: '2dsphere' });
 
-export const Airport = mongoose.models.Airport || mongoose.model('Airport', airportSchema);
+export const Airport = mongoose.models.TaxiAirport || mongoose.model('TaxiAirport', airportSchema);

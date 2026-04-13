@@ -4,7 +4,7 @@ import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { User } from '../../user/models/User.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
-import { AppModule } from '../models/AppModule.js';
+// AppModule import removed
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
 import { Airport } from '../models/Airport.js';
 import { GoodsType } from '../models/GoodsType.js';
@@ -30,6 +30,8 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
+import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+import { cancelRideByAdmin } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
   const result = { ...target };
@@ -201,13 +203,16 @@ const serializeSetPrice = (item) => ({
 
 const serializeGoodsType = (item) => ({
   _id: item._id,
-  id: item._id,
-  name: item.name || '',
-  goods_type_for: item.goods_type_for || 'all',
-  status: item.status || (item.active === false ? 'inactive' : 'active'),
-  active: item.active !== false,
-  createdAt: item.createdAt,
-  updatedAt: item.updatedAt,
+  id: item.external_id || item.id || 1,
+  name: item.goods_type_name || item.name || '',
+  goods_type_name: item.goods_type_name || item.name || '',
+  translation_dataset: item.translation_dataset || '',
+  goods_types_for: item.goods_types_for || 'both',
+  company_key: item.company_key || null,
+  active: item.active !== undefined ? Number(item.active) : 1,
+  created_at: item.createdAt,
+  updated_at: item.updatedAt,
+  goods_type_translation_words: item.goods_type_translation_words || [],
 });
 
 const serializeRentalPackageType = (item) => ({
@@ -448,10 +453,7 @@ const seedInitialData = async () => {
     await RideModule.insertMany(defaults.rideModules);
   }
 
-  // Seed App Modules
-  if (await AppModule.countDocuments() === 0) {
-    await AppModule.insertMany(defaults.appModules);
-  }
+  // Seed App Modules removed (Migrated to AdminAppSetting)
 
   // Seed Notification Channels
   if (await NotificationChannel.countDocuments() === 0) {
@@ -1019,37 +1021,162 @@ export const listNearbyServiceLocations = async ({ latitude, longitude, maxDista
 
 export const listRideModules = async () => RideModule.find().sort({ createdAt: -1 }).lean();
 
+const formatRidePointLabel = (point, fallback = 'Unknown') => {
+  const [lng, lat] = point?.coordinates || [];
+
+  if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+    return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+  }
+
+  return fallback;
+};
+
+const toAdminRideRow = (ride) => {
+  const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
+  const tripStatus = liveStatus === RIDE_LIVE_STATUS.STARTED
+    ? 'ONGOING'
+    : liveStatus === RIDE_LIVE_STATUS.ARRIVING || liveStatus === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED
+      ? 'ACCEPTED'
+      : 'UPCOMING';
+
+  return {
+    id: String(ride._id),
+    requestId: requestCode,
+    date: ride.createdAt,
+    userName: ride.userId?.name || 'Unknown User',
+    driverName: ride.driverId?.name || 'Unassigned',
+    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Taxi',
+    tripStatus,
+    rideStatus: ride.status,
+    liveStatus: ride.liveStatus,
+    paymentOption: 'CASH',
+    fare: Number(ride.fare || 0),
+    pickupLabel: formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+    dropLabel: formatRidePointLabel(ride.dropLocation, 'Drop'),
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    lastDriverLocation: ride.lastDriverLocation || null,
+    user: ride.userId ? {
+      id: String(ride.userId._id),
+      name: ride.userId.name || '',
+      phone: ride.userId.phone || '',
+    } : null,
+    driver: ride.driverId ? {
+      id: String(ride.driverId._id),
+      name: ride.driverId.name || '',
+      phone: ride.driverId.phone || '',
+      vehicleType: ride.driverId.vehicleType || '',
+      vehicleNumber: ride.driverId.vehicleNumber || '',
+    } : null,
+  };
+};
+
+export const listOngoingRides = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const rides = await Ride.find({
+    status: { $in: [RIDE_STATUS.SEARCHING, RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+  })
+    .sort({ createdAt: -1 })
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = rides.map(toAdminRideRow);
+
+  if (tab === 'accepted') {
+    rows = rows.filter((row) => row.tripStatus === 'ACCEPTED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'ongoing') {
+    rows = rows.filter((row) => row.tripStatus === 'ONGOING');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.pickupLabel,
+        row.dropLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
+export const deleteOngoingRide = async (rideId) => {
+  if (!mongoose.Types.ObjectId.isValid(String(rideId))) {
+    throw new ApiError(400, 'Invalid ride id');
+  }
+
+  const deletedRide = await cancelRideByAdmin(rideId);
+
+  if (!deletedRide) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  return {
+    id: String(deletedRide._id),
+    deleted: true,
+    status: deletedRide.status,
+    liveStatus: deletedRide.liveStatus,
+  };
+};
+
 export const listVehicleTypes = async (locationId, transportType) => {
   const query = {};
   if (locationId) query.location_id = locationId;
   if (transportType) query.transport_type = transportType;
-  return Vehicle.find(query).sort({ createdAt: -1 }).lean();
+  const items = await Vehicle.find(query).sort({ createdAt: -1 }).lean();
+  return {
+    results: items,
+    paginator: {
+      data: items,
+      total: items.length,
+      current_page: 1,
+      last_page: 1,
+      per_page: items.length,
+      from: 1,
+      to: items.length
+    }
+  };
 };
 
 export const listVehicleCatalog = async () => {
-  const state = await ensureAdminState();
-  const preferenceLookup = new Map(
-    (state.preferences || []).map((preference) => [String(preference._id), preference]),
-  );
-
   const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
 
-  const normalizedItems = items.map((item) => ({
+  const results = items.map((item) => ({
     ...item,
-    supported_other_vehicle_types: Array.isArray(item.supported_other_vehicle_types)
-      ? item.supported_other_vehicle_types.map((value) => String(value))
-      : [],
-    vehicle_preference: Array.isArray(item.vehicle_preference)
-      ? item.vehicle_preference.map((value) => String(value))
-      : [],
-    vehicle_preference_details: Array.isArray(item.vehicle_preference)
-      ? item.vehicle_preference
-          .map((value) => preferenceLookup.get(String(value)))
-          .filter(Boolean)
-      : [],
+    id: String(item._id),
+    supported_vehicles: Array.isArray(item.supported_other_vehicle_types)
+      ? item.supported_other_vehicle_types.map((v) => String(v)).join(',')
+      : '',
+    icon_types_for: item.icon_types,
+    trip_dispatch_type: item.dispatch_type,
+    created_at: item.createdAt,
+    updated_at: item.updatedAt,
   }));
 
-  return { vehicle_types: normalizedItems };
+  return {
+    results,
+    paginator: {
+      data: results,
+      total: results.length,
+      current_page: 1,
+      last_page: 1,
+      per_page: 10,
+      from: 1,
+      to: results.length,
+    }
+  };
 };
 
 export const listVehiclePreferences = async () => {
@@ -1137,6 +1264,168 @@ export const deleteVehicleType = async (id) => {
   if (!deleted) {
     throw new ApiError(404, 'Vehicle type not found');
   }
+  return true;
+};
+
+export const listSetPrices = async () => {
+  const items = await SetPrice.find()
+    .populate('vehicle_type')
+    .populate({
+      path: 'zone_id',
+      populate: { path: 'service_location_id' }
+    })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const results = items.map((item) => {
+    const vType = item.vehicle_type || {};
+    const zone = item.zone_id || {};
+    const sl = zone.service_location_id || {};
+
+    return {
+      id: String(item._id),
+      type_id: vType._id ? String(vType._id) : null,
+      name: vType.name || '',
+      icon: vType.icon || '',
+      capacity: vType.capacity || item.capacity || 0,
+      is_accept_share_ride: item.enable_shared_ride || 0,
+      active: item.active || 0,
+      currency: sl.currency_symbol || '₹',
+      unit: Number(zone.unit || 1),
+      unit_in_words: 'Km',
+      zone_name: zone.name || '',
+      vehicle_type_name: vType.name || '',
+      drop_zone_name: null,
+      transport_type: item.transport_type || 'both',
+      payment_type: Array.isArray(item.payment_type) ? item.payment_type : (item.payment_type ? String(item.payment_type).split(',') : ['cash', 'online', 'wallet']),
+    };
+  });
+
+  const paginatorData = items.map((item) => {
+    const vType = item.vehicle_type || {};
+    const zone = item.zone_id || {};
+    const sl = zone.service_location_id || {};
+
+    return {
+      ...item,
+      id: String(item._id),
+      vehicle_type_name: vType.name || '',
+      icon: vType.icon || '',
+      zone_name: zone.name || '',
+      drop_zone_name: null,
+      vehicle_type: vType ? {
+        ...vType,
+        id: String(vType._id),
+        icon_types_for: vType.icon_types,
+        trip_dispatch_type: vType.dispatch_type,
+      } : null,
+      zone: zone ? {
+        ...zone,
+        id: String(zone._id),
+        service_location: sl ? {
+          ...sl,
+          id: String(sl._id),
+        } : null,
+      } : null,
+    };
+  });
+
+  return {
+    results,
+    paginator: {
+      current_page: 1,
+      data: paginatorData,
+      from: 1,
+      to: paginatorData.length,
+      total: paginatorData.length,
+      last_page: 1,
+      per_page: 10,
+    }
+  };
+};
+
+export const createSetPrice = async (payload) => {
+  const setPrice = await SetPrice.create({
+    zone_id: toObjectId(payload.zone_id),
+    vehicle_type: toObjectId(payload.vehicle_type),
+    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+    transport_type: payload.transport_type || 'taxi',
+    payment_type: Array.isArray(payload.payment_type) ? payload.payment_type : ['cash', 'online', 'wallet'],
+    active: Number(payload.active ?? 1),
+    
+    // Commission Structure
+    admin_commision_type: Number(payload.admin_commision_type ?? (payload.customer_commission_type === 'percentage' ? 1 : 0)),
+    admin_commision: Number(payload.admin_commision ?? payload.customer_commission ?? 0),
+    admin_commission_type_for_owner: Number(payload.admin_commission_type_for_owner ?? 1),
+    admin_commission_for_owner: Number(payload.admin_commission_for_owner ?? 0),
+    admin_commission_type_from_driver: Number(payload.admin_commission_type_from_driver ?? 1),
+    admin_commission_from_driver: Number(payload.admin_commission_from_driver ?? 0),
+    
+    // Tax & Surgers
+    service_tax: Number(payload.service_tax ?? 0),
+    airport_surge: Number(payload.airport_surge ?? 0),
+    support_airport_fee: Number(payload.support_airport_fee ?? 0),
+    support_outstation: Number(payload.support_outstation ?? 0),
+    
+    // Core Pricing
+    base_price: Number(payload.base_price ?? 0),
+    base_distance: Number(payload.base_distance ?? 0),
+    price_per_distance: Number(payload.price_per_distance ?? 0),
+    time_price: Number(payload.time_price ?? 0),
+    waiting_charge: Number(payload.waiting_charge ?? 0),
+    free_waiting_before: Number(payload.free_waiting_before ?? 0),
+    free_waiting_after: Number(payload.free_waiting_after ?? 0),
+    
+    // Ride Sharing
+    enable_shared_ride: Number(payload.enable_shared_ride ?? (payload.enable_ride_sharing ? 1 : 0)),
+    price_per_seat: Number(payload.price_per_seat ?? 0),
+    shared_price_per_distance: Number(payload.shared_price_per_distance ?? 0),
+    shared_cancel_fee: Number(payload.shared_cancel_fee ?? 0),
+    
+    // Meta
+    order_number: Number(payload.order_number ?? 1),
+    bill_status: Number(payload.bill_status ?? 1),
+    status: payload.status || 'active',
+  });
+
+  return setPrice.toObject();
+};
+
+export const updateSetPrice = async (id, payload) => {
+  const setPrice = await SetPrice.findById(id);
+  if (!setPrice) throw new ApiError(404, 'Set Price not found');
+
+  const fields = [
+    'zone_id', 'vehicle_type', 'service_location_id', 'transport_type',
+    'payment_type', 'active', 'admin_commision_type', 'admin_commision',
+    'admin_commission_type_for_owner', 'admin_commission_for_owner',
+    'admin_commission_type_from_driver', 'admin_commission_from_driver',
+    'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
+    'base_price', 'base_distance', 'price_per_distance', 'time_price',
+    'waiting_charge', 'free_waiting_before', 'free_waiting_after',
+    'enable_shared_ride', 'price_per_seat', 'shared_price_per_distance',
+    'shared_cancel_fee', 'order_number', 'bill_status', 'status'
+  ];
+
+  fields.forEach(field => {
+    if (payload[field] !== undefined) {
+      if (field.includes('_id') || field === 'vehicle_type') {
+         if (payload[field]) setPrice[field] = toObjectId(payload[field]);
+      } else if (typeof setPrice[field] === 'number') {
+         setPrice[field] = Number(payload[field]);
+      } else {
+         setPrice[field] = payload[field];
+      }
+    }
+  });
+
+  await setPrice.save();
+  return setPrice.toObject();
+};
+
+export const deleteSetPrice = async (id) => {
+  const deleted = await SetPrice.findByIdAndDelete(id);
+  if (!deleted) throw new ApiError(404, 'Set Price not found');
   return true;
 };
 
@@ -1523,16 +1812,6 @@ export const toggleZoneStatus = async (id) => {
   return serializeZone(populatedZone);
 };
 
-export const listSetPrices = async () => {
-  const items = await SetPrice.find()
-    .populate('zone_id', 'name')
-    .populate('service_location_id', 'name service_location_name')
-    .populate('vehicle_type', 'name')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return items.map(serializeSetPrice);
-};
 
 export const listAirports = async () => {
   const items = await Airport.find()
@@ -1662,185 +1941,53 @@ export const deleteAirport = async (id) => {
   return true;
 };
 
-export const createSetPrice = async (payload) => {
-  const item = await SetPrice.create({
-    zone_id: payload.zone_id ? toObjectId(payload.zone_id) : null,
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
-    transport_type: payload.transport_type || 'taxi',
-    vehicle_type: payload.vehicle_type ? toObjectId(payload.vehicle_type) : null,
-    app_modules: payload.app_modules ?? null,
-    vehicle_preference: payload.vehicle_preference ?? null,
-    payment_type: Array.isArray(payload.payment_type) ? payload.payment_type : [payload.payment_type || 'cash'],
-    customer_commission_type: payload.customer_commission_type || 'percentage',
-    customer_commission: toNullableNumber(payload.customer_commission),
-    driver_commission_type: payload.driver_commission_type || 'percentage',
-    driver_commission: toNullableNumber(payload.driver_commission),
-    owner_commission_type: payload.owner_commission_type || 'percentage',
-    owner_commission: toNullableNumber(payload.owner_commission),
-    service_tax: toNullableNumber(payload.service_tax),
-    eta_sequence: toNullableNumber(payload.eta_sequence),
-    base_price: toNullableNumber(payload.base_price),
-    base_distance: toNullableNumber(payload.base_distance),
-    price_per_distance: toNullableNumber(payload.price_per_distance),
-    time_price: toNullableNumber(payload.time_price),
-    waiting_charge: toNullableNumber(payload.waiting_charge),
-    free_waiting_before: toNullableNumber(payload.free_waiting_before),
-    free_waiting_after: toNullableNumber(payload.free_waiting_after),
-    enable_airport_ride: normalizeBoolean(payload.enable_airport_ride),
-    enable_outstation_ride: normalizeBoolean(payload.enable_outstation_ride),
-    user_cancellation_fee_type: payload.user_cancellation_fee_type || 'percentage',
-    user_cancellation_fee: toNullableNumber(payload.user_cancellation_fee),
-    driver_cancellation_fee_type: payload.driver_cancellation_fee_type || 'percentage',
-    driver_cancellation_fee: toNullableNumber(payload.driver_cancellation_fee),
-    cancellation_fee_goes_to: payload.cancellation_fee_goes_to || 'admin',
-    enable_ride_sharing: normalizeBoolean(payload.enable_ride_sharing),
-    status: payload.status || (normalizeBoolean(payload.active ?? true) ? 'active' : 'inactive'),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : (payload.status ? payload.status === 'active' : true),
-  });
-
-  const populatedItem = await SetPrice.findById(item._id)
-    .populate('zone_id', 'name')
-    .populate('service_location_id', 'name service_location_name')
-    .populate('vehicle_type', 'name')
-    .lean();
-
-  return serializeSetPrice(populatedItem);
-};
-
-export const updateSetPrice = async (id, payload) => {
-  const item = await SetPrice.findById(id);
-  if (!item) throw new ApiError(404, 'Set price not found');
-
-  if (payload.zone_id !== undefined) {
-    item.zone_id = payload.zone_id ? toObjectId(payload.zone_id) : null;
-  }
-  if (payload.service_location_id !== undefined) {
-    item.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
-  }
-  if (payload.transport_type !== undefined) {
-    item.transport_type = payload.transport_type || 'taxi';
-  }
-  if (payload.vehicle_type !== undefined) {
-    item.vehicle_type = payload.vehicle_type ? toObjectId(payload.vehicle_type) : null;
-  }
-  if (payload.app_modules !== undefined) {
-    item.app_modules = payload.app_modules ?? null;
-  }
-  if (payload.vehicle_preference !== undefined) {
-    item.vehicle_preference = payload.vehicle_preference ?? null;
-  }
-  if (payload.payment_type !== undefined) {
-    item.payment_type = Array.isArray(payload.payment_type) ? payload.payment_type : [payload.payment_type || 'cash'];
-  }
-  if (payload.customer_commission_type !== undefined) {
-    item.customer_commission_type = payload.customer_commission_type || 'percentage';
-  }
-  if (payload.customer_commission !== undefined) {
-    item.customer_commission = toNullableNumber(payload.customer_commission);
-  }
-  if (payload.driver_commission_type !== undefined) {
-    item.driver_commission_type = payload.driver_commission_type || 'percentage';
-  }
-  if (payload.driver_commission !== undefined) {
-    item.driver_commission = toNullableNumber(payload.driver_commission);
-  }
-  if (payload.owner_commission_type !== undefined) {
-    item.owner_commission_type = payload.owner_commission_type || 'percentage';
-  }
-  if (payload.owner_commission !== undefined) {
-    item.owner_commission = toNullableNumber(payload.owner_commission);
-  }
-  if (payload.service_tax !== undefined) {
-    item.service_tax = toNullableNumber(payload.service_tax);
-  }
-  if (payload.eta_sequence !== undefined) {
-    item.eta_sequence = toNullableNumber(payload.eta_sequence);
-  }
-  if (payload.base_price !== undefined) {
-    item.base_price = toNullableNumber(payload.base_price);
-  }
-  if (payload.base_distance !== undefined) {
-    item.base_distance = toNullableNumber(payload.base_distance);
-  }
-  if (payload.price_per_distance !== undefined) {
-    item.price_per_distance = toNullableNumber(payload.price_per_distance);
-  }
-  if (payload.time_price !== undefined) {
-    item.time_price = toNullableNumber(payload.time_price);
-  }
-  if (payload.waiting_charge !== undefined) {
-    item.waiting_charge = toNullableNumber(payload.waiting_charge);
-  }
-  if (payload.free_waiting_before !== undefined) {
-    item.free_waiting_before = toNullableNumber(payload.free_waiting_before);
-  }
-  if (payload.free_waiting_after !== undefined) {
-    item.free_waiting_after = toNullableNumber(payload.free_waiting_after);
-  }
-  if (payload.enable_airport_ride !== undefined) {
-    item.enable_airport_ride = normalizeBoolean(payload.enable_airport_ride);
-  }
-  if (payload.enable_outstation_ride !== undefined) {
-    item.enable_outstation_ride = normalizeBoolean(payload.enable_outstation_ride);
-  }
-  if (payload.user_cancellation_fee_type !== undefined) {
-    item.user_cancellation_fee_type = payload.user_cancellation_fee_type || 'percentage';
-  }
-  if (payload.user_cancellation_fee !== undefined) {
-    item.user_cancellation_fee = toNullableNumber(payload.user_cancellation_fee);
-  }
-  if (payload.driver_cancellation_fee_type !== undefined) {
-    item.driver_cancellation_fee_type = payload.driver_cancellation_fee_type || 'percentage';
-  }
-  if (payload.driver_cancellation_fee !== undefined) {
-    item.driver_cancellation_fee = toNullableNumber(payload.driver_cancellation_fee);
-  }
-  if (payload.cancellation_fee_goes_to !== undefined) {
-    item.cancellation_fee_goes_to = payload.cancellation_fee_goes_to || 'admin';
-  }
-  if (payload.enable_ride_sharing !== undefined) {
-    item.enable_ride_sharing = normalizeBoolean(payload.enable_ride_sharing);
-  }
-  if (payload.status !== undefined) {
-    item.status = payload.status || 'active';
-    item.active = item.status === 'active';
-  } else if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-    item.status = item.active ? 'active' : 'inactive';
-  }
-
-  await item.save();
-
-  const populatedItem = await SetPrice.findById(item._id)
-    .populate('zone_id', 'name')
-    .populate('service_location_id', 'name service_location_name')
-    .populate('vehicle_type', 'name')
-    .lean();
-
-  return serializeSetPrice(populatedItem);
-};
-
-export const deleteSetPrice = async (id) => {
-  const deleted = await SetPrice.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Set price not found');
-  return true;
-};
 
 export const listGoodsTypes = async () => {
   const items = await GoodsType.find().sort({ createdAt: -1 }).lean();
-  return items.map(serializeGoodsType);
+  const results = items.map(serializeGoodsType);
+  
+  return {
+    success: true,
+    results,
+    paginator: {
+      current_page: 1,
+      data: results,
+      first_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
+      from: 1,
+      last_page: 1,
+      last_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
+      links: [
+        { url: null, label: "&laquo; Previous", active: false },
+        { url: "http://localhost:5000/api/v1/admin/goods-types?page=1", label: "1", active: true },
+        { url: null, label: "Next &raquo;", active: false }
+      ],
+      next_page_url: null,
+      path: "http://localhost:5000/api/v1/admin/goods-types",
+      per_page: 50,
+      prev_page_url: null,
+      to: results.length,
+      total: results.length
+    }
+  };
 };
 
 export const createGoodsType = async (payload) => {
-  if (!payload.name?.trim()) {
+  const name = payload.goods_type_name || payload.name || '';
+  if (!name.trim()) {
     throw new ApiError(400, 'Goods type name is required');
   }
 
+  const active = payload.active !== undefined ? 
+                 (typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active)) : 
+                 1;
+
   const item = await GoodsType.create({
-    name: String(payload.name).trim(),
-    goods_type_for: payload.goods_type_for || 'all',
-    status: payload.status || 'active',
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : ((payload.status || 'active') === 'active'),
+    goods_type_name: name.trim(),
+    name: name.trim(),
+    goods_types_for: payload.goods_types_for || payload.goods_type_for || 'both',
+    status: payload.status || (active === 1 ? 'active' : 'inactive'),
+    active: active,
+    translation_dataset: payload.translation_dataset || '',
   });
 
   return serializeGoodsType(item.toObject());
@@ -1850,18 +1997,28 @@ export const updateGoodsType = async (id, payload) => {
   const item = await GoodsType.findById(id);
   if (!item) throw new ApiError(404, 'Goods type not found');
 
-  if (payload.name !== undefined) {
-    item.name = String(payload.name).trim();
+  const name = payload.goods_type_name || payload.name;
+  if (name !== undefined) {
+    item.goods_type_name = name.trim();
+    item.name = name.trim();
   }
-  if (payload.goods_type_for !== undefined) {
-    item.goods_type_for = payload.goods_type_for || 'all';
+  
+  if (payload.goods_types_for !== undefined || payload.goods_type_for !== undefined) {
+    item.goods_types_for = payload.goods_types_for || payload.goods_type_for || 'both';
   }
+
+  if (payload.active !== undefined) {
+    item.active = typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active);
+  }
+
   if (payload.status !== undefined) {
-    item.status = payload.status || 'active';
-    item.active = item.status === 'active';
+    item.status = payload.status;
   } else if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-    item.status = item.active ? 'active' : 'inactive';
+    item.status = item.active === 1 ? 'active' : 'inactive';
+  }
+
+  if (payload.translation_dataset !== undefined) {
+    item.translation_dataset = payload.translation_dataset;
   }
 
   await item.save();
@@ -2243,33 +2400,8 @@ export const ensureAppSettings = async () => {
 };
 
 export const ensureAppModules = async () => {
-  const existingCount = await AppModule.countDocuments();
-  if (existingCount > 0) {
-    return;
-  }
-
-  const settings = await ensureAppSettings();
-  const legacyModules =
-    settings.app_modules?.length > 0
-      ? settings.app_modules
-      : createDefaultAppSettings().app_modules || [];
-
-  if (legacyModules.length === 0) {
-    return;
-  }
-
-  await AppModule.insertMany(
-    legacyModules.map((item) => ({
-      name: item.name,
-      transport_type: item.transport_type,
-      service_type: item.service_type,
-      order_by: Number(item.order_by || 0),
-      short_description: item.short_description || '',
-      description: item.description || '',
-      active: normalizeBoolean(item.active ?? true),
-      mobile_menu_icon: item.mobile_menu_icon || '',
-    })),
-  );
+  // No-op: AppModule is now nested inside AdminAppSetting
+  return;
 };
 
 export const getGeneralSettings = async (category) => {
@@ -2333,77 +2465,61 @@ export const updateGeneralSettings = async (category, payload) => {
   return { settings: bizSettings[bizKey] };
 };
 
-export const listAppModules = async ({ page = 1, limit = 20 }) => {
-  await ensureAppModules();
-
-  const safePage = Math.max(1, Number(page) || 1);
-  const safeLimit = Math.max(1, Number(limit) || 20);
-  const skip = (safePage - 1) * safeLimit;
-
-  const [results, total] = await Promise.all([
-    AppModule.find({})
-      .sort({ order_by: 1, createdAt: -1 })
-      .skip(skip)
-      .limit(safeLimit)
-      .lean(),
-    AppModule.countDocuments(),
-  ]);
-
+export const listAppModules = async () => {
+  const settings = await ensureAppSettings();
+  const modules = settings.app_modules || [];
   return {
-    results,
+    results: modules.sort((a, b) => Number(a.order_by || 0) - Number(b.order_by || 0)),
     paginator: {
-      current_page: safePage,
-      per_page: safeLimit,
-      total,
-      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+      total: modules.length,
+      current_page: 1,
+      last_page: 1,
     },
   };
 };
 
 export const createAppModule = async (payload) => {
-  await ensureAppModules();
-
-  const moduleItem = await AppModule.create({
-    name: payload.name,
-    transport_type: payload.transport_type,
-    service_type: payload.service_type,
+  const settings = await ensureAppSettings();
+  const newModule = {
+    _id: nextId(),
+    ...payload,
     order_by: Number(payload.order_by || 0),
-    short_description: payload.short_description || '',
-    description: payload.description || '',
     active: normalizeBoolean(payload.active ?? true),
-    mobile_menu_icon:
-      payload.mobile_menu_icon ||
-      (payload.transport_type === 'delivery'
-        ? 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/package.svg'
-        : 'https://cdn.jsdelivr.net/gh/tabler/tabler-icons/icons/car.svg'),
-  });
-
-  return moduleItem.toObject();
+  };
+  settings.app_modules.push(newModule);
+  settings.markModified('app_modules');
+  await settings.save();
+  return newModule;
 };
 
 export const updateAppModule = async (id, payload) => {
-  await ensureAppModules();
+  const settings = await ensureAppSettings();
+  const moduleIndex = settings.app_modules.findIndex((m) => String(m._id) === String(id));
+  if (moduleIndex === -1) throw new ApiError(404, 'App module not found');
 
-  const moduleItem = await AppModule.findById(id);
-  if (!moduleItem) throw new ApiError(404, 'App module not found');
+  settings.app_modules[moduleIndex] = {
+    ...settings.app_modules[moduleIndex],
+    ...payload,
+    order_by: payload.order_by !== undefined ? Number(payload.order_by) : settings.app_modules[moduleIndex].order_by,
+    active: payload.active !== undefined ? normalizeBoolean(payload.active) : settings.app_modules[moduleIndex].active,
+  };
 
-  Object.assign(moduleItem, payload, {
-    order_by: payload.order_by !== undefined ? Number(payload.order_by) : moduleItem.order_by,
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : moduleItem.active,
-  });
-
-  await moduleItem.save();
-  return moduleItem.toObject();
+  settings.markModified('app_modules');
+  await settings.save();
+  return settings.app_modules[moduleIndex];
 };
 
 export const deleteAppModule = async (id) => {
-  await ensureAppModules();
-
-  const deleted = await AppModule.findByIdAndDelete(id);
-  if (!deleted) {
+  const settings = await ensureAppSettings();
+  const initialCount = settings.app_modules.length;
+  settings.app_modules = settings.app_modules.filter((m) => String(m._id) !== String(id));
+  
+  if (settings.app_modules.length === initialCount) {
     throw new ApiError(404, 'App module not found');
   }
 
+  settings.markModified('app_modules');
+  await settings.save();
   return true;
 };
 

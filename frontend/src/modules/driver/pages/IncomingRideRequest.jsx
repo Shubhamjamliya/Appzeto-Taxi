@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion, AnimatePresence, useMotionValue, useTransform } from 'framer-motion';
 import { 
     Clock, 
     Navigation, 
@@ -19,8 +19,10 @@ import {
     ArrowRight
 } from 'lucide-react';
 
-const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
+const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAccepting = false }) => {
     const [timer, setTimer] = useState(15);
+    const slideX = useMotionValue(0);
+    const slideFillWidth = useTransform(slideX, [0, 160], ['52px', '100%']);
 
     const data = requestData;
 
@@ -40,6 +42,24 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
         }
         return () => clearInterval(interval);
     }, [visible, onDecline]);
+
+    useEffect(() => {
+        slideX.set(0);
+    }, [slideX, visible, data?.rideId]);
+
+    const handleSlideEnd = (_event, info) => {
+        if (isAccepting) {
+            return;
+        }
+
+        if (info.offset.x >= 110) {
+            slideX.set(160);
+            onAccept(data);
+            return;
+        }
+
+        slideX.set(0);
+    };
 
     if (!visible || !data) return null;
 
@@ -61,7 +81,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
                     initial={{ y: '100%' }}
                     animate={{ y: 0 }}
                     exit={{ y: '100%' }}
-                    className="w-full max-w-sm bg-white rounded-[2rem] overflow-hidden shadow-2xl border border-slate-100 relative p-5 pt-8"
+                    className="w-full max-w-md bg-white rounded-[2rem] overflow-hidden shadow-2xl border border-slate-100 relative p-6 pt-10"
                 >
                     {/* Timer Circle */}
                     <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-1/2">
@@ -88,76 +108,102 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData }) => {
                                     strokeLinecap="round"
                                 />
                             </svg>
-                            <span className="text-xl font-black text-slate-900 z-10">{timer}</span>
+                            <span className="text-xl font-bold text-slate-900 z-10">{timer}</span>
                         </div>
                     </div>
 
                     {/* Content Section */}
-                    <div className="text-center space-y-3">
-                        <div className="space-y-1 pt-1">
-                             <div className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full ${isParcel ? 'bg-orange-100 text-orange-600' : 'bg-slate-900 text-white'}`}>
+                    <div className="text-center space-y-4">
+                        <div className="space-y-1.5 pt-1">
+                             <div className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full ${isParcel ? 'bg-orange-100 text-orange-600' : 'bg-slate-900 text-white'}`}>
                                 {isParcel ? <Package size={14} strokeWidth={2.5} /> : <Bike size={14} strokeWidth={2.5} />}
-                                <span className="text-[9px] font-black uppercase tracking-[0.15em]">{data.title} Request</span>
+                                <span className="text-[10px] font-semibold tracking-wide">{data.title} Request</span>
                              </div>
-                             <h2 className="text-xl font-black text-slate-900 tracking-tight uppercase mt-2 leading-none">
+                             <h2 className="text-xl font-bold text-slate-900 tracking-tight mt-2 leading-none">
                                 Incoming Order
                              </h2>
                         </div>
 
                         {/* Amount & Distance Stats */}
-                        <div className="flex items-center justify-center gap-4 py-1.5 bg-slate-50 rounded-2xl border border-slate-100/50 mx-2">
+                        <div className="flex items-center justify-center gap-5 py-3 bg-slate-50 rounded-2xl border border-slate-100/50 mx-1">
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Distance</p>
-                                <p className="text-[12px] font-black text-slate-800 leading-none">{data.distance}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Distance</p>
+                                <p className="text-[13px] font-bold text-slate-800 leading-none">{data.distance}</p>
                             </div>
-                            <div className="w-[1px] h-6 bg-slate-200" />
+                            <div className="w-[1px] h-8 bg-slate-200" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Earnings</p>
-                                <p className="text-lg font-black text-slate-900 leading-none">{data.fare}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Earnings</p>
+                                <p className="text-lg font-bold text-slate-900 leading-none">{data.fare}</p>
                             </div>
-                            <div className="w-[1px] h-6 bg-slate-200" />
+                            <div className="w-[1px] h-8 bg-slate-200" />
                             <div className="text-center">
-                                <p className="text-[8px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Method</p>
-                                <p className="text-[12px] font-black text-emerald-600 uppercase leading-none">{data.payment}</p>
+                                <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wider leading-none mb-1">Method</p>
+                                <p className="text-[13px] font-bold text-emerald-600 uppercase leading-none">{data.payment}</p>
                             </div>
                         </div>
 
                         {/* Route Details - Very Compact */}
-                        <div className="px-2 space-y-2 mt-4">
+                        <div className="px-2 space-y-3 mt-5">
                             <div className="flex items-start gap-3">
                                 <div className="mt-1">
                                     <div className="w-2 h-2 rounded-full border-2 border-slate-900 bg-white" />
                                 </div>
                                 <div className="flex-1 text-left">
-                                     <p className="text-[12px] font-black text-slate-900 leading-tight uppercase line-clamp-1">{data.pickup}</p>
-                                     <p className="text-[8px] font-bold text-slate-400 tracking-[0.1em] uppercase">Pickup Point</p>
+                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.pickup}</p>
+                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Pickup Point</p>
                                 </div>
                             </div>
-                            <div className="flex items-start gap-3 border-t border-dashed border-slate-100 pt-2">
+                            <div className="flex items-start gap-3 border-t border-dashed border-slate-100 pt-3">
                                 <div className="mt-1">
                                     <div className="w-2 h-2 rounded-full border-2 border-rose-500 bg-white" />
                                 </div>
                                 <div className="flex-1 text-left">
-                                     <p className="text-[12px] font-black text-slate-900 leading-tight uppercase line-clamp-1">{data.drop}</p>
-                                     <p className="text-[8px] font-bold text-slate-400 tracking-[0.1em] uppercase">Drop Point</p>
+                                     <p className="text-sm font-semibold text-slate-900 leading-tight line-clamp-1">{data.drop}</p>
+                                     <p className="text-[9px] font-medium text-slate-400 tracking-wide uppercase">Drop Point</p>
                                 </div>
                             </div>
                         </div>
 
-                        {/* Action Buttons */}
-                        <div className="flex gap-2.5 pt-3">
+                        {/* Action Controls */}
+                        <div className="flex gap-3 pt-4">
                             <button 
                                 onClick={onDecline}
-                                className="w-14 h-14 rounded-2xl border-2 border-slate-100 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors bg-white shadow-sm"
+                                disabled={isAccepting}
+                                className="w-14 h-14 rounded-2xl border-2 border-slate-100 flex items-center justify-center text-slate-300 hover:text-rose-500 transition-colors bg-white shadow-sm shrink-0 disabled:opacity-50 disabled:pointer-events-none"
                             >
                                 <X size={24} strokeWidth={2.5} />
                             </button>
+                            <div 
+                                className="relative h-14 flex-1 overflow-hidden rounded-2xl bg-slate-900 shadow-xl shadow-slate-900/20"
+                            >
+                                <motion.div
+                                    style={{ width: slideFillWidth }}
+                                    className="absolute inset-y-0 left-0 rounded-2xl bg-emerald-500"
+                                />
+                                <div className="pointer-events-none absolute inset-0 flex items-center justify-center pl-12 pr-3">
+                                    <span className="truncate text-[11px] font-black uppercase tracking-[0.16em] text-white/75">
+                                        {isAccepting ? 'Accepting...' : 'Slide to accept'}
+                                    </span>
+                                    <ArrowRight size={15} className="ml-1.5 shrink-0 text-white/70" strokeWidth={3} />
+                                </div>
+                                <motion.div
+                                    drag="x"
+                                    dragConstraints={{ left: 0, right: 160 }}
+                                    dragElastic={0.02}
+                                    dragMomentum={false}
+                                    style={{ x: slideX }}
+                                    onDragEnd={handleSlideEnd}
+                                    className="absolute left-1.5 top-1.5 z-10 flex h-[44px] w-[44px] cursor-grab items-center justify-center rounded-[14px] bg-white text-slate-900 shadow-lg active:cursor-grabbing"
+                                >
+                                    <ChevronRight size={24} strokeWidth={3} />
+                                </motion.div>
+                            </div>
                             <motion.button 
                                 whileTap={{ scale: 0.98 }}
                                 onClick={() => onAccept(data)}
-                                className="flex-1 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[14px] font-black uppercase tracking-[0.15em] shadow-xl shadow-slate-900/20"
+                                className="flex-1 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-2 text-[15px] font-bold shadow-xl shadow-slate-900/20"
                             >
-                                Accept <ArrowRight size={20} strokeWidth={2.5} />
+                                Accept Ride <ArrowRight size={20} strokeWidth={2.5} />
                             </motion.button>
                         </div>
                     </div>

@@ -6,10 +6,10 @@ const subscriptionPlanSchema = new mongoose.Schema({
   amount: Number,
   duration: Number, // in days
   transport_type: String,
-  vehicle_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'VehicleType' },
-  service_location_id: { type: mongoose.Schema.Types.ObjectId, ref: 'ServiceLocation' },
+  vehicle_type_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiVehicle' },
+  service_location_id: { type: mongoose.Schema.Types.ObjectId, ref: 'TaxiServiceLocation' },
   how_it_works: String,
   active: { type: Boolean, default: true }
 }, { timestamps: true });
 
-export const SubscriptionPlan = mongoose.models.SubscriptionPlan || mongoose.model('SubscriptionPlan', subscriptionPlanSchema);
+export const SubscriptionPlan = mongoose.models.TaxiSubscriptionPlan || mongoose.model('TaxiSubscriptionPlan', subscriptionPlanSchema);

@@ -292,6 +292,7 @@ const AdminLayout = () => {
               { label: 'Service Location', path: '/admin/pricing/service-location' },
               { label: 'Zone', path: '/admin/pricing/zone' },
               { label: 'Airport', path: '/admin/pricing/airport' },
+              { label: 'App Modules', path: '/admin/pricing/app-modules' },
               { label: 'Vehicle Type', path: '/admin/pricing/vehicle-type' },
               { label: 'Rental Package Types', path: '/admin/pricing/rental-packages' },
               { label: 'Set Price', path: '/admin/pricing/set-price' },
@@ -409,7 +410,6 @@ const AdminLayout = () => {
               { label: 'Wallet Settings', path: '/admin/settings/app/wallet' },
               { label: 'Tip Settings', path: '/admin/settings/app/tip' },
               { label: 'Country', path: '/admin/settings/app/country' },
-              { label: 'App Modules', path: '/admin/settings/app/modules' },
               { label: 'Mobile App Landing/Onboard Screens Settings', path: '/admin/settings/app/onboard' },
             ],
           },
@@ -549,7 +549,7 @@ const AdminLayout = () => {
   };
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[#F8F9FA] font-['Plus_Jakarta_Sans',sans-serif] text-gray-900">
+    <div className="flex h-screen overflow-hidden bg-[#F8F9FA] font-sans text-gray-900">
       <aside
         className={`relative z-50 flex h-screen flex-col overflow-hidden bg-[#0F172A] transition-all duration-500 ${
           isCollapsed ? 'w-20' : 'w-72'

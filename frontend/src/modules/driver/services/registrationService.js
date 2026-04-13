@@ -45,18 +45,39 @@ export const saveDriverDocuments = (payload) => api.patch('/drivers/onboarding/d
 
 export const completeDriverOnboarding = (payload) => api.post('/drivers/onboarding/complete', payload);
 
-export const getCurrentDriver = () => api.get('/drivers/me');
+const readLocalDriverToken = () =>
+  localStorage.getItem('driverToken') || localStorage.getItem('token') || '';
 
-export const updateDriverVehicle = (payload) => api.patch('/drivers/vehicle', payload);
+const withDriverAuth = (config = {}) => {
+  const token = readLocalDriverToken();
 
-export const getDriverVehicleTypes = () => api.get('/admin/types/vehicle-types');
+  if (!token) {
+    return config;
+  }
 
-export const getDriverApprovalStatus = () =>
-  api.get('/drivers/approval-status', {
+  return {
+    ...config,
+    headers: {
+      ...(config.headers || {}),
+      Authorization: `Bearer ${token}`,
+    },
+  };
+};
+
+export const getCurrentDriver = () => api.get('/drivers/me', withDriverAuth());
+
+export const updateDriverVehicle = (payload) =>
+  api.patch('/drivers/vehicle', payload, withDriverAuth());
+
+export const getDriverVehicleTypes = () => api.get('/admin/types/vehicle-types', withDriverAuth());
+
+export const getDriverApprovalStatus = () => {
+  return api.get('/drivers/approval-status', withDriverAuth({
     params: {
       t: Date.now(),
     },
-  });
+  }));
+};
 
 export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {

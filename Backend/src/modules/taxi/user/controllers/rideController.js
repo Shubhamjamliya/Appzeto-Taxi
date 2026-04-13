@@ -2,7 +2,18 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint } from '../../../../utils/geo.js';
 import { Driver } from '../../driver/models/Driver.js';
-import { createRideRecord, getRideDetails, startDispatchFlow } from '../services/rideService.js';
+import { RIDE_LIVE_STATUS } from '../../constants/index.js';
+import {
+  createRideRecord,
+  ensureRideParticipantAccess,
+  getActiveRideForIdentity,
+  getRideDetails,
+  getRideRoom,
+  listRideHistoryForIdentity,
+  serializeRideRealtime,
+  updateRideLifecycle,
+} from '../../services/rideService.js';
+import { startDispatchFlow } from '../../services/dispatchService.js';
 
 export const createRide = async (req, res) => {
   const { pickup, drop, fare, vehicleTypeId, vehicleIconType } = req.body;
@@ -24,16 +35,79 @@ export const createRide = async (req, res) => {
 
   res.status(201).json({
     success: true,
-    data: ride,
+    data: {
+      ride,
+      realtime: {
+        room: getRideRoom(ride._id),
+        rideId: String(ride._id),
+      },
+    },
   });
 };
 
 export const getRideById = async (req, res) => {
+  await ensureRideParticipantAccess({
+    rideId: req.params.rideId,
+    role: req.auth.role,
+    entityId: req.auth.sub,
+  });
+
   const ride = await getRideDetails(req.params.rideId);
 
   res.json({
     success: true,
     data: ride,
+  });
+};
+
+export const getMyActiveRide = async (req, res) => {
+  const ride = await getActiveRideForIdentity({
+    role: req.auth.role,
+    entityId: req.auth.sub,
+  });
+
+  res.json({
+    success: true,
+    data: ride ? serializeRideRealtime(ride) : null,
+  });
+};
+
+export const listMyRides = async (req, res) => {
+  const rides = await listRideHistoryForIdentity({
+    role: req.auth.role,
+    entityId: req.auth.sub,
+    limit: req.query.limit,
+  });
+
+  res.json({
+    success: true,
+    data: {
+      results: rides,
+      total: rides.length,
+    },
+  });
+};
+
+export const updateRideStatus = async (req, res) => {
+  if (req.auth.role !== 'driver') {
+    throw new ApiError(403, 'Only drivers can update ride status');
+  }
+
+  const nextStatus = String(req.body.status || '').trim().toLowerCase();
+
+  if (![RIDE_LIVE_STATUS.ARRIVING, RIDE_LIVE_STATUS.STARTED, RIDE_LIVE_STATUS.COMPLETED].includes(nextStatus)) {
+    throw new ApiError(400, 'status must be arriving, started, or completed');
+  }
+
+  const ride = await updateRideLifecycle({
+    rideId: req.params.rideId,
+    driverId: req.auth.sub,
+    nextStatus,
+  });
+
+  res.json({
+    success: true,
+    data: serializeRideRealtime(ride),
   });
 };
 
@@ -69,7 +143,6 @@ export const listAvailableDrivers = async (req, res) => {
   const drivers = await Driver.find({
     isOnline: true,
     isOnRide: false,
-    socketId: { $ne: null },
     vehicleTypeId,
     location: {
       $near: near,

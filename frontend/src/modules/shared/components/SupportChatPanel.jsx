@@ -103,6 +103,7 @@ const SupportChatPanel = ({
   const [sending, setSending] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState('');
+  const [isConnected, setIsConnected] = useState(socketService.isConnected());
   const bottomRef = useRef(null);
 
   const selectedConversation = useMemo(
@@ -325,12 +326,22 @@ const SupportChatPanel = ({
       });
     };
 
+    const handleConnect = () => setIsConnected(true);
+    const handleDisconnect = () => setIsConnected(false);
+
+    socketService.on('connect', handleConnect);
+    socketService.on('disconnect', handleDisconnect);
+
     socketService.on('chat:message', handleMessage);
     socketService.on('chat:conversation-updated', handleConversationUpdate);
     socketService.on('chat:conversation-deleted', handleConversationDeleted);
     socketService.on('errorMessage', handleSocketError);
 
+    setIsConnected(socketService.isConnected());
+
     return () => {
+      socketService.off('connect', handleConnect);
+      socketService.off('disconnect', handleDisconnect);
       socketService.off('chat:message', handleMessage);
       socketService.off('chat:conversation-updated', handleConversationUpdate);
       socketService.off('chat:conversation-deleted', handleConversationDeleted);
@@ -549,12 +560,12 @@ const SupportChatPanel = ({
     return (
       <div className={`rounded-[32px] border border-slate-200 bg-white p-8 shadow-sm ${className}`}>
         <div className="flex items-center gap-3">
-          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900 text-white">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-600 text-white">
             <ShieldCheck size={20} />
           </div>
           <div>
-            <p className="text-[11px] font-black uppercase tracking-[0.24em] text-slate-400">Support Chat</p>
-            <h2 className="text-[20px] font-black text-slate-900">{title}</h2>
+            <p className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">Support Chat</p>
+            <h2 className="text-[20px] font-semibold text-slate-900">{title}</h2>
           </div>
         </div>
         <p className="mt-4 text-[13px] font-semibold leading-6 text-slate-500">
@@ -568,18 +579,22 @@ const SupportChatPanel = ({
     <div className={`overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.08)] ${className}`}>
       <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
         <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-slate-900 text-white">
+          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white">
             <MessageCircle size={18} />
           </div>
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-slate-400">Support Desk</p>
-            <h2 className="text-[18px] font-black text-slate-900">{title}</h2>
-            <p className="text-[11px] font-bold uppercase tracking-[0.18em] text-emerald-600">{subtitle}</p>
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Support Desk</p>
+            <h2 className="text-[18px] font-semibold text-slate-900">{title}</h2>
+            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">{subtitle}</p>
           </div>
         </div>
-        <div className="flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-2 text-emerald-700">
-          <div className="h-2 w-2 rounded-full bg-emerald-500" />
-          <span className="text-[10px] font-black uppercase tracking-[0.18em]">Live</span>
+        <div className={`flex items-center gap-2 rounded-full border px-3 py-2 transition-colors ${
+          isConnected ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-100 bg-rose-50 text-rose-700'
+        }`}>
+          <div className={`h-2 w-2 rounded-full animate-pulse ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
+          <span className="text-[10px] font-semibold uppercase tracking-wider">
+            {isConnected ? 'Live' : 'Offline'}
+          </span>
         </div>
       </div>
 
@@ -605,7 +620,7 @@ const SupportChatPanel = ({
                   onClick={() => handleSelectConversation(conversation.conversationKey)}
                   className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
                     selectedConversationKey === conversation.conversationKey
-                      ? 'border-slate-900 bg-slate-900 text-white'
+                      ? 'border-indigo-600 bg-indigo-600 text-white'
                       : 'border-transparent bg-white hover:border-slate-200'
                   }`}
                 >
@@ -617,18 +632,18 @@ const SupportChatPanel = ({
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`truncate text-[13px] font-black uppercase tracking-[0.08em] ${
+                      <p className={`truncate text-[13px] font-semibold uppercase tracking-tight ${
                         selectedConversationKey === conversation.conversationKey ? 'text-white' : 'text-slate-900'
                       }`}>
                         {conversation.peer?.name || 'Support Contact'}
                       </p>
                       {conversation.unreadCount > 0 && (
-                        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black text-white">
+                        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-semibold text-white">
                           {conversation.unreadCount}
                         </span>
                       )}
                     </div>
-                    <p className={`mt-0.5 text-[11px] font-bold uppercase tracking-[0.12em] ${
+                    <p className={`mt-0.5 text-[11px] font-bold uppercase tracking-wider ${
                       selectedConversationKey === conversation.conversationKey ? 'text-white/70' : 'text-slate-500'
                     }`}>
                       {conversation.peer?.role || 'user'}
@@ -658,10 +673,10 @@ const SupportChatPanel = ({
                 {selectedConversation?.peer?.role === 'driver' ? <CircleUser size={20} /> : <Bot size={20} />}
               </div>
               <div className="min-w-0">
-                <h3 className="truncate text-[15px] font-black uppercase tracking-[0.08em] text-slate-900">
+                <h3 className="truncate text-[15px] font-semibold uppercase tracking-tight text-slate-900">
                   {selectedConversation?.peer?.name || 'Support Team'}
                 </h3>
-                <p className="text-[11px] font-bold uppercase tracking-[0.16em] text-emerald-600">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">
                   {isAdminPanel
                     ? selectedConversation?.peer?.role === 'driver'
                       ? 'Driver Support Thread'
@@ -679,7 +694,7 @@ const SupportChatPanel = ({
                   socketService.emit('chat:read', { conversationKey: selectedConversationKey });
                 }
               }}
-              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-slate-500 transition-colors hover:bg-slate-50"
+              className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-slate-500 transition-colors hover:bg-slate-50"
             >
               <RefreshCcw size={14} className="inline-block" />
             </button>
@@ -687,7 +702,7 @@ const SupportChatPanel = ({
               type="button"
               onClick={handleClearChat}
               disabled={!selectedConversationKey || messages.length === 0 || deleting}
-              className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-black uppercase tracking-[0.16em] text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl border border-rose-100 bg-rose-50 px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-rose-600 transition-colors hover:bg-rose-100 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Trash2 size={14} className="inline-block" />
             </button>
@@ -719,13 +734,13 @@ const SupportChatPanel = ({
                           <div
                             className={`rounded-3xl px-4 py-3 shadow-sm ${
                               isMine
-                                ? 'rounded-br-md border border-slate-900 bg-slate-900 text-white'
+                                ? 'rounded-br-md border border-indigo-600 bg-indigo-600 text-white'
                                 : 'rounded-bl-md border border-slate-200 bg-white text-slate-800'
                             }`}
                           >
                             <p className="text-[14px] font-medium leading-6">{message.message}</p>
                           </div>
-                          <div className={`mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-[0.18em] ${
+                          <div className={`mt-1 flex items-center gap-2 text-[10px] font-bold uppercase tracking-wider ${
                             isMine ? 'justify-end text-slate-400' : 'text-slate-400'
                           }`}>
                             <Clock3 size={11} />
@@ -778,7 +793,7 @@ const SupportChatPanel = ({
                 onClick={handleSend}
                 disabled={sending || !draft.trim()}
                 className={`inline-flex h-11 w-11 items-center justify-center rounded-2xl text-white transition-all ${
-                  sending || !draft.trim() ? 'bg-slate-300' : 'bg-slate-900 hover:bg-slate-800'
+                  sending || !draft.trim() ? 'bg-slate-300' : 'bg-indigo-600 hover:bg-slate-800'
                 }`}
               >
                 {sending ? <Loader2 size={16} className="animate-spin" /> : <Send size={16} />}
@@ -792,7 +807,7 @@ const SupportChatPanel = ({
                     type="button"
                     key={reply}
                     onClick={() => setDraft(reply)}
-                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-black uppercase tracking-[0.14em] text-slate-500"
+                    className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-500"
                   >
                     {reply}
                   </button>

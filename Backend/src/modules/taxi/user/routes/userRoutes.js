@@ -1,7 +1,8 @@
 import { Router } from 'express';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
-import { authenticate } from '../../middlewares/authMiddleware.js';
+import { authenticateOrResolveUser } from '../../middlewares/authMiddleware.js';
 import {
+  createRazorpayWalletTopupOrder,
   getUserWallet,
   getCurrentUser,
   loginUser,
@@ -12,12 +13,15 @@ import {
   transferUserWallet,
   updateCurrentUser,
   uploadUserProfileImage,
+  verifyRazorpayWalletTopup,
   verifyUserOtpRequest,
   verifyUserPhoneForOtpLogin,
 } from '../controllers/userController.js';
+import { getAppModules } from '../../admin/controllers/adminController.js';
 
 export const userRouter = Router();
 
+userRouter.get('/app-modules', asyncHandler(getAppModules));
 userRouter.post('/register', asyncHandler(registerUser));
 userRouter.post('/signup', asyncHandler(signupUser));
 userRouter.post('/login', asyncHandler(loginUser));
@@ -25,8 +29,10 @@ userRouter.post('/profile-image', asyncHandler(uploadUserProfileImage));
 userRouter.post('/auth/send-otp', asyncHandler(startUserOtpRequest));
 userRouter.post('/auth/verify-otp', asyncHandler(verifyUserOtpRequest));
 userRouter.post('/otp-login', asyncHandler(verifyUserPhoneForOtpLogin));
-userRouter.get('/me', authenticate(['user']), asyncHandler(getCurrentUser));
-userRouter.patch('/me', authenticate(['user']), asyncHandler(updateCurrentUser));
-userRouter.get('/wallet', authenticate(['user']), asyncHandler(getUserWallet));
-userRouter.post('/wallet/topup', authenticate(['user']), asyncHandler(topupUserWallet));
-userRouter.post('/wallet/transfer', authenticate(['user']), asyncHandler(transferUserWallet));
+userRouter.get('/me', authenticateOrResolveUser(['user']), asyncHandler(getCurrentUser));
+userRouter.patch('/me', authenticateOrResolveUser(['user']), asyncHandler(updateCurrentUser));
+userRouter.get('/wallet', authenticateOrResolveUser(['user']), asyncHandler(getUserWallet));
+userRouter.post('/wallet/topup', authenticateOrResolveUser(['user']), asyncHandler(topupUserWallet));
+userRouter.post('/wallet/transfer', authenticateOrResolveUser(['user']), asyncHandler(transferUserWallet));
+userRouter.post('/wallet/razorpay/order', authenticateOrResolveUser(['user']), asyncHandler(createRazorpayWalletTopupOrder));
+userRouter.post('/wallet/razorpay/verify', authenticateOrResolveUser(['user']), asyncHandler(verifyRazorpayWalletTopup));

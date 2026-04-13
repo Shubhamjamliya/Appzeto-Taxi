@@ -127,7 +127,7 @@ const userSchema = new mongoose.Schema(
     },
     referredBy: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'User',
+      ref: 'TaxiUser',
       default: null,
       index: true,
     },
@@ -150,41 +150,6 @@ const userSchema = new mongoose.Schema(
       default: 'USER',
       trim: true,
     },
-    walletBalance: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    walletTransactions: {
-      type: [
-        new mongoose.Schema(
-          {
-            kind: {
-              type: String,
-              enum: ['credit', 'debit'],
-              required: true,
-            },
-            amount: {
-              type: Number,
-              required: true,
-              min: 0,
-            },
-            title: {
-              type: String,
-              default: '',
-              trim: true,
-            },
-            counterpartyPhone: {
-              type: String,
-              default: '',
-              trim: true,
-            },
-          },
-          { _id: true, timestamps: true },
-        ),
-      ],
-      default: [],
-    },
     addresses: {
       type: [userAddressSchema],
       default: [],
@@ -204,7 +169,7 @@ const userSchema = new mongoose.Schema(
     },
     currentRideId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: 'Ride',
+      ref: 'TaxiRide',
       default: null,
     },
   },
@@ -216,7 +181,7 @@ const userSchema = new mongoose.Schema(
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ 'addresses.location': '2dsphere' });
 
-const UserModel = mongoose.models.User || mongoose.model('User', userSchema);
+const UserModel = mongoose.models.TaxiUser || mongoose.model('TaxiUser', userSchema);
 
 export const User = UserModel;
 export const FoodUser = UserModel;

@@ -10,6 +10,7 @@ import {
   verifyDriverLoginOtp,
 } from '../services/loginOtpService.js';
 import { verifyAccessToken } from '../../services/tokenService.js';
+import { clearDriverActiveRideIfStale } from '../../services/rideService.js';
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -83,6 +84,8 @@ export const loginDriver = async (req, res) => {
     throw new ApiError(403, 'Driver account is pending approval');
   }
 
+  await clearDriverActiveRideIfStale(driver);
+
   const token = signAccessToken({ sub: String(driver._id), role: 'driver' });
 
   res.json({
@@ -107,6 +110,13 @@ export const goOnline = async (req, res) => {
 
   const coordinates = normalizePoint(location, 'location');
   const zone = await findZoneByPickup(coordinates);
+  const existingDriver = await Driver.findById(req.auth.sub);
+
+  if (!existingDriver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  await clearDriverActiveRideIfStale(existingDriver);
 
   const driver = await Driver.findByIdAndUpdate(
     req.auth.sub,
@@ -135,6 +145,8 @@ export const getCurrentDriver = async (req, res) => {
     throw new ApiError(404, 'Driver not found');
   }
 
+  await clearDriverActiveRideIfStale(driver);
+
   res.json({
     success: true,
     data: {
@@ -157,6 +169,8 @@ export const getCurrentDriver = async (req, res) => {
       rating: driver.rating,
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
+      location: driver.location,
+      zoneId: driver.zoneId,
       documents: driver.documents || {},
       onboarding: driver.onboarding || {},
     },

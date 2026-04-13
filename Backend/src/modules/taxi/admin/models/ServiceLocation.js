@@ -85,4 +85,4 @@ serviceLocationSchema.index({ name: 1 });
 serviceLocationSchema.index({ country: 1, status: 1 });
 
 export const ServiceLocation =
-  mongoose.models.ServiceLocation || mongoose.model('ServiceLocation', serviceLocationSchema);
+  mongoose.models.TaxiServiceLocation || mongoose.model('TaxiServiceLocation', serviceLocationSchema);

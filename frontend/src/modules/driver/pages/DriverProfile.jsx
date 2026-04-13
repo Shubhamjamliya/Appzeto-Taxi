@@ -114,7 +114,7 @@ const DriverProfile = () => {
                     { id: 'vehicle', label: 'My Vehicle', icon: <Car size={20} />, path: '/taxi/driver/vehicle-fleet' },
                 ] : []),
                 { id: 'docs', label: 'Documents', icon: <FileText size={20} />, path: '/taxi/driver/documents' },
-                { id: 'history', label: 'History', icon: <History size={20} />, path: '/taxi/driver/history' },
+                { id: 'history', label: 'Ride History', icon: <History size={20} />, path: '/taxi/driver/history' },
                 { id: 'notifications', label: 'Notifications', icon: <Bell size={20} />, path: '/taxi/driver/notifications' },
             ]
         },
@@ -123,27 +123,27 @@ const DriverProfile = () => {
             items: [
                 { id: 'refer', label: 'Refer & Earn', icon: <Gift size={20} />, path: '/taxi/driver/referral' },
                 { id: 'incentives', label: 'Incentives', icon: <BadgePercent size={20} />, path: '/taxi/driver/wallet' },
-                { id: 'sos', label: 'SOS', icon: <Shield size={20} />, path: '/taxi/driver/security' },
+                { id: 'sos', label: 'Emergency SOS', icon: <Shield size={20} />, path: '/taxi/driver/security' },
             ]
         },
         {
             title: 'Earnings',
             items: [
                 { id: 'earnings', label: 'My Earnings', icon: <Wallet size={20} />, path: '/taxi/driver/wallet' },
-                { id: 'reports', label: 'Reports', icon: <BarChart3 size={20} />, path: '/taxi/driver/history' },
+                { id: 'reports', label: 'Earnings Report', icon: <BarChart3 size={20} />, path: '/taxi/driver/history' },
             ]
         },
         {
             title: 'Preferences',
             items: [
-                { id: 'languages', label: 'Languages', icon: <Languages size={20} />, path: '/taxi/driver/lang-select' },
-                { id: 'routeBooking', label: 'MyRouteBooking', icon: <Route size={20} />, type: 'toggle' },
+                { id: 'languages', label: 'App Language', icon: <Languages size={20} />, path: '/taxi/driver/lang-select' },
+                { id: 'routeBooking', label: 'My Route Booking', icon: <Route size={20} />, type: 'toggle' },
             ]
         },
         {
             title: 'Settings',
             items: [
-                { id: 'settings', label: 'Settings', icon: <Settings size={20} />, path: '/taxi/driver/settings' },
+                { id: 'settings', label: 'App Settings', icon: <Settings size={20} />, path: '/taxi/driver/settings' },
             ]
         }
     ];
@@ -156,20 +156,20 @@ const DriverProfile = () => {
                     <button onClick={() => navigate(-1)} className="p-1 -ml-2 text-slate-600 active:scale-95">
                         <ArrowLeft size={22} strokeWidth={2.5} />
                     </button>
-                    <button onClick={() => navigate('/ride/chat?admin=true&role=driver')} className="flex items-center gap-1.5 text-[#88B04B] font-black text-[13px] uppercase tracking-wider">
+                    <button onClick={() => navigate('/ride/chat?admin=true&role=driver')} className="flex items-center gap-1.5 text-[#88B04B] font-bold text-[13px] tracking-wide">
                         <Info size={18} />
-                        Help
+                        Help & Support
                     </button>
                 </div>
 
                 <div className="flex items-center justify-between">
                     <div className="space-y-0.5">
-                        <h2 className="text-[22px] font-black text-slate-900 leading-tight uppercase">
+                        <h2 className="text-[22px] font-bold text-slate-900 leading-tight">
                             {isLoading ? 'Loading...' : driverName}
                         </h2>
                         <div className="flex items-center gap-1.5 text-sky-500">
                             <Star size={14} fill="currentColor" />
-                            <span className="text-[14px] font-black">{driverRating.toFixed(1)}</span>
+                            <span className="text-[14px] font-bold">{driverRating.toFixed(1)} Rating</span>
                         </div>
                     </div>
                     {/* Integrated Profile Image */}
@@ -187,32 +187,32 @@ const DriverProfile = () => {
                 </div>
                 <div className="mt-4 rounded-2xl bg-slate-50 px-4 py-3 border border-slate-100">
                     {error ? (
-                        <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                        <p className="text-[11px] font-medium text-rose-500">{error}</p>
                     ) : (
                         <div className="grid grid-cols-2 gap-3 text-left">
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Phone</p>
-                                <p className="text-[12px] font-black text-slate-900">{driverPhone}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Phone</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverPhone}</p>
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Email</p>
-                                <p className="text-[12px] font-black text-slate-900 break-all">{driverEmail}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Email</p>
+                                <p className="text-[12px] font-bold text-slate-900 break-all">{driverEmail}</p>
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle</p>
-                                <p className="text-[12px] font-black text-slate-900">{driverVehicle}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Vehicle Type</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverVehicle}</p>
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">City</p>
-                                <p className="text-[12px] font-black text-slate-900">{driverLocation}</p>
+                                <p className="text-[10px] font-medium text-slate-400">City</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverLocation}</p>
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Vehicle No.</p>
-                                <p className="text-[12px] font-black text-slate-900">{driverNumber}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Vehicle No.</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverNumber}</p>
                             </div>
                             <div>
-                                <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Color</p>
-                                <p className="text-[12px] font-black text-slate-900">{driverColor}</p>
+                                <p className="text-[10px] font-medium text-slate-400">Color</p>
+                                <p className="text-[12px] font-bold text-slate-900">{driverColor}</p>
                             </div>
                         </div>
                     )}
@@ -223,7 +223,7 @@ const DriverProfile = () => {
             <main className="space-y-1">
                 {sections.map((section, sIdx) => (
                     <div key={sIdx} className="pt-5">
-                        <h3 className="px-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em] mb-3">{section.title}</h3>
+                        <h3 className="px-6 text-[11px] font-semibold text-slate-400 uppercase tracking-widest mb-3">{section.title}</h3>
                         <div className="space-y-0">
                             {section.items.map((item) => (
                                 <motion.div 
@@ -237,8 +237,8 @@ const DriverProfile = () => {
                                             {item.icon}
                                         </div>
                                         <div>
-                                            <h4 className="text-[14px] font-black text-slate-800 tracking-tight uppercase">{item.label}</h4>
-                                            {item.sub && <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{item.sub}</p>}
+                                            <h4 className="text-[15px] font-medium text-slate-800 tracking-tight">{item.label}</h4>
+                                            {item.sub && <p className="text-[11px] text-slate-400 font-medium">{item.sub}</p>}
                                         </div>
                                     </div>
                                     {item.type === 'toggle' ? (
@@ -265,10 +265,10 @@ const DriverProfile = () => {
             <div className="px-6 py-10">
                 <button 
                     onClick={() => setIsLogoutOpen(true)}
-                    className="flex items-center gap-3 text-rose-500 font-black text-[12px] uppercase tracking-[0.2em] active:translate-x-1 transition-transform"
+                    className="flex items-center gap-3 text-rose-500 font-bold text-[13px] active:translate-x-1 transition-transform"
                 >
                     <LogOut size={16} strokeWidth={2.5} />
-                    Logout
+                    Logout from Account
                 </button>
             </div>
 
@@ -284,8 +284,8 @@ const DriverProfile = () => {
                             className="w-full max-w-xs rounded-[28px] bg-white p-6 shadow-2xl border border-slate-100"
                         >
                             <div className="space-y-2 text-center">
-                                <h3 className="text-[18px] font-black text-slate-900 uppercase tracking-tight">Logout</h3>
-                                <p className="text-[12px] font-bold text-slate-400">
+                                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight">Logout</h3>
+                                <p className="text-[13px] font-medium text-slate-500">
                                     Are you sure you want to logout?
                                 </p>
                             </div>
@@ -293,15 +293,15 @@ const DriverProfile = () => {
                             <div className="mt-6 grid grid-cols-2 gap-3">
                                 <button
                                     onClick={() => setIsLogoutOpen(false)}
-                                    className="h-12 rounded-2xl border border-slate-200 text-slate-700 font-black text-[12px] uppercase tracking-widest"
+                                    className="h-12 rounded-2xl border border-slate-200 text-slate-700 font-bold text-[13px]"
                                 >
-                                    No
+                                    Cancel
                                 </button>
                                 <button
                                     onClick={handleLogout}
-                                    className="h-12 rounded-2xl bg-rose-500 text-white font-black text-[12px] uppercase tracking-widest"
+                                    className="h-12 rounded-2xl bg-rose-500 text-white font-bold text-[13px]"
                                 >
-                                    Yes
+                                    Logout
                                 </button>
                             </div>
                         </motion.div>

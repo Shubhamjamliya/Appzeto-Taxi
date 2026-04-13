@@ -167,20 +167,36 @@ const serializeSetPrice = (item) => ({
     ? {
         _id: item.vehicle_type._id || item.vehicle_type,
         name: item.vehicle_type.name || '',
+        icon: item.vehicle_type.icon || '',
       }
     : null,
   vehicle_name: item.vehicle_type?.name || '',
+  icon: item.vehicle_type?.icon || item.icon || '',
   app_modules: item.app_modules ?? '',
   vehicle_preference: item.vehicle_preference ?? '',
-  payment_type: Array.isArray(item.payment_type) ? item.payment_type : [],
+  payment_type: Array.isArray(item.payment_type) ? item.payment_type : (typeof item.payment_type === 'string' ? item.payment_type.split(',') : []),
+  
+  // Commissions
   customer_commission_type: item.customer_commission_type || 'percentage',
   customer_commission: item.customer_commission,
+  admin_commision_type: item.admin_commision_type ?? (item.customer_commission_type === 'percentage' ? 1 : 0),
+  admin_commision: item.admin_commision ?? item.customer_commission,
+  
   driver_commission_type: item.driver_commission_type || 'percentage',
   driver_commission: item.driver_commission,
+  admin_commission_type_from_driver: item.admin_commission_type_from_driver ?? (item.driver_commission_type === 'percentage' ? 1 : 0),
+  admin_commission_from_driver: item.admin_commission_from_driver ?? item.driver_commission,
+  
   owner_commission_type: item.owner_commission_type || 'percentage',
   owner_commission: item.owner_commission,
+  admin_commission_type_for_owner: item.admin_commission_type_for_owner ?? (item.owner_commission_type === 'percentage' ? 1 : 0),
+  admin_commission_for_owner: item.admin_commission_for_owner ?? item.owner_commission,
+
   service_tax: item.service_tax,
   eta_sequence: item.eta_sequence,
+  order_number: item.order_number ?? item.eta_sequence ?? 1,
+  
+  // Core Pricing
   base_price: item.base_price,
   base_distance: item.base_distance,
   price_per_distance: item.price_per_distance,
@@ -188,14 +204,27 @@ const serializeSetPrice = (item) => ({
   waiting_charge: item.waiting_charge,
   free_waiting_before: item.free_waiting_before,
   free_waiting_after: item.free_waiting_after,
+  
+  // Settings
   enable_airport_ride: Boolean(item.enable_airport_ride),
   enable_outstation_ride: Boolean(item.enable_outstation_ride),
+  support_airport_fee: item.support_airport_fee ?? (item.enable_airport_ride ? 1 : 0),
+  support_outstation: item.support_outstation ?? (item.enable_outstation_ride ? 1 : 0),
+  
+  // Cancellation
   user_cancellation_fee_type: item.user_cancellation_fee_type || 'percentage',
   user_cancellation_fee: item.user_cancellation_fee,
   driver_cancellation_fee_type: item.driver_cancellation_fee_type || 'percentage',
   driver_cancellation_fee: item.driver_cancellation_fee,
   cancellation_fee_goes_to: item.cancellation_fee_goes_to || 'admin',
+  
+  // Ride Sharing
   enable_ride_sharing: Boolean(item.enable_ride_sharing),
+  enable_shared_ride: item.enable_shared_ride ?? (item.enable_ride_sharing ? 1 : 0),
+  price_per_seat: item.price_per_seat,
+  shared_price_per_distance: item.shared_price_per_distance,
+  shared_cancel_fee: item.shared_cancel_fee,
+  
   status: item.status || (item.active === false ? 'inactive' : 'active'),
   active: item.active !== false,
   createdAt: item.createdAt,
@@ -1212,12 +1241,19 @@ const formatRidePointLabel = (point, fallback = 'Unknown') => {
 
 const toAdminRideRow = (ride) => {
   const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
-  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
-  const tripStatus = liveStatus === RIDE_LIVE_STATUS.STARTED
-    ? 'ONGOING'
-    : liveStatus === RIDE_LIVE_STATUS.ARRIVING || liveStatus === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED
-      ? 'ACCEPTED'
-      : 'UPCOMING';
+  const status = String(ride.status || '').toLowerCase();
+  const liveStatus = String(ride.liveStatus || '').toLowerCase();
+
+  let tripStatus = 'UPCOMING';
+  if (status === RIDE_STATUS.COMPLETED) {
+    tripStatus = 'COMPLETED';
+  } else if (status === RIDE_STATUS.CANCELLED) {
+    tripStatus = 'CANCELLED';
+  } else if (status === RIDE_STATUS.ONGOING || liveStatus === RIDE_LIVE_STATUS.STARTED) {
+    tripStatus = 'ONGOING';
+  } else if (status === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ARRIVING) {
+    tripStatus = 'ACCEPTED';
+  }
 
   return {
     id: String(ride._id),
@@ -1284,6 +1320,50 @@ export const listOngoingRides = async (query = {}) => {
         row.transportType,
         row.pickupLabel,
         row.dropLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
+export const listRideRequests = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const filter = {};
+  if (tab === 'completed') {
+    filter.status = RIDE_STATUS.COMPLETED;
+  } else if (tab === 'cancelled') {
+    filter.status = RIDE_STATUS.CANCELLED;
+  } else if (tab === 'upcoming') {
+    filter.status = RIDE_STATUS.SEARCHING;
+  } else if (tab === 'ongoing') {
+    filter.status = { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] };
+  }
+
+  if (search) {
+    // Basic search on ID or user/driver name if possible
+    // Note: complex search might require aggregation for populated fields
+  }
+
+  const rides = await Ride.find(filter)
+    .sort({ createdAt: -1 })
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = rides.map(toAdminRideRow);
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
       ].some((value) => String(value || '').toLowerCase().includes(search)),
     );
   }
@@ -1524,12 +1604,22 @@ export const listSetPrices = async () => {
 };
 
 export const createSetPrice = async (payload) => {
+  const payment_type = Array.isArray(payload.payment_type) 
+    ? payload.payment_type 
+    : typeof payload.payment_type === 'string' 
+      ? payload.payment_type.split(',').map(s => s.trim()) 
+      : ['cash', 'online', 'wallet'];
+
+  const zone_id = toObjectId(payload.zone_id?._id || payload.zone_id?.id || payload.zone_id);
+  const vehicle_type = toObjectId(payload.vehicle_type?._id || payload.vehicle_type?.id || payload.vehicle_type || payload.type_id);
+  const service_location_id = toObjectId(payload.service_location_id?._id || payload.service_location_id?.id || payload.service_location_id || payload.zone?._id || payload.zone?.service_location_id);
+
   const setPrice = await SetPrice.create({
-    zone_id: toObjectId(payload.zone_id),
-    vehicle_type: toObjectId(payload.vehicle_type),
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+    zone_id,
+    vehicle_type,
+    service_location_id,
     transport_type: payload.transport_type || 'taxi',
-    payment_type: Array.isArray(payload.payment_type) ? payload.payment_type : ['cash', 'online', 'wallet'],
+    payment_type,
     active: Number(payload.active ?? 1),
     
     // Commission Structure
@@ -1545,6 +1635,8 @@ export const createSetPrice = async (payload) => {
     airport_surge: Number(payload.airport_surge ?? 0),
     support_airport_fee: Number(payload.support_airport_fee ?? 0),
     support_outstation: Number(payload.support_outstation ?? 0),
+    enable_airport_ride: payload.enable_airport_ride ?? !!payload.support_airport_fee,
+    enable_outstation_ride: payload.enable_outstation_ride ?? !!payload.support_outstation,
     
     // Core Pricing
     base_price: Number(payload.base_price ?? 0),
@@ -1557,12 +1649,20 @@ export const createSetPrice = async (payload) => {
     
     // Ride Sharing
     enable_shared_ride: Number(payload.enable_shared_ride ?? (payload.enable_ride_sharing ? 1 : 0)),
+    enable_ride_sharing: payload.enable_ride_sharing ?? !!payload.enable_shared_ride,
     price_per_seat: Number(payload.price_per_seat ?? 0),
     shared_price_per_distance: Number(payload.shared_price_per_distance ?? 0),
     shared_cancel_fee: Number(payload.shared_cancel_fee ?? 0),
     
+    // Cancellation Fee
+    user_cancellation_fee: Number(payload.user_cancellation_fee ?? payload.cancellation_fee_for_user ?? 0),
+    driver_cancellation_fee: Number(payload.driver_cancellation_fee ?? payload.cancellation_fee_for_driver ?? 0),
+    cancellation_fee_goes_to: payload.cancellation_fee_goes_to ?? payload.fee_goes_to ?? 'admin',
+    user_cancellation_fee_type: payload.user_cancellation_fee_type || 'percentage',
+    driver_cancellation_fee_type: payload.driver_cancellation_fee_type || 'percentage',
+
     // Meta
-    order_number: Number(payload.order_number ?? 1),
+    order_number: Number(payload.order_number ?? payload.eta_sequence ?? 1),
     bill_status: Number(payload.bill_status ?? 1),
     status: payload.status || 'active',
   });
@@ -1580,20 +1680,43 @@ export const updateSetPrice = async (id, payload) => {
     'admin_commission_type_for_owner', 'admin_commission_for_owner',
     'admin_commission_type_from_driver', 'admin_commission_from_driver',
     'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
+    'enable_airport_ride', 'enable_outstation_ride',
     'base_price', 'base_distance', 'price_per_distance', 'time_price',
     'waiting_charge', 'free_waiting_before', 'free_waiting_after',
-    'enable_shared_ride', 'price_per_seat', 'shared_price_per_distance',
-    'shared_cancel_fee', 'order_number', 'bill_status', 'status'
+    'enable_shared_ride', 'enable_ride_sharing', 'price_per_seat', 
+    'shared_price_per_distance', 'shared_cancel_fee', 
+    'user_cancellation_fee', 'driver_cancellation_fee', 'cancellation_fee_goes_to',
+    'user_cancellation_fee_type', 'driver_cancellation_fee_type',
+    'order_number', 'bill_status', 'status'
   ];
 
   fields.forEach(field => {
-    if (payload[field] !== undefined) {
+    let value = payload[field];
+    
+    // Aliases & Nested Object Handling
+    if (field === 'zone_id') value = payload.zone_id?._id || payload.zone_id?.id || payload.zone_id;
+    if (field === 'vehicle_type') value = payload.vehicle_type?._id || payload.vehicle_type?.id || payload.vehicle_type || payload.type_id;
+    if (field === 'service_location_id') value = payload.service_location_id?._id || payload.service_location_id?.id || payload.service_location_id || payload.zone?._id || payload.zone?.service_location_id;
+
+    if (value === undefined) {
+      if (field === 'admin_commision') value = payload.customer_commission;
+      if (field === 'admin_commision_type') value = payload.customer_commission_type === 'percentage' ? 1 : (payload.customer_commission_type === 'fixed' ? 0 : undefined);
+      if (field === 'order_number') value = payload.eta_sequence;
+      if (field === 'user_cancellation_fee') value = payload.cancellation_fee_for_user;
+      if (field === 'driver_cancellation_fee') value = payload.cancellation_fee_for_driver;
+      if (field === 'cancellation_fee_goes_to') value = payload.fee_goes_to;
+      if (field === 'enable_ride_sharing') value = payload.enable_shared_ride !== undefined ? !!payload.enable_shared_ride : undefined;
+    }
+
+    if (value !== undefined) {
       if (field.includes('_id') || field === 'vehicle_type') {
-         if (payload[field]) setPrice[field] = toObjectId(payload[field]);
-      } else if (typeof setPrice[field] === 'number') {
-         setPrice[field] = Number(payload[field]);
+         if (value) setPrice[field] = toObjectId(value);
+      } else if (field === 'payment_type') {
+         setPrice[field] = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(',').map(s => s.trim()) : value);
+      } else if (typeof setPrice[field] === 'number' || ['admin_commision', 'service_tax', 'base_price', 'base_distance', 'price_per_distance', 'time_price', 'order_number'].includes(field)) {
+         setPrice[field] = Number(value);
       } else {
-         setPrice[field] = payload[field];
+         setPrice[field] = value;
       }
     }
   });

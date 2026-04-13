@@ -83,6 +83,7 @@ import {
   permanentlyDeleteDeletedUser,
   restoreDeletedDriver,
   permanentlyDeleteDeletedDriver,
+  getRideRequests,
   getUserRequests,
   getUserWalletHistory,
   getVehiclePreferenceOptions,
@@ -206,6 +207,7 @@ adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
+adminRouter.get('/admin/ride-requests', getRideRequests);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);

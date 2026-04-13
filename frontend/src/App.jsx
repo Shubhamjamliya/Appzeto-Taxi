@@ -565,6 +565,8 @@ function App() {
                 <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
                 <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
+                <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
+                <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
                 <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />

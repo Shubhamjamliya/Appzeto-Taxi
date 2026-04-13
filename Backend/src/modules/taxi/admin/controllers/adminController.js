@@ -133,6 +133,9 @@ export const getRideModules = asyncHandler(async (_req, res) =>
 export const getOngoingRides = asyncHandler(async (req, res) =>
   ok(res, await adminService.listOngoingRides(req.query)),
 );
+export const getRideRequests = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listRideRequests(req.query)),
+);
 export const deleteOngoingRide = asyncHandler(async (req, res) =>
   ok(res, await adminService.deleteOngoingRide(req.params.id)),
 );

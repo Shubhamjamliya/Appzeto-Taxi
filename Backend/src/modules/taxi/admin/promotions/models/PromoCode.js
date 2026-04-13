@@ -24,6 +24,11 @@ const promoCodeSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    user_specific: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
     transport_type: {
       type: String,
       enum: ['taxi', 'delivery', 'all'],
@@ -42,18 +47,23 @@ const promoCodeSchema = new mongoose.Schema(
     minimum_trip_amount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     maximum_discount_amount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     cumulative_max_discount_amount: {
       type: Number,
       default: 0,
+      min: 0,
     },
     discount_percentage: {
       type: Number,
       default: 0,
+      min: 0,
+      max: 100,
     },
     from_date: {
       type: Date,
@@ -70,9 +80,15 @@ const promoCodeSchema = new mongoose.Schema(
       default: 1,
       min: 1,
     },
+    max_uses_total: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     usage_count: {
       type: Number,
       default: 0,
+      min: 0,
     },
     active: {
       type: Boolean,

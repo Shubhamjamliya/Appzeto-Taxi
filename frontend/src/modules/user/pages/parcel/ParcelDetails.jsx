@@ -9,12 +9,13 @@ const WEIGHT_PRICES = {
 };
 
 const ParcelDetails = () => {
+  const location = useLocation();
+  const parcelState = location.state || {};
   const [weight, setWeight] = useState('Under 5kg');
   const [description, setDescription] = useState('');
   const [descError, setDescError] = useState('');
   const navigate = useNavigate();
-  const location = useLocation();
-  const parcelType = location.state?.parcelType || 'Documents';
+  const parcelType = parcelState.parcelType || 'Documents';
   const priceRange = WEIGHT_PRICES[weight];
 
   const handleNext = () => {
@@ -23,7 +24,15 @@ const ParcelDetails = () => {
       return;
     }
     setDescError('');
-    navigate('/parcel/contacts', { state: { parcelType, weight, description, estimatedFare: priceRange } });
+    navigate('/parcel/contacts', {
+      state: {
+        ...parcelState,
+        parcelType,
+        weight,
+        description,
+        estimatedFare: priceRange,
+      },
+    });
   };
 
   return (

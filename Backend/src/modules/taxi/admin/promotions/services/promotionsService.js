@@ -76,6 +76,7 @@ const serializePromoCode = (item) => ({
   service_location_name: item.service_location_name || '',
   user_id: item.user_id || '',
   user_name: item.user_name || '',
+  user_specific: item.user_specific === true,
   transport_type: item.transport_type || 'all',
   code: item.code || '',
   minimum_trip_amount: Number(item.minimum_trip_amount || 0),
@@ -85,6 +86,7 @@ const serializePromoCode = (item) => ({
   from: item.from_date || item.from || '',
   to: item.to_date || item.to || '',
   uses_per_user: Number(item.uses_per_user || 1),
+  max_uses_total: Number(item.max_uses_total || 0),
   usage_count: Number(item.usage_count || 0),
   active: item.active !== false,
   createdAt: item.createdAt,
@@ -120,6 +122,47 @@ const serializeBanner = (item) => ({
   updatedAt: item.updatedAt,
 });
 
+const serializeBannerMinimal = (item) => ({
+  _id: item._id,
+  image: item.image || '',
+  active: item.active !== false,
+});
+
+const serializeBannerFromPayload = (item, payload = {}) => {
+  const keys = new Set(Object.keys(payload || {}));
+  const response = { _id: item._id };
+
+  if (keys.has('image') || keys.has('image_url') || keys.has('use_url')) {
+    response.image = item.image || '';
+  }
+  if (keys.has('image_url')) {
+    response.image_url = String(payload.image_url || '');
+  }
+  if (keys.has('use_url')) {
+    response.use_url = payload.use_url === true || payload.use_url === 1 || payload.use_url === '1' || payload.use_url === 'true';
+  }
+  if (keys.has('active')) {
+    response.active = item.active !== false;
+  }
+  if (keys.has('title')) {
+    response.title = item.title || '';
+  }
+  if (keys.has('link_type')) {
+    response.link_type = item.link_type || 'external_link';
+  }
+  if (keys.has('external_link')) {
+    response.external_link = item.external_link || '';
+  }
+  if (keys.has('deep_link')) {
+    response.deep_link = item.deep_link || '';
+  }
+  if (keys.has('redirect_url') || keys.has('target_route_url')) {
+    response.redirect_url = item.redirect_url || item.external_link || item.deep_link || '';
+  }
+
+  return response;
+};
+
 const ensureServiceLocationExists = async (serviceLocationId) => {
   const location = await ServiceLocation.findById(toObjectIdOrThrow(serviceLocationId, 'service location id')).lean();
   if (!location) {
@@ -148,6 +191,7 @@ const normalizePromoPayload = async (payload, existing = null) => {
 
   const serviceLocation = await ensureServiceLocationExists(serviceLocationId);
   const state = await ensureAdminState();
+  const userSpecific = normalizeBoolean(payload.user_specific, existing?.user_specific ?? false);
   const userId = normalizeText(payload.user_id ?? existing?.user_id);
   const realUser = userId
     ? await User.findById(toObjectIdOrThrow(userId, 'user id')).select('_id name phone').lean()
@@ -157,7 +201,7 @@ const normalizePromoPayload = async (payload, existing = null) => {
     : null;
   const user = realUser || legacyUser;
 
-  if (payload.user_id !== undefined || !existing) {
+  if (userSpecific && (payload.user_id !== undefined || !existing || existing?.user_specific !== true)) {
     if (!userId) {
       throw new ApiError(400, 'User is required');
     }
@@ -185,8 +229,22 @@ const normalizePromoPayload = async (payload, existing = null) => {
   );
   const discountPercentage = parseNumber(payload.discount_percentage ?? existing?.discount_percentage, 0);
   const usesPerUser = Math.max(1, Math.floor(parseNumber(payload.uses_per_user ?? existing?.uses_per_user, 1)));
+  const maxUsesTotal = Math.max(0, Math.floor(parseNumber(payload.max_uses_total ?? existing?.max_uses_total, 0)));
   const fromDate = normalizeDate(payload.from ?? payload.from_date ?? existing?.from_date, 'From date');
   const toDate = normalizeDate(payload.to ?? payload.to_date ?? existing?.to_date, 'To date');
+
+  if (minimumTripAmount < 0) {
+    throw new ApiError(400, 'Minimum trip amount must be greater than or equal to 0');
+  }
+  if (maximumDiscountAmount < 0) {
+    throw new ApiError(400, 'Maximum discount amount must be greater than or equal to 0');
+  }
+  if (cumulativeMaxDiscountAmount < 0) {
+    throw new ApiError(400, 'Cumulative maximum discount amount must be greater than or equal to 0');
+  }
+  if (discountPercentage < 0 || discountPercentage > 100) {
+    throw new ApiError(400, 'Discount percentage must be between 0 and 100');
+  }
 
   if (fromDate > toDate) {
     throw new ApiError(400, 'From date must be earlier than or equal to To date');
@@ -195,8 +253,9 @@ const normalizePromoPayload = async (payload, existing = null) => {
   return {
     service_location_id: serviceLocation._id,
     service_location_name: serviceLocation.service_location_name || serviceLocation.name || '',
-    user_id: user?._id || userId,
-    user_name: user?.name || '',
+    user_id: userSpecific ? user?._id || userId : '',
+    user_name: userSpecific ? user?.name || '' : '',
+    user_specific: userSpecific,
     transport_type: transportType,
     code,
     minimum_trip_amount: minimumTripAmount,
@@ -206,6 +265,7 @@ const normalizePromoPayload = async (payload, existing = null) => {
     from_date: fromDate,
     to_date: toDate,
     uses_per_user: usesPerUser,
+    max_uses_total: maxUsesTotal,
     active: normalizeBoolean(payload.active, existing?.active ?? true),
   };
 };
@@ -262,15 +322,15 @@ const normalizeNotificationPayload = async (payload, existing = null) => {
 };
 
 const normalizeBannerPayload = async (payload, existing = null) => {
-  const title = normalizeText(payload.title ?? existing?.title);
-  let image = normalizeText(payload.image ?? existing?.image);
-  const linkType = normalizeText(payload.link_type ?? existing?.link_type ?? 'external_link');
-  const redirectUrl = normalizeText(payload.redirect_url ?? payload.external_link ?? payload.deep_link ?? existing?.redirect_url);
-  const active = normalizeBoolean(payload.active, existing?.active ?? true);
-
-  if (!title) {
-    throw new ApiError(400, 'Banner title is required');
-  }
+  const generatedTitle = `Banner ${new Date().toISOString()}`;
+  const title = normalizeText(payload.title ?? existing?.title ?? generatedTitle);
+  let image = normalizeText(payload.image ?? payload.image_url ?? existing?.image);
+  const rawLinkType = normalizeText(payload.link_type ?? payload.redirect_type ?? existing?.link_type ?? 'external_link');
+  const linkType = rawLinkType === 'app_route' ? 'deep_link' : rawLinkType;
+  const redirectUrl = normalizeText(
+    payload.redirect_url ?? payload.external_link ?? payload.deep_link ?? payload.target_route_url ?? existing?.redirect_url,
+  );
+  const active = normalizeBoolean(payload.active ?? payload.status, existing?.active ?? true);
   if (!image) {
     throw new ApiError(400, 'Banner image is required');
   }
@@ -291,9 +351,6 @@ const normalizeBannerPayload = async (payload, existing = null) => {
 
   if (!['external_link', 'deep_link'].includes(linkType)) {
     throw new ApiError(400, 'Link type must be external_link or deep_link');
-  }
-  if (!redirectUrl) {
-    throw new ApiError(400, 'Redirect URL is required');
   }
 
   return {
@@ -453,7 +510,7 @@ export const listBanners = async ({ page = 1, limit = 50, active }) => {
   ]);
 
   return {
-    results: items.map(serializeBanner),
+    results: items.map(serializeBannerMinimal),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -466,7 +523,7 @@ export const listBanners = async ({ page = 1, limit = 50, active }) => {
 export const createBanner = async (payload) => {
   const normalizedPayload = await normalizeBannerPayload(payload);
   const banner = await Banner.create(normalizedPayload);
-  return serializeBanner(banner.toObject());
+  return serializeBannerFromPayload(banner.toObject(), payload);
 };
 
 export const updateBanner = async (id, payload) => {

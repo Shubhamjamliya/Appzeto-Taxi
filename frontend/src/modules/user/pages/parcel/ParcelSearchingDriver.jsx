@@ -15,6 +15,17 @@ const unwrapLoginPayload = (response) => {
 };
 const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '4.9', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted' };
+const ACTIVE_DELIVERY_POLL_MS = 8000;
+
+const withUserAuthorization = (token) => (
+  token
+    ? {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      }
+    : {}
+);
 
 const normalizeDriver = (driver = {}) => ({
   name: driver.name || 'Delivery Captain',
@@ -25,8 +36,32 @@ const normalizeDriver = (driver = {}) => ({
   eta: driver.eta || 2,
 });
 
-const pickParcelVehicle = (types = []) => {
+const normalizeLabel = (value = '') => String(value).trim().toLowerCase();
+
+const pickParcelVehicle = (types = [], preferredType = '') => {
   const activeTypes = types.filter((type) => type.active !== false && Number(type.status ?? 1) !== 0);
+  const preferredLabel = normalizeLabel(preferredType);
+
+  if (preferredLabel && preferredLabel !== 'both') {
+    const exactMatch = activeTypes.find((type) => normalizeLabel(type.name || type.vehicle_type || type.label) === preferredLabel);
+    if (exactMatch) {
+      return exactMatch;
+    }
+
+    const transportMatch = activeTypes.find((type) => normalizeLabel(type.transport_type) === preferredLabel);
+    if (transportMatch) {
+      return transportMatch;
+    }
+
+    const partialMatch = activeTypes.find((type) => {
+      const haystack = `${type.name || ''} ${type.vehicle_type || ''} ${type.label || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
+      return haystack.includes(preferredLabel);
+    });
+    if (partialMatch) {
+      return partialMatch;
+    }
+  }
+
   const parcelFirst = activeTypes.find((type) => {
     const value = `${type.name || ''} ${type.icon_types || ''} ${type.transport_type || ''}`.toLowerCase();
     return value.includes('bike') || value.includes('delivery') || value.includes('parcel');
@@ -81,6 +116,13 @@ const ParcelSearchingDriver = () => {
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
   const activeRideIdRef = useRef('');
+  const preferredVehicleType = String(
+    routeState.goodsTypeFor ||
+    routeState.selectedGoodsType?.goodsTypeFor ||
+    routeState.selectedGoodsType?.goods_types_for ||
+    routeState.selectedGoodsType?.goods_type_for ||
+    '',
+  ).trim();
 
   useEffect(() => {
     driverRef.current = driver;
@@ -122,11 +164,14 @@ const ParcelSearchingDriver = () => {
       }, 1400);
     };
 
-    const hydrateAcceptedRide = async () => {
-      const activeResponse = await api.get('/rides/active/me');
-      const activeRide = activeResponse?.data || activeResponse;
-      if (!activeRide?.rideId) return null;
-      return activeRide;
+    const hydrateAcceptedDelivery = async (token) => {
+      const activeResponse = await api.get('/deliveries/active/me', {
+        ...withUserAuthorization(token),
+        params: { t: Date.now() },
+      });
+      const activeDelivery = activeResponse?.data || activeResponse;
+      if (!activeDelivery?.rideId) return null;
+      return activeDelivery;
     };
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
@@ -153,11 +198,11 @@ const ParcelSearchingDriver = () => {
     const onRideStatusUpdated = async (payload) => {
       if (!payload || String(payload.rideId || '') !== String(activeRideIdRef.current || '')) return;
       if (payload.status === 'accepted' || payload.liveStatus === 'accepted') {
-        const activeRide = await hydrateAcceptedRide().catch(() => null);
+        const activeDelivery = await hydrateAcceptedDelivery(getLocalUserToken()).catch(() => null);
         moveToTracking({
-          acceptedDriver: activeRide?.driver || driverRef.current,
+          acceptedDriver: activeDelivery?.driver || driverRef.current,
           rideId: payload.rideId,
-          rideSnapshot: activeRide || payload,
+          rideSnapshot: activeDelivery || payload,
         });
       }
     };
@@ -200,14 +245,26 @@ const ParcelSearchingDriver = () => {
         const vehicleCatalogResponse = await api.get('/admin/types/vehicle-types');
         const vehicleCatalog = unwrap(vehicleCatalogResponse);
         const vehicleTypes = vehicleCatalog?.vehicle_types || vehicleCatalog?.results || (Array.isArray(vehicleCatalog) ? vehicleCatalog : []);
-        const selectedVehicleType = pickParcelVehicle(vehicleTypes);
+        const selectedVehicleType = pickParcelVehicle(vehicleTypes, preferredVehicleType);
 
         if (!selectedVehicleType?._id && !selectedVehicleType?.id) {
           throw new Error('No active vehicle type available for parcel dispatch.');
         }
 
         const rideRequestConfig = userToken ? { headers: { Authorization: `Bearer ${userToken}` } } : {};
-        const response = await api.post('/rides', {
+        const parcelPayload = {
+          ...(routeState.parcel || {}),
+          category: routeState.parcel?.category || routeState.parcelType || 'Parcel',
+          weight: routeState.parcel?.weight || routeState.weight || 'Under 5kg',
+          description: routeState.parcel?.description || routeState.description || '',
+          senderName: routeState.parcel?.senderName || routeState.senderName || '',
+          senderMobile: routeState.parcel?.senderMobile || routeState.senderMobile || '',
+          receiverName: routeState.parcel?.receiverName || routeState.receiverName || '',
+          receiverMobile: routeState.parcel?.receiverMobile || routeState.receiverMobile || '',
+          goodsTypeFor: preferredVehicleType || routeState.parcel?.goodsTypeFor || 'both',
+        };
+
+        const response = await api.post('/deliveries', {
           pickup: routeState.pickupCoords || [75.9048, 22.7039],
           drop: routeState.dropCoords || [75.8937, 22.7533],
           fare: routeState.fare || routeState.estimatedFare?.min || 45,
@@ -215,20 +272,11 @@ const ParcelSearchingDriver = () => {
           vehicleIconType: selectedVehicleType.icon_types || 'bike',
           paymentMethod: routeState.paymentMethod || 'Cash',
           type: 'parcel',
-          parcel: routeState.parcel || {
-            category: routeState.parcelType || 'Parcel',
-            weight: routeState.weight || 'Under 5kg',
-            description: routeState.description || '',
-            senderName: routeState.senderName || '',
-            senderMobile: routeState.senderMobile || '',
-            receiverName: routeState.receiverName || '',
-            receiverMobile: routeState.receiverMobile || '',
-          },
+          parcel: parcelPayload,
         }, rideRequestConfig);
 
         const payload = response?.data || response;
-        const ride = payload?.ride || payload;
-        const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
+        const rideId = payload?.rideId || payload?.realtime?.rideId || payload?.ride?._id || payload?._id || payload?.id;
         activeRideIdRef.current = String(rideId || '');
 
         const socket = socketService.connect({ role: 'user', token: userToken });
@@ -239,7 +287,7 @@ const ParcelSearchingDriver = () => {
 
         const pollActiveRide = async () => {
           try {
-            const activeRide = await hydrateAcceptedRide();
+            const activeRide = await hydrateAcceptedDelivery(userToken);
             if (!activeRide?.rideId) return;
             const isThisRide = String(activeRide.rideId || '') === String(rideId || '');
             const isAcceptedRide = ['accepted', 'arriving', 'started', 'ongoing'].includes(String(activeRide.status || activeRide.liveStatus || '').toLowerCase());
@@ -252,7 +300,8 @@ const ParcelSearchingDriver = () => {
         };
 
         clearInterval(activeRidePollRef.current);
-        activeRidePollRef.current = setInterval(pollActiveRide, 1500);
+        // Socket events are the primary realtime path. This backup poll only guards against missed events.
+        activeRidePollRef.current = setInterval(pollActiveRide, ACTIVE_DELIVERY_POLL_MS);
         pollActiveRide();
         setSearchStatus('Parcel booking created. Searching nearby drivers...');
       } catch (error) {
@@ -271,7 +320,7 @@ const ParcelSearchingDriver = () => {
       socketService.off('rideCancelled', onRideCancelled);
       socketService.off('errorMessage', onError);
     };
-  }, [navigate, otp, routeState]);
+  }, [navigate, otp, preferredVehicleType, routeState]);
 
   const handleCancel = () => {
     clearInterval(activeRidePollRef.current);

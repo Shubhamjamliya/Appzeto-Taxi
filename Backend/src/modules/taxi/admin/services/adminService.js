@@ -31,7 +31,7 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
-import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../../constants/index.js';
+import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
@@ -327,6 +327,7 @@ const serializeDriver = (driver) => ({
   mobile: driver.phone || '',
   email: driver.email || '',
   city: driver.city || '',
+  service_location_name: driver.city || '',
   transport_type: driver.registerFor || driver.vehicleType || '',
   register_for: driver.registerFor || '',
   vehicle_type: driver.vehicleType || '',
@@ -336,6 +337,7 @@ const serializeDriver = (driver) => ({
   approve: Boolean(driver.approve),
   status: driver.status || (driver.approve ? 'approved' : 'pending'),
   active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
+  deletedAt: driver.deletedAt || null,
   documents: driver.documents || {},
   onboarding: driver.onboarding || {},
   createdAt: driver.createdAt,
@@ -800,8 +802,8 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
   const start = (safePage - 1) * safeLimit;
 
   const [drivers, total] = await Promise.all([
-    Driver.find().sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
-    Driver.countDocuments(),
+    Driver.find({ deletedAt: null }).sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.countDocuments({ deletedAt: null }),
   ]);
 
   return {
@@ -813,6 +815,107 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
       last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
   };
+};
+
+export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+
+  const [drivers, total] = await Promise.all([
+    Driver.find({ deletedAt: { $ne: null } })
+      .sort({ deletedAt: -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    Driver.countDocuments({ deletedAt: { $ne: null } }),
+  ]);
+
+  return {
+    results: drivers.map(serializeDriver),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const restoreDeletedDriver = async (id) => {
+  const driver = await Driver.findOneAndUpdate(
+    { _id: id, deletedAt: { $ne: null } },
+    { $set: { deletedAt: null } },
+    { new: true },
+  );
+
+  if (!driver) {
+    throw new ApiError(404, 'Deleted driver not found');
+  }
+
+  return serializeDriver(driver.toObject ? driver.toObject() : driver);
+};
+
+export const permanentlyDeleteDeletedDriver = async (id) => {
+  const deleted = await Driver.findOneAndDelete({ _id: id, deletedAt: { $ne: null } });
+  if (!deleted) {
+    throw new ApiError(404, 'Deleted driver not found');
+  }
+  return true;
+};
+
+export const createDriver = async (payload = {}) => {
+  const name = String(payload.name || '').trim();
+  const phone = String(payload.phone || payload.mobile || '').trim();
+  const password = String(payload.password || '').trim();
+  const email = String(payload.email || '').trim();
+
+  if (!name) throw new ApiError(400, 'Driver name is required');
+  if (!phone) throw new ApiError(400, 'Driver phone is required');
+  if (!password || password.length < 6) {
+    throw new ApiError(400, 'Password must be at least 6 characters');
+  }
+
+  const existing = await Driver.findOne({ phone }).lean();
+  if (existing) throw new ApiError(409, 'Driver phone already exists');
+
+  const rawVehicleType = String(
+    payload.vehicle_type || payload.vehicleType || payload.car_type || 'car',
+  ).toLowerCase();
+  const vehicleType = VEHICLE_TYPES.includes(rawVehicleType) ? rawVehicleType : 'car';
+
+  const registerFor = String(
+    payload.transport_type || payload.transportType || payload.register_for || payload.registerFor || vehicleType,
+  ).toLowerCase();
+
+  let city = String(payload.city || '').trim();
+  const serviceLocationId = payload.service_location_id || payload.area || payload.service_location;
+  if (serviceLocationId) {
+    const location = await ServiceLocation.findById(serviceLocationId).lean();
+    if (location) {
+      city = location.service_location_name || location.name || city;
+    }
+  }
+
+  const driver = await Driver.create({
+    name,
+    phone,
+    email,
+    gender: String(payload.gender || '').trim(),
+    password: await hashPassword(password),
+    vehicleType,
+    vehicleTypeId: payload.vehicle_type_id || payload.vehicleTypeId || null,
+    vehicleMake: String(payload.vehicle_make || payload.vehicleMake || payload.car_make || '').trim(),
+    vehicleModel: String(payload.vehicle_model || payload.vehicleModel || payload.car_model || '').trim(),
+    vehicleColor: String(payload.vehicle_color || payload.vehicleColor || payload.car_color || '').trim(),
+    vehicleNumber: String(payload.vehicle_number || payload.vehicleNumber || payload.car_number || '').trim(),
+    registerFor,
+    city,
+    approve: payload.approve !== undefined ? Boolean(payload.approve) : true,
+    status: payload.status || (payload.approve === false ? 'pending' : 'approved'),
+  });
+
+  return serializeDriver(driver.toObject());
 };
 
 export const updateDriver = async (id, payload) => {
@@ -870,6 +973,81 @@ export const getDriverById = async (id) => {
     throw new ApiError(404, 'Driver not found');
   }
   return serializeDriver(driver);
+};
+
+export const getDriverProfile = async (id) => {
+  const driver = await Driver.findById(id).lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const rides = await Ride.find({ driverId: driver._id }).sort({ createdAt: -1 }).lean();
+  const startOfDay = new Date();
+  startOfDay.setHours(0, 0, 0, 0);
+
+  const isCompleted = (ride) => String(ride.status || '').toLowerCase() === 'completed';
+  const isCancelled = (ride) => String(ride.status || '').toLowerCase() === 'cancelled';
+  const isOngoing = (ride) => !isCompleted(ride) && !isCancelled(ride);
+
+  const completedRides = rides.filter(isCompleted);
+  const cancelledRides = rides.filter(isCancelled);
+  const ongoingRides = rides.filter(isOngoing);
+  const todayRides = rides.filter((ride) => ride.createdAt && ride.createdAt >= startOfDay);
+  const todayCompleted = completedRides.filter((ride) =>
+    (ride.completedAt || ride.createdAt) >= startOfDay
+  );
+  const todayCancelled = cancelledRides.filter((ride) =>
+    (ride.completedAt || ride.createdAt) >= startOfDay
+  );
+
+  const sum = (items, field) =>
+    items.reduce((total, item) => total + Number(item?.[field] || 0), 0);
+
+  const totalEarnings = sum(completedRides, 'fare');
+  const todayEarnings = sum(todayCompleted, 'fare');
+  const driverEarnings = sum(completedRides, 'driverEarnings');
+  const adminCommission = sum(completedRides, 'commissionAmount');
+  const byCash = sum(completedRides.filter((r) => r.paymentMethod === 'cash'), 'fare');
+  const byCard = sum(completedRides.filter((r) => r.paymentMethod === 'online'), 'fare');
+
+  const driverLocation = driver.location?.coordinates || [];
+  const lastRideLocation = rides.find((ride) => Array.isArray(ride.lastDriverLocation?.coordinates));
+  const coordinates = driverLocation.length === 2 ? driverLocation : (lastRideLocation?.lastDriverLocation?.coordinates || []);
+
+  const [lng, lat] = coordinates;
+  const hasValidLocation = Number.isFinite(lat) && Number.isFinite(lng) && !(lat === 0 && lng === 0);
+
+  return {
+    ...serializeDriver(driver),
+    joined_at: driver.createdAt ? new Date(driver.createdAt).toLocaleString('en-IN') : 'N/A',
+    vehicle: {
+      type: driver.vehicleType || driver.registerFor || '',
+      make: driver.vehicleMake || '',
+      model: driver.vehicleModel || '',
+      color: driver.vehicleColor || '',
+      number: driver.vehicleNumber || '',
+    },
+    image: driver.profile_image || driver.avatar || 'https://i.pravatar.cc/200?img=12',
+    vehicle_image: 'https://img.freepik.com/free-vector/yellow-passenger-transport-taxi-car_1017-4886.jpg',
+    stats: {
+      total_trips: rides.length,
+      completed_trips: completedRides.length,
+      cancelled_trips: cancelledRides.length,
+      ongoing_trips: ongoingRides.length,
+      today_trips: todayRides.length,
+      today_cancelled: todayCancelled.length,
+    },
+    earnings: {
+      today_earnings: Number(todayEarnings.toFixed(2)),
+      total_earnings: Number(totalEarnings.toFixed(2)),
+      driver_earnings: Number(driverEarnings.toFixed(2)),
+      admin_commission: Number(adminCommission.toFixed(2)),
+      by_cash: Number(byCash.toFixed(2)),
+      by_wallet: 0,
+      by_card: Number(byCard.toFixed(2)),
+    },
+    location: hasValidLocation ? { lat, lng } : null,
+  };
 };
 
 export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id service_location_id').lean();

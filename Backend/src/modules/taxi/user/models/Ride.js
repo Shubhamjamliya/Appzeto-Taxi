@@ -48,18 +48,6 @@ const rideSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    deliveryId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: 'Delivery',
-      default: null,
-    },
-    serviceType: {
-      type: String,
-      enum: ['ride', 'parcel'],
-      default: 'ride',
-      lowercase: true,
-      trim: true,
-    },
     status: {
       type: String,
       enum: Object.values(RIDE_STATUS),
@@ -97,63 +85,48 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
-    paymentMethod: {
-      type: String,
-      enum: ['cash', 'online'],
-      default: 'cash',
-      lowercase: true,
-      trim: true,
-    },
-    parcel: {
-      category: {
+    promo: {
+      code: {
         type: String,
         default: '',
         trim: true,
+        uppercase: true,
       },
-      weight: {
+      promo_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiPromoCode',
+        default: null,
+      },
+      discount_amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_before_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      fare_after_discount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      service_location_id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiServiceLocation',
+        default: null,
+      },
+      transport_type: {
         type: String,
-        default: '',
+        enum: ['taxi', 'delivery', 'all'],
+        default: 'taxi',
         trim: true,
       },
-      description: {
-        type: String,
-        default: '',
-        trim: true,
+      applied_at: {
+        type: Date,
+        default: null,
       },
-      senderName: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-      senderMobile: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-      receiverName: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-      receiverMobile: {
-        type: String,
-        default: '',
-        trim: true,
-      },
-    },
-    commissionAmount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    driverEarnings: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    walletSettledAt: {
-      type: Date,
-      default: null,
     },
     lastDriverLocation: {
       type: {
@@ -195,9 +168,7 @@ const rideSchema = new mongoose.Schema(
       default: null,
     },
   },
-  { 
-    timestamps: true,
-  },
+  { timestamps: true },
 );
 
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

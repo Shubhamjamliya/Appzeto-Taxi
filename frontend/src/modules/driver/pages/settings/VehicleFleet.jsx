@@ -61,6 +61,7 @@ const VehicleFleet = () => {
         const selectedId = formData.vehicleTypeId || getDriverVehicleTypeId(driver);
         return vehicleTypes.find((type) => String(type._id || type.id) === String(selectedId));
     }, [driver, formData.vehicleTypeId, vehicleTypes]);
+    const driverRegisterFor = String(driver?.registerFor || 'taxi').toLowerCase();
 
     const ActiveIcon = iconFor(selectedType?.icon_types || driver?.vehicleIconType || driver?.vehicleType);
     const activeVehicleName = getTypeLabel(selectedType) || driver?.vehicleType || 'Vehicle';
@@ -86,7 +87,17 @@ const VehicleFleet = () => {
                 const nextDriver = unwrap(driverResponse);
                 const nextTypes = getVehicleTypes(typeResponse).filter((type) => {
                     const isActive = type.active !== false && Number(type.status ?? 1) !== 0;
-                    return isActive && String(type.transport_type || 'taxi').toLowerCase() === 'taxi';
+                    const transportType = String(type.transport_type || 'taxi').toLowerCase();
+
+                    if (!isActive) {
+                        return false;
+                    }
+
+                    if (String(nextDriver?.registerFor || 'taxi').toLowerCase() === 'both') {
+                        return true;
+                    }
+
+                    return transportType === String(nextDriver?.registerFor || 'taxi').toLowerCase();
                 });
 
                 setDriver(nextDriver);
@@ -193,7 +204,14 @@ const VehicleFleet = () => {
                         <div className="bg-amber-50 border border-amber-100 rounded-2xl px-4 py-3">
                             <p className="text-[10px] font-black uppercase tracking-widest text-amber-500">Dispatch Matching</p>
                             <p className="text-[11px] font-bold text-slate-600 mt-1 leading-relaxed">
-                                Update the primary vehicle here if ride requests are not reaching this driver. Dispatch now uses this selected vehicle type and icon.
+                                Update the primary vehicle here if requests are not reaching this driver. Dispatch uses the selected vehicle type exactly, including delivery jobs.
+                            </p>
+                        </div>
+
+                        <div className="bg-blue-50 border border-blue-100 rounded-2xl px-4 py-3">
+                            <p className="text-[10px] font-black uppercase tracking-widest text-blue-500">Dispatch Mode</p>
+                            <p className="text-[11px] font-bold text-slate-600 mt-1 leading-relaxed">
+                                This driver is registered for <span className="text-slate-900 uppercase">{driverRegisterFor}</span>. Only matching {driverRegisterFor === 'both' ? 'taxi and delivery' : driverRegisterFor} vehicle types are shown below.
                             </p>
                         </div>
 

@@ -1,9 +1,11 @@
 import { Router } from 'express';
+import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   approveOwner,
   createAirport,
   createAppModule,
   createGoodsType,
+  createDriver,
   createRentalPackageType,
   createOwner,
   createOwnerBooking,
@@ -43,8 +45,10 @@ import {
   getCountries,
   getDashboardData,
   getDriver,
+  getDriverProfile,
   getDriverOnboarding,
   getDrivers,
+  getDeletedDrivers,
   getFirebaseSettings,
   getGoodsTypes,
   getRentalPackageTypes,
@@ -77,6 +81,8 @@ import {
   getDeletedUsers,
   restoreDeletedUser,
   permanentlyDeleteDeletedUser,
+  restoreDeletedDriver,
+  permanentlyDeleteDeletedDriver,
   getUserRequests,
   getUserWalletHistory,
   getVehiclePreferenceOptions,
@@ -88,6 +94,7 @@ import {
   toggleChannelMail,
   toggleChannelPush,
   toggleZoneStatus,
+  adjustDriverWallet,
   updateAppModule,
   updateAirport,
   updateDriver,
@@ -134,10 +141,16 @@ adminRouter.get('/admin/users/:id/requests', getUserRequests);
 adminRouter.get('/admin/users/:id/wallet-history', getUserWalletHistory);
 
 adminRouter.get('/admin/drivers', getDrivers);
+adminRouter.get('/admin/drivers/deleted', authenticate(['admin']), getDeletedDrivers);
+adminRouter.patch('/admin/drivers/deleted/:id/restore', authenticate(['admin']), restoreDeletedDriver);
+adminRouter.delete('/admin/drivers/deleted/:id', authenticate(['admin']), permanentlyDeleteDeletedDriver);
+adminRouter.post('/admin/drivers', createDriver);
+adminRouter.get('/admin/drivers/:id/profile', getDriverProfile);
 adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);
+adminRouter.post('/admin/wallet/drivers/:id/adjust', adjustDriverWallet);
 
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);

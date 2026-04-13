@@ -345,7 +345,6 @@ const AdminLayout = () => {
               { label: 'Driver Needed Documents', path: '/admin/drivers/documents' },
               { label: 'Driver Bulk Upload', path: '/admin/drivers/bulk-upload' },
               { label: 'Payment Methods', path: '/admin/drivers/payment-methods' },
-              { label: 'Service Config', path: '/admin/drivers/service-config' },
             ],
           },
           {

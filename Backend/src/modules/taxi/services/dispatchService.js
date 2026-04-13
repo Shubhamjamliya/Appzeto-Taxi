@@ -65,6 +65,13 @@ const emitToRoom = (room, event, payload) => {
   }
 };
 
+export const notifyUserAccountDeleted = (userId) => {
+  if (!userId) return;
+  emitToRoom(getUserRoom(userId), 'account:deleted', {
+    reason: 'delete_request_approved',
+  });
+};
+
 export const emitToDriver = (driverId, event, payload) => {
   if (driverId) {
     emitToRoom(getDriverRoom(driverId), event, payload);

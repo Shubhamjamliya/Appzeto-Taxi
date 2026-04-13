@@ -1,238 +1,527 @@
-import React, { useState, useRef } from 'react';
-import { 
-  UploadCloud, 
-  Download, 
-  FileText, 
-  AlertTriangle, 
-  CheckCircle2, 
-  X, 
-  Info,
-  ArrowRight,
-  Database,
-  Users as UsersIcon,
-  ShieldAlert,
-  Loader2,
+import React, { useEffect, useRef, useState } from "react";
+import {
+  ArrowLeft,
   ChevronRight,
-  Plus
-} from 'lucide-react';
+  Download,
+  FileText,
+  Loader2,
+  RefreshCw,
+  UploadCloud,
+  X,
+} from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+import toast from "react-hot-toast";
+import {
+  USER_IMPORT_COLUMNS,
+  validateUserImportFile,
+} from "./userImportSchema";
+import * as XLSX from "xlsx";
+import { adminService } from "../../services/adminService";
+
+const formatFileSize = (size = 0) => `${(size / (1024 * 1024)).toFixed(2)} MB`;
+
+const parseCsvLine = (line = "") => {
+  const cells = [];
+  let current = "";
+  let insideQuote = false;
+
+  for (let index = 0; index < line.length; index += 1) {
+    const char = line[index];
+    const nextChar = line[index + 1];
+
+    if (char === '"' && nextChar === '"') {
+      current += '"';
+      index += 1;
+      continue;
+    }
+
+    if (char === '"') {
+      insideQuote = !insideQuote;
+      continue;
+    }
+
+    if (char === "," && !insideQuote) {
+      cells.push(current.trim());
+      current = "";
+      continue;
+    }
+
+    current += char;
+  }
+
+  cells.push(current.trim());
+  return cells;
+};
+
+const normalizeCsvColumn = (column = "") =>
+  String(column || "")
+    .replace(/^\uFEFF/, "")
+    .trim()
+    .toLowerCase();
+
+const parseUsersFromCsv = (text = "") => {
+  const rows = String(text || "")
+    .split(/\r?\n/)
+    .map((row) => row.trim())
+    .filter((row) => row.length > 0);
+
+  if (!rows.length) {
+    return [];
+  }
+
+  const header = parseCsvLine(rows[0]);
+  const headerIndex = new Map(
+    header.map((column, index) => [normalizeCsvColumn(column), index]),
+  );
+  const requiredColumns = USER_IMPORT_COLUMNS.map(normalizeCsvColumn);
+
+  const missingColumns = requiredColumns.filter(
+    (column) => !headerIndex.has(column),
+  );
+  if (missingColumns.length) {
+    throw new Error(`Missing required columns: ${missingColumns.join(", ")}`);
+  }
+
+  const users = [];
+  for (let index = 1; index < rows.length; index += 1) {
+    const values = parseCsvLine(rows[index]);
+    const getValue = (column) =>
+      values[headerIndex.get(normalizeCsvColumn(column))] ?? "";
+
+    const name = String(getValue("Name") || "").trim();
+    const email = String(getValue("Email") || "").trim();
+    const mobile = String(getValue("Mobile") || "").trim();
+    const gender = String(getValue("Gender") || "").trim();
+    const country = String(getValue("Country") || "").trim();
+
+    if (!name && !mobile && !email) {
+      continue;
+    }
+
+    users.push({
+      name,
+      email,
+      phone: mobile,
+      gender: gender.toLowerCase(),
+      countryCode: country,
+    });
+  }
+
+  return users;
+};
 
 const UserBulkUpload = () => {
+  const navigate = useNavigate();
+  const location = useLocation();
   const [dragActive, setDragActive] = useState(false);
-  const [file, setFile] = useState(null);
-  const [uploadStatus, setUploadStatus] = useState('idle'); // idle, uploading, success, error
+  const [files, setFiles] = useState(() => {
+    const incomingFile = location.state?.selectedFile;
+    return incomingFile ? [incomingFile] : [];
+  });
+  const [error, setError] = useState("");
+  const [replaceIndex, setReplaceIndex] = useState(null);
+  const [importingIndex, setImportingIndex] = useState(null);
   const fileInputRef = useRef(null);
 
-  const handleDrag = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (e.type === "dragenter" || e.type === "dragover") {
+  useEffect(() => {
+    const incomingFile = location.state?.selectedFile;
+    if (!incomingFile) return;
+
+    navigate(location.pathname, { replace: true, state: null });
+  }, [location.pathname, location.state, navigate]);
+
+  const addFiles = async (selectedFiles = []) => {
+    const nextFiles = Array.from(selectedFiles);
+    if (!nextFiles.length) return;
+
+    const validatedFiles = [];
+    for (const file of nextFiles) {
+      const validation = await validateUserImportFile(file);
+      if (!validation.valid) {
+        setError(validation.message);
+        return;
+      }
+      validatedFiles.push(file);
+    }
+
+    setError("");
+
+    if (replaceIndex !== null) {
+      setFiles((current) =>
+        current.map((currentFile, index) =>
+          index === replaceIndex ? validatedFiles[0] : currentFile,
+        ),
+      );
+      setReplaceIndex(null);
+      return;
+    }
+
+    setFiles((current) => [...current, ...validatedFiles]);
+  };
+
+  const handleDrag = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
+
+    if (event.type === "dragenter" || event.type === "dragover") {
       setDragActive(true);
-    } else if (e.type === "dragleave") {
+      return;
+    }
+
+    if (event.type === "dragleave") {
       setDragActive(false);
     }
   };
 
-  const handleDrop = (e) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleDrop = (event) => {
+    event.preventDefault();
+    event.stopPropagation();
     setDragActive(false);
-    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      setFile(e.dataTransfer.files[0]);
+
+    void addFiles(event.dataTransfer.files);
+  };
+
+  const handleFileSelect = (event) => {
+    void addFiles(event.target.files);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
     }
   };
 
-  const handleFileSelect = (e) => {
-    if (e.target.files && e.target.files[0]) {
-      setFile(e.target.files[0]);
+  const removeFile = (indexToRemove) => {
+    setFiles((current) =>
+      current.filter((_, index) => index !== indexToRemove),
+    );
+  };
+
+  const handleDownload = (file) => {
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  const handleReupload = (index) => {
+    setReplaceIndex(index);
+    fileInputRef.current?.click();
+  };
+
+  const handleImport = async (selectedFile, index) => {
+    if (!selectedFile) return;
+
+    const fileName = selectedFile.name.toLowerCase();
+    if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx")) {
+      toast.error("Only CSV or XLSX import is supported.");
+      return;
     }
-  };
 
-  const handleUpload = () => {
-    if (!file) return;
-    setUploadStatus('uploading');
-    
-    // Simulate upload delay
-    setTimeout(() => {
-      setUploadStatus('success');
-    }, 3000);
-  };
+    try {
+      setImportingIndex(index);
+      let users = [];
 
-  const resetUpload = () => {
-    setFile(null);
-    setUploadStatus('idle');
+      if (fileName.endsWith(".csv")) {
+        const csvText = await selectedFile.text();
+        users = parseUsersFromCsv(csvText);
+      } else if (fileName.endsWith(".xlsx")) {
+        const buffer = await selectedFile.arrayBuffer();
+        const workbook = XLSX.read(buffer, { type: "array" });
+        const firstSheetName = workbook.SheetNames[0];
+        const worksheet = workbook.Sheets[firstSheetName];
+        const json = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+
+        if (json.length > 1) {
+          const header = json[0];
+          const headerIndex = new Map(
+            header.map((col, idx) => [normalizeCsvColumn(col), idx]),
+          );
+
+          for (let i = 1; i < json.length; i++) {
+            const row = json[i];
+            if (!row || row.length === 0) continue;
+
+            const getValue = (column) =>
+              row[headerIndex.get(normalizeCsvColumn(column))] ?? "";
+            const name = String(getValue("Name") || "").trim();
+            const email = String(getValue("Email") || "").trim();
+            const mobile = String(getValue("Mobile") || "").trim();
+            const gender = String(getValue("Gender") || "").trim();
+            const country = String(getValue("Country") || "").trim();
+
+            if (!name && !mobile && !email) {
+              continue;
+            }
+
+            users.push({
+              name,
+              email,
+              phone: mobile,
+              gender: gender.toLowerCase(),
+              countryCode: country,
+            });
+          }
+        }
+      }
+
+      if (!users.length) {
+        toast.error("No valid user rows found in this file.");
+        return;
+      }
+
+      const batchSize = 300;
+      let createdCount = 0;
+      let skippedCount = 0;
+      let errorCount = 0;
+      const skippedSample = [];
+      const errorSample = [];
+      const totalBatches = Math.ceil(users.length / batchSize);
+      const toastId = toast.loading(
+        `Importing batch 1/${totalBatches} (0/${users.length})...`,
+      );
+
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex += 1) {
+        const start = batchIndex * batchSize;
+        const end = Math.min(users.length, start + batchSize);
+        const batch = users.slice(start, end);
+
+        toast.loading(
+          `Importing batch ${batchIndex + 1}/${totalBatches} (${end}/${users.length})...`,
+          { id: toastId },
+        );
+
+        const resData = await adminService.bulkImportUsers({ users: batch });
+
+        if (!resData?.success) {
+          toast.error(resData?.message || "Import failed", { id: toastId });
+          return;
+        }
+
+        const summary = resData.data || {};
+        createdCount += Number(summary.created_count || 0);
+        skippedCount += Number(summary.skipped_count || 0);
+        errorCount += Number(summary.error_count || 0);
+
+        if (Array.isArray(summary.skipped) && skippedSample.length < 5) {
+          skippedSample.push(
+            ...summary.skipped
+              .slice(0, 5 - skippedSample.length)
+              .map((item) => item?.phone)
+              .filter(Boolean),
+          );
+        }
+
+        if (Array.isArray(summary.errors) && errorSample.length < 5) {
+          errorSample.push(
+            ...summary.errors
+              .slice(0, 5 - errorSample.length)
+              .map((item) => item?.message)
+              .filter(Boolean),
+          );
+        }
+      }
+
+      if (createdCount === 0) {
+        const detailParts = [];
+        if (skippedCount) detailParts.push(`skipped ${skippedCount}`);
+        if (errorCount) detailParts.push(`errors ${errorCount}`);
+        const details = detailParts.length
+          ? ` (${detailParts.join(", ")})`
+          : "";
+
+        const hintParts = [];
+        if (skippedSample.length)
+          hintParts.push(`Duplicates: ${skippedSample.join(", ")}`);
+        if (errorSample.length)
+          hintParts.push(`Errors: ${errorSample.join(" | ")}`);
+        const hint = hintParts.length ? `\n${hintParts.join("\n")}` : "";
+
+        toast.error(`No users were created${details}.${hint}`, { id: toastId });
+        return;
+      }
+
+      toast.success(
+        `Imported ${createdCount}, skipped ${skippedCount}, errors ${errorCount}`,
+        { id: toastId },
+      );
+      navigate("/admin/users");
+    } catch (err) {
+      toast.error(err.message || "Failed to import users");
+    } finally {
+      setImportingIndex(null);
+    }
   };
 
   return (
-    <div className="space-y-8 p-1 animate-in fade-in duration-700 relative text-gray-950 font-sans">
-      {/* MATE STYLE HEADER */}
-      <div className="flex items-start justify-between">
-         <div>
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 mb-2">Bulk Migration</h1>
-            <div className="flex items-center gap-2 text-[13px] font-bold text-gray-400">
-               <span className="text-gray-950">Management</span>
-               <ChevronRight size={14} />
-               <span>User Onboarding</span>
-            </div>
-         </div>
-         <div className="flex items-center gap-3">
-            <button className="bg-white border border-gray-200 text-gray-950 px-5 py-2.5 rounded-xl text-[13px] font-bold flex items-center gap-2 hover:bg-gray-50 transition-all shadow-sm">
-               <Download size={16} className="text-gray-400" /> Template
-            </button>
-         </div>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      <div className="mb-6">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Users</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Bulk Upload</span>
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900">Bulk Upload</h1>
+          <button
+            type="button"
+            onClick={() => navigate("/admin/users")}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors">
+            <ArrowLeft size={16} /> Back
+          </button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 items-start">
-         {/* MAIN AREA */}
-         <div className="xl:col-span-3 space-y-6">
-            <div 
+      <div>
+        <div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-col gap-4 mb-6 pb-4 border-b border-gray-100 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <UploadCloud size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">
+                    Upload Customer File
+                  </h3>
+                  <p className="text-xs text-gray-400">
+                    File columns: {USER_IMPORT_COLUMNS.join(", ")}
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => navigate("/user-import/create")}
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700">
+                <UploadCloud size={16} /> Select Files
+              </button>
+            </div>
+
+            <div
               onDragEnter={handleDrag}
               onDragLeave={handleDrag}
               onDragOver={handleDrag}
               onDrop={handleDrop}
-              className={`bg-white rounded-[40px] border border-gray-100 shadow-sm transition-all min-h-[500px] flex flex-col items-center justify-center text-center p-12 overflow-hidden ${
-                dragActive ? 'bg-gray-50/80 ring-2 ring-gray-900 border-transparent' : 'hover:bg-gray-50/30'
-              }`}
-            >
-               {uploadStatus === 'idle' && (
-                  <div className="max-w-md space-y-8 flex flex-col items-center animate-in zoom-in-95 duration-500">
-                     <div className="w-24 h-24 bg-gray-50 rounded-[32px] border border-gray-100 flex items-center justify-center text-gray-950 shadow-sm">
-                        <UploadCloud size={40} />
-                     </div>
-                     <div>
-                        <h4 className="text-2xl font-bold text-gray-950 mb-3 tracking-tight leading-none">Drop your CSV files here</h4>
-                        <p className="text-gray-400 font-bold text-[14px] px-8 leading-relaxed">Ensure your headers match the template. Max. 50,000 records per upload.</p>
-                     </div>
-                     <div className="flex items-center gap-3">
-                        <button 
-                          onClick={() => fileInputRef.current.click()}
-                          className="px-8 py-4 bg-black text-white text-[12px] font-black uppercase tracking-widest rounded-2xl hover:opacity-90 active:scale-95 transition-all shadow-lg"
-                        >
-                           Select File
-                        </button>
-                        <button className="px-8 py-4 bg-gray-50 text-gray-500 text-[12px] font-black uppercase tracking-widest rounded-2xl border border-gray-100 hover:bg-gray-100 transition-all">
-                           Cloud Import
-                        </button>
-                     </div>
-                     <input 
-                       ref={fileInputRef}
-                       type="file" 
-                       className="hidden" 
-                       accept=".csv,.xlsx" 
-                       onChange={handleFileSelect}
-                     />
-                  </div>
-               )}
-
-               {(uploadStatus === 'uploading' || (file && uploadStatus === 'idle')) && (
-                  <div className="w-full max-w-lg space-y-10 animate-in fade-in duration-300">
-                     <div className="p-8 bg-gray-50/50 rounded-3xl border border-gray-100 relative group overflow-hidden">
-                        <div className="absolute inset-0 bg-white translate-y-full group-hover:translate-y-0 transition-transform duration-500"></div>
-                        <div className="relative z-10 flex items-center justify-between">
-                           <div className="flex items-center gap-5">
-                              <div className="w-14 h-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-gray-950 shadow-sm"><FileText size={28} /></div>
-                              <div className="text-left">
-                                 <p className="text-[15px] font-bold text-gray-950 truncate leading-none mb-1.5">{file?.name}</p>
-                                 <p className="text-[11px] font-bold text-gray-400 uppercase tracking-widest leading-none">{(file?.size / (1024 * 1024)).toFixed(2)} MB • READY</p>
+              className={`rounded-lg border transition-colors ${
+                dragActive
+                  ? "border-indigo-500 bg-indigo-50"
+                  : "border-gray-200 bg-white"
+              }`}>
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[720px] text-left">
+                  <thead>
+                    <tr className="border-b border-gray-100 bg-gray-50">
+                      <th className="px-4 py-3 text-xs font-semibold text-gray-900">
+                        File
+                      </th>
+                      <th className="px-4 py-3 text-right text-xs font-semibold text-gray-900">
+                        Action
+                      </th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-100">
+                    {files.length === 0 ? (
+                      <tr>
+                        <td
+                          colSpan="2"
+                          className="px-4 py-14 text-center text-sm font-medium text-gray-400">
+                          No files selected. Use Select Files above to create a
+                          new upload.
+                        </td>
+                      </tr>
+                    ) : (
+                      files.map((selectedFile, index) => (
+                        <tr
+                          key={`${selectedFile.name}-${selectedFile.lastModified}-${index}`}
+                          className="hover:bg-gray-50/60 transition-colors">
+                          <td className="px-4 py-3">
+                            <div className="flex min-w-0 items-center gap-3">
+                              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                                <FileText size={18} />
                               </div>
-                           </div>
-                           <button onClick={resetUpload} className="p-2.5 bg-white border border-gray-100 hover:text-rose-500 rounded-xl transition-all shadow-sm">
-                              <X size={18} />
-                           </button>
-                        </div>
-                     </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-medium text-gray-900">
+                                  {selectedFile.name}
+                                </p>
+                                <p className="mt-0.5 text-xs text-gray-400">
+                                  {formatFileSize(selectedFile.size)}
+                                </p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="flex items-center justify-end gap-2">
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleImport(selectedFile, index)
+                                }
+                                title="Import"
+                                disabled={importingIndex !== null}
+                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600 disabled:cursor-not-allowed disabled:opacity-60">
+                                {importingIndex === index ? (
+                                  <Loader2 size={16} className="animate-spin" />
+                                ) : (
+                                  <UploadCloud size={16} />
+                                )}
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleDownload(selectedFile)}
+                                title="Download"
+                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-indigo-50 hover:text-indigo-600">
+                                <Download size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => handleReupload(index)}
+                                title="Re-upload"
+                                disabled={importingIndex !== null}
+                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-emerald-50 hover:text-emerald-600">
+                                <RefreshCw size={16} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => removeFile(index)}
+                                title="Remove"
+                                disabled={importingIndex !== null}
+                                className="rounded-lg p-2 text-gray-500 transition-colors hover:bg-rose-50 hover:text-rose-600">
+                                <X size={16} />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-                     {uploadStatus === 'uploading' ? (
-                       <div className="flex flex-col items-center">
-                          <Loader2 size={40} className="animate-spin text-gray-950 mb-6" />
-                          <p className="text-[13px] font-bold text-gray-400 uppercase tracking-widest">Validating data pool...</p>
-                          <div className="w-64 h-1.5 bg-gray-100 rounded-full mt-6 overflow-hidden">
-                             <div className="h-full bg-gray-950 animate-progress origin-left"></div>
-                          </div>
-                       </div>
-                     ) : (
-                       <button 
-                         onClick={handleUpload}
-                         className="w-full py-5 bg-black text-white text-[13px] font-black uppercase tracking-widest rounded-2xl shadow-2xl hover:scale-[1.01] active:scale-95 transition-all flex items-center justify-center gap-3"
-                       >
-                          Initiate Migration <ArrowRight size={18} />
-                       </button>
-                     )}
-                  </div>
-               )}
+              <div className="border-t border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
+                Existing import files will appear here with download and
+                re-upload actions.
+              </div>
 
-               {uploadStatus === 'success' && (
-                 <div className="space-y-8 flex flex-col items-center animate-in zoom-in-95 duration-500">
-                    <div className="w-24 h-24 bg-emerald-50 text-emerald-500 rounded-[32px] flex items-center justify-center shadow-lg border border-emerald-100">
-                       <CheckCircle2 size={48} />
-                    </div>
-                    <div>
-                       <h4 className="text-2xl font-bold text-gray-950 mb-3 tracking-tight leading-none">Migration Ready!</h4>
-                       <p className="text-gray-400 font-bold text-[14px] max-w-sm mx-auto leading-relaxed">Data has been successfully staged. Final confirmation is required in the pending queue.</p>
-                    </div>
-                    <div className="flex gap-4">
-                       <button 
-                          onClick={resetUpload}
-                          className="px-8 py-4 bg-black text-white text-[12px] font-black uppercase tracking-widest rounded-2xl transition-all shadow-xl"
-                       >
-                          View Results
-                       </button>
-                    </div>
-                 </div>
-               )}
+              {error && (
+                <div className="border-t border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+                  {error}
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                className="hidden"
+                accept=".csv,.xlsx"
+                multiple={replaceIndex === null}
+                onChange={handleFileSelect}
+              />
             </div>
-         </div>
-
-         {/* SIDEBAR ANALYTICS - MATE STYLE */}
-         <div className="space-y-6">
-            <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden">
-               <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-6">Migration Health</h4>
-               
-               <div className="flex flex-col items-center mb-8">
-                  <div className="relative w-32 h-32 flex items-center justify-center">
-                     <svg className="w-full h-full -rotate-90">
-                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-gray-50" />
-                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" strokeDasharray="364" strokeDashoffset="90" className="text-gray-950" />
-                     </svg>
-                     <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
-                        <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest leading-none mb-1">Status</p>
-                        <p className="text-xl font-black text-gray-950 leading-none">Optimal</p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="space-y-5">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-emerald-500"><CheckCircle2 size={16} /></div>
-                        <span className="text-[12px] font-bold text-gray-500">Correct records</span>
-                     </div>
-                     <span className="text-[13px] font-black text-gray-950">98%</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-lg bg-gray-50 flex items-center justify-center text-rose-500"><AlertTriangle size={16} /></div>
-                        <span className="text-[12px] font-bold text-gray-500">Duplicate IDs</span>
-                     </div>
-                     <span className="text-[13px] font-black text-rose-500">2%</span>
-                  </div>
-               </div>
-            </div>
-
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-8 rounded-[32px] border border-indigo-100 relative overflow-hidden group">
-               <div className="absolute bottom-0 right-0 p-6 opacity-10 text-indigo-500 group-hover:scale-110 transition-transform duration-700">
-                  <Database size={100} strokeWidth={1} />
-               </div>
-               <div className="relative z-10">
-                  <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 mb-4 shadow-sm border border-indigo-100"><Info size={24} /></div>
-                  <h4 className="text-[14px] font-black text-gray-950 uppercase tracking-widest mb-3 leading-none">Mapping Specs</h4>
-                  <p className="text-[12px] font-bold text-gray-500 leading-relaxed mb-6 italic">Ensure your spreadsheet column names match these exact keys: name, email, phone, wallet, join_date.</p>
-                  <div className="flex items-center justify-between text-[11px] font-black text-indigo-600 uppercase tracking-widest">
-                     <span>Required</span>
-                     <ArrowRight size={14} />
-                  </div>
-               </div>
-            </div>
-         </div>
+          </div>
+        </div>
       </div>
     </div>
   );

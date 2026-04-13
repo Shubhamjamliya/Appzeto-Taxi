@@ -7,9 +7,28 @@ const ownerSchema = new mongoose.Schema(
       required: true,
       trim: true,
     },
+    legacy_id: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    user_id: {
+      type: Number,
+      default: null,
+    },
+    owner_name: {
+      type: String,
+      default: null,
+      trim: true,
+    },
     name: {
       type: String,
       required: true,
+      trim: true,
+    },
+    surname: {
+      type: String,
+      default: null,
       trim: true,
     },
     mobile: {
@@ -27,7 +46,7 @@ const ownerSchema = new mongoose.Schema(
     },
     password: {
       type: String,
-      required: true,
+      default: null,
       minlength: 6,
       select: false,
     },
@@ -36,9 +55,73 @@ const ownerSchema = new mongoose.Schema(
       ref: 'TaxiServiceLocation',
       default: null,
     },
+    legacy_service_location_id: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     transport_type: {
       type: String,
       default: 'taxi',
+      trim: true,
+    },
+    phone: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    address: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    postal_code: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    city: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    expiry_date: {
+      type: Date,
+      default: null,
+    },
+    no_of_vehicles: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    tax_number: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    bank_name: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    ifsc: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    account_no: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    iban: {
+      type: String,
+      default: null,
+      trim: true,
+    },
+    bic: {
+      type: String,
+      default: null,
       trim: true,
     },
     active: {
@@ -54,11 +137,20 @@ const ownerSchema = new mongoose.Schema(
       default: 'pending',
       trim: true,
     },
+    area_snapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    user_snapshot: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
   },
   { timestamps: true },
 );
 
 ownerSchema.index({ company_name: 1 });
 ownerSchema.index({ service_location_id: 1 });
+ownerSchema.index({ legacy_id: 1 }, { sparse: true });
 
 export const Owner = mongoose.models.TaxiOwner || mongoose.model('TaxiOwner', ownerSchema);

@@ -1,22 +1,30 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift } from 'lucide-react';
+import { User, Wallet, Bell, Shield, LogOut, ChevronRight, HelpCircle, MapPin, Star, Package, Wrench, Gift, Trash2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
+import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
+import { clearCurrentRide } from '../services/currentRideService';
+import { socketService } from '../../../shared/api/socket';
+import { userAuthService } from '../services/authService';
+
+const MotionDiv = motion.div;
+const MotionButton = motion.button;
 import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
 import { clearCurrentRide } from '../services/currentRideService';
 import { socketService } from '../../../shared/api/socket';
 
 const menuItems = [
-  { icon: User,        title: 'Profile Settings',  sub: 'Manage your personal info',        path: '/taxi/user/profile/settings',      bg: 'bg-orange-50',  color: 'text-orange-500' },
-  { icon: Wallet,      title: 'Wallet',             sub: 'Balance, transactions & top-up',   path: '/taxi/user/wallet',                bg: 'bg-blue-50',    color: 'text-blue-500'   },
-  { icon: MapPin,      title: 'Saved Addresses',    sub: 'Home, office & others',            path: '/taxi/user/profile/addresses',     bg: 'bg-emerald-50', color: 'text-emerald-500'},
-  { icon: Package,     title: 'My Rides',           sub: 'History & receipts',               path: '/taxi/user/activity',              bg: 'bg-indigo-50',  color: 'text-indigo-500' },
-  { icon: Bell,        title: 'Notifications',      sub: 'Offers & safety alerts',           path: '/taxi/user/profile/notifications', bg: 'bg-purple-50',  color: 'text-purple-500' },
-  { icon: Shield,      title: 'Security',           sub: 'Privacy & password',               path: '/taxi/user/profile/security',      bg: 'bg-rose-50',    color: 'text-rose-500'    },
-  { icon: Gift,        title: 'Refer & Earn',       sub: 'Invite friends & get rewards',     path: '/taxi/user/referral',              bg: 'bg-amber-50',   color: 'text-amber-500' },
-  { icon: HelpCircle,  title: 'Support',            sub: 'Help center & ticketing',          path: '/taxi/user/support/tickets',       bg: 'bg-slate-50',   color: 'text-slate-500'  },
-  { icon: Wrench,      title: 'Workshop & RSA',     sub: 'Quick roadside assistance',        path: '/taxi/user/services/workshop-rsa', bg: 'bg-sky-50',     color: 'text-sky-500'  },
+  { icon: User, title: 'Profile Settings', sub: 'Manage your personal info', path: '/taxi/user/profile/settings', bg: 'bg-orange-50', color: 'text-orange-500' },
+  { icon: Wallet, title: 'Wallet', sub: 'Balance, transactions & top-up', path: '/taxi/user/wallet', bg: 'bg-blue-50', color: 'text-blue-500' },
+  { icon: MapPin, title: 'Saved Addresses', sub: 'Home, office & others', path: '/taxi/user/profile/addresses', bg: 'bg-emerald-50', color: 'text-emerald-500' },
+  { icon: Package, title: 'My Rides', sub: 'History & receipts', path: '/taxi/user/activity', bg: 'bg-indigo-50', color: 'text-indigo-500' },
+  { icon: Bell, title: 'Notifications', sub: 'Offers & safety alerts', path: '/taxi/user/profile/notifications', bg: 'bg-purple-50', color: 'text-purple-500' },
+  { icon: Shield, title: 'Security', sub: 'Privacy & password', path: '/taxi/user/profile/security', bg: 'bg-rose-50', color: 'text-rose-500' },
+  { icon: Gift, title: 'Refer & Earn', sub: 'Invite friends & get rewards', path: '/taxi/user/referral', bg: 'bg-amber-50', color: 'text-amber-500' },
+  { icon: HelpCircle, title: 'Support', sub: 'Help center & ticketing', path: '/taxi/user/support/tickets', bg: 'bg-slate-50', color: 'text-slate-500' },
+  { icon: Wrench, title: 'Workshop & RSA', sub: 'Quick roadside assistance', path: '/taxi/user/services/workshop-rsa', bg: 'bg-sky-50', color: 'text-sky-500' },
+  { icon: Trash2, title: 'Delete Account', sub: 'Request account deletion', path: '/taxi/user/profile/delete-account', bg: 'bg-red-50', color: 'text-red-500' },
 ];
 
 const Profile = () => {
@@ -40,34 +48,69 @@ const Profile = () => {
       return;
     }
 
-    let stored = {};
-    try {
-      stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
-    } catch {
-      stored = {};
-    }
-    setProfile({
-      name: stored?.name || '',
-      phone: stored?.phone || '',
-      profileImage: stored?.profileImage || '',
+    const [profile, setProfile] = useState(() => {
+      const token = getLocalUserToken();
+
+      if (!token) {
+        setProfile({
+          name: '',
+          phone: '',
+          profileImage: '',
+        });
+        navigate('/taxi/user/login', { replace: true });
+        return;
+      }
+
+      let stored = {};
+      try {
+        stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
+      } catch {
+        stored = {};
+      }
+
+      return {
+        name: stored?.name || '',
+        phone: stored?.phone || '',
+        profileImage: stored?.profileImage || '',
+      };
     });
 
-    const loadProfile = async () => {
-      try {
-        const response = await userAuthService.getCurrentUser();
-        const user = response?.data?.user || {};
-        setProfile({
-          name: user.name || stored?.name || '',
-          phone: user.phone || stored?.phone || '',
-          profileImage: user.profileImage || stored?.profileImage || '',
-        });
-        localStorage.setItem('userInfo', JSON.stringify(user));
-      } catch (error) {
-        // Keep the local fallback if the network is unavailable.
-      }
-    };
+    useEffect(() => {
+      const loadProfile = async () => {
+        try {
+          let stored = {};
+          try {
+            stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
+          } catch {
+            stored = {};
+          }
+          const response = await userAuthService.getCurrentUser();
+          const user = response?.data?.user || {};
+          setProfile({
+            name: user.name || stored?.name || '',
+            phone: user.phone || stored?.phone || '',
+            profileImage: user.profileImage || stored?.profileImage || '',
+          });
+          localStorage.setItem('userInfo', JSON.stringify(user));
+        } catch {
+          // Keep the local fallback if the network is unavailable.
+        }
+      };
 
-    loadProfile();
+      loadProfile();
+    }, [navigate]);
+
+    const handleLogout = () => {
+      clearCurrentRide();
+      socketService.disconnect();
+      clearLocalUserSession();
+      setProfile({
+        name: '',
+        phone: '',
+        profileImage: '',
+      });
+      navigate('/taxi/user/login', { replace: true });
+    };
   }, [navigate]);
 
   const handleLogout = () => {
@@ -102,7 +145,7 @@ const Profile = () => {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-none">My Account</h1>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mt-1.5 opacity-70">Manage your profile & settings</p>
           </div>
-          <button 
+          <button
             onClick={() => navigate('/taxi/user/profile/settings')}
             className="w-10 h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm text-slate-400 hover:text-slate-900 active:scale-95 transition-all"
           >
@@ -111,18 +154,18 @@ const Profile = () => {
         </div>
 
         {/* Hero Profile Card */}
-        <motion.div 
+        <MotionDiv
           initial={{ opacity: 0, scale: 0.98 }}
           animate={{ opacity: 1, scale: 1 }}
           className="rounded-[28px] bg-white border border-slate-100 shadow-xl shadow-slate-900/5 p-5 flex items-center gap-5"
         >
           <div className="relative">
             <div className="w-15 h-15 rounded-[22px] bg-slate-900 flex items-center justify-center shadow-lg relative overflow-hidden">
-               {profile.profileImage ? (
-                 <img src={profile.profileImage} alt="User" className="w-full h-full object-cover" />
-               ) : (
-                 <span className="text-xl font-bold text-white opacity-40">{initials || 'U'}</span>
-               )}
+              {profile.profileImage ? (
+                <img src={profile.profileImage} alt="User" className="w-full h-full object-cover" />
+              ) : (
+                <span className="text-xl font-bold text-white opacity-40">{initials || 'U'}</span>
+              )}
             </div>
             <div className="absolute -bottom-1 -right-1 w-5 h-5 bg-emerald-500 rounded-lg border-2 border-white flex items-center justify-center shadow-sm" />
           </div>
@@ -141,43 +184,44 @@ const Profile = () => {
             </div>
             <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Active</span>
           </div>
-        </motion.div>
+        </MotionDiv>
       </div>
 
       {/* Menu Options */}
       <div className="px-5 space-y-3">
         <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-widest ml-1 opacity-60">System Menu</h3>
-        
+
         <div className="rounded-[28px] border border-slate-100 bg-white shadow-sm overflow-hidden divide-y divide-slate-50">
           {menuItems.map(({ icon: Icon, title, sub, path, bg, color }, idx) => (
-            <motion.button 
+            <MotionButton
               key={idx}
               whileTap={{ backgroundColor: '#F8FAFC' }}
               onClick={() => navigate(path)}
               className="w-full flex items-center gap-4 px-5 py-4 text-left transition-colors"
             >
               <div className={`w-10 h-10 rounded-[18px] flex items-center justify-center shrink-0 ${bg}`}>
-                <Icon size={18} className={color} strokeWidth={2} />
+                {React.createElement(Icon, { size: 18, className: color, strokeWidth: 2 })}
               </div>
               <div className="flex-1">
                 <p className="text-[14px] font-semibold text-slate-900 leading-tight">{title}</p>
                 <p className="text-[11px] font-medium text-slate-400 mt-1">{sub}</p>
               </div>
               <ChevronRight size={16} className="text-slate-200" strokeWidth={3} />
-            </motion.button>
+            </MotionButton>
           ))}
         </div>
 
         {/* Sign Out Action */}
         <div className="pt-4 pb-8">
-          <button 
+          <button
+            onClick={handleLogout}
             onClick={handleLogout}
             className="w-full h-15 rounded-2xl border border-rose-100 bg-rose-50 text-rose-500 flex items-center justify-center gap-3 text-[14px] font-bold active:scale-98 transition-all"
           >
             <LogOut size={16} strokeWidth={2.5} />
             Sign Out from Session
           </button>
-          
+
           <p className="text-center text-[10px] font-bold text-slate-300 uppercase tracking-widest mt-8">App Version 2.4.1 (Stable)</p>
         </div>
       </div>

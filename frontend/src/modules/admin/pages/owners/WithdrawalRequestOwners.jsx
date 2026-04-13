@@ -1,265 +1,229 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  ChevronRight, 
-  Search, 
-  Filter, 
-  Download, 
-  Eye, 
-  MoreHorizontal,
-  ChevronDown,
-  AlertCircle,
-  Clock,
-  CheckCircle2,
-  XCircle,
-  User,
-  Phone,
-  FileText,
-  Loader2
-} from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { ChevronDown, ChevronRight, Eye, FileSearch, Loader2, Menu } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
+
+import { adminService } from '../../services/adminService';
+
+const formatDate = (value) => {
+  if (!value) return '-';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '-';
+  return date.toLocaleDateString('en-GB', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+  });
+};
+
+const formatAmount = (value, currency = 'INR') => {
+  const amount = Number(value || 0);
+  return `${currency} ${amount.toFixed(2)}`;
+};
+
+const getOwnerName = (item) =>
+  item.owner_id?.name ||
+  item.owner_id?.owner_name ||
+  item.owner_id?.company_name ||
+  item.owner?.name ||
+  item.owner?.company_name ||
+  '-';
+
+const getStatusClass = (status) => {
+  const normalized = String(status || '').toLowerCase();
+
+  if (['approved', 'processed', 'completed', 'paid'].includes(normalized)) {
+    return 'bg-emerald-50 text-emerald-700';
+  }
+
+  if (['rejected', 'cancelled', 'failed'].includes(normalized)) {
+    return 'bg-red-50 text-red-600';
+  }
+
+  return 'bg-amber-50 text-amber-700';
+};
 
 const WithdrawalRequestOwners = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [activeMenu, setActiveMenu] = useState(null);
+  const [page, setPage] = useState(1);
   const [requests, setRequests] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [pagination, setPagination] = useState(null);
 
   useEffect(() => {
     const fetchWithdrawals = async () => {
+      setIsLoading(true);
+
       try {
-        setIsLoading(true);
-        const token = localStorage.getItem('adminToken');
-        // pattern follows the driver module: /api/v1/admin/wallet/drivers/withdrawals
-        const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/wallet/owners/withdrawals?limit=${itemsPerPage}`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const data = await res.json();
-        if (data.success) {
-          const mapped = (data.data?.results || []).map(r => ({
-            id: r.owner_id || r._id,
-            date: new Date(r.last_request_at || r.createdAt).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }),
-            name: r.owner?.name || 'Unknown Owner',
-            phone: r.owner?.mobile || 'N/A',
-            amount: `INR ${r.amount || 0}`,
-            status: r.status || 'pending'
-          }));
-          setRequests(mapped);
-          setPagination(data.data?.paginator);
+        const response = await adminService.getWithdrawals();
+
+        if (response.success) {
+          const results = response.data?.results || response.data || [];
+          setRequests(results.filter((item) => item.owner_id || item.owner));
         }
-      } catch (err) {
-        console.error('Fetch error:', err);
+      } catch (error) {
+        console.error('Owner withdrawals fetch failed:', error);
       } finally {
         setIsLoading(false);
       }
     };
+
     fetchWithdrawals();
-  }, [itemsPerPage]);
-
-  const toggleMenu = (e, id) => {
-    e.stopPropagation();
-    setActiveMenu(activeMenu === id ? null : id);
-  };
-
-  useEffect(() => {
-    const handleClose = () => setActiveMenu(null);
-    window.addEventListener('click', handleClose);
-    return () => window.removeEventListener('click', handleClose);
   }, []);
 
-  const getStatusStyle = (status) => {
-    switch (status.toLowerCase()) {
-      case 'requested':
-      case 'pending':
-        return 'bg-amber-50 text-amber-600 border-amber-100';
-      case 'processed':
-      case 'approved':
-      case 'completed':
-        return 'bg-emerald-50 text-emerald-600 border-emerald-100';
-      case 'rejected':
-      case 'cancelled':
-        return 'bg-rose-50 text-rose-600 border-rose-100';
-      default:
-        return 'bg-gray-50 text-gray-600 border-gray-100';
-    }
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [itemsPerPage]);
 
-  const filteredRequests = requests.filter(req => 
-    req.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    req.phone.includes(searchTerm)
-  );
+  const totalEntries = requests.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const pagedRequests = useMemo(() => {
+    const start = (safePage - 1) * itemsPerPage;
+    return requests.slice(start, start + itemsPerPage);
+  }, [itemsPerPage, requests, safePage]);
+  const showingFrom = totalEntries === 0 ? 0 : (safePage - 1) * itemsPerPage + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(showingFrom + pagedRequests.length - 1, totalEntries);
 
   return (
-    <div className="min-h-screen bg-transparent p-1 font-sans text-gray-950">
-      {/* HEADER SECTION */}
-      <div className="flex items-center justify-between mb-8 px-1">
-        <div>
-          <h1 className="text-[17px] font-black tracking-tight text-gray-900 uppercase italic">Withdrawal Request Owners</h1>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 mt-1 uppercase tracking-widest">
-            <span className="cursor-pointer hover:text-gray-900 transition-colors" onClick={() => navigate('/admin/owners/dashboard')}>Owner Management</span>
-            <ChevronRight size={12} className="opacity-50" />
-            <span className="text-gray-900 font-black">Settlement Audit</span>
-          </div>
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
+      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
+        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Withdrawal Request Owners</h1>
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <span className="text-gray-950">Withdrawal Request Owners</span>
+          <ChevronRight size={14} />
+          <span>Withdrawal Request Owners</span>
         </div>
       </div>
 
-      {/* TOOLBAR & TABLE CARD */}
-      <div className="bg-white rounded-[40px] border border-gray-100 shadow-sm overflow-hidden mb-20 border-b-8 border-b-indigo-50/20">
-        <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row items-center justify-between gap-6 bg-gray-50/10">
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-2 text-[12px] font-black text-gray-400 uppercase tracking-[0.2em] whitespace-nowrap">
-              show 
-              <div className="relative group">
-                <select 
-                  value={itemsPerPage}
-                  onChange={(e) => setItemsPerPage(e.target.value)}
-                  className="bg-white border border-gray-100 rounded-xl px-5 py-2 text-gray-900 font-black outline-none appearance-none transition-all shadow-sm pr-10 focus:ring-4 focus:ring-indigo-50"
-                >
-                  <option value={10}>10</option>
-                  <option value={20}>20</option>
-                  <option value={50}>50</option>
-                </select>
-                <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" size={14} />
-              </div>
-              entries
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3 w-full md:w-auto">
-            <div className="relative group flex-1 md:flex-none">
-              <Search className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 group-hover:text-indigo-400 transition-colors" size={18} />
-              <input 
-                type="text" 
-                placeholder="Search owner..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full md:w-80 h-14 pl-14 pr-6 bg-white border border-gray-100 rounded-2xl text-[13px] font-bold outline-none focus:border-indigo-100 focus:bg-white transition-all shadow-inner shadow-gray-50/50"
+      <div className="px-5">
+        <div className="relative rounded border border-gray-200 bg-white shadow-sm">
+          <div className="flex items-center gap-3 px-5 py-10 text-sm font-semibold text-slate-400">
+            <span>show</span>
+            <div className="relative">
+              <select
+                value={itemsPerPage}
+                onChange={(event) => setItemsPerPage(Number(event.target.value) || 10)}
+                className="h-9 w-24 appearance-none rounded border border-gray-300 bg-white px-3 text-sm text-gray-950 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+              >
+                {[10, 25, 50, 100].map((value) => (
+                  <option key={value} value={value}>
+                    {value}
+                  </option>
+                ))}
+              </select>
+              <ChevronDown
+                size={16}
+                className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-700"
               />
             </div>
-            <button className="h-14 w-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm">
-                <Filter size={20} />
+            <span>entries</span>
+          </div>
+
+          <div className="px-5">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Date</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Name</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Requested Amount</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Status</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan="5" className="px-3 py-24 text-center">
+                        <div className="flex flex-col items-center gap-4 text-slate-400">
+                          <Loader2 size={34} className="animate-spin text-teal-500" />
+                          <p className="text-sm font-semibold">Loading withdrawal requests...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : pagedRequests.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="border-b border-gray-200 px-3 py-12 text-center">
+                        <div className="flex min-h-[130px] flex-col items-center justify-center text-slate-700">
+                          <FileSearch size={92} strokeWidth={1.7} className="mb-2 text-indigo-950" />
+                          <p className="text-xl font-medium">No Data Found</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedRequests.map((item) => {
+                      const ownerId = item.owner_id?._id || item.owner_id || item.owner?._id || item._id;
+                      const status = item.status || 'requested';
+
+                      return (
+                        <tr key={item._id || ownerId} className="bg-white transition-colors hover:bg-gray-50">
+                          <td className="px-3 py-5 text-sm text-gray-950">
+                            {formatDate(item.createdAt || item.last_request_at)}
+                          </td>
+                          <td className="px-3 py-5 text-sm text-gray-950">{getOwnerName(item)}</td>
+                          <td className="px-3 py-5 text-sm text-gray-950">
+                            {formatAmount(item.amount || item.pending_amount, item.requested_currency || 'INR')}
+                          </td>
+                          <td className="px-3 py-5 text-sm">
+                            <span className={`inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusClass(status)}`}>
+                              {status}
+                            </span>
+                          </td>
+                          <td className="px-3 py-5">
+                            <button
+                              type="button"
+                              onClick={() => navigate(`/admin/owners/wallet/withdrawals/${ownerId}`)}
+                              className="inline-flex h-9 w-10 items-center justify-center rounded bg-teal-50 text-teal-500 transition-colors hover:bg-teal-100"
+                              title="View withdrawal request"
+                            >
+                              <Eye size={17} />
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="absolute -right-1 top-[66%] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-teal-500 text-white shadow-xl transition-colors hover:bg-teal-600"
+          >
+            <Menu size={24} />
+          </button>
+        </div>
+
+        <div className="mt-8 flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-400">
+            Showing {showingFrom} to {showingTo} of {totalEntries} entries
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage <= 1}
+              className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Prev
             </button>
-            <button className="h-14 w-14 bg-white border border-gray-100 rounded-2xl flex items-center justify-center text-gray-400 hover:text-indigo-600 hover:border-indigo-100 transition-all shadow-sm">
-                <Download size={20} />
+            <button
+              type="button"
+              className="rounded bg-indigo-950 px-4 py-2 text-sm font-semibold text-white"
+            >
+              {safePage}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Next
             </button>
           </div>
-        </div>
-
-        <div className="overflow-x-auto no-scrollbar">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white border-b border-gray-50">
-                <th className="px-10 py-7 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em]">Date</th>
-                <th className="px-10 py-7 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em]">Name</th>
-                <th className="px-10 py-7 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em]">Requested Amount</th>
-                <th className="px-10 py-7 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] text-center">Status</th>
-                <th className="px-10 py-7 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] text-right">Action</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50">
-              {isLoading ? (
-                <tr>
-                  <td colSpan="5" className="py-24 text-center">
-                    <div className="flex flex-col items-center gap-4 opacity-30">
-                      <Loader2 className="animate-spin text-indigo-950" size={48} strokeWidth={3} />
-                      <p className="text-[12px] font-black uppercase tracking-[0.4em]">Compiling Ledger...</p>
-                    </div>
-                  </td>
-                </tr>
-              ) : filteredRequests.length === 0 ? (
-                <tr>
-                  <td colSpan="5" className="py-32 text-center">
-                    <div className="flex flex-col items-center gap-6 opacity-30">
-                      <div className="w-24 h-24 bg-gray-50 rounded-full flex items-center justify-center border border-gray-100 shadow-inner">
-                        <FileText size={48} className="text-gray-200" />
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[14px] font-black uppercase tracking-[0.2em] text-gray-900 italic underline decoration-indigo-200 decoration-4">No Data Found</p>
-                        <p className="text-[10px] font-bold text-gray-400 tracking-widest uppercase italic">The vault is currently balanced</p>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : (
-                filteredRequests.map((req) => (
-                  <tr key={req.id} className="group hover:bg-slate-50/50 transition-all border-l-4 border-l-transparent hover:border-l-indigo-600">
-                    <td className="px-10 py-7 whitespace-nowrap">
-                       <span className="text-[13px] font-black text-gray-900 italic uppercase">{req.date}</span>
-                    </td>
-                    <td className="px-10 py-7">
-                      <div className="flex items-center gap-5">
-                        <div className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center text-indigo-600 border border-gray-100 group-hover:scale-110 transition-transform shadow-sm">
-                           <User size={22} strokeWidth={2.5} />
-                        </div>
-                        <div>
-                          <div className="text-[15px] font-black text-gray-950 uppercase">{req.name}</div>
-                          <div className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">{req.phone}</div>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-10 py-7">
-                      <span className="text-[16px] font-black text-gray-950 italic tracking-tight">{req.amount}</span>
-                    </td>
-                    <td className="px-10 py-7 text-center">
-                       <span className={`px-5 py-2 rounded-2xl text-[10px] font-black uppercase tracking-[0.15em] border transition-all shadow-sm ${getStatusStyle(req.status)}`}>
-                          {req.status}
-                       </span>
-                    </td>
-                    <td className="px-10 py-7 text-right">
-                       <div className="relative inline-block text-left">
-                          <button 
-                            onClick={(e) => toggleMenu(e, req.id)}
-                            className="p-3.5 bg-white border border-gray-100 rounded-2xl text-gray-400 hover:text-gray-950 hover:border-gray-200 transition-all shadow-sm active:scale-90"
-                          >
-                            <MoreHorizontal size={20} />
-                          </button>
-                          
-                          <AnimatePresence>
-                            {activeMenu === req.id && (
-                              <motion.div 
-                                initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                                animate={{ opacity: 1, y: 0, scale: 1 }}
-                                exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                                className="absolute right-0 mt-4 w-56 bg-white rounded-[28px] shadow-2xl border border-gray-100 p-2.5 z-[100] backdrop-blur-xl ring-8 ring-black/5"
-                              >
-                                <button
-                                  onClick={() => navigate(`/admin/owners/wallet/withdrawals/${req.id}`)}
-                                  className="w-full flex items-center justify-between px-6 py-4 text-[10px] font-black text-gray-500 hover:text-indigo-600 hover:bg-indigo-50/50 rounded-2xl transition-all uppercase tracking-[0.2em]"
-                                >
-                                  Review Account <Eye size={16} />
-                                </button>
-                                <button
-                                  className="w-full flex items-center justify-between px-6 py-4 text-[10px] font-black text-emerald-500 hover:bg-emerald-50/50 rounded-2xl transition-all uppercase tracking-[0.2em]"
-                                >
-                                  Process Bank <CheckCircle2 size={16} />
-                                </button>
-                                <button
-                                  className="w-full flex items-center justify-between px-6 py-4 text-[10px] font-black text-rose-500 hover:bg-rose-50/50 rounded-2xl transition-all uppercase tracking-[0.2em]"
-                                >
-                                  Decline Payment <XCircle size={16} />
-                                </button>
-                              </motion.div>
-                            )}
-                          </AnimatePresence>
-                       </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-
-        <div className="p-10 bg-gray-50/30 border-t border-gray-50/50 flex items-center justify-between">
-           <span className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em] italic">Audit Trail: {filteredRequests.length} Transactions</span>
-           <div className="flex items-center gap-1.5">
-              <button className="px-8 py-3 bg-white border border-gray-100 rounded-2xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors shadow-sm">Prev</button>
-              <button className="h-12 w-12 bg-[#2D3A6E] text-white rounded-2xl text-[14px] font-black shadow-xl shadow-indigo-100 ring-4 ring-indigo-50">1</button>
-              <button className="px-8 py-3 bg-white border border-gray-100 rounded-2xl text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors shadow-sm">Next</button>
-           </div>
         </div>
       </div>
     </div>
@@ -267,4 +231,3 @@ const WithdrawalRequestOwners = () => {
 };
 
 export default WithdrawalRequestOwners;
-

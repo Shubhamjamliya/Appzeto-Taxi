@@ -83,4 +83,9 @@ export const userAuthService = {
   transferWallet: (phone, amount) => api.post('/users/wallet/transfer', { phone, amount }, withUserAuth()),
   createWalletTopupOrder: (amount) => api.post('/users/wallet/razorpay/order', { amount }, withUserAuth()),
   verifyWalletTopup: (payload) => api.post('/users/wallet/razorpay/verify', payload, withUserAuth()),
+  createWalletTopupOrder: (amount) => api.post('/users/wallet/razorpay/order', { amount }),
+  verifyWalletTopup: (payload) => api.post('/users/wallet/razorpay/verify', payload),
+  requestAccountDeletion: (reason) => api.post('/users/me/delete-request', { reason }),
+  createWalletTopupOrder: (amount) => api.post('/users/wallet/razorpay/order', { amount }, withUserAuth()),
+  verifyWalletTopup: (payload) => api.post('/users/wallet/razorpay/verify', payload, withUserAuth()),
 };

@@ -7,6 +7,7 @@ import {
   createGoodsType,
   createDriver,
   createDriverNeededDocument,
+  bulkImportDrivers,
   createRentalPackageType,
   createOwner,
   createOwnerBooking,
@@ -19,6 +20,8 @@ import {
   createSubscriptionPlan,
   createUser,
   createZone,
+  bulkImportUsers,
+  approveUserDeletionRequest,
   deleteAppModule,
   deleteDriver,
   deleteDriverNeededDocument,
@@ -63,6 +66,7 @@ import {
   getDeletedDrivers,
   getFirebaseSettings,
   getGoodsTypes,
+  getIntercityTrips,
   getRentalPackageTypes,
   getReferralTranslations,
   getGeneralSettingsCategory,
@@ -73,6 +77,7 @@ import {
   getNotificationChannels,
   getOngoingRides,
   getOverallEarnings,
+  getOwner,
   getOwners,
   getOwnerOnboarding,
   getOwnerBookings,
@@ -100,10 +105,13 @@ import {
   getUser,
   getUsers,
   getDeletedUsers,
+  getUserDeletionRequests,
   restoreDeletedUser,
   permanentlyDeleteDeletedUser,
   restoreDeletedDriver,
   permanentlyDeleteDeletedDriver,
+  getRideRequests,
+  rejectUserDeletionRequest,
   getUserRequests,
   getUserWalletHistory,
   getVehiclePreferenceOptions,
@@ -154,10 +162,14 @@ adminRouter.get('/admin/status', getAdminStatus);
 adminRouter.post('/admin/login', loginAdmin);
 
 adminRouter.get('/admin/users', getUsers);
+adminRouter.post('/admin/users/bulk-import', bulkImportUsers);
 adminRouter.post('/admin/users', createUser);
 adminRouter.get('/admin/users/deleted', getDeletedUsers);
 adminRouter.patch('/admin/users/deleted/:id/restore', restoreDeletedUser);
 adminRouter.delete('/admin/users/deleted/:id', permanentlyDeleteDeletedUser);
+adminRouter.get('/admin/users/delete-requests', getUserDeletionRequests);
+adminRouter.patch('/admin/users/delete-requests/:id/approve', approveUserDeletionRequest);
+adminRouter.patch('/admin/users/delete-requests/:id/reject', rejectUserDeletionRequest);
 adminRouter.get('/admin/users/:id', getUser);
 adminRouter.patch('/admin/users/:id', updateUser);
 adminRouter.delete('/admin/users/:id', deleteUser);
@@ -165,6 +177,7 @@ adminRouter.get('/admin/users/:id/requests', getUserRequests);
 adminRouter.get('/admin/users/:id/wallet-history', getUserWalletHistory);
 
 adminRouter.get('/admin/drivers', getDrivers);
+adminRouter.post('/admin/drivers/bulk-import', bulkImportDrivers);
 adminRouter.get('/admin/drivers/deleted', authenticate(['admin']), getDeletedDrivers);
 adminRouter.patch('/admin/drivers/deleted/:id/restore', authenticate(['admin']), restoreDeletedDriver);
 adminRouter.delete('/admin/drivers/deleted/:id', authenticate(['admin']), permanentlyDeleteDeletedDriver);
@@ -219,6 +232,7 @@ adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
 adminRouter.get('/admin/owner-management/manage-owners', getOwners);
 adminRouter.post('/admin/owner-management/manage-owners', createOwner);
+adminRouter.get('/admin/owner-management/manage-owners/:id', getOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
@@ -249,8 +263,10 @@ adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
+adminRouter.get('/admin/ride-requests', getRideRequests);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
 adminRouter.get('/admin/deliveries', getDeliveries);
+adminRouter.get('/admin/trips', getIntercityTrips);
 
 adminRouter.get('/admin/wallet/withdrawals', getWithdrawals);
 

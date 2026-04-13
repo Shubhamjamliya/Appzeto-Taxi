@@ -15,19 +15,23 @@ import {
   Activity,
   Tag,
   Info,
+  Save,
+  Info,
   Upload
 } from 'lucide-react';
 import { motion } from "framer-motion";
 import { useNavigate, useParams } from 'react-router-dom';
 
+const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
+const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
 const Motion = motion;
 
 const StatusToggle = ({ active, onToggle }) => (
   <button
     onClick={(e) => { e.stopPropagation(); onToggle(); }}
-    className={`w-11 h-6 rounded-full transition-colors relative ${active ? 'bg-indigo-600' : 'bg-gray-200'}`}
+    className={`w-10 h-5 rounded-full transition-colors relative ${active ? 'bg-[#00BFA5]' : 'bg-gray-200'}`}
   >
-    <div className={`absolute top-1 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-5' : 'translate-x-1'}`} />
+    <div className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-transform ${active ? 'translate-x-[22px]' : 'translate-x-0.5'}`} />
   </button>
 );
 
@@ -72,15 +76,15 @@ const readFileAsDataUrl = (file) =>
 const GoodsTypes = ({ mode }) => {
   const navigate = useNavigate();
   const { id } = useParams();
+  const isCreateOrEdit = mode === 'create' || mode === 'edit';
   
   const [goods, setGoods] = useState([]);
-  const [vehicleOptions, setVehicleOptions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [activeTab, setActiveTab] = useState('English');
   const [searchTerm, setSearchTerm] = useState('');
   
-  const languages = ['English', 'Arabic', 'French', 'Spanish'];
+  const languages = ['English', 'Arabic', 'French', 'Spanish', 'Tamil', 'Kannada'];
 
   const [formData, setFormData] = useState({
     name: '',
@@ -126,36 +130,15 @@ const GoodsTypes = ({ mode }) => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
-      const [goodsRes, vehicleRes] = await Promise.all([
-        fetch(`${baseUrl}/goods-types`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(`${baseUrl}/types/vehicle-types`, {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-      ]);
-
-      const [goodsData, vehicleData] = await Promise.all([goodsRes.json(), vehicleRes.json()]);
-
-      if (goodsData.success) {
-        const items = goodsData.results || goodsData.data?.results || goodsData.data?.goods_types || [];
-        setGoods(items);
-      }
-
-      if (vehicleData.success) {
-        const rawVehicles = vehicleData.results || vehicleData.data?.vehicle_types || vehicleData.data || [];
-        const items = Array.isArray(rawVehicles)
-          ? rawVehicles
-          : (rawVehicles?.results || rawVehicles?.vehicle_types || []);
-        const safeItems = Array.isArray(items) ? items.filter((item) => item && typeof item === 'object') : [];
-        const mappedOptions = safeItems
-          .map(formatVehicleOption)
-          .filter((item) => item.value);
-
-        setVehicleOptions(mappedOptions);
+      const res = await fetch(`${baseUrl}/goods-types`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      const data = await res.json();
+      if (data.success) {
+        setGoods(data.results || data.data?.results || data.data?.goods_types || []);
       }
     } catch (error) {
-      console.error("Error fetching goods types form data:", error);
+      console.error("Error fetching goods types:", error);
     } finally {
       setLoading(false);
     }
@@ -179,14 +162,13 @@ const GoodsTypes = ({ mode }) => {
       const isEdit = mode === 'edit' && id;
       const method = isEdit ? 'PATCH' : 'POST';
       const url = isEdit ? `${baseUrl}/goods-types/${id}` : `${baseUrl}/goods-types`;
-      const icon = formData.iconFile ? await readFileAsDataUrl(formData.iconFile) : formData.icon;
+      
       const payload = {
         name: formData.name,
         goods_type_for: selectedVehicles.join(','),
         goods_types_for: selectedVehicles.join(','),
         active: formData.active,
-        goods_type_name: formData.name,
-        icon,
+        goods_type_name: formData.name
       };
       
       const res = await fetch(url, {
@@ -216,7 +198,7 @@ const GoodsTypes = ({ mode }) => {
     const sid = item._id || item.id;
     const nextActive = (Number(item.active) === 1) ? 0 : 1;
     try {
-      const res = await fetch(`${baseUrl}/goods-types/${sid}`, {
+      await fetch(`${baseUrl}/goods-types/${sid}`, {
         method: 'PATCH',
         headers: { 
           'Authorization': `Bearer ${token}`, 
@@ -234,7 +216,7 @@ const GoodsTypes = ({ mode }) => {
   };
 
   const handleDelete = async (itemId) => {
-    if (!window.confirm("Delete this goods category permanently?")) return;
+    if (!window.confirm("Delete this goods type permanently?")) return;
     try {
       const res = await fetch(`${baseUrl}/goods-types/${itemId}`, {
         method: 'DELETE',
@@ -248,8 +230,6 @@ const GoodsTypes = ({ mode }) => {
   };
 
   const filteredGoods = goods.filter(g => (g.name || g.goods_type_name || '').toLowerCase().includes(searchTerm.toLowerCase()));
-  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors shadow-sm";
-  const labelClass = "block text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wider";
   const previewIcon = formData.iconFile ? URL.createObjectURL(formData.iconFile) : formData.icon;
   const availableForOptions = (() => {
     const dynamicOptions = vehicleOptions.map((option) => ({
@@ -302,21 +282,21 @@ const GoodsTypes = ({ mode }) => {
     }));
   };
 
-  if (!mode) {
-    return (
-      <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500">
-        <div className="max-w-7xl mx-auto space-y-6">
-          {/* Header */}
-          <div>
-            <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 font-medium uppercase tracking-widest">
-              <span>Pricing</span>
-              <ChevronRight size={12} />
-              <span className="text-gray-700">Goods Types</span>
-            </div>
-            <div className="flex items-center justify-between">
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 tracking-tight">Goods Configuration</h1>
-                <p className="text-xs text-gray-500 mt-1 font-medium">Categorize transportable items for delivery and logistics modules.</p>
+  return (
+    <div className="min-h-screen bg-[#F7F8FC] flex flex-col font-sans">
+      <AnimatePresence mode="wait">
+        {!isCreateOrEdit ? (
+          <motion.div 
+            key="list" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="p-6 lg:p-8 space-y-4"
+          >
+            {/* List Header */}
+            <div className="flex items-center justify-between mb-4">
+              <h1 className="text-sm font-bold text-gray-800 uppercase tracking-widest">GOODS TYPES</h1>
+              <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
+                <span>Goods Type</span>
+                <ChevronRight size={10} className="text-gray-300" />
+                <span className="text-gray-600">Listing</span>
               </div>
               <button
                 onClick={() => navigate('/admin/pricing/goods-types/create')}
@@ -325,27 +305,26 @@ const GoodsTypes = ({ mode }) => {
                 <Plus size={18} /> New Goods Type
               </button>
             </div>
-          </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {[
-              { label: 'Active Categories', value: goods.filter(g => Number(g.active) === 1).length, icon: Package, color: 'indigo' },
-              { label: 'Universal Support', value: goods.filter(g => (g.goods_type_for || 'both') === 'both').length, icon: Globe, color: 'emerald' },
-              { label: 'Total Definitions', value: goods.length, icon: Activity, color: 'blue' }
-            ].map((stat, i) => (
-              <div key={i} className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex items-center gap-4 group hover:border-indigo-100 transition-colors">
-                <div className={`w-12 h-12 rounded-xl bg-${stat.color}-50 flex items-center justify-center text-${stat.color}-600 border border-${stat.color}-100 shadow-sm group-hover:scale-110 transition-transform`}>
-                  <stat.icon size={24} />
+            <div className="bg-white rounded-lg border border-gray-100 shadow-sm overflow-hidden">
+              <div className="p-4 border-b border-gray-50 flex items-center justify-between bg-white">
+                <div className="relative w-64">
+                   <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" />
+                   <input 
+                      type="text" value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)}
+                      placeholder="Search..." 
+                      className="w-full pl-9 pr-4 py-2 border border-gray-100 rounded-md text-xs focus:outline-none focus:border-indigo-400"
+                   />
                 </div>
-                <div>
-                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">{stat.label}</p>
-                  <h3 className="text-2xl font-black text-gray-900 mt-1">{stat.value}</h3>
-                </div>
+                <button 
+                  onClick={() => navigate('/admin/pricing/goods-types/create')}
+                  className="flex items-center gap-2 px-6 py-2 bg-[#334155] text-white rounded text-xs font-bold hover:bg-[#1E293B] shadow-sm transition-all"
+                >
+                  <Plus size={16} /> Add Goods Type
+                </button>
               </div>
-            ))}
-          </div>
 
+              <div className="overflow-x-auto">
           {/* List Card */}
           <div className="bg-white rounded-2xl border border-gray-200 overflow-hidden shadow-sm">
             <div className="p-4 bg-gray-50/50 border-b border-gray-100">
@@ -367,25 +346,44 @@ const GoodsTypes = ({ mode }) => {
                 </div>
               ) : filteredGoods.length > 0 ? (
                 <table className="w-full text-left">
-                  <thead>
-                    <tr className="bg-gray-50/50 border-b border-gray-100 text-[10px] uppercase font-bold text-gray-400 tracking-widest">
-                      <th className="px-6 py-4">Goods Identity</th>
-                      <th className="px-6 py-4">Module Compatibility</th>
-                      <th className="px-6 py-4 text-center">Status</th>
-                      <th className="px-6 py-4 text-right">Actions</th>
+                  <thead className="bg-[#FBFCFF]">
+                    <tr className="border-b border-gray-50 text-[11px] text-gray-400 uppercase font-black tracking-widest">
+                       <th className="px-6 py-4">Name</th>
+                       <th className="px-6 py-4">Compatible With</th>
+                       <th className="px-6 py-4 text-center">Status</th>
+                       <th className="px-6 py-4 text-right pr-10">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-100">
-                    {filteredGoods.map(item => (
-                      <tr key={item._id || item.id} className="hover:bg-gray-50/20 transition-colors group">
-                        <td className="px-6 py-4">
-                          <div className="flex items-center gap-4">
-                            <div className="w-10 h-10 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 border border-indigo-100 shadow-sm group-hover:rotate-12 transition-transform">
-                              <Package size={18} />
+                  <tbody className="divide-y divide-gray-50">
+                    {loading ? (
+                      <tr><td colSpan="4" className="py-20 text-center text-gray-300 animate-pulse font-medium uppercase text-[10px] tracking-widest">Processing Recordset...</td></tr>
+                    ) : filteredGoods.length === 0 ? (
+                      <tr><td colSpan="4" className="py-20 text-center text-gray-300">No goods types configured.</td></tr>
+                    ) : (
+                      filteredGoods.map(item => (
+                        <tr key={item._id || item.id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-5 text-sm font-semibold text-gray-700">{item.name || item.goods_type_name}</td>
+                          <td className="px-6 py-5 whitespace-nowrap">
+                            <span className="px-2.5 py-1 bg-gray-50 text-gray-500 rounded text-[10px] font-bold uppercase border border-gray-100 italic">
+                               {item.goods_types_for || item.goods_type_for || 'BOTH'}
+                            </span>
+                          </td>
+                          <td className="px-6 py-5">
+                            <div className="flex justify-center"><StatusToggle active={Number(item.active) === 1} onToggle={() => handleToggleStatus(item)} /></div>
+                          </td>
+                          <td className="px-6 py-5 pr-10">
+                            <div className="flex items-center justify-end gap-2">
+                               <button onClick={() => navigate(`/admin/pricing/goods-types/edit/${item._id || item.id}`)} className="p-2 text-gray-400 hover:text-indigo-600 transition-colors"><Edit2 size={16} /></button>
+                               <button onClick={() => handleDelete(item._id || item.id)} className="p-2 text-gray-400 hover:text-rose-600 transition-colors"><Trash2 size={16} /></button>
                             </div>
-                            <span className="text-sm font-bold text-gray-900 leading-tight">{item.name || item.goods_type_name}</span>
-                          </div>
-                        </td>
+                          </td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td colSpan="4" className="py-24 text-center">
+                          <div className="text-gray-300 mb-2"><Package size={40} className="mx-auto" /></div>
+                          <p className="text-sm font-bold text-gray-800">No Goods Types Found</p>
                         <td className="px-6 py-4 whitespace-nowrap">
                            <span className="px-2.5 py-1 bg-gray-100 text-gray-600 rounded-lg text-[10px] font-black uppercase tracking-wider border border-gray-200">
                               {formatGoodsTypeForDisplay(item.goods_types_for || item.goods_type_for || 'Universal')}
@@ -401,17 +399,20 @@ const GoodsTypes = ({ mode }) => {
                            </div>
                         </td>
                       </tr>
-                    ))}
+                    )}
                   </tbody>
                 </table>
-              ) : (
-                <div className="py-24 text-center">
-                  <div className="w-16 h-16 bg-gray-50 rounded-2xl border border-gray-100 flex items-center justify-center text-gray-200 mx-auto mb-4"><Package size={32} /></div>
-                  <h3 className="text-sm font-bold text-gray-900 mb-1">No Goods Records</h3>
-                  <p className="text-xs text-gray-400 max-w-xs mx-auto">Define transportable items to enable delivery pricing rules.</p>
-                </div>
-              )}
+              </div>
             </div>
+
+            {/* Floating Action Menu Button */}
+            <div className="fixed right-6 top-[60%] z-50">
+              <button className="w-12 h-12 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-lg hover:rotate-90 transition-all duration-300">
+                <div className="flex flex-col gap-1.5 items-center">
+                  <div className="w-5 h-0.5 bg-white rounded-full" />
+                  <div className="w-5 h-0.5 bg-white rounded-full" />
+                </div>
+              </button>
 
             <div className="px-6 py-4 border-t border-gray-50 bg-gray-50/30 flex items-center justify-between">
               <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Synchronized Recordset</span>
@@ -421,33 +422,41 @@ const GoodsTypes = ({ mode }) => {
                 <button className="p-1.5 text-gray-400 hover:text-gray-600 disabled:opacity-30" disabled><ChevronRight size={16} /></button>
               </div>
             </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
+          </motion.div>
+        ) : (
+          <motion.div 
+            key="form" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+            className="p-6 lg:p-8 space-y-6"
+          >
+            {/* Create/Edit Header */}
+            <div className="flex items-center justify-between mb-8">
+               <h1 className="text-sm font-bold text-gray-800 tracking-wider uppercase">{mode === 'edit' ? 'EDIT' : 'CREATE'}</h1>
+               <div className="flex items-center gap-1.5 text-[11px] text-gray-400 font-medium">
+                  <span className="hover:text-gray-600 cursor-pointer" onClick={() => navigate('/admin/pricing/goods-types')}>Goods Type</span>
+                  <ChevronRight size={10} className="text-gray-300" />
+                  <span className="text-gray-800">{mode === 'edit' ? 'Edit' : 'Create'}</span>
+               </div>
+            </div>
 
-  return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 animate-in fade-in duration-500">
-      <div className="max-w-4xl mx-auto space-y-6">
-        {/* Header */}
-        <div>
-          <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2 font-medium uppercase tracking-widest">
-            <span>Goods Configuration</span>
-            <ChevronRight size={12} />
-            <span className="text-gray-700">{mode === 'edit' ? 'Refine' : 'Initialize'}</span>
-          </div>
-          <div className="flex items-center justify-between">
-            <h1 className="text-xl font-bold text-gray-900 tracking-tight">{mode === 'edit' ? 'Edit Goods Type' : 'Add New Category'}</h1>
-            <button 
-              onClick={() => navigate('/admin/pricing/goods-types')}
-              className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-gray-500 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm"
-            >
-              <ArrowLeft size={16} /> Back to Registry
-            </button>
-          </div>
-        </div>
-
+            <div className="relative">
+              {/* Main Form Container */}
+              <div className="bg-white rounded-xl border border-gray-100 overflow-hidden shadow-sm">
+                {/* Multilingual Tabs */}
+                <div className="flex items-center border-b border-gray-100 bg-white">
+                  {languages.map(lang => (
+                    <button
+                      key={lang}
+                      type="button"
+                      onClick={() => setActiveTab(lang)}
+                      className={`px-8 py-5 text-[13px] font-semibold transition-all relative ${activeTab === lang ? 'text-[#00BFA5]' : 'text-gray-500 hover:text-gray-700'}`}
+                    >
+                      {lang}
+                      {activeTab === lang && (
+                        <motion.div layoutId="tab-underline-create" className="absolute bottom-0 left-0 right-0 h-[2px] bg-[#00BFA5]" />
+                      )}
+                    </button>
+                  ))}
+                </div>
         {/* Form Card */}
         <div className="bg-white rounded-3xl border border-gray-200 shadow-xl shadow-gray-200/20 overflow-hidden">
           {/* Language Tabs */}
@@ -466,6 +475,20 @@ const GoodsTypes = ({ mode }) => {
             ))}
           </div>
 
+                <form onSubmit={handleSave} className="p-8">
+                  <div className="max-w-2xl space-y-10">
+                    {/* Name Input */}
+                    <div className="space-y-2.5">
+                      <label className="block text-[13px] font-semibold text-gray-600">
+                        Name <span className="text-rose-500">*</span>
+                      </label>
+                      <input 
+                        type="text" required value={formData.name}
+                        onChange={(e) => setFormData(p => ({ ...p, name: e.target.value }))}
+                        placeholder={`Enter Name in ${activeTab}`} 
+                        className="w-full border border-gray-200 rounded-lg px-4 py-3.5 text-sm text-gray-800 bg-white focus:border-[#00BFA5] focus:ring-1 focus:ring-[#00BFA5] outline-none transition-all"
+                      />
+                    </div>
           <form onSubmit={handleSave} className="p-8 lg:p-10 space-y-10">
             <div className="space-y-8">
                <div className="flex items-center gap-3 mb-2 pb-5 border-b border-gray-50">
@@ -489,6 +512,29 @@ const GoodsTypes = ({ mode }) => {
                     </div>
                  </div>
 
+                    {/* Compatibility Select */}
+                    <div className="space-y-2.5">
+                      <label className="block text-[13px] font-semibold text-gray-600">
+                         Goods Type For <span className="text-rose-500">*</span>
+                      </label>
+                      <div className="relative">
+                        <select 
+                          required value={formData.goods_type_for}
+                          onChange={(e) => setFormData(p => ({ ...p, goods_type_for: e.target.value }))}
+                          className="w-full border border-gray-200 rounded-lg px-4 py-3.5 text-sm text-gray-800 bg-white focus:border-[#00BFA5] focus:ring-1 focus:ring-[#00BFA5] outline-none transition-all appearance-none cursor-pointer"
+                        >
+                          <option value="">Select</option>
+                          <option value="both">All Vehicles (Universal)</option>
+                          <option value="truck">Logistics (Trucks)</option>
+                          <option value="motor_bike">Courier (Bikes)</option>
+                          {availableForOptions.length > 0 && availableForOptions.map((option) => (
+                            <option key={option.id} value={option.value}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
                  <div className="space-y-2">
                     <label className={labelClass}>
                       <Plus size={11} className="inline mr-1 text-gray-400" />
@@ -568,6 +614,18 @@ const GoodsTypes = ({ mode }) => {
                       )}
                     </div>
 
+                    {/* Status Toggle */}
+                    <div className="flex items-center justify-between p-4 bg-gray-50/50 rounded-xl border border-gray-100">
+                      <div className="flex items-center gap-3">
+                        <CheckCircle2 size={16} className="text-[#00BFA5]" />
+                        <span className="text-xs font-semibold text-gray-600">Publish immediately upon creation</span>
+                      </div>
+                      <StatusToggle 
+                        active={formData.active === 1} 
+                        onToggle={() => setFormData(p => ({ ...p, active: p.active === 1 ? 0 : 1 }))} 
+                      />
+                    </div>
+                  </div>
                     <div className="flex-1 space-y-3">
                       <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-indigo-600 px-4 py-3 text-[11px] font-bold uppercase tracking-widest text-white shadow-lg shadow-indigo-100 transition-all hover:bg-indigo-700">
                         <Upload size={15} />
@@ -626,6 +684,35 @@ const GoodsTypes = ({ mode }) => {
                <p className="text-[11px] font-bold text-amber-800 leading-relaxed">Defining correct goods types ensures that drivers with incompatible vehicles are not matched with specific cargo types.</p>
             </div>
 
+                  {/* Floating Menu Action (Visual reference to mockup) */}
+                  <div className="absolute right-8 top-1/2 -translate-y-1/2">
+                    <button 
+                      type="button"
+                      className="w-12 h-12 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-[0_8px_30px_rgb(0,191,165,0.3)] hover:scale-110 active:scale-95 transition-all"
+                    >
+                      <div className="flex flex-col gap-1 items-center">
+                        <div className="w-5 h-[2px] bg-white rounded-full" />
+                        <div className="w-5 h-[2px] bg-white rounded-full" />
+                        <div className="w-5 h-[2px] bg-white rounded-full" />
+                      </div>
+                    </button>
+                  </div>
+
+                {/* Footer Action: Save */}
+                <div className="pt-10 flex justify-end">
+                  <button 
+                    type="submit" disabled={saving}
+                    className="px-10 py-2.5 bg-[#4F5B71] text-white rounded text-sm font-semibold shadow-md active:scale-95 transition-all flex items-center gap-2"
+                  >
+                    {saving && <Loader2 size={16} className="animate-spin" />}
+                    Save
+                  </button>
+                </div>
+              </form>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
             <div className="pt-6 border-t border-gray-50 flex justify-end gap-3">
                <button 
                   type="button" onClick={() => navigate('/admin/pricing/goods-types')}

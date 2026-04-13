@@ -5,6 +5,7 @@ import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
   DISPATCH_RADII,
+  DISPATCH_INTERCITY_RADII,
   DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
@@ -46,6 +47,12 @@ const getDispatchVehicleTypeIds = (ride) => {
   return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
 };
 
+const getDispatchRadii = (ride) => (
+  String(ride?.serviceType || '').toLowerCase() === 'intercity'
+    ? DISPATCH_INTERCITY_RADII
+    : DISPATCH_RADII
+);
+
 const emitToSocket = (socketId, event, payload) => {
   if (ioInstance && socketId) {
     ioInstance.to(socketId).emit(event, payload);
@@ -56,6 +63,13 @@ const emitToRoom = (room, event, payload) => {
   if (ioInstance) {
     ioInstance.to(room).emit(event, payload);
   }
+};
+
+export const notifyUserAccountDeleted = (userId) => {
+  if (!userId) return;
+  emitToRoom(getUserRoom(userId), 'account:deleted', {
+    reason: 'delete_request_approved',
+  });
 };
 
 export const emitToDriver = (driverId, event, payload) => {
@@ -196,7 +210,8 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
   }
 
   try {
-    const radius = DISPATCH_RADII[radiusIndex];
+    const dispatchRadii = getDispatchRadii(ride);
+    const radius = dispatchRadii[radiusIndex] || dispatchRadii[dispatchRadii.length - 1];
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
@@ -241,7 +256,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       matchedDrivers: targetDrivers.length,
     });
 
-    if (radiusIndex === DISPATCH_RADII.length - 1) {
+    if (radiusIndex === dispatchRadii.length - 1) {
       // Final attempt waits one more cycle before the ride is closed as unmatched.
       const timer = setTimeout(() => {
         closeRideAsUnmatched(rideId)

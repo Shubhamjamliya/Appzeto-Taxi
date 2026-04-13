@@ -24,6 +24,32 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    owner_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiOwner',
+      default: null,
+      index: true,
+    },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiServiceLocation',
+      default: null,
+      index: true,
+    },
+    country: {
+      type: mongoose.Schema.Types.Mixed,
+      default: null,
+    },
+    profile_picture: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    profileImage: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     gender: {
       type: String,
       default: '',
@@ -92,6 +118,11 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    vehicleImage: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     city: {
       type: String,
       default: '',
@@ -116,6 +147,16 @@ const driverSchema = new mongoose.Schema(
       default: 5,
       min: 0,
       max: 5,
+    },
+    ratingCount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    totalRatingScore: {
+      type: Number,
+      default: 0,
+      min: 0,
     },
     ratingCount: {
       type: Number,

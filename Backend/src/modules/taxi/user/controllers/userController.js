@@ -129,6 +129,9 @@ const toUserPayload = (user) => ({
   profileImage: user.profileImage || '',
   referralCode: user.referralCode || '',
   referralCount: Number(user.referralCount || 0),
+  deletionRequestStatus: user.deletionRequest?.status || 'none',
+  referralCode: user.referralCode || '',
+  referralCount: Number(user.referralCount || 0),
   currentRideId: user.currentRideId || null,
 });
 
@@ -300,6 +303,9 @@ export const getCurrentUser = async (req, res) => {
         profileImage: user.profileImage || '',
         referralCode: user.referralCode || '',
         referralCount: Number(user.referralCount || 0),
+        deletionRequestStatus: user.deletionRequest?.status || 'none',
+        referralCode: user.referralCode || '',
+        referralCount: Number(user.referralCount || 0),
         currentRideId: user.currentRideId || null,
         createdAt: user.createdAt || null,
       },
@@ -364,6 +370,56 @@ export const updateCurrentUser = async (req, res) => {
     success: true,
     data: {
       user: toUserPayload(user),
+    },
+  });
+};
+
+export const requestAccountDeletion = async (req, res) => {
+  const userId = req.auth?.sub;
+  const reason = toCleanString(req.body?.reason);
+
+  if (!reason) {
+    throw new ApiError(400, 'Deletion reason is required');
+  }
+
+  const user = await User.findById(userId);
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  if (user.deletedAt || user.isActive === false || user.active === false) {
+    throw new ApiError(400, 'Account is already inactive');
+  }
+
+  if (user.deletionRequest?.status === 'pending') {
+    res.json({
+      success: true,
+      data: {
+        deletionRequestStatus: 'pending',
+        requestedAt: user.deletionRequest.requestedAt || null,
+      },
+      message: 'Deletion request is already pending admin review',
+    });
+    return;
+  }
+
+  user.deletionRequest = {
+    status: 'pending',
+    reason: reason.slice(0, 300),
+    requestedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+    adminNote: '',
+  };
+
+  await user.save();
+
+  res.status(201).json({
+    success: true,
+    data: {
+      deletionRequestStatus: user.deletionRequest.status,
+      requestedAt: user.deletionRequest.requestedAt,
     },
   });
 };

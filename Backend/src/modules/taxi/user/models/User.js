@@ -167,6 +167,37 @@ const userSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    deletionRequest: {
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+        index: true,
+      },
+      reason: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      requestedAt: {
+        type: Date,
+        default: null,
+      },
+      reviewedAt: {
+        type: Date,
+        default: null,
+      },
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Admin',
+        default: null,
+      },
+      adminNote: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
     currentRideId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiRide',
@@ -180,6 +211,7 @@ const userSchema = new mongoose.Schema(
 
 userSchema.index({ phone: 1 }, { unique: true });
 userSchema.index({ 'addresses.location': '2dsphere' });
+userSchema.index({ 'deletionRequest.status': 1, deletedAt: 1 });
 
 const UserModel = mongoose.models.TaxiUser || mongoose.model('TaxiUser', userSchema);
 

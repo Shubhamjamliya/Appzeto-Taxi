@@ -3,6 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { ArrowLeft, Shield, Lock, Smartphone, ShieldAlert, Trash2, ChevronRight } from 'lucide-react';
 
+const MotionButton = motion.button;
+
 const SecuritySettings = () => {
   const navigate = useNavigate();
   return (
@@ -23,7 +25,7 @@ const SecuritySettings = () => {
             <div className="w-12 h-12 bg-blue-50 text-blue-500 rounded-2xl flex items-center justify-center"><Smartphone /></div>
             <div><p className="font-black">Active Devices</p><p className="text-xs text-gray-400">Current: Pixel 7 Pro</p></div>
          </div>
-         <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate('/safety/sos')}
+         <MotionButton whileTap={{ scale: 0.98 }} onClick={() => navigate('/safety/sos')}
            className="w-full bg-white p-5 rounded-[28px] border border-gray-50 flex items-center gap-4 text-left shadow-sm">
             <div className="w-12 h-12 bg-orange-50 text-orange-500 rounded-2xl flex items-center justify-center shrink-0"><ShieldAlert size={22} strokeWidth={2} /></div>
             <div className="flex-1">
@@ -31,8 +33,8 @@ const SecuritySettings = () => {
               <p className="text-xs text-gray-400">Manage emergency contacts</p>
             </div>
             <ChevronRight size={16} className="text-gray-300" strokeWidth={2.5} />
-         </motion.button>
-         <motion.button whileTap={{ scale: 0.98 }} onClick={() => navigate('/profile/delete-account')}
+         </MotionButton>
+         <MotionButton whileTap={{ scale: 0.98 }} onClick={() => navigate('/taxi/user/profile/delete-account')}
            className="w-full bg-red-50 p-5 rounded-[28px] border border-red-100 flex items-center gap-4 text-left">
             <div className="w-12 h-12 bg-red-100 text-red-500 rounded-2xl flex items-center justify-center shrink-0"><Trash2 size={20} strokeWidth={2} /></div>
             <div className="flex-1">
@@ -40,7 +42,7 @@ const SecuritySettings = () => {
               <p className="text-xs text-red-400">Permanently remove your account</p>
             </div>
             <ChevronRight size={16} className="text-red-300" strokeWidth={2.5} />
-         </motion.button>
+         </MotionButton>
       </div>
     </div>
   );

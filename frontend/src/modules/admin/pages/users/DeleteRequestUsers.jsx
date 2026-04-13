@@ -1,347 +1,285 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Trash2, UserX, Search, Calendar, AlertCircle, CheckCircle2, 
-  XCircle, MoreHorizontal, Mail, Phone, Clock, ArrowRight, 
-  ChevronRight, ChevronDown, ChevronLeft, X, FileText, RotateCcw
+import React, { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import {
+  ArrowLeft,
+  CheckCircle2,
+  ChevronRight,
+  Eye,
+  Loader2,
+  Search,
+  Trash2,
+  XCircle,
 } from 'lucide-react';
+import toast from 'react-hot-toast';
+import { adminService } from '../../services/adminService';
+
+const inputClass =
+  'w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors';
+
+const formatDate = (date) => {
+  if (!date) return 'Unknown';
+  const parsed = new Date(date);
+  return Number.isNaN(parsed.getTime()) ? 'Unknown' : parsed.toLocaleDateString();
+};
+
+const getInitials = (name) =>
+  String(name || 'User')
+    .split(' ')
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0]?.toUpperCase() || '')
+    .join('');
 
 const DeleteRequestUsers = () => {
+  const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedRows, setSelectedRows] = useState([]);
   const [users, setUsers] = useState([]);
-  const [stats, setStats] = useState({
-    deletedCount: 0,
-    activeCount: 0,
-    totalCount: 0,
-    deletionRate: 0,
-    recentDeleted: 0,
-    todayDeleted: 0,
-    avgAgeHours: 0,
-  });
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [error, setError] = useState('');
 
-  const fetchDeletedUsers = async () => {
+  const fetchDeleteRequests = async () => {
     setIsLoading(true);
+    setError('');
+
     try {
-      const token = localStorage.getItem('adminToken');
-      const [deletedRes, activeRes] = await Promise.all([
-        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users/deleted', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-        fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/users?page=1&limit=1', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        }),
-      ]);
-      const deletedData = await deletedRes.json();
-      const activeData = await activeRes.json();
-      const deletedList = deletedData.data?.results || [];
-      const activeCount = activeData.data?.paginator?.total ?? activeData.paginator?.total ?? activeData.data?.results?.length ?? 0;
-      const deletedCount = deletedList.length;
-      const totalCount = activeCount + deletedCount;
-      const now = Date.now();
-      const dayMs = 24 * 60 * 60 * 1000;
-      const weekMs = 7 * dayMs;
-      const ageHours = deletedList
-        .filter((user) => user.deletedAt)
-        .map((user) => (now - new Date(user.deletedAt).getTime()) / 36e5)
-        .filter((value) => Number.isFinite(value) && value >= 0);
-      const todayDeleted = deletedList.filter((user) => user.deletedAt && (now - new Date(user.deletedAt).getTime()) <= dayMs).length;
-      const recentDeleted = deletedList.filter((user) => user.deletedAt && (now - new Date(user.deletedAt).getTime()) <= weekMs).length;
-      const avgAgeHours = ageHours.length ? Math.round(ageHours.reduce((sum, value) => sum + value, 0) / ageHours.length) : 0;
+      const requestData = await adminService.getUserDeleteRequests();
+      const requestList = requestData.data?.results || [];
 
-      if (deletedData.success) {
-        setUsers(deletedList);
-      }
-
-      setStats({
-        deletedCount,
-        activeCount,
-        totalCount,
-        deletionRate: totalCount ? Math.round((deletedCount / totalCount) * 100) : 0,
-        recentDeleted,
-        todayDeleted,
-        avgAgeHours,
-      });
-    } catch (err) {
-      console.error('Fetch deleted users error:', err);
+      setUsers(requestList);
+    } catch (fetchError) {
+      setError(fetchError.message || 'Failed to fetch delete requests');
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
-    fetchDeletedUsers();
+    fetchDeleteRequests();
   }, []);
 
-  const handleRestore = async (id) => {
-    if (!window.confirm('Are you sure you want to restore this user?')) return;
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('adminToken');
-      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/users/deleted/${id}/restore`, {
-        method: 'PATCH',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert('User restored successfully');
-        fetchDeletedUsers();
-      }
-    } catch (err) { console.error(err); }
-    finally { setIsSubmitting(false); }
-  };
+  const filteredUsers = useMemo(
+    () =>
+      users.filter((user) => {
+        const query = searchTerm.toLowerCase();
+        const name = user.name || user.user_id?.name || '';
+        const email = user.email || user.user_id?.email || '';
+        const reason = user.deletionRequest?.reason || '';
 
-  const handlePermanentDelete = async (id) => {
-    if (!window.confirm('PERMANENT DELETE? This cannot be undone.')) return;
-    setIsSubmitting(true);
-    try {
-      const token = localStorage.getItem('adminToken');
-      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/users/deleted/${id}`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const data = await res.json();
-      if (data.success) {
-        alert('User deleted permanently');
-        fetchDeletedUsers();
-      }
-    } catch (err) { console.error(err); }
-    finally { setIsSubmitting(false); }
-  };
+        return (
+          name.toLowerCase().includes(query) ||
+          email.toLowerCase().includes(query) ||
+          reason.toLowerCase().includes(query)
+        );
+      }),
+    [searchTerm, users],
+  );
 
-  const toggleSelectAll = () => {
-    if (selectedRows.length === users.length) {
-      setSelectedRows([]);
-    } else {
-      setSelectedRows(users.map(r => r._id));
+  const handleReject = async (id) => {
+    if (!window.confirm('Reject this account deletion request?')) return;
+    setIsSubmitting(true);
+
+    try {
+      const data = await adminService.rejectUserDeleteRequest(id);
+      if (data.success) {
+        toast.success('Delete request rejected');
+        fetchDeleteRequests();
+      }
+    } catch (rejectError) {
+      toast.error(rejectError.message || 'Failed to reject request');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const toggleRowSelect = (id) => {
-    if (selectedRows.includes(id)) {
-      setSelectedRows(selectedRows.filter(rid => rid !== id));
-    } else {
-      setSelectedRows([...selectedRows, id]);
+  const handleApprove = async (id) => {
+    if (!window.confirm('Approve this account deletion request? The user will be logged out and deactivated.')) return;
+    setIsSubmitting(true);
+
+    try {
+      const data = await adminService.approveUserDeleteRequest(id);
+      if (data.success) {
+        toast.success('Delete request approved');
+        fetchDeleteRequests();
+      }
+    } catch (approveError) {
+      toast.error(approveError.message || 'Failed to approve request');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
-  const StatusBadge = ({ status }) => {
-    const styles = {
-      'Pending': 'bg-amber-50 text-amber-600 border-amber-100',
-      'In Review': 'bg-blue-50 text-blue-600 border-blue-100',
-      'Approved': 'bg-emerald-50 text-emerald-600 border-emerald-100',
-      'Rejected': 'bg-rose-50 text-rose-600 border-rose-100',
-    };
+  if (isLoading) {
     return (
-      <span className={`px-2 py-0.5 rounded-full text-[11px] font-bold border flex items-center gap-1.5 w-fit ${styles[status]}`}>
-        <span className={`w-1.5 h-1.5 rounded-full ${status === 'Pending' ? 'bg-amber-500' : status === 'In Review' ? 'bg-blue-500' : status === 'Approved' ? 'bg-emerald-500' : 'bg-rose-500'}`}></span>
-        {status}
-      </span>
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
+        <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
+        <p className="text-sm text-gray-400">Loading delete requests...</p>
+      </div>
     );
-  };
+  }
 
-   const filteredUsers = users.filter(user => {
-      const name = user.name || user.user_id?.name || 'Unknown';
-      const email = user.email || user.user_id?.email || 'N/A';
-      return name.toLowerCase().includes(searchTerm.toLowerCase()) || email.toLowerCase().includes(searchTerm.toLowerCase());
-   });
-
-   if (isLoading) {
-      return (
-        <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
-          <div className="w-12 h-12 border-4 border-gray-100 border-t-black rounded-full animate-spin"></div>
-          <p className="text-[12px] font-black text-gray-400 uppercase tracking-widest">Fetching Deletion Queue...</p>
+  return (
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      <div className="mb-6">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>Users</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Delete Requests</span>
         </div>
-      );
-   }
 
-   return (
-    <div className="space-y-8 p-1 animate-in fade-in duration-700 relative text-gray-950 font-sans">
-      {/* MATE STYLE HEADER */}
-      <div className="flex items-start justify-between">
-         <div>
-            <h1 className="text-4xl font-bold tracking-tight text-gray-900 mb-2">Delete Queue</h1>
-            <div className="flex items-center gap-2 text-[13px] font-bold text-gray-400">
-               <span className="text-gray-950">Safety</span>
-               <ChevronRight size={14} />
-               <span>User Deletion Queue</span>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900">Delete Requests</h1>
+          <button
+            type="button"
+            onClick={() => navigate('/admin/users')}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
+        </div>
+      </div>
+
+      {error && (
+        <div className="mb-6 rounded-lg border border-rose-100 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-600">
+          {error}
+        </div>
+      )}
+
+      <div>
+        <div>
+          <div className="bg-white rounded-xl border border-gray-200 p-6">
+            <div className="flex flex-col gap-4 border-b border-gray-100 pb-4 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Trash2 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-sm font-semibold text-gray-900">Pending Requests</h3>
+                  <p className="text-xs text-gray-400">Review customer account deletion requests</p>
+                </div>
+              </div>
+
+              <div className="relative w-full md:w-80">
+                <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Search delete requests..."
+                  value={searchTerm}
+                  onChange={(event) => setSearchTerm(event.target.value)}
+                  className={`${inputClass} pl-10`}
+                />
+              </div>
             </div>
-         </div>
-      </div>
 
-      {/* FILTER BAR - MATE STYLE */}
-      <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-         <div className="flex flex-wrap items-center gap-2">
-            <div className="px-3 py-1 bg-black text-white text-[12px] font-bold rounded-lg cursor-pointer">Managed Users</div>
-         </div>
-         <div className="relative w-full md:w-80">
-            <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400" size={16} />
-            <input 
-               type="text" 
-               placeholder="Search deleted users..." 
-               value={searchTerm}
-               onChange={(e) => setSearchTerm(e.target.value)}
-               className="w-full pl-11 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-[13px] font-bold focus:ring-2 focus:ring-gray-100 outline-none transition-all"
-            />
-         </div>
-      </div>
-
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-8 items-start">
-         {/* TABLE CONTAINER */}
-         <div className="xl:col-span-3">
-            <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-visible">
-               <div className="overflow-x-auto no-scrollbar">
-                  <table className="w-full text-left">
-                     <thead>
-                        <tr className="border-b border-gray-50 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-                           <th className="px-6 py-5">
-                              <div 
-                                onClick={toggleSelectAll}
-                                className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedRows.length === users.length && users.length > 0 ? 'bg-black border-black text-white' : 'border-gray-200 hover:border-gray-300'}`}
+            <div className="mt-5 overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-gray-50 border-b border-gray-100">
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">User</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Reason</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Requested Date</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-900">Status</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-900">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-50">
+                  {filteredUsers.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="px-4 py-14 text-center text-sm font-medium text-gray-400">
+                        No pending delete requests found.
+                      </td>
+                    </tr>
+                  ) : (
+                    filteredUsers.map((user) => (
+                      <tr key={user._id} className="hover:bg-gray-50/50 transition-colors">
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-3">
+                            <div className="w-9 h-9 rounded-lg bg-gray-100 text-gray-600 font-medium text-xs flex items-center justify-center">
+                              {getInitials(user.name || user.user_id?.name)}
+                            </div>
+                            <div>
+                              <button
+                                type="button"
+                                onClick={() => navigate(`/admin/users/${user._id}`)}
+                                className="text-left text-sm font-medium text-gray-900 hover:text-indigo-600 hover:underline transition-colors"
                               >
-                                 {selectedRows.length === users.length && users.length > 0 && <CheckCircle2 size={12} />}
-                              </div>
-                           </th>
-                           <th className="px-4 py-5 font-bold">User</th>
-                           <th className="px-4 py-5 font-bold">Status</th>
-                           <th className="px-4 py-5 font-bold">Deleted Date</th>
-                           <th className="px-6 py-5 text-right font-bold">Action</th>
-                        </tr>
-                     </thead>
-                     <tbody className="divide-y divide-gray-50">
-                        {filteredUsers.length === 0 ? (
-                           <tr>
-                              <td colSpan="5" className="px-6 py-20 text-center text-gray-400 font-bold uppercase tracking-widest italic opacity-50 text-[10px]">No users found in deletion queue</td>
-                           </tr>
-                        ) : (
-                           filteredUsers.map((user) => (
-                              <tr key={user._id} className={`group hover:bg-gray-50/50 transition-all ${selectedRows.includes(user._id) ? 'bg-gray-50/80 shadow-inner' : ''}`}>
-                                 <td className="px-6 py-4">
-                                    <div 
-                                      onClick={(e) => { e.stopPropagation(); toggleRowSelect(user._id); }}
-                                      className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all cursor-pointer ${selectedRows.includes(user._id) ? 'bg-black border-black text-white' : 'border-gray-100 group-hover:border-gray-300'}`}
-                                    >
-                                       {selectedRows.includes(user._id) && <CheckCircle2 size={12} />}
-                                    </div>
-                                 </td>
-                                 <td className="px-4 py-4">
-                                    <div className="flex items-center gap-3">
-                                       <div className="w-10 h-10 rounded-full bg-rose-50 border border-rose-100 text-rose-600 font-bold text-[13px] flex items-center justify-center shadow-sm">
-                                          {(user.name || user.user_id?.name || 'U')[0]}
-                                       </div>
-                                       <div>
-                                          <p className="text-[14px] font-bold text-gray-900 tracking-tight leading-none">{user.name || user.user_id?.name || 'Unknown'}</p>
-                                          <p className="text-[12px] text-gray-400 mt-1 font-medium">{user.email || user.user_id?.email || 'N/A'}</p>
-                                       </div>
-                                    </div>
-                                 </td>
-                                 <td className="px-4 py-4">
-                                    <span className="px-2 py-0.5 rounded-full text-[10px] font-black uppercase tracking-widest bg-rose-50 text-rose-600 border border-rose-100 italic">Deleted</span>
-                                 </td>
-                                 <td className="px-4 py-4">
-                                    <p className="text-[12px] font-bold text-gray-400 uppercase tracking-tighter">{user.deletedAt ? new Date(user.deletedAt).toLocaleDateString() : 'Unknown'}</p>
-                                 </td>
-                                 <td className="px-6 py-4 text-right">
-                                    <div className="flex items-center justify-end gap-2 relative">
-                                       <button 
-                                         disabled={isSubmitting}
-                                         onClick={() => handleRestore(user._id)}
-                                         title="Restore User"
-                                         className="p-2 text-emerald-500 hover:bg-emerald-50 rounded-lg transition-all"
-                                       >
-                                          <RotateCcw size={18} />
-                                       </button>
-                                       <button 
-                                         disabled={isSubmitting}
-                                         onClick={() => handlePermanentDelete(user._id)}
-                                         title="Permanent Delete"
-                                         className="p-2 text-rose-500 hover:bg-rose-50 rounded-lg transition-all"
-                                       >
-                                          <Trash2 size={18} />
-                                       </button>
-                                    </div>
-                                 </td>
-                              </tr>
-                           ))
-                        )}
-                     </tbody>
-                  </table>
-               </div>
-            </div>
-         </div>
-
-         {/* RIGHT SIDE STATS - MATE STYLE */}
-         <div className="space-y-6">
-            <div className="bg-white p-8 rounded-[32px] border border-gray-100 shadow-sm relative overflow-hidden">
-               <h4 className="text-[12px] font-bold text-gray-400 uppercase tracking-widest mb-6">Deletion Statistics</h4>
-               
-               <div className="flex flex-col items-center mb-8">
-                  <div className="relative w-32 h-32 flex items-center justify-center">
-                     <svg className="w-full h-full -rotate-90">
-                        <circle cx="64" cy="64" r="58" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-gray-50" />
-                        <circle
-                          cx="64"
-                          cy="64"
-                          r="58"
-                          stroke="currentColor"
-                          strokeWidth="8"
-                          fill="transparent"
-                          strokeDasharray="364"
-                          strokeDashoffset={364 - (364 * stats.deletionRate) / 100}
-                          className="text-rose-500 transition-all duration-300"
-                        />
-                     </svg>
-                     <div className="absolute inset-0 flex flex-col items-center justify-center">
-                        <p className="text-2xl font-black text-gray-950 leading-none">{stats.deletionRate}%</p>
-                        <p className="text-[10px] font-bold text-gray-400 mt-1 uppercase">Queue Load</p>
-                     </div>
-                  </div>
-               </div>
-
-               <div className="space-y-4">
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-amber-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">Today</span>
-                     </div>
-                     <span className="text-[12px] font-black text-gray-950">{stats.todayDeleted}</span>
-                  </div>
-                  <div className="flex items-center justify-between">
-                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-blue-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">7 Days</span>
-                     </div>
-                     <span className="text-[12px] font-black text-gray-950">{stats.recentDeleted}</span>
-                  </div>
-                  <div className="flex items-center justify-between pb-2 border-b border-gray-50">
-                     <div className="flex items-center gap-2">
-                        <div className="w-2 h-2 rounded-full bg-emerald-500"></div>
-                        <span className="text-[12px] font-bold text-gray-500">Active</span>
-                     </div>
-                     <span className="text-[12px] font-black text-gray-950">{stats.activeCount}</span>
-                  </div>
-               </div>
-
-               <div className="mt-8">
-                  <p className="text-xl font-black text-gray-950">{stats.avgAgeHours} Hours</p>
-                  <p className="text-[9px] font-black text-gray-400 uppercase mt-1 tracking-widest">Avg Queue Age</p>
-               </div>
+                                {user.name || user.user_id?.name || 'Unknown'}
+                              </button>
+                              <p className="text-xs text-gray-400">{user.email || user.user_id?.email || 'N/A'}</p>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-700">
+                          <span className="block max-w-[220px] truncate">{user.deletionRequest?.reason || 'N/A'}</span>
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-500">
+                          {formatDate(user.deletionRequest?.requestedAt)}
+                        </td>
+                        <td className="px-4 py-4">
+                          <span className="inline-flex items-center gap-1.5 rounded-lg border border-amber-100 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-700">
+                            <span className="h-1.5 w-1.5 rounded-full bg-amber-500" />
+                            Pending
+                          </span>
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => navigate(`/admin/users/${user._id}`)}
+                              title="View Customer Profile"
+                              className="p-2 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <Eye size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => handleReject(user._id)}
+                              title="Reject Request"
+                              className="p-2 text-gray-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <XCircle size={16} />
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSubmitting}
+                              onClick={() => handleApprove(user._id)}
+                              title="Approve Request"
+                              className="p-2 text-gray-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors disabled:opacity-50"
+                            >
+                              <CheckCircle2 size={16} />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
             </div>
 
-            <div className="bg-rose-50 p-8 rounded-[32px] border border-rose-100 shadow-sm relative overflow-hidden group">
-               <div className="absolute top-0 right-0 p-6 opacity-20 text-rose-500"><Trash2 size={100} strokeWidth={1} /></div>
-               <div className="relative z-10 flex flex-col items-center text-center">
-                  <div className="w-14 h-14 bg-rose-100 text-rose-500 rounded-2xl flex items-center justify-center mb-4"><AlertCircle size={28} /></div>
-                  <h4 className="text-[14px] font-black text-gray-900 uppercase tracking-widest mb-2">Legal Compliance</h4>
-                  <p className="text-[12px] font-bold text-gray-500 leading-relaxed">Account deletion is permanent. PII masking will occur after 30 days of approval.</p>
-               </div>
+            <div className="mt-5 flex flex-col gap-3 border-t border-gray-100 pt-4 text-sm text-gray-500 md:flex-row md:items-center md:justify-between">
+              <span>
+                Showing {filteredUsers.length ? 1 : 0} to {filteredUsers.length} of {filteredUsers.length} entries
+              </span>
+              <div className="flex items-center gap-2">
+                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-gray-200 rounded-lg disabled:opacity-50" disabled>
+                  Prev
+                </button>
+                <button className="px-4 py-2 text-sm text-white bg-indigo-600 border border-indigo-600 rounded-lg">
+                  1
+                </button>
+                <button className="px-4 py-2 text-sm text-gray-500 bg-white border border-gray-200 rounded-lg disabled:opacity-50" disabled>
+                  Next
+                </button>
+              </div>
             </div>
-         </div>
+          </div>
+        </div>
       </div>
     </div>
   );
 };
 
 export default DeleteRequestUsers;
-

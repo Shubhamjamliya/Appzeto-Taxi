@@ -35,7 +35,7 @@ import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import { hashPassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
-import { cancelRideByAdmin } from '../../services/dispatchService.js';
+import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
 const deepMerge = (target, source) => {
   const result = { ...target };
@@ -117,6 +117,9 @@ const toDocumentKey = (value = '') => {
     .join('');
 };
 
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const VALID_USER_GENDERS = new Set(['male', 'female', 'other', 'prefer-not-to-say']);
+
 const findById = (items, id) => items.find((item) => String(item._id) === String(id));
 
 const removeById = (items, id) => items.filter((item) => String(item._id) !== String(id));
@@ -196,35 +199,51 @@ const serializeSetPrice = (item) => ({
   id: item._id,
   zone_id: item.zone_id
     ? {
-        _id: item.zone_id._id || item.zone_id,
-        name: item.zone_id.name || '',
-      }
+      _id: item.zone_id._id || item.zone_id,
+      name: item.zone_id.name || '',
+    }
     : null,
   service_location_id: item.service_location_id
     ? {
-        _id: item.service_location_id._id || item.service_location_id,
-        name: item.service_location_id.service_location_name || item.service_location_id.name || '',
-      }
+      _id: item.service_location_id._id || item.service_location_id,
+      name: item.service_location_id.service_location_name || item.service_location_id.name || '',
+    }
     : null,
   transport_type: item.transport_type || '',
   vehicle_type: item.vehicle_type
     ? {
-        _id: item.vehicle_type._id || item.vehicle_type,
-        name: item.vehicle_type.name || '',
-      }
+      _id: item.vehicle_type._id || item.vehicle_type,
+      name: item.vehicle_type.name || '',
+      icon: item.vehicle_type.icon || '',
+    }
     : null,
   vehicle_name: item.vehicle_type?.name || '',
+  icon: item.vehicle_type?.icon || item.icon || '',
   app_modules: item.app_modules ?? '',
   vehicle_preference: item.vehicle_preference ?? '',
-  payment_type: Array.isArray(item.payment_type) ? item.payment_type : [],
+  payment_type: Array.isArray(item.payment_type) ? item.payment_type : (typeof item.payment_type === 'string' ? item.payment_type.split(',') : []),
+
+  // Commissions
   customer_commission_type: item.customer_commission_type || 'percentage',
   customer_commission: item.customer_commission,
+  admin_commision_type: item.admin_commision_type ?? (item.customer_commission_type === 'percentage' ? 1 : 0),
+  admin_commision: item.admin_commision ?? item.customer_commission,
+
   driver_commission_type: item.driver_commission_type || 'percentage',
   driver_commission: item.driver_commission,
+  admin_commission_type_from_driver: item.admin_commission_type_from_driver ?? (item.driver_commission_type === 'percentage' ? 1 : 0),
+  admin_commission_from_driver: item.admin_commission_from_driver ?? item.driver_commission,
+
   owner_commission_type: item.owner_commission_type || 'percentage',
   owner_commission: item.owner_commission,
+  admin_commission_type_for_owner: item.admin_commission_type_for_owner ?? (item.owner_commission_type === 'percentage' ? 1 : 0),
+  admin_commission_for_owner: item.admin_commission_for_owner ?? item.owner_commission,
+
   service_tax: item.service_tax,
   eta_sequence: item.eta_sequence,
+  order_number: item.order_number ?? item.eta_sequence ?? 1,
+
+  // Core Pricing
   base_price: item.base_price,
   base_distance: item.base_distance,
   price_per_distance: item.price_per_distance,
@@ -232,14 +251,27 @@ const serializeSetPrice = (item) => ({
   waiting_charge: item.waiting_charge,
   free_waiting_before: item.free_waiting_before,
   free_waiting_after: item.free_waiting_after,
+
+  // Settings
   enable_airport_ride: Boolean(item.enable_airport_ride),
   enable_outstation_ride: Boolean(item.enable_outstation_ride),
+  support_airport_fee: item.support_airport_fee ?? (item.enable_airport_ride ? 1 : 0),
+  support_outstation: item.support_outstation ?? (item.enable_outstation_ride ? 1 : 0),
+
+  // Cancellation
   user_cancellation_fee_type: item.user_cancellation_fee_type || 'percentage',
   user_cancellation_fee: item.user_cancellation_fee,
   driver_cancellation_fee_type: item.driver_cancellation_fee_type || 'percentage',
   driver_cancellation_fee: item.driver_cancellation_fee,
   cancellation_fee_goes_to: item.cancellation_fee_goes_to || 'admin',
+
+  // Ride Sharing
   enable_ride_sharing: Boolean(item.enable_ride_sharing),
+  enable_shared_ride: item.enable_shared_ride ?? (item.enable_ride_sharing ? 1 : 0),
+  price_per_seat: item.price_per_seat,
+  shared_price_per_distance: item.shared_price_per_distance,
+  shared_cancel_fee: item.shared_cancel_fee,
+
   status: item.status || (item.active === false ? 'inactive' : 'active'),
   active: item.active !== false,
   createdAt: item.createdAt,
@@ -434,6 +466,32 @@ const resolveReferralTranslationLanguage = async (languageCode = '') => {
   };
 };
 
+const cleanupLegacySeededDriverNeededDocumentsFinal = async () => {
+  const items = await DriverNeededDocument.find().lean();
+
+  if (items.length !== LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.length) {
+    return;
+  }
+
+  const isLegacySeedSet = items.every((item) =>
+    LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.some(
+      (seed) =>
+        seed.slug === item.slug &&
+        String(seed.key || '') === String(item.key || '') &&
+        String(seed.front_key || '') === String(item.front_key || '') &&
+        String(seed.back_key || '') === String(item.back_key || ''),
+    ),
+  );
+
+  if (!isLegacySeedSet) {
+    return;
+  }
+
+  await DriverNeededDocument.deleteMany({
+    slug: { $in: LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.map((item) => item.slug) },
+  });
+};
+
 const serializeAirport = (item) => ({
   _id: item._id,
   id: item._id,
@@ -441,16 +499,16 @@ const serializeAirport = (item) => ({
   code: item.code || '',
   service_location_id: item.service_location_id
     ? {
-        _id: item.service_location_id._id || item.service_location_id,
-        name: item.service_location_id.service_location_name || item.service_location_id.name || '',
-        country: item.service_location_id.country || '',
-      }
+      _id: item.service_location_id._id || item.service_location_id,
+      name: item.service_location_id.service_location_name || item.service_location_id.name || '',
+      country: item.service_location_id.country || '',
+    }
     : null,
   zone_id: item.zone_id
     ? {
-        _id: item.zone_id._id || item.zone_id,
-        name: item.zone_id.name || '',
-      }
+      _id: item.zone_id._id || item.zone_id,
+      name: item.zone_id.name || '',
+    }
     : null,
   terminal: item.terminal || '',
   address: item.address || '',
@@ -466,32 +524,90 @@ const serializeAirport = (item) => ({
   updatedAt: item.updatedAt,
 });
 
-const serializeOwner = (owner) => ({
-  _id: owner._id,
-  company_name: owner.company_name || '',
-  name: owner.name || '',
-  mobile: owner.mobile || '',
-  email: owner.email || '',
-  service_location_id: owner.service_location_id?._id || owner.service_location_id || '',
-  service_location: owner.service_location_id?.service_location_name || owner.service_location_id?.name || '',
-  transport_type: owner.transport_type || '',
-  active: owner.active !== false,
-  approve: Boolean(owner.approve),
-  status: owner.status || (owner.approve ? 'approved' : 'pending'),
-  createdAt: owner.createdAt,
-  updatedAt: owner.updatedAt,
-});
+const toIsoString = (value) => (value instanceof Date ? value.toISOString() : value || null);
+
+const serializeServiceLocationSnapshot = (serviceLocation, fallback = null) => {
+  if (!serviceLocation && !fallback) return null;
+
+  const source = serviceLocation || fallback;
+  return {
+    id: source.legacy_id || source.id || source._id || '',
+    company_key: source.company_key ?? null,
+    name: source.name || source.service_location_name || '',
+    translation_dataset: source.translation_dataset || '',
+    currency_name: source.currency_name || 'Indian rupee',
+    currency_code: source.currency_code || 'INR',
+    currency_symbol: source.currency_symbol || '₹',
+    currency_pointer: source.currency_pointer || 'ltr',
+    timezone: source.timezone || 'Asia/Kolkata',
+    country: source.country ?? 102,
+    active: source.active === false ? 0 : 1,
+    created_at: toIsoString(source.createdAt || source.created_at),
+    updated_at: toIsoString(source.updatedAt || source.updated_at),
+    deleted_at: source.deleted_at || null,
+  };
+};
+
+const serializeOwner = (owner) => {
+  const area = serializeServiceLocationSnapshot(owner.service_location_id, owner.area_snapshot);
+  const mobile = owner.mobile || '';
+  const mobileNumber = mobile ? (mobile.startsWith('+') ? mobile : `+91${mobile}`) : '';
+
+  return {
+    _id: owner._id,
+    id: owner.legacy_id || owner._id,
+    user_id: owner.user_id ?? null,
+    transport_type: owner.transport_type || '',
+    service_location_id:
+      owner.legacy_service_location_id ||
+      owner.service_location_id?.legacy_id ||
+      owner.service_location_id?._id ||
+      owner.service_location_id ||
+      '',
+    company_name: owner.company_name || '',
+    owner_name: owner.owner_name ?? null,
+    name: owner.name || '',
+    surname: owner.surname ?? null,
+    email: owner.email || '',
+    mobile,
+    phone: owner.phone ?? null,
+    address: owner.address ?? null,
+    postal_code: owner.postal_code ?? null,
+    city: owner.city ?? null,
+    expiry_date: owner.expiry_date ?? null,
+    no_of_vehicles: Number(owner.no_of_vehicles || 0),
+    tax_number: owner.tax_number ?? null,
+    bank_name: owner.bank_name ?? null,
+    ifsc: owner.ifsc ?? null,
+    account_no: owner.account_no ?? null,
+    iban: owner.iban ?? null,
+    bic: owner.bic ?? null,
+    active: owner.active === false ? 0 : 1,
+    approve: owner.approve ? 1 : 0,
+    status: owner.status || (owner.approve ? 'approved' : 'pending'),
+    created_at: toIsoString(owner.createdAt),
+    updated_at: toIsoString(owner.updatedAt),
+    deleted_at: null,
+    area_name: area?.name || '',
+    mobile_number: mobileNumber,
+    converted_deleted_at: null,
+    area,
+    user: owner.user_snapshot || null,
+    createdAt: owner.createdAt,
+    updatedAt: owner.updatedAt,
+  };
+};
 
 const serializeOwnerBooking = (item) => ({
   _id: item._id,
   id: item._id,
   owner_id: item.owner_id
     ? {
-        _id: item.owner_id._id || item.owner_id,
-        name: item.owner_id.full_name || item.owner_id.name || '',
-        email: item.owner_id.email || '',
-        mobile: item.owner_id.mobile || '',
-      }
+      _id: item.owner_id._id || item.owner_id,
+      name: item.owner_id.full_name || item.owner_id.name || '',
+      email: item.owner_id.email || '',
+      mobile: item.owner_id.mobile || '',
+    }
     : null,
   booking_reference: item.booking_reference || '',
   customer_name: item.customer_name || '',
@@ -516,6 +632,10 @@ const serializeDriver = (driver) => ({
   phone: driver.phone || '',
   mobile: driver.phone || '',
   email: driver.email || '',
+  owner_id: driver.owner_id || null,
+  service_location_id: driver.service_location_id || null,
+  country: driver.country || null,
+  profile_picture: driver.profile_picture || '',
   city: driver.city || '',
   service_location_name: driver.city || '',
   transport_type: driver.registerFor || driver.vehicleType || '',
@@ -539,12 +659,15 @@ const serializeUser = (user) => ({
   id: user._id,
   name: user.name || '',
   email: user.email || '',
+  gender: user.gender || '',
+  profileImage: user.profileImage || '',
   mobile: user.phone || user.mobile || '',
   phone: user.phone || user.mobile || '',
   wallet_balance: Number(user.wallet_balance || 0),
   active: user.active !== false && !user.deletedAt,
   deletedAt: user.deletedAt || null,
   deletion_reason: user.deletion_reason || '',
+  deletionRequest: user.deletionRequest || { status: 'none' },
   createdAt: user.createdAt,
   updatedAt: user.updatedAt,
 });
@@ -578,6 +701,56 @@ const normalizeServiceLocationPayload = (payload = {}, fallback = {}) => {
     status,
     active: status === 'active',
   };
+};
+
+const escapeRegex = (value = '') =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const resolveServiceLocationForImport = async (value) => {
+  const candidate = String(value || '').trim();
+  if (!candidate) return null;
+
+  if (mongoose.isValidObjectId(candidate)) {
+    const byId = await ServiceLocation.findById(candidate).lean();
+    if (byId) return byId;
+  }
+
+  return ServiceLocation.findOne({
+    $or: [
+      { name: new RegExp(`^${escapeRegex(candidate)}$`, 'i') },
+      { service_location_name: new RegExp(`^${escapeRegex(candidate)}$`, 'i') },
+    ],
+  }).lean();
+};
+
+const resolveVehicleForImport = async (vehicleLabel, transportType) => {
+  const candidate = String(vehicleLabel || '').trim();
+  if (!candidate) return null;
+
+  if (mongoose.isValidObjectId(candidate)) {
+    const byId = await Vehicle.findById(candidate).lean();
+    if (byId) return byId;
+  }
+
+  return Vehicle.findOne({
+    name: new RegExp(`^${escapeRegex(candidate)}$`, 'i'),
+    ...(transportType ? { transport_type: transportType } : {}),
+  }).lean();
+};
+
+const normalizeImportTransportType = (value = '') =>
+  String(value || '').trim().toLowerCase() === 'delivery' ? 'delivery' : 'taxi';
+
+const normalizeImportVehicleType = (value = '', vehicleRecord = null) => {
+  const vehicleText = String(
+    vehicleRecord?.icon_types || vehicleRecord?.name || value || '',
+  )
+    .trim()
+    .toLowerCase();
+
+  if (vehicleText.includes('bike') || vehicleText.includes('scooter')) return 'bike';
+  if (vehicleText.includes('auto') || vehicleText.includes('rickshaw')) return 'auto';
+  return 'car';
 };
 
 const csvFromRows = (headers, rows) => {
@@ -617,6 +790,239 @@ const syncDefaultAdminRecord = async () => {
     { upsert: true },
   );
 };
+
+const LEGACY_OWNER_SERVICE_LOCATION = {
+  legacy_id: '53027f5a-dad1-47fa-8417-b958dd520821',
+  company_key: null,
+  name: 'India',
+  service_location_name: 'India',
+  translation_dataset: '{"en":{"locale":"en","name":"India"}}',
+  currency_name: 'Indian rupee',
+  currency_code: 'INR',
+  currency_symbol: '₹',
+  currency_pointer: 'ltr',
+  timezone: 'Asia/Kolkata',
+  country: 102,
+  active: true,
+  status: 'active',
+  createdAt: new Date('2026-02-02T11:57:30.000Z'),
+  updatedAt: new Date('2026-02-02T11:57:30.000Z'),
+};
+
+const LEGACY_OWNER_ROLE = {
+  id: 3,
+  slug: 'owner',
+  name: 'Normal Owner',
+  description: 'Normal Owner with standard access',
+  all: 0,
+  locked: 1,
+  created_by: 1,
+  created_at: '2026-02-02T11:36:54.000000Z',
+  updated_at: '2026-02-07T15:55:24.000000Z',
+};
+
+const buildLegacyOwnerSeeds = (serviceLocationId) => [
+  {
+    legacy_id: '08e4823f-33df-480b-8419-91e8f49aa204',
+    user_id: 55,
+    transport_type: 'taxi',
+    service_location_id: serviceLocationId,
+    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+    company_name: 'Zyder',
+    owner_name: null,
+    name: 'Demo owner',
+    surname: null,
+    email: 'owner@gmail.com',
+    password: '$2y$10$5P1q/uu.og/yMK1y5fHstuHPW1u7rD5x0CoGGvDoSW6Okjv1v/B0m',
+    mobile: '7470311227',
+    phone: null,
+    address: null,
+    postal_code: null,
+    city: null,
+    expiry_date: null,
+    no_of_vehicles: 0,
+    tax_number: null,
+    bank_name: null,
+    ifsc: null,
+    account_no: null,
+    iban: null,
+    bic: null,
+    active: true,
+    approve: true,
+    status: 'approved',
+    createdAt: new Date('2026-03-20T07:42:58.000Z'),
+    updatedAt: new Date('2026-04-09T07:47:17.000Z'),
+    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
+    user_snapshot: {
+      id: 55,
+      name: 'Demo owner',
+      company_key: null,
+      username: null,
+      map_type: null,
+      email: 'owner@gmail.com',
+      mobile: '7470311227',
+      ride_otp: null,
+      gender: null,
+      profile_picture: 'https://zyder.co.in/assets/images/Male_default_image.png',
+      stripe_customer_id: null,
+      is_deleted_at: null,
+      country: 102,
+      timezone: null,
+      active: 1,
+      email_confirmed: 0,
+      mobile_confirmed: 0,
+      fcm_token: null,
+      apn_token: null,
+      refferal_code: null,
+      referred_by: null,
+      rating: 0,
+      lang: null,
+      zone_id: null,
+      current_lat: null,
+      current_lng: null,
+      rating_total: 0,
+      no_of_ratings: 0,
+      login_by: null,
+      last_known_ip: null,
+      last_login_at: null,
+      social_provider: null,
+      is_bid_app: 0,
+      social_nickname: null,
+      social_id: null,
+      social_token: null,
+      social_token_secret: null,
+      social_refresh_token: null,
+      social_expires_in: null,
+      social_avatar: null,
+      social_avatar_original: null,
+      created_at: '2026-03-20T07:42:58.000000Z',
+      updated_at: '2026-04-09T07:47:17.000000Z',
+      authorization_code: null,
+      deleted_at: null,
+      service_location_id: null,
+      country_name: 'India',
+      mobile_number: '+917470311227',
+      role_name: 'owner',
+      converted_deleted_at: null,
+      country_detail: {
+        id: 102,
+        name: 'India',
+        dial_code: '+91',
+        dial_min_length: 7,
+        dial_max_length: 14,
+        code: 'IN',
+        currency_name: 'Indian rupee',
+        currency_code: 'INR',
+        currency_symbol: '₹',
+        flag: 'https://zyder.co.in/image/country/flags/IN.png',
+        active: 1,
+        created_at: null,
+        updated_at: null,
+      },
+      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 55, role_id: 3 } }],
+    },
+  },
+  {
+    legacy_id: '941bb56f-2775-4685-818e-8326b44ead94',
+    user_id: 39,
+    transport_type: 'Both',
+    service_location_id: serviceLocationId,
+    legacy_service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+    company_name: 'itc',
+    owner_name: 'princess',
+    name: 'princess',
+    surname: null,
+    email: 'indra@gmail.com',
+    password: null,
+    mobile: '8072694803',
+    phone: null,
+    address: 'hgxbnmkchcufjbjbivjnvjv',
+    postal_code: '908899',
+    city: 'd6hf hmm kb',
+    expiry_date: null,
+    no_of_vehicles: 0,
+    tax_number: '578999bcv8988',
+    bank_name: null,
+    ifsc: null,
+    account_no: null,
+    iban: null,
+    bic: null,
+    active: true,
+    approve: true,
+    status: 'approved',
+    createdAt: new Date('2026-02-28T12:34:16.000Z'),
+    updatedAt: new Date('2026-02-28T13:36:28.000Z'),
+    area_snapshot: LEGACY_OWNER_SERVICE_LOCATION,
+    user_snapshot: {
+      id: 39,
+      name: 'princess',
+      company_key: null,
+      username: null,
+      map_type: null,
+      email: 'indra@gmail.com',
+      mobile: '8072694803',
+      ride_otp: null,
+      gender: 'female',
+      profile_picture: 'https://zyder.co.in/assets/images/Female_default_image.png',
+      stripe_customer_id: null,
+      is_deleted_at: null,
+      country: 102,
+      timezone: 'Asia/Kolkata',
+      active: 1,
+      email_confirmed: 0,
+      mobile_confirmed: 1,
+      fcm_token: 'dqw_CwtrSXa0l9p5oMxCLl:APA91bH1ZbjCzaE-crPxlDOfbU8LBDXg1gerLnzsrWB5Ky6hy9gRvT7LPZb2OSdK9AHh1w2RBSyj-fnuNIofm9FF6GfkdcfusbSMy2lmmjBQ2omVAXlgJQE',
+      apn_token: null,
+      refferal_code: 'v7CmOw',
+      referred_by: null,
+      rating: 0,
+      lang: 'en',
+      zone_id: '8d426929-591a-4bb7-bc60-256abb196363',
+      current_lat: 11.9190793,
+      current_lng: 79.8034286,
+      rating_total: 0,
+      no_of_ratings: 0,
+      login_by: 'android',
+      last_known_ip: null,
+      last_login_at: null,
+      social_provider: null,
+      is_bid_app: 0,
+      social_nickname: null,
+      social_id: null,
+      social_token: null,
+      social_token_secret: null,
+      social_refresh_token: null,
+      social_expires_in: null,
+      social_avatar: null,
+      social_avatar_original: null,
+      created_at: '2026-02-28T12:34:16.000000Z',
+      updated_at: '2026-02-28T13:10:44.000000Z',
+      authorization_code: null,
+      deleted_at: null,
+      service_location_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id,
+      country_name: 'India',
+      mobile_number: '+918072694803',
+      role_name: 'owner',
+      converted_deleted_at: null,
+      country_detail: {
+        id: 102,
+        name: 'India',
+        dial_code: '+91',
+        dial_min_length: 7,
+        dial_max_length: 14,
+        code: 'IN',
+        currency_name: 'Indian rupee',
+        currency_code: 'INR',
+        currency_symbol: '₹',
+        flag: 'https://zyder.co.in/image/country/flags/IN.png',
+        active: 1,
+        created_at: null,
+        updated_at: null,
+      },
+      roles: [{ ...LEGACY_OWNER_ROLE, pivot: { user_id: 39, role_id: 3 } }],
+    },
+  },
+];
 
 const seedInitialData = async () => {
   const defaults = createDefaultAdminState();
@@ -677,12 +1083,67 @@ const seedInitialData = async () => {
   if (await OnboardingScreen.countDocuments() === 0) {
     await OnboardingScreen.insertMany(defaults.onboardingScreens);
   }
+
+  await ensureFleetOwnersSeeded();
 };
 
 export const ensureServiceLocationsSeeded = async () => {
   if (await ServiceLocation.countDocuments() === 0) {
     const defaults = createDefaultAdminState();
     await ServiceLocation.insertMany(defaults.serviceLocations);
+  }
+};
+
+export const ensureFleetOwnersSeeded = async () => {
+  const now = new Date();
+
+  const serviceLocation = await ServiceLocation.findOneAndUpdate(
+    {
+      $or: [
+        { legacy_id: LEGACY_OWNER_SERVICE_LOCATION.legacy_id },
+        { name: LEGACY_OWNER_SERVICE_LOCATION.name },
+      ],
+    },
+    {
+      $set: {
+        ...LEGACY_OWNER_SERVICE_LOCATION,
+        updatedAt: LEGACY_OWNER_SERVICE_LOCATION.updatedAt || now,
+      },
+      $setOnInsert: {
+        createdAt: LEGACY_OWNER_SERVICE_LOCATION.createdAt || now,
+      },
+    },
+    { upsert: true, returnDocument: 'after', setDefaultsOnInsert: true },
+  );
+
+  const ownerSeeds = buildLegacyOwnerSeeds(serviceLocation._id);
+
+  for (const seed of ownerSeeds) {
+    const existingOwner = await Owner.findOne({
+      $or: [
+        { legacy_id: seed.legacy_id },
+        { email: seed.email },
+        { mobile: seed.mobile },
+      ],
+    }).lean();
+
+    if (existingOwner) {
+      await Owner.updateOne(
+        { _id: existingOwner._id },
+        {
+          $set: {
+            ...seed,
+            updatedAt: seed.updatedAt || now,
+          },
+          $setOnInsert: {
+            createdAt: seed.createdAt || now,
+          },
+        },
+      );
+      continue;
+    }
+
+    await Owner.create(seed);
   }
 };
 
@@ -763,15 +1224,216 @@ export const listUsers = async ({ page = 1, limit = 50 }) => {
   };
 };
 
+export const bulkImportUsers = async (payload = {}) => {
+  const incomingUsers = Array.isArray(payload.users) ? payload.users : [];
+
+  if (!incomingUsers.length) {
+    throw new ApiError(400, 'users array is required');
+  }
+
+  if (incomingUsers.length > 2000) {
+    throw new ApiError(400, 'Too many users in one import (max 2000)');
+  }
+
+  const errors = [];
+  const created = [];
+  const skipped = [];
+
+  for (let index = 0; index < incomingUsers.length; index += 1) {
+    const raw = incomingUsers[index] || {};
+    const name = String(raw.name || '').trim();
+    const phone = String(raw.phone || raw.mobile || '').replace(/\D/g, '');
+    const email = String(raw.email || '').trim().toLowerCase();
+    const gender = String(raw.gender || '').trim().toLowerCase();
+    const countryCode = String(raw.countryCode || raw.country_code || raw.country || '').trim();
+
+    if (!name) {
+      errors.push({ index, field: 'name', message: 'Name is required' });
+      continue;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      errors.push({ index, field: 'phone', message: 'A valid 10-digit phone number is required' });
+      continue;
+    }
+
+    if (email && !EMAIL_REGEX.test(email)) {
+      errors.push({ index, field: 'email', message: 'A valid email address is required' });
+      continue;
+    }
+
+    const normalizedGender = VALID_USER_GENDERS.has(gender) ? gender : '';
+    const normalizedCountryCode = countryCode && countryCode.startsWith('+') ? countryCode : '+91';
+
+    const existingUser = await User.findOne({ phone }).lean();
+    if (existingUser) {
+      skipped.push({ index, phone, id: String(existingUser._id) });
+      continue;
+    }
+
+    try {
+      const user = await User.create({
+        name,
+        phone,
+        email,
+        gender: normalizedGender,
+        countryCode: normalizedCountryCode,
+        isVerified: true,
+        active: raw.active ?? true,
+      });
+      created.push(serializeUser(user.toObject()));
+    } catch (error) {
+      const message = error?.message || 'Failed to create user';
+      errors.push({ index, message });
+    }
+  }
+
+  return {
+    created_count: created.length,
+    skipped_count: skipped.length,
+    error_count: errors.length,
+    created,
+    skipped: skipped.slice(0, 200),
+    errors: errors.slice(0, 200),
+  };
+};
+
+export const bulkImportDrivers = async (payload = {}) => {
+  const incomingDrivers = Array.isArray(payload.drivers) ? payload.drivers : [];
+
+  if (!incomingDrivers.length) {
+    throw new ApiError(400, 'drivers array is required');
+  }
+
+  if (incomingDrivers.length > 2000) {
+    throw new ApiError(400, 'Too many drivers in one import (max 2000)');
+  }
+
+  const errors = [];
+  const created = [];
+  const skipped = [];
+
+  for (let index = 0; index < incomingDrivers.length; index += 1) {
+    const raw = incomingDrivers[index] || {};
+    const name = String(raw.name || '').trim();
+    const phone = String(raw.phone || raw.mobile || '').replace(/\D/g, '');
+    const email = String(raw.email || '').trim().toLowerCase();
+    const gender = String(raw.gender || '').trim().toLowerCase();
+    const serviceLocationInput = String(
+      raw.service_location || raw.serviceLocation || '',
+    ).trim();
+    const transportType = normalizeImportTransportType(
+      raw.transport_type || raw.transportType,
+    );
+    const vehicleInput = String(raw.vehicle_type || raw.vehicleType || '').trim();
+
+    if (!name) {
+      errors.push({ index, field: 'name', message: 'Name is required' });
+      continue;
+    }
+
+    if (!/^\d{10}$/.test(phone)) {
+      errors.push({
+        index,
+        field: 'phone',
+        message: 'A valid 10-digit phone number is required',
+      });
+      continue;
+    }
+
+    if (email && !EMAIL_REGEX.test(email)) {
+      errors.push({ index, field: 'email', message: 'A valid email address is required' });
+      continue;
+    }
+
+    if (!serviceLocationInput) {
+      errors.push({
+        index,
+        field: 'service_location',
+        message: 'Service location is required',
+      });
+      continue;
+    }
+
+    const existingDriver = await Driver.findOne({ phone }).lean();
+    if (existingDriver) {
+      skipped.push({ index, phone, id: String(existingDriver._id) });
+      continue;
+    }
+
+    const serviceLocation = await resolveServiceLocationForImport(serviceLocationInput);
+    const normalizedVehicleInput = vehicleInput || transportType || 'car';
+    const vehicleRecord = await resolveVehicleForImport(
+      normalizedVehicleInput,
+      transportType,
+    );
+    const vehicleType = normalizeImportVehicleType(
+      normalizedVehicleInput,
+      vehicleRecord,
+    );
+
+    try {
+      const driver = await Driver.create({
+        name,
+        phone,
+        email,
+        gender,
+        password: await hashPassword(phone),
+        vehicleType,
+        vehicleTypeId: vehicleRecord?._id || null,
+        vehicleMake: String(raw.vehicle_make || raw.vehicleMake || '').trim(),
+        vehicleModel: String(raw.vehicle_model || raw.vehicleModel || '').trim(),
+        vehicleColor: String(raw.vehicle_color || raw.vehicleColor || '').trim(),
+        vehicleNumber: String(raw.vehicle_number || raw.vehicleNumber || '').trim(),
+        registerFor: transportType,
+        city:
+          serviceLocation?.service_location_name ||
+          serviceLocation?.name ||
+          serviceLocationInput ||
+          String(raw.country || '').trim(),
+        approve: raw.approve !== undefined ? Boolean(raw.approve) : true,
+        status: raw.status || (raw.approve === false ? 'pending' : 'approved'),
+        onboarding: {
+          importCountry: String(raw.country || '').trim(),
+          importServiceLocation: serviceLocationInput,
+          importedByAdmin: true,
+        },
+      });
+
+      created.push(serializeDriver(driver.toObject()));
+    } catch (error) {
+      errors.push({ index, message: error?.message || 'Failed to create driver' });
+    }
+  }
+
+  return {
+    created_count: created.length,
+    skipped_count: skipped.length,
+    error_count: errors.length,
+    created,
+    skipped: skipped.slice(0, 200),
+    errors: errors.slice(0, 200),
+  };
+};
+
 export const createUser = async (payload) => {
   const name = String(payload.name || '').trim();
-  const phone = String(payload.phone || payload.mobile || '').trim();
-  const email = String(payload.email || '').trim();
-  const password = String(payload.password || '').trim();
+  const phone = String(payload.phone || payload.mobile || '').replace(/\D/g, '');
+  const email = String(payload.email || '').trim().toLowerCase();
+  const password = String(payload.password || '');
+  const passwordConfirmation = String(payload.password_confirmation ?? payload.confirmPassword ?? '');
+  const gender = String(payload.gender || '').trim().toLowerCase();
+  const profileImage = String(payload.profileImage || '').trim();
 
   if (!name) throw new ApiError(400, 'User name is required');
-  if (!phone) throw new ApiError(400, 'Phone is required');
-  if (!password) throw new ApiError(400, 'Password is required');
+  if (!/^\d{10}$/.test(phone)) throw new ApiError(400, 'A valid 10-digit phone number is required');
+  if (!email) throw new ApiError(400, 'Email is required');
+  if (!EMAIL_REGEX.test(email)) throw new ApiError(400, 'A valid email address is required');
+  if (!gender || !VALID_USER_GENDERS.has(gender)) throw new ApiError(400, 'A valid gender is required');
+  if (!password.trim()) throw new ApiError(400, 'Password is required');
+  if (password.length < 5) throw new ApiError(400, 'Password must be at least 5 characters');
+  if (!passwordConfirmation) throw new ApiError(400, 'Confirm password is required');
+  if (password !== passwordConfirmation) throw new ApiError(400, 'Passwords do not match');
 
   const existingUser = await User.findOne({ phone });
   if (existingUser) {
@@ -782,6 +1444,8 @@ export const createUser = async (payload) => {
     name,
     phone,
     email,
+    gender,
+    profileImage,
     password: await hashPassword(password),
     wallet_balance: Number(payload.wallet_balance || 0),
     active: payload.active ?? true,
@@ -840,9 +1504,24 @@ export const updateUser = async (id, payload) => {
 
   if (payload.name !== undefined) update.name = String(payload.name || '').trim();
   if (payload.phone !== undefined || payload.mobile !== undefined) {
-    update.phone = String(payload.phone || payload.mobile || '').trim();
+    update.phone = String(payload.phone || payload.mobile || '').replace(/\D/g, '');
+    if (!/^\d{10}$/.test(update.phone)) {
+      throw new ApiError(400, 'A valid 10-digit phone number is required');
+    }
   }
-  if (payload.email !== undefined) update.email = String(payload.email || '').trim();
+  if (payload.email !== undefined) {
+    update.email = String(payload.email || '').trim().toLowerCase();
+    if (update.email && !EMAIL_REGEX.test(update.email)) {
+      throw new ApiError(400, 'A valid email address is required');
+    }
+  }
+  if (payload.gender !== undefined) {
+    update.gender = String(payload.gender || '').trim().toLowerCase();
+    if (update.gender && !VALID_USER_GENDERS.has(update.gender)) {
+      throw new ApiError(400, 'A valid gender is required');
+    }
+  }
+  if (payload.profileImage !== undefined) update.profileImage = String(payload.profileImage || '').trim();
   if (payload.wallet_balance !== undefined) update.wallet_balance = Number(payload.wallet_balance || 0);
   if (payload.active !== undefined) update.active = Boolean(payload.active);
   if (payload.password) {
@@ -932,6 +1611,86 @@ export const permanentlyDeleteDeletedUser = async (id) => {
   return true;
 };
 
+export const listUserDeletionRequests = async ({ page = 1, limit = 50, status = 'pending' } = {}) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const requestedStatus = String(status || 'pending').toLowerCase();
+  const start = (safePage - 1) * safeLimit;
+  const statusQuery =
+    requestedStatus === 'all'
+      ? { $in: ['pending', 'approved', 'rejected'] }
+      : requestedStatus;
+  const query = {
+    'deletionRequest.status': statusQuery,
+    deletedAt: null,
+  };
+
+  const [users, total] = await Promise.all([
+    User.find(query)
+      .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    User.countDocuments(query),
+  ]);
+
+  return {
+    results: users.map(serializeUser),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const approveUserDeletionRequest = async (id, adminId) => {
+  const now = new Date();
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        deletedAt: now,
+        active: false,
+        isActive: false,
+        deletion_reason: 'user_delete_request',
+        'deletionRequest.status': 'approved',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': adminId || null,
+        'deletionRequest.adminNote': '',
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
+  notifyUserAccountDeleted(user._id);
+  return serializeUser(user.toObject());
+};
+
+export const rejectUserDeletionRequest = async (id, payload = {}, adminId) => {
+  const now = new Date();
+  const adminNote = String(payload.adminNote || payload.note || '').trim();
+  const user = await User.findOneAndUpdate(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        active: true,
+        isActive: true,
+        'deletionRequest.status': 'rejected',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': adminId || null,
+        'deletionRequest.adminNote': adminNote,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!user) throw new ApiError(404, 'Pending user deletion request not found');
+  return serializeUser(user.toObject());
+};
+
 export const getUserById = async (id) => {
   const user = await User.findById(id).lean();
 
@@ -961,9 +1720,9 @@ export const listUserRequests = async (id) => {
       },
       driver_id: ride.driverId
         ? {
-            _id: ride.driverId._id || ride.driverId,
-            name: ride.driverId.name || 'Pending',
-          }
+          _id: ride.driverId._id || ride.driverId,
+          name: ride.driverId.name || 'Pending',
+        }
         : null,
       is_completed: String(ride.status).toLowerCase() === 'completed',
       is_cancelled: String(ride.status).toLowerCase() === 'cancelled',
@@ -992,7 +1751,13 @@ export const listDrivers = async ({ page = 1, limit = 50 }) => {
   const start = (safePage - 1) * safeLimit;
 
   const [drivers, total] = await Promise.all([
-    Driver.find({ deletedAt: null }).sort({ createdAt: -1 }).skip(start).limit(safeLimit).lean(),
+    Driver.find({ deletedAt: null })
+      .populate('owner_id', 'company_name owner_name name email mobile')
+      .populate('service_location_id', 'service_location_name name country')
+      .sort({ createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
     Driver.countDocuments({ deletedAt: null }),
   ]);
 
@@ -1189,11 +1954,11 @@ export const listDriverWithdrawalSummaries = async ({ page = 1, limit = 50, sear
         pending_amount: Number(row.pending_amount || 0),
         driver: driver
           ? {
-              _id: driver._id,
-              name: driver.name || '',
-              mobile: driver.phone || '',
-              email: driver.email || '',
-            }
+            _id: driver._id,
+            name: driver.name || '',
+            mobile: driver.phone || '',
+            email: driver.email || '',
+          }
           : null,
       };
     }),
@@ -1356,6 +2121,11 @@ export const createDriver = async (payload = {}) => {
     name,
     phone,
     email,
+    owner_id: payload.owner_id && mongoose.isValidObjectId(payload.owner_id) ? toObjectId(payload.owner_id) : null,
+    service_location_id:
+      serviceLocationId && mongoose.isValidObjectId(serviceLocationId) ? toObjectId(serviceLocationId) : null,
+    country: payload.country || null,
+    profile_picture: String(payload.profile_picture || payload.profilePicture || '').trim(),
     gender: String(payload.gender || '').trim(),
     password: await hashPassword(password),
     vehicleType,
@@ -1600,7 +2370,6 @@ export const getReferralDashboard = async () => {
 };
 
 export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
-
 export const createSubscriptionPlan = async (payload) => {
   const plan = await SubscriptionPlan.create({
     ...payload,
@@ -1625,10 +2394,10 @@ export const listCountries = async () => {
       typeof country === 'object'
         ? country
         : {
-            _id: nextId(),
-            name: String(country),
-            code: String(country).slice(0, 2).toUpperCase(),
-          },
+          _id: nextId(),
+          name: String(country),
+          code: String(country).slice(0, 2).toUpperCase(),
+        },
     );
 
   const merged = [
@@ -1761,12 +2530,19 @@ const formatRidePointLabel = (point, fallback = 'Unknown') => {
 
 const toAdminRideRow = (ride) => {
   const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
-  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
-  const tripStatus = liveStatus === RIDE_LIVE_STATUS.STARTED
-    ? 'ONGOING'
-    : liveStatus === RIDE_LIVE_STATUS.ARRIVING || liveStatus === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED
-      ? 'ACCEPTED'
-      : 'UPCOMING';
+  const status = String(ride.status || '').toLowerCase();
+  const liveStatus = String(ride.liveStatus || '').toLowerCase();
+
+  let tripStatus = 'UPCOMING';
+  if (status === RIDE_STATUS.COMPLETED) {
+    tripStatus = 'COMPLETED';
+  } else if (status === RIDE_STATUS.CANCELLED) {
+    tripStatus = 'CANCELLED';
+  } else if (status === RIDE_STATUS.ONGOING || liveStatus === RIDE_LIVE_STATUS.STARTED) {
+    tripStatus = 'ONGOING';
+  } else if (status === RIDE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ACCEPTED || liveStatus === RIDE_LIVE_STATUS.ARRIVING) {
+    tripStatus = 'ACCEPTED';
+  }
 
   return {
     id: String(ride._id),
@@ -1829,6 +2605,55 @@ const toAdminDeliveryRow = (ride) => {
     pickupLocation: ride.pickupLocation,
     dropLocation: ride.dropLocation,
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
+    user: ride.userId ? {
+      id: String(ride.userId._id),
+      name: ride.userId.name || '',
+      phone: ride.userId.phone || '',
+    } : null,
+    driver: ride.driverId ? {
+      id: String(ride.driverId._id),
+      name: ride.driverId.name || '',
+      phone: ride.driverId.phone || '',
+      vehicleType: ride.driverId.vehicleType || '',
+      vehicleNumber: ride.driverId.vehicleNumber || '',
+    } : null,
+  };
+};
+
+const toAdminIntercityTripRow = (ride) => {
+  const requestCode = ride.intercity?.bookingId || `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
+  const rideStatus = String(ride.status || '').toLowerCase();
+  const tripStatus = rideStatus === RIDE_STATUS.COMPLETED || liveStatus === RIDE_LIVE_STATUS.COMPLETED
+    ? 'COMPLETED'
+    : rideStatus === RIDE_STATUS.CANCELLED || liveStatus === RIDE_LIVE_STATUS.CANCELLED
+      ? 'CANCELLED'
+      : liveStatus === RIDE_LIVE_STATUS.STARTED || rideStatus === RIDE_STATUS.ONGOING
+        ? 'ON_TRIP'
+        : 'UPCOMING';
+
+  return {
+    id: String(ride._id),
+    requestId: requestCode,
+    date: ride.createdAt,
+    userName: ride.userId?.name || 'Unknown User',
+    driverName: ride.driverId?.name || 'Unassigned',
+    transportType: ride.intercity?.vehicleName || ride.driverId?.vehicleType || ride.vehicleIconType || 'Intercity',
+    tripStatus,
+    rideStatus: ride.status,
+    liveStatus: ride.liveStatus,
+    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
+    fare: Number(ride.fare || 0),
+    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
+    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
+    routeLabel: [ride.intercity?.fromCity, ride.intercity?.toCity].filter(Boolean).join(' to '),
+    tripType: ride.intercity?.tripType || '',
+    travelDate: ride.intercity?.travelDate || '',
+    passengers: ride.intercity?.passengers || 1,
+    distance: ride.intercity?.distance || 0,
+    pickupLocation: ride.pickupLocation,
+    dropLocation: ride.dropLocation,
+    intercity: ride.intercity || null,
     user: ride.userId ? {
       id: String(ride.userId._id),
       name: ride.userId.name || '',
@@ -1928,6 +2753,47 @@ export const listDeliveries = async (query = {}) => {
   return buildPaginator(rows, page, limit);
 };
 
+export const listIntercityTrips = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
+
+  const rides = await Ride.find({ serviceType: 'intercity' })
+    .sort({ createdAt: -1 })
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
+
+  let rows = rides.map(toAdminIntercityTripRow);
+
+  if (tab === 'completed') {
+    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
+  } else if (tab === 'cancelled') {
+    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
+  }
+
+  if (search) {
+    rows = rows.filter((row) =>
+      [
+        row.requestId,
+        row.userName,
+        row.driverName,
+        row.transportType,
+        row.pickupLabel,
+        row.dropLabel,
+        row.routeLabel,
+      ].some((value) => String(value || '').toLowerCase().includes(search)),
+    );
+  }
+
+  return buildPaginator(rows, page, limit);
+};
+
 export const deleteOngoingRide = async (rideId) => {
   if (!mongoose.Types.ObjectId.isValid(String(rideId))) {
     throw new ApiError(400, 'Invalid ride id');
@@ -1966,1389 +2832,1488 @@ export const listVehicleTypes = async (queryParams = {}) => {
 };
 
 export const listVehicleCatalog = async () => {
-  const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
+    const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
 
-  const results = items.map((item) => ({
-    ...item,
-    id: String(item._id),
-    supported_vehicles: Array.isArray(item.supported_other_vehicle_types)
-      ? item.supported_other_vehicle_types.map((v) => String(v)).join(',')
-      : '',
-    icon_types_for: item.icon_types,
-    trip_dispatch_type: item.dispatch_type,
-    created_at: item.createdAt,
-    updated_at: item.updatedAt,
-  }));
-
-  return {
-    results,
-    paginator: {
-      data: results,
-      total: results.length,
-      current_page: 1,
-      last_page: 1,
-      per_page: 10,
-      from: 1,
-      to: results.length,
-    }
-  };
-};
-
-export const listVehiclePreferences = async () => {
-  return listPreferences();
-};
-
-export const createVehicleType = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Vehicle name is required');
-  }
-
-  if (!payload.transport_type?.trim()) {
-    throw new ApiError(400, 'Transport type is required');
-  }
-
-  const vehicle = await Vehicle.create({
-    name: payload.name.trim(),
-    short_description: payload.short_description ?? '',
-    description: payload.description ?? '',
-    transport_type: payload.transport_type,
-    dispatch_type: payload.dispatch_type || 'normal',
-    icon_types: payload.icon_types || 'car',
-    image: payload.image ?? '',
-    status: Number(payload.status ?? 1) ? 1 : 0,
-    active: Number(payload.status ?? 1) === 1,
-    supported_other_vehicle_types: Array.isArray(payload.supported_other_vehicle_types)
-      ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
-      : [],
-    vehicle_preference: Array.isArray(payload.vehicle_preference)
-      ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
-      : [],
-  });
-
-  return vehicle.toObject();
-};
-
-export const updateVehicleType = async (id, payload) => {
-  const vehicle = await Vehicle.findById(id);
-  if (!vehicle) {
-    throw new ApiError(404, 'Vehicle type not found');
-  }
-
-  if (payload.name !== undefined) {
-    vehicle.name = String(payload.name).trim();
-  }
-  if (payload.short_description !== undefined) {
-    vehicle.short_description = payload.short_description ?? '';
-  }
-  if (payload.description !== undefined) {
-    vehicle.description = payload.description ?? '';
-  }
-  if (payload.transport_type !== undefined) {
-    vehicle.transport_type = payload.transport_type;
-  }
-  if (payload.dispatch_type !== undefined) {
-    vehicle.dispatch_type = payload.dispatch_type || 'normal';
-  }
-  if (payload.icon_types !== undefined) {
-    vehicle.icon_types = payload.icon_types || 'car';
-  }
-  if (payload.image !== undefined) {
-    vehicle.image = payload.image ?? '';
-  }
-  if (payload.status !== undefined) {
-    vehicle.status = Number(payload.status) ? 1 : 0;
-    vehicle.active = vehicle.status === 1;
-  }
-  if (payload.supported_other_vehicle_types !== undefined) {
-    vehicle.supported_other_vehicle_types = Array.isArray(payload.supported_other_vehicle_types)
-      ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
-      : [];
-  }
-  if (payload.vehicle_preference !== undefined) {
-    vehicle.vehicle_preference = Array.isArray(payload.vehicle_preference)
-      ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
-      : [];
-  }
-
-  await vehicle.save();
-  return vehicle.toObject();
-};
-
-export const deleteVehicleType = async (id) => {
-  const deleted = await Vehicle.findByIdAndDelete(id);
-  if (!deleted) {
-    throw new ApiError(404, 'Vehicle type not found');
-  }
-  return true;
-};
-
-export const listSetPrices = async () => {
-  const items = await SetPrice.find()
-    .populate('vehicle_type')
-    .populate({
-      path: 'zone_id',
-      populate: { path: 'service_location_id' }
-    })
-    .sort({ createdAt: -1 })
-    .lean();
-
-  const results = items.map((item) => {
-    const vType = item.vehicle_type || {};
-    const zone = item.zone_id || {};
-    const sl = zone.service_location_id || {};
-
-    return {
-      id: String(item._id),
-      type_id: vType._id ? String(vType._id) : null,
-      name: vType.name || '',
-      icon: vType.icon || '',
-      capacity: vType.capacity || item.capacity || 0,
-      is_accept_share_ride: item.enable_shared_ride || 0,
-      active: item.active || 0,
-      currency: sl.currency_symbol || '₹',
-      unit: Number(zone.unit || 1),
-      unit_in_words: 'Km',
-      zone_name: zone.name || '',
-      vehicle_type_name: vType.name || '',
-      drop_zone_name: null,
-      transport_type: item.transport_type || 'both',
-      payment_type: Array.isArray(item.payment_type) ? item.payment_type : (item.payment_type ? String(item.payment_type).split(',') : ['cash', 'online', 'wallet']),
-    };
-  });
-
-  const paginatorData = items.map((item) => {
-    const vType = item.vehicle_type || {};
-    const zone = item.zone_id || {};
-    const sl = zone.service_location_id || {};
-
-    return {
+    const results = items.map((item) => ({
       ...item,
       id: String(item._id),
-      vehicle_type_name: vType.name || '',
-      icon: vType.icon || '',
-      zone_name: zone.name || '',
-      drop_zone_name: null,
-      vehicle_type: vType ? {
-        ...vType,
-        id: String(vType._id),
-        icon_types_for: vType.icon_types,
-        trip_dispatch_type: vType.dispatch_type,
-      } : null,
-      zone: zone ? {
-        ...zone,
-        id: String(zone._id),
-        service_location: sl ? {
-          ...sl,
-          id: String(sl._id),
-        } : null,
-      } : null,
-    };
-  });
+      supported_vehicles: Array.isArray(item.supported_other_vehicle_types)
+        ? item.supported_other_vehicle_types.map((v) => String(v)).join(',')
+        : '',
+      icon_types_for: item.icon_types,
+      trip_dispatch_type: item.dispatch_type,
+      created_at: item.createdAt,
+      updated_at: item.updatedAt,
+    }));
 
-  return {
-    results,
-    paginator: {
-      current_page: 1,
-      data: paginatorData,
-      from: 1,
-      to: paginatorData.length,
-      total: paginatorData.length,
-      last_page: 1,
-      per_page: 10,
-    }
-  };
-};
-
-export const createSetPrice = async (payload) => {
-  const setPrice = await SetPrice.create({
-    zone_id: toObjectId(payload.zone_id),
-    vehicle_type: toObjectId(payload.vehicle_type),
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
-    transport_type: payload.transport_type || 'taxi',
-    payment_type: Array.isArray(payload.payment_type) ? payload.payment_type : ['cash', 'online', 'wallet'],
-    active: Number(payload.active ?? 1),
-    
-    // Commission Structure
-    admin_commision_type: Number(payload.admin_commision_type ?? (payload.customer_commission_type === 'percentage' ? 1 : 0)),
-    admin_commision: Number(payload.admin_commision ?? payload.customer_commission ?? 0),
-    admin_commission_type_for_owner: Number(payload.admin_commission_type_for_owner ?? 1),
-    admin_commission_for_owner: Number(payload.admin_commission_for_owner ?? 0),
-    admin_commission_type_from_driver: Number(payload.admin_commission_type_from_driver ?? 1),
-    admin_commission_from_driver: Number(payload.admin_commission_from_driver ?? 0),
-    
-    // Tax & Surgers
-    service_tax: Number(payload.service_tax ?? 0),
-    airport_surge: Number(payload.airport_surge ?? 0),
-    support_airport_fee: Number(payload.support_airport_fee ?? 0),
-    support_outstation: Number(payload.support_outstation ?? 0),
-    
-    // Core Pricing
-    base_price: Number(payload.base_price ?? 0),
-    base_distance: Number(payload.base_distance ?? 0),
-    price_per_distance: Number(payload.price_per_distance ?? 0),
-    time_price: Number(payload.time_price ?? 0),
-    waiting_charge: Number(payload.waiting_charge ?? 0),
-    free_waiting_before: Number(payload.free_waiting_before ?? 0),
-    free_waiting_after: Number(payload.free_waiting_after ?? 0),
-    
-    // Ride Sharing
-    enable_shared_ride: Number(payload.enable_shared_ride ?? (payload.enable_ride_sharing ? 1 : 0)),
-    price_per_seat: Number(payload.price_per_seat ?? 0),
-    shared_price_per_distance: Number(payload.shared_price_per_distance ?? 0),
-    shared_cancel_fee: Number(payload.shared_cancel_fee ?? 0),
-    
-    // Meta
-    order_number: Number(payload.order_number ?? 1),
-    bill_status: Number(payload.bill_status ?? 1),
-    status: payload.status || 'active',
-  });
-
-  return setPrice.toObject();
-};
-
-export const updateSetPrice = async (id, payload) => {
-  const setPrice = await SetPrice.findById(id);
-  if (!setPrice) throw new ApiError(404, 'Set Price not found');
-
-  const fields = [
-    'zone_id', 'vehicle_type', 'service_location_id', 'transport_type',
-    'payment_type', 'active', 'admin_commision_type', 'admin_commision',
-    'admin_commission_type_for_owner', 'admin_commission_for_owner',
-    'admin_commission_type_from_driver', 'admin_commission_from_driver',
-    'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
-    'base_price', 'base_distance', 'price_per_distance', 'time_price',
-    'waiting_charge', 'free_waiting_before', 'free_waiting_after',
-    'enable_shared_ride', 'price_per_seat', 'shared_price_per_distance',
-    'shared_cancel_fee', 'order_number', 'bill_status', 'status'
-  ];
-
-  fields.forEach(field => {
-    if (payload[field] !== undefined) {
-      if (field.includes('_id') || field === 'vehicle_type') {
-         if (payload[field]) setPrice[field] = toObjectId(payload[field]);
-      } else if (typeof setPrice[field] === 'number') {
-         setPrice[field] = Number(payload[field]);
-      } else {
-         setPrice[field] = payload[field];
+    return {
+      results,
+      paginator: {
+        data: results,
+        total: results.length,
+        current_page: 1,
+        last_page: 1,
+        per_page: 10,
+        from: 1,
+        to: results.length,
       }
+    };
+  };
+
+  export const listVehiclePreferences = async () => {
+    return listPreferences();
+  };
+
+  export const createVehicleType = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Vehicle name is required');
     }
-  });
 
-  await setPrice.save();
-  return setPrice.toObject();
-};
-
-export const deleteSetPrice = async (id) => {
-  const deleted = await SetPrice.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Set Price not found');
-  return true;
-};
-
-export const listOwners = async () => {
-  const owners = await Owner.find()
-    .populate('service_location_id', 'name service_location_name')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return owners.map(serializeOwner);
-};
-
-export const createOwner = async (payload) => {
-  if (!payload.company_name?.trim()) {
-    throw new ApiError(400, 'Company name is required');
-  }
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Owner name is required');
-  }
-  if (!payload.mobile?.trim()) {
-    throw new ApiError(400, 'Mobile number is required');
-  }
-  if (!payload.email?.trim()) {
-    throw new ApiError(400, 'Email is required');
-  }
-  if (!payload.password || String(payload.password).length < 6) {
-    throw new ApiError(400, 'Password must be at least 6 characters');
-  }
-  if (payload.password !== payload.password_confirmation) {
-    throw new ApiError(400, 'Passwords do not match');
-  }
-
-  const normalizedEmail = String(payload.email).trim().toLowerCase();
-  const normalizedMobile = String(payload.mobile).trim();
-
-  const existingOwner = await Owner.findOne({
-    $or: [{ email: normalizedEmail }, { mobile: normalizedMobile }],
-  }).lean();
-
-  if (existingOwner) {
-    throw new ApiError(409, 'Owner with this email or mobile already exists');
-  }
-
-  const owner = await Owner.create({
-    company_name: String(payload.company_name).trim(),
-    name: String(payload.name).trim(),
-    mobile: normalizedMobile,
-    email: normalizedEmail,
-    password: await hashPassword(String(payload.password)),
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
-    transport_type: payload.transport_type || 'taxi',
-    active: normalizeBoolean(payload.active ?? true),
-    approve: normalizeBoolean(payload.approve ?? false),
-    status: normalizeBoolean(payload.approve ?? false) ? 'approved' : 'pending',
-  });
-
-  const populatedOwner = await Owner.findById(owner._id)
-    .populate('service_location_id', 'name service_location_name')
-    .lean();
-
-  return serializeOwner(populatedOwner);
-};
-
-export const updateOwner = async (id, payload) => {
-  const owner = await Owner.findById(id);
-  if (!owner) throw new ApiError(404, 'Owner not found');
-
-  if (payload.company_name !== undefined) {
-    owner.company_name = String(payload.company_name).trim();
-  }
-  if (payload.name !== undefined) {
-    owner.name = String(payload.name).trim();
-  }
-  if (payload.mobile !== undefined) {
-    const mobile = String(payload.mobile).trim();
-    const duplicateMobile = await Owner.findOne({ _id: { $ne: id }, mobile }).lean();
-    if (duplicateMobile) {
-      throw new ApiError(409, 'Another owner already uses this mobile number');
+    if (!payload.transport_type?.trim()) {
+      throw new ApiError(400, 'Transport type is required');
     }
-    owner.mobile = mobile;
-  }
-  if (payload.email !== undefined) {
-    const email = String(payload.email).trim().toLowerCase();
-    const duplicateEmail = await Owner.findOne({ _id: { $ne: id }, email }).lean();
-    if (duplicateEmail) {
-      throw new ApiError(409, 'Another owner already uses this email');
+
+    const vehicle = await Vehicle.create({
+      name: payload.name.trim(),
+      short_description: payload.short_description ?? '',
+      description: payload.description ?? '',
+      transport_type: payload.transport_type,
+      dispatch_type: payload.dispatch_type || 'normal',
+      icon_types: payload.icon_types || 'car',
+      image: payload.image ?? '',
+      status: Number(payload.status ?? 1) ? 1 : 0,
+      active: Number(payload.status ?? 1) === 1,
+      supported_other_vehicle_types: Array.isArray(payload.supported_other_vehicle_types)
+        ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
+        : [],
+      vehicle_preference: Array.isArray(payload.vehicle_preference)
+        ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
+        : [],
+    });
+
+    return vehicle.toObject();
+  };
+
+  export const updateVehicleType = async (id, payload) => {
+    const vehicle = await Vehicle.findById(id);
+    if (!vehicle) {
+      throw new ApiError(404, 'Vehicle type not found');
     }
-    owner.email = email;
-  }
-  if (payload.service_location_id !== undefined) {
-    owner.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
-  }
-  if (payload.transport_type !== undefined) {
-    owner.transport_type = payload.transport_type || 'taxi';
-  }
-  if (payload.active !== undefined) {
-    owner.active = normalizeBoolean(payload.active);
-  }
-  if (payload.approve !== undefined) {
-    owner.approve = normalizeBoolean(payload.approve);
-    owner.status = owner.approve ? 'approved' : 'pending';
-  }
-  if (payload.password) {
-    if (String(payload.password).length < 6) {
+
+    if (payload.name !== undefined) {
+      vehicle.name = String(payload.name).trim();
+    }
+    if (payload.short_description !== undefined) {
+      vehicle.short_description = payload.short_description ?? '';
+    }
+    if (payload.description !== undefined) {
+      vehicle.description = payload.description ?? '';
+    }
+    if (payload.transport_type !== undefined) {
+      vehicle.transport_type = payload.transport_type;
+    }
+    if (payload.dispatch_type !== undefined) {
+      vehicle.dispatch_type = payload.dispatch_type || 'normal';
+    }
+    if (payload.icon_types !== undefined) {
+      vehicle.icon_types = payload.icon_types || 'car';
+    }
+    if (payload.image !== undefined) {
+      vehicle.image = payload.image ?? '';
+    }
+    if (payload.status !== undefined) {
+      vehicle.status = Number(payload.status) ? 1 : 0;
+      vehicle.active = vehicle.status === 1;
+    }
+    if (payload.supported_other_vehicle_types !== undefined) {
+      vehicle.supported_other_vehicle_types = Array.isArray(payload.supported_other_vehicle_types)
+        ? payload.supported_other_vehicle_types.filter(Boolean).map(toObjectId)
+        : [];
+    }
+    if (payload.vehicle_preference !== undefined) {
+      vehicle.vehicle_preference = Array.isArray(payload.vehicle_preference)
+        ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
+        : [];
+    }
+
+    await vehicle.save();
+    return vehicle.toObject();
+  };
+
+  export const deleteVehicleType = async (id) => {
+    const deleted = await Vehicle.findByIdAndDelete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Vehicle type not found');
+    }
+    return true;
+  };
+
+  export const listSetPrices = async () => {
+    const items = await SetPrice.find()
+      .populate('vehicle_type')
+      .populate({
+        path: 'zone_id',
+        populate: { path: 'service_location_id' }
+      })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    const results = items.map((item) => {
+      const vType = item.vehicle_type || {};
+      const zone = item.zone_id || {};
+      const sl = zone.service_location_id || {};
+
+      return {
+        id: String(item._id),
+        type_id: vType._id ? String(vType._id) : null,
+        name: vType.name || '',
+        icon: vType.icon || '',
+        capacity: vType.capacity || item.capacity || 0,
+        is_accept_share_ride: item.enable_shared_ride || 0,
+        active: item.active || 0,
+        currency: sl.currency_symbol || '₹',
+        unit: Number(zone.unit || 1),
+        unit_in_words: 'Km',
+        zone_name: zone.name || '',
+        vehicle_type_name: vType.name || '',
+        drop_zone_name: null,
+        transport_type: item.transport_type || 'both',
+        payment_type: Array.isArray(item.payment_type) ? item.payment_type : (item.payment_type ? String(item.payment_type).split(',') : ['cash', 'online', 'wallet']),
+      };
+    });
+
+    const paginatorData = items.map((item) => {
+      const vType = item.vehicle_type || {};
+      const zone = item.zone_id || {};
+      const sl = zone.service_location_id || {};
+
+      return {
+        ...item,
+        id: String(item._id),
+        vehicle_type_name: vType.name || '',
+        icon: vType.icon || '',
+        zone_name: zone.name || '',
+        drop_zone_name: null,
+        vehicle_type: vType ? {
+          ...vType,
+          id: String(vType._id),
+          icon_types_for: vType.icon_types,
+          trip_dispatch_type: vType.dispatch_type,
+        } : null,
+        zone: zone ? {
+          ...zone,
+          id: String(zone._id),
+          service_location: sl ? {
+            ...sl,
+            id: String(sl._id),
+          } : null,
+        } : null,
+      };
+    });
+
+    return {
+      results,
+      paginator: {
+        current_page: 1,
+        data: paginatorData,
+        from: 1,
+        to: paginatorData.length,
+        total: paginatorData.length,
+        last_page: 1,
+        per_page: 10,
+      }
+    };
+  };
+
+  export const createSetPrice = async (payload) => {
+    const payment_type = Array.isArray(payload.payment_type)
+      ? payload.payment_type
+      : typeof payload.payment_type === 'string'
+        ? payload.payment_type.split(',').map(s => s.trim())
+        : ['cash', 'online', 'wallet'];
+
+    const zone_id = toObjectId(payload.zone_id?._id || payload.zone_id?.id || payload.zone_id);
+    const vehicle_type = toObjectId(payload.vehicle_type?._id || payload.vehicle_type?.id || payload.vehicle_type || payload.type_id);
+    const service_location_id = toObjectId(payload.service_location_id?._id || payload.service_location_id?.id || payload.service_location_id || payload.zone?._id || payload.zone?.service_location_id);
+
+    const setPrice = await SetPrice.create({
+      zone_id,
+      vehicle_type,
+      service_location_id,
+      transport_type: payload.transport_type || 'taxi',
+      payment_type,
+      active: Number(payload.active ?? 1),
+
+      // Commission Structure
+      admin_commision_type: Number(payload.admin_commision_type ?? (payload.customer_commission_type === 'percentage' ? 1 : 0)),
+      admin_commision: Number(payload.admin_commision ?? payload.customer_commission ?? 0),
+      admin_commission_type_for_owner: Number(payload.admin_commission_type_for_owner ?? 1),
+      admin_commission_for_owner: Number(payload.admin_commission_for_owner ?? 0),
+      admin_commission_type_from_driver: Number(payload.admin_commission_type_from_driver ?? 1),
+      admin_commission_from_driver: Number(payload.admin_commission_from_driver ?? 0),
+
+      // Tax & Surgers
+      service_tax: Number(payload.service_tax ?? 0),
+      airport_surge: Number(payload.airport_surge ?? 0),
+      support_airport_fee: Number(payload.support_airport_fee ?? 0),
+      support_outstation: Number(payload.support_outstation ?? 0),
+      enable_airport_ride: payload.enable_airport_ride ?? !!payload.support_airport_fee,
+      enable_outstation_ride: payload.enable_outstation_ride ?? !!payload.support_outstation,
+
+      // Core Pricing
+      base_price: Number(payload.base_price ?? 0),
+      base_distance: Number(payload.base_distance ?? 0),
+      price_per_distance: Number(payload.price_per_distance ?? 0),
+      time_price: Number(payload.time_price ?? 0),
+      waiting_charge: Number(payload.waiting_charge ?? 0),
+      free_waiting_before: Number(payload.free_waiting_before ?? 0),
+      free_waiting_after: Number(payload.free_waiting_after ?? 0),
+
+      // Ride Sharing
+      enable_shared_ride: Number(payload.enable_shared_ride ?? (payload.enable_ride_sharing ? 1 : 0)),
+      enable_ride_sharing: payload.enable_ride_sharing ?? !!payload.enable_shared_ride,
+      price_per_seat: Number(payload.price_per_seat ?? 0),
+      shared_price_per_distance: Number(payload.shared_price_per_distance ?? 0),
+      shared_cancel_fee: Number(payload.shared_cancel_fee ?? 0),
+
+      // Cancellation Fee
+      user_cancellation_fee: Number(payload.user_cancellation_fee ?? payload.cancellation_fee_for_user ?? 0),
+      driver_cancellation_fee: Number(payload.driver_cancellation_fee ?? payload.cancellation_fee_for_driver ?? 0),
+      cancellation_fee_goes_to: payload.cancellation_fee_goes_to ?? payload.fee_goes_to ?? 'admin',
+      user_cancellation_fee_type: payload.user_cancellation_fee_type || 'percentage',
+      driver_cancellation_fee_type: payload.driver_cancellation_fee_type || 'percentage',
+
+      // Meta
+      order_number: Number(payload.order_number ?? payload.eta_sequence ?? 1),
+      bill_status: Number(payload.bill_status ?? 1),
+      status: payload.status || 'active',
+    });
+
+    return setPrice.toObject();
+  };
+
+  export const updateSetPrice = async (id, payload) => {
+    const setPrice = await SetPrice.findById(id);
+    if (!setPrice) throw new ApiError(404, 'Set Price not found');
+
+    const fields = [
+      'zone_id', 'vehicle_type', 'service_location_id', 'transport_type',
+      'payment_type', 'active', 'admin_commision_type', 'admin_commision',
+      'admin_commission_type_for_owner', 'admin_commission_for_owner',
+      'admin_commission_type_from_driver', 'admin_commission_from_driver',
+      'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
+      'enable_airport_ride', 'enable_outstation_ride',
+      'base_price', 'base_distance', 'price_per_distance', 'time_price',
+      'waiting_charge', 'free_waiting_before', 'free_waiting_after',
+      'enable_shared_ride', 'enable_ride_sharing', 'price_per_seat',
+      'shared_price_per_distance', 'shared_cancel_fee',
+      'user_cancellation_fee', 'driver_cancellation_fee', 'cancellation_fee_goes_to',
+      'user_cancellation_fee_type', 'driver_cancellation_fee_type',
+      'order_number', 'bill_status', 'status'
+    ];
+
+    fields.forEach(field => {
+      let value = payload[field];
+
+      // Aliases & Nested Object Handling
+      if (field === 'zone_id') value = payload.zone_id?._id || payload.zone_id?.id || payload.zone_id;
+      if (field === 'vehicle_type') value = payload.vehicle_type?._id || payload.vehicle_type?.id || payload.vehicle_type || payload.type_id;
+      if (field === 'service_location_id') value = payload.service_location_id?._id || payload.service_location_id?.id || payload.service_location_id || payload.zone?._id || payload.zone?.service_location_id;
+
+      if (value === undefined) {
+        if (field === 'admin_commision') value = payload.customer_commission;
+        if (field === 'admin_commision_type') value = payload.customer_commission_type === 'percentage' ? 1 : (payload.customer_commission_type === 'fixed' ? 0 : undefined);
+        if (field === 'order_number') value = payload.eta_sequence;
+        if (field === 'user_cancellation_fee') value = payload.cancellation_fee_for_user;
+        if (field === 'driver_cancellation_fee') value = payload.cancellation_fee_for_driver;
+        if (field === 'cancellation_fee_goes_to') value = payload.fee_goes_to;
+        if (field === 'enable_ride_sharing') value = payload.enable_shared_ride !== undefined ? !!payload.enable_shared_ride : undefined;
+      }
+
+      if (value !== undefined) {
+        if (field.includes('_id') || field === 'vehicle_type') {
+          if (value) setPrice[field] = toObjectId(value);
+        } else if (field === 'payment_type') {
+          setPrice[field] = Array.isArray(value) ? value : (typeof value === 'string' ? value.split(',').map(s => s.trim()) : value);
+        } else if (typeof setPrice[field] === 'number' || ['admin_commision', 'service_tax', 'base_price', 'base_distance', 'price_per_distance', 'time_price', 'order_number'].includes(field)) {
+          setPrice[field] = Number(value);
+        } else {
+          setPrice[field] = value;
+        }
+      }
+    });
+
+    await setPrice.save();
+    return setPrice.toObject();
+  };
+
+  export const deleteSetPrice = async (id) => {
+    const deleted = await SetPrice.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Set Price not found');
+    return true;
+  };
+
+  export const listOwners = async () => {
+    await ensureFleetOwnersSeeded();
+
+    const owners = await Owner.find()
+      .populate(
+        'service_location_id',
+        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+      )
+      .sort({ createdAt: -1 })
+      .lean();
+
+    return owners.map(serializeOwner);
+  };
+
+  export const getOwnerById = async (id) => {
+    await ensureFleetOwnersSeeded();
+
+    const ownerId = String(id || '').trim();
+    if (!ownerId) throw new ApiError(400, 'Owner id is required');
+
+    const owner = await Owner.findOne(
+      mongoose.isValidObjectId(ownerId) ? { _id: ownerId } : { legacy_id: ownerId },
+    )
+      .populate(
+        'service_location_id',
+        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+      )
+      .lean();
+
+    if (!owner) throw new ApiError(404, 'Owner not found');
+    return serializeOwner(owner);
+  };
+
+  export const createOwner = async (payload) => {
+    if (!payload.company_name?.trim()) {
+      throw new ApiError(400, 'Company name is required');
+    }
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Owner name is required');
+    }
+    if (!payload.mobile?.trim()) {
+      throw new ApiError(400, 'Mobile number is required');
+    }
+    if (!payload.email?.trim()) {
+      throw new ApiError(400, 'Email is required');
+    }
+    if (!payload.password || String(payload.password).length < 6) {
       throw new ApiError(400, 'Password must be at least 6 characters');
     }
     if (payload.password !== payload.password_confirmation) {
       throw new ApiError(400, 'Passwords do not match');
     }
-    owner.password = await hashPassword(String(payload.password));
-  }
 
-  await owner.save();
+    const normalizedEmail = String(payload.email).trim().toLowerCase();
+    const normalizedMobile = String(payload.mobile).trim();
+    const serviceLocationId =
+      payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)
+        ? toObjectId(payload.service_location_id)
+        : null;
 
-  const populatedOwner = await Owner.findById(owner._id)
-    .populate('service_location_id', 'name service_location_name')
-    .lean();
+    const existingOwner = await Owner.findOne({
+      $or: [{ email: normalizedEmail }, { mobile: normalizedMobile }],
+    }).lean();
 
-  return serializeOwner(populatedOwner);
-};
+    if (existingOwner) {
+      throw new ApiError(409, 'Owner with this email or mobile already exists');
+    }
 
-export const approveOwner = async (id, payload) =>
-  updateOwner(id, { approve: normalizeBoolean(payload.approve), active: true });
+    const owner = await Owner.create({
+      company_name: String(payload.company_name).trim(),
+      owner_name: payload.owner_name ? String(payload.owner_name).trim() : null,
+      name: String(payload.name).trim(),
+      mobile: normalizedMobile,
+      email: normalizedEmail,
+      password: await hashPassword(String(payload.password)),
+      service_location_id: serviceLocationId,
+      legacy_service_location_id:
+        payload.legacy_service_location_id || (serviceLocationId ? '' : payload.service_location_id || ''),
+      transport_type: payload.transport_type || 'taxi',
+      phone: payload.phone || null,
+      address: payload.address || null,
+      postal_code: payload.postal_code || null,
+      city: payload.city || null,
+      tax_number: payload.tax_number || null,
+      active: normalizeBoolean(payload.active ?? true),
+      approve: normalizeBoolean(payload.approve ?? false),
+      status: normalizeBoolean(payload.approve ?? false) ? 'approved' : 'pending',
+    });
 
-export const deleteOwner = async (id) => {
-  const owner = await Owner.findByIdAndDelete(id);
-  if (!owner) throw new ApiError(404, 'Owner not found');
-  return true;
-};
+    const populatedOwner = await Owner.findById(owner._id)
+      .populate(
+        'service_location_id',
+        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+      )
+      .lean();
 
-export const listOwnerBookings = async () => {
-  const items = await OwnerBooking.find()
-    .populate('owner_id', 'full_name name email mobile')
-    .sort({ createdAt: -1 })
-    .lean();
-
-  return items.map(serializeOwnerBooking);
-};
-
-export const createOwnerBooking = async (payload) => {
-  if (!payload.booking_reference?.trim()) {
-    throw new ApiError(400, 'Booking reference is required');
-  }
-
-  if (!payload.customer_name?.trim()) {
-    throw new ApiError(400, 'Customer name is required');
-  }
-
-  const item = await OwnerBooking.create({
-    owner_id: payload.owner_id ? toObjectId(payload.owner_id) : null,
-    booking_reference: String(payload.booking_reference).trim(),
-    customer_name: String(payload.customer_name).trim(),
-    customer_phone: String(payload.customer_phone || '').trim(),
-    pickup_location: String(payload.pickup_location || '').trim(),
-    dropoff_location: String(payload.dropoff_location || '').trim(),
-    trip_type: payload.trip_type || 'city',
-    vehicle_type: String(payload.vehicle_type || '').trim(),
-    trip_date: payload.trip_date ? new Date(payload.trip_date) : null,
-    fare_amount: toNullableNumber(payload.fare_amount) ?? 0,
-    payment_status: payload.payment_status || 'pending',
-    booking_status: payload.booking_status || 'pending',
-    notes: String(payload.notes || '').trim(),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-  });
-
-  const populatedItem = await OwnerBooking.findById(item._id)
-    .populate('owner_id', 'full_name name email mobile')
-    .lean();
-
-  return serializeOwnerBooking(populatedItem);
-};
-
-export const updateOwnerBooking = async (id, payload) => {
-  const item = await OwnerBooking.findById(id);
-  if (!item) throw new ApiError(404, 'Owner booking not found');
-
-  if (payload.owner_id !== undefined) {
-    item.owner_id = payload.owner_id ? toObjectId(payload.owner_id) : null;
-  }
-  if (payload.booking_reference !== undefined) {
-    item.booking_reference = String(payload.booking_reference || '').trim();
-  }
-  if (payload.customer_name !== undefined) {
-    item.customer_name = String(payload.customer_name || '').trim();
-  }
-  if (payload.customer_phone !== undefined) {
-    item.customer_phone = String(payload.customer_phone || '').trim();
-  }
-  if (payload.pickup_location !== undefined) {
-    item.pickup_location = String(payload.pickup_location || '').trim();
-  }
-  if (payload.dropoff_location !== undefined) {
-    item.dropoff_location = String(payload.dropoff_location || '').trim();
-  }
-  if (payload.trip_type !== undefined) {
-    item.trip_type = payload.trip_type || 'city';
-  }
-  if (payload.vehicle_type !== undefined) {
-    item.vehicle_type = String(payload.vehicle_type || '').trim();
-  }
-  if (payload.trip_date !== undefined) {
-    item.trip_date = payload.trip_date ? new Date(payload.trip_date) : null;
-  }
-  if (payload.fare_amount !== undefined) {
-    item.fare_amount = toNullableNumber(payload.fare_amount) ?? 0;
-  }
-  if (payload.payment_status !== undefined) {
-    item.payment_status = payload.payment_status || 'pending';
-  }
-  if (payload.booking_status !== undefined) {
-    item.booking_status = payload.booking_status || 'pending';
-  }
-  if (payload.notes !== undefined) {
-    item.notes = String(payload.notes || '').trim();
-  }
-  if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-  }
-
-  await item.save();
-
-  const populatedItem = await OwnerBooking.findById(item._id)
-    .populate('owner_id', 'full_name name email mobile')
-    .lean();
-
-  return serializeOwnerBooking(populatedItem);
-};
-
-export const deleteOwnerBooking = async (id) => {
-  const deleted = await OwnerBooking.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Owner booking not found');
-  return true;
-};
-
-export const getDashboardData = async () => {
-  const [totalUsers, totalDrivers, totalOwners] = await Promise.all([
-    User.countDocuments(),
-    Driver.countDocuments(),
-    Owner.countDocuments(),
-  ]);
-
-  const approvedDrivers = await Driver.countDocuments({ approve: true });
-
-  // Dummy aggregation for now, until real transaction models are connected
-  return {
-    totalUsers,
-    totalDrivers: {
-      total: totalDrivers,
-      approved: approvedDrivers,
-      declined: totalDrivers - approvedDrivers
-    },
-    total_earnings: 124500,
-    payment_success_rate: 99.4,
-    todayEarnings: 1450,
-    overallEarnings: {
-      today: 1450,
-      by_cash: 950,
-      by_wallet: 200,
-      by_card: 300,
-      admin_commission: 195,
-      driver_earnings: 1255,
-    },
-    cancelChart: { total: 7, byUser: 3, byDriver: 3, noDriver: 1 },
+    return serializeOwner(populatedOwner);
   };
-};
 
-export const getOverallEarnings = async () => (await getDashboardData()).overallEarnings;
-export const getTodayEarnings = async () => (await getDashboardData()).todayEarnings;
-export const getCancelChart = async () => (await getDashboardData()).cancelChart;
+  export const updateOwner = async (id, payload) => {
+    const owner = await Owner.findById(id);
+    if (!owner) throw new ApiError(404, 'Owner not found');
 
-export const listWithdrawals = async () => WithdrawalRequest.find().populate('driver_id owner_id').sort({ createdAt: -1 }).lean();
+    if (payload.company_name !== undefined) {
+      owner.company_name = String(payload.company_name).trim();
+    }
+    if (payload.name !== undefined) {
+      owner.name = String(payload.name).trim();
+    }
+    if (payload.mobile !== undefined) {
+      const mobile = String(payload.mobile).trim();
+      const duplicateMobile = await Owner.findOne({ _id: { $ne: id }, mobile }).lean();
+      if (duplicateMobile) {
+        throw new ApiError(409, 'Another owner already uses this mobile number');
+      }
+      owner.mobile = mobile;
+    }
+    if (payload.email !== undefined) {
+      const email = String(payload.email).trim().toLowerCase();
+      const duplicateEmail = await Owner.findOne({ _id: { $ne: id }, email }).lean();
+      if (duplicateEmail) {
+        throw new ApiError(409, 'Another owner already uses this email');
+      }
+      owner.email = email;
+    }
+    if (payload.service_location_id !== undefined) {
+      if (payload.service_location_id && mongoose.isValidObjectId(payload.service_location_id)) {
+        owner.service_location_id = toObjectId(payload.service_location_id);
+        owner.legacy_service_location_id = '';
+      } else {
+        owner.service_location_id = null;
+        owner.legacy_service_location_id = payload.service_location_id || '';
+      }
+    }
+    if (payload.transport_type !== undefined) {
+      owner.transport_type = payload.transport_type || 'taxi';
+    }
+    if (payload.active !== undefined) {
+      owner.active = normalizeBoolean(payload.active);
+    }
+    if (payload.approve !== undefined) {
+      owner.approve = normalizeBoolean(payload.approve);
+      owner.status = owner.approve ? 'approved' : 'pending';
+    }
+    if (payload.password) {
+      if (String(payload.password).length < 6) {
+        throw new ApiError(400, 'Password must be at least 6 characters');
+      }
+      if (payload.password !== payload.password_confirmation) {
+        throw new ApiError(400, 'Passwords do not match');
+      }
+      owner.password = await hashPassword(String(payload.password));
+    }
 
-export const listZones = async () => {
-  const zones = await Zone.find()
-    .populate('service_location_id', 'name service_location_name country timezone')
-    .sort({ createdAt: -1 })
-    .lean();
+    if (payload.owner_name !== undefined) owner.owner_name = payload.owner_name || null;
+    if (payload.phone !== undefined) owner.phone = payload.phone || null;
+    if (payload.address !== undefined) owner.address = payload.address || null;
+    if (payload.postal_code !== undefined) owner.postal_code = payload.postal_code || null;
+    if (payload.city !== undefined) owner.city = payload.city || null;
+    if (payload.tax_number !== undefined) owner.tax_number = payload.tax_number || null;
+    if (payload.no_of_vehicles !== undefined) owner.no_of_vehicles = Number(payload.no_of_vehicles || 0);
 
-  return zones.map(serializeZone);
-};
+    await owner.save();
 
-export const createZone = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Zone name is required');
-  }
+    const populatedOwner = await Owner.findById(owner._id)
+      .populate(
+        'service_location_id',
+        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+      )
+      .lean();
 
-  const zone = await Zone.create({
-    name: String(payload.name).trim(),
-    service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
-    unit: payload.unit || 'km',
-    peak_zone_ride_count: toNullableNumber(payload.peak_zone_ride_count),
-    peak_zone_radius: toNullableNumber(payload.peak_zone_radius),
-    peak_zone_selection_duration: toNullableNumber(payload.peak_zone_selection_duration),
-    peak_zone_duration: toNullableNumber(payload.peak_zone_duration),
-    peak_zone_surge_percentage: toNullableNumber(payload.peak_zone_surge_percentage),
-    maximum_distance_for_regular_rides: toNullableNumber(payload.maximum_distance_for_regular_rides),
-    maximum_distance_for_outstation_rides: toNullableNumber(payload.maximum_distance_for_outstation_rides),
-    active: payload.status ? payload.status === 'active' : true,
-    status: payload.status || 'active',
-    geometry: {
-      type: 'Polygon',
-      coordinates: [normalizeZoneCoordinates(payload.coordinates)],
-    },
-  });
+    return serializeOwner(populatedOwner);
+  };
 
-  const populatedZone = await Zone.findById(zone._id)
-    .populate('service_location_id', 'name service_location_name country timezone')
-    .lean();
+  export const approveOwner = async (id, payload) =>
+    updateOwner(id, { approve: normalizeBoolean(payload.approve), active: true });
 
-  return serializeZone(populatedZone);
-};
+  export const deleteOwner = async (id) => {
+    const owner = await Owner.findByIdAndDelete(id);
+    if (!owner) throw new ApiError(404, 'Owner not found');
+    return true;
+  };
 
-export const updateZone = async (id, payload) => {
-  const zone = await Zone.findById(id);
-  if (!zone) throw new ApiError(404, 'Zone not found');
+  export const listOwnerBookings = async () => {
+    const items = await OwnerBooking.find()
+      .populate('owner_id', 'full_name name email mobile')
+      .sort({ createdAt: -1 })
+      .lean();
 
-  if (payload.name !== undefined) {
-    zone.name = String(payload.name).trim();
-  }
-  if (payload.service_location_id !== undefined) {
-    zone.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
-  }
-  if (payload.unit !== undefined) {
-    zone.unit = payload.unit || 'km';
-  }
-  if (payload.peak_zone_ride_count !== undefined) {
-    zone.peak_zone_ride_count = toNullableNumber(payload.peak_zone_ride_count);
-  }
-  if (payload.peak_zone_radius !== undefined) {
-    zone.peak_zone_radius = toNullableNumber(payload.peak_zone_radius);
-  }
-  if (payload.peak_zone_selection_duration !== undefined) {
-    zone.peak_zone_selection_duration = toNullableNumber(payload.peak_zone_selection_duration);
-  }
-  if (payload.peak_zone_duration !== undefined) {
-    zone.peak_zone_duration = toNullableNumber(payload.peak_zone_duration);
-  }
-  if (payload.peak_zone_surge_percentage !== undefined) {
-    zone.peak_zone_surge_percentage = toNullableNumber(payload.peak_zone_surge_percentage);
-  }
-  if (payload.maximum_distance_for_regular_rides !== undefined) {
-    zone.maximum_distance_for_regular_rides = toNullableNumber(payload.maximum_distance_for_regular_rides);
-  }
-  if (payload.maximum_distance_for_outstation_rides !== undefined) {
-    zone.maximum_distance_for_outstation_rides = toNullableNumber(payload.maximum_distance_for_outstation_rides);
-  }
-  if (payload.status !== undefined) {
-    zone.status = payload.status || 'active';
-    zone.active = zone.status === 'active';
-  }
-  if (payload.coordinates !== undefined) {
-    zone.geometry = {
-      type: 'Polygon',
-      coordinates: [normalizeZoneCoordinates(payload.coordinates)],
+    return items.map(serializeOwnerBooking);
+  };
+
+  export const createOwnerBooking = async (payload) => {
+    if (!payload.booking_reference?.trim()) {
+      throw new ApiError(400, 'Booking reference is required');
+    }
+
+    if (!payload.customer_name?.trim()) {
+      throw new ApiError(400, 'Customer name is required');
+    }
+
+    const item = await OwnerBooking.create({
+      owner_id: payload.owner_id ? toObjectId(payload.owner_id) : null,
+      booking_reference: String(payload.booking_reference).trim(),
+      customer_name: String(payload.customer_name).trim(),
+      customer_phone: String(payload.customer_phone || '').trim(),
+      pickup_location: String(payload.pickup_location || '').trim(),
+      dropoff_location: String(payload.dropoff_location || '').trim(),
+      trip_type: payload.trip_type || 'city',
+      vehicle_type: String(payload.vehicle_type || '').trim(),
+      trip_date: payload.trip_date ? new Date(payload.trip_date) : null,
+      fare_amount: toNullableNumber(payload.fare_amount) ?? 0,
+      payment_status: payload.payment_status || 'pending',
+      booking_status: payload.booking_status || 'pending',
+      notes: String(payload.notes || '').trim(),
+      active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+    });
+
+    const populatedItem = await OwnerBooking.findById(item._id)
+      .populate('owner_id', 'full_name name email mobile')
+      .lean();
+
+    return serializeOwnerBooking(populatedItem);
+  };
+
+  export const updateOwnerBooking = async (id, payload) => {
+    const item = await OwnerBooking.findById(id);
+    if (!item) throw new ApiError(404, 'Owner booking not found');
+
+    if (payload.owner_id !== undefined) {
+      item.owner_id = payload.owner_id ? toObjectId(payload.owner_id) : null;
+    }
+    if (payload.booking_reference !== undefined) {
+      item.booking_reference = String(payload.booking_reference || '').trim();
+    }
+    if (payload.customer_name !== undefined) {
+      item.customer_name = String(payload.customer_name || '').trim();
+    }
+    if (payload.customer_phone !== undefined) {
+      item.customer_phone = String(payload.customer_phone || '').trim();
+    }
+    if (payload.pickup_location !== undefined) {
+      item.pickup_location = String(payload.pickup_location || '').trim();
+    }
+    if (payload.dropoff_location !== undefined) {
+      item.dropoff_location = String(payload.dropoff_location || '').trim();
+    }
+    if (payload.trip_type !== undefined) {
+      item.trip_type = payload.trip_type || 'city';
+    }
+    if (payload.vehicle_type !== undefined) {
+      item.vehicle_type = String(payload.vehicle_type || '').trim();
+    }
+    if (payload.trip_date !== undefined) {
+      item.trip_date = payload.trip_date ? new Date(payload.trip_date) : null;
+    }
+    if (payload.fare_amount !== undefined) {
+      item.fare_amount = toNullableNumber(payload.fare_amount) ?? 0;
+    }
+    if (payload.payment_status !== undefined) {
+      item.payment_status = payload.payment_status || 'pending';
+    }
+    if (payload.booking_status !== undefined) {
+      item.booking_status = payload.booking_status || 'pending';
+    }
+    if (payload.notes !== undefined) {
+      item.notes = String(payload.notes || '').trim();
+    }
+    if (payload.active !== undefined) {
+      item.active = normalizeBoolean(payload.active);
+    }
+
+    await item.save();
+
+    const populatedItem = await OwnerBooking.findById(item._id)
+      .populate('owner_id', 'full_name name email mobile')
+      .lean();
+
+    return serializeOwnerBooking(populatedItem);
+  };
+
+  export const deleteOwnerBooking = async (id) => {
+    const deleted = await OwnerBooking.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Owner booking not found');
+    return true;
+  };
+
+  export const getDashboardData = async () => {
+    const [totalUsers, totalDrivers, totalOwners] = await Promise.all([
+      User.countDocuments(),
+      Driver.countDocuments(),
+      Owner.countDocuments(),
+    ]);
+
+    const approvedDrivers = await Driver.countDocuments({ approve: true });
+
+    // Dummy aggregation for now, until real transaction models are connected
+    return {
+      totalUsers,
+      totalDrivers: {
+        total: totalDrivers,
+        approved: approvedDrivers,
+        declined: totalDrivers - approvedDrivers
+      },
+      total_earnings: 124500,
+      payment_success_rate: 99.4,
+      todayEarnings: 1450,
+      overallEarnings: {
+        today: 1450,
+        by_cash: 950,
+        by_wallet: 200,
+        by_card: 300,
+        admin_commission: 195,
+        driver_earnings: 1255,
+      },
+      cancelChart: { total: 7, byUser: 3, byDriver: 3, noDriver: 1 },
     };
-  }
+  };
 
-  await zone.save();
+  export const getOverallEarnings = async () => (await getDashboardData()).overallEarnings;
+  export const getTodayEarnings = async () => (await getDashboardData()).todayEarnings;
+  export const getCancelChart = async () => (await getDashboardData()).cancelChart;
 
-  const populatedZone = await Zone.findById(zone._id)
-    .populate('service_location_id', 'name service_location_name country timezone')
-    .lean();
+  export const listWithdrawals = async () => WithdrawalRequest.find().populate('driver_id owner_id').sort({ createdAt: -1 }).lean();
 
-  return serializeZone(populatedZone);
-};
+  export const listZones = async () => {
+    const zones = await Zone.find()
+      .populate('service_location_id', 'name service_location_name country timezone')
+      .sort({ createdAt: -1 })
+      .lean();
 
-export const deleteZone = async (id) => {
-  const deleted = await Zone.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Zone not found');
-  return true;
-};
+    return zones.map(serializeZone);
+  };
 
-export const toggleZoneStatus = async (id) => {
-  const zone = await Zone.findById(id);
-  if (!zone) throw new ApiError(404, 'Zone not found');
-  zone.active = !zone.active;
-  zone.status = zone.active ? 'active' : 'inactive';
-  await zone.save();
+  export const createZone = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Zone name is required');
+    }
 
-  const populatedZone = await Zone.findById(zone._id)
-    .populate('service_location_id', 'name service_location_name country timezone')
-    .lean();
+    const zone = await Zone.create({
+      name: String(payload.name).trim(),
+      service_location_id: payload.service_location_id ? toObjectId(payload.service_location_id) : null,
+      unit: payload.unit || 'km',
+      peak_zone_ride_count: toNullableNumber(payload.peak_zone_ride_count),
+      peak_zone_radius: toNullableNumber(payload.peak_zone_radius),
+      peak_zone_selection_duration: toNullableNumber(payload.peak_zone_selection_duration),
+      peak_zone_duration: toNullableNumber(payload.peak_zone_duration),
+      peak_zone_surge_percentage: toNullableNumber(payload.peak_zone_surge_percentage),
+      maximum_distance_for_regular_rides: toNullableNumber(payload.maximum_distance_for_regular_rides),
+      maximum_distance_for_outstation_rides: toNullableNumber(payload.maximum_distance_for_outstation_rides),
+      active: payload.status ? payload.status === 'active' : true,
+      status: payload.status || 'active',
+      geometry: {
+        type: 'Polygon',
+        coordinates: [normalizeZoneCoordinates(payload.coordinates)],
+      },
+    });
 
-  return serializeZone(populatedZone);
-};
+    const populatedZone = await Zone.findById(zone._id)
+      .populate('service_location_id', 'name service_location_name country timezone')
+      .lean();
+
+    return serializeZone(populatedZone);
+  };
+
+  export const updateZone = async (id, payload) => {
+    const zone = await Zone.findById(id);
+    if (!zone) throw new ApiError(404, 'Zone not found');
+
+    if (payload.name !== undefined) {
+      zone.name = String(payload.name).trim();
+    }
+    if (payload.service_location_id !== undefined) {
+      zone.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
+    }
+    if (payload.unit !== undefined) {
+      zone.unit = payload.unit || 'km';
+    }
+    if (payload.peak_zone_ride_count !== undefined) {
+      zone.peak_zone_ride_count = toNullableNumber(payload.peak_zone_ride_count);
+    }
+    if (payload.peak_zone_radius !== undefined) {
+      zone.peak_zone_radius = toNullableNumber(payload.peak_zone_radius);
+    }
+    if (payload.peak_zone_selection_duration !== undefined) {
+      zone.peak_zone_selection_duration = toNullableNumber(payload.peak_zone_selection_duration);
+    }
+    if (payload.peak_zone_duration !== undefined) {
+      zone.peak_zone_duration = toNullableNumber(payload.peak_zone_duration);
+    }
+    if (payload.peak_zone_surge_percentage !== undefined) {
+      zone.peak_zone_surge_percentage = toNullableNumber(payload.peak_zone_surge_percentage);
+    }
+    if (payload.maximum_distance_for_regular_rides !== undefined) {
+      zone.maximum_distance_for_regular_rides = toNullableNumber(payload.maximum_distance_for_regular_rides);
+    }
+    if (payload.maximum_distance_for_outstation_rides !== undefined) {
+      zone.maximum_distance_for_outstation_rides = toNullableNumber(payload.maximum_distance_for_outstation_rides);
+    }
+    if (payload.status !== undefined) {
+      zone.status = payload.status || 'active';
+      zone.active = zone.status === 'active';
+    }
+    if (payload.coordinates !== undefined) {
+      zone.geometry = {
+        type: 'Polygon',
+        coordinates: [normalizeZoneCoordinates(payload.coordinates)],
+      };
+    }
+
+    await zone.save();
+
+    const populatedZone = await Zone.findById(zone._id)
+      .populate('service_location_id', 'name service_location_name country timezone')
+      .lean();
+
+    return serializeZone(populatedZone);
+  };
+
+  export const deleteZone = async (id) => {
+    const deleted = await Zone.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Zone not found');
+    return true;
+  };
+
+  export const toggleZoneStatus = async (id) => {
+    const zone = await Zone.findById(id);
+    if (!zone) throw new ApiError(404, 'Zone not found');
+    zone.active = !zone.active;
+    zone.status = zone.active ? 'active' : 'inactive';
+    await zone.save();
+
+    const populatedZone = await Zone.findById(zone._id)
+      .populate('service_location_id', 'name service_location_name country timezone')
+      .lean();
+
+    return serializeZone(populatedZone);
+  };
 
 
-export const listAirports = async () => {
-  const items = await Airport.find()
-    .populate('service_location_id', 'name service_location_name country')
-    .populate('zone_id', 'name')
-    .sort({ createdAt: -1 })
-    .lean();
+  export const listAirports = async () => {
+    const items = await Airport.find()
+      .populate('service_location_id', 'name service_location_name country')
+      .populate('zone_id', 'name')
+      .sort({ createdAt: -1 })
+      .lean();
 
-  return items.map(serializeAirport);
-};
+    return items.map(serializeAirport);
+  };
 
-export const createAirport = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Airport name is required');
-  }
+  export const createAirport = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Airport name is required');
+    }
 
-  if (!payload.service_location_id) {
-    throw new ApiError(400, 'Service location is required');
-  }
+    if (!payload.service_location_id) {
+      throw new ApiError(400, 'Service location is required');
+    }
 
-  const latitude = toNullableNumber(payload.latitude);
-  const longitude = toNullableNumber(payload.longitude);
-  const status = payload.status || (normalizeBoolean(payload.active ?? true) ? 'active' : 'inactive');
+    const latitude = toNullableNumber(payload.latitude);
+    const longitude = toNullableNumber(payload.longitude);
+    const status = payload.status || (normalizeBoolean(payload.active ?? true) ? 'active' : 'inactive');
 
-  const item = await Airport.create({
-    name: String(payload.name).trim(),
-    code: String(payload.code || '').trim().toUpperCase(),
-    service_location_id: toObjectId(payload.service_location_id),
-    zone_id: payload.zone_id ? toObjectId(payload.zone_id) : null,
-    terminal: String(payload.terminal || '').trim(),
-    address: String(payload.address || '').trim(),
-    contact_number: String(payload.contact_number || '').trim(),
-    latitude,
-    longitude,
-    location:
-      latitude !== null && longitude !== null
-        ? {
+    const item = await Airport.create({
+      name: String(payload.name).trim(),
+      code: String(payload.code || '').trim().toUpperCase(),
+      service_location_id: toObjectId(payload.service_location_id),
+      zone_id: payload.zone_id ? toObjectId(payload.zone_id) : null,
+      terminal: String(payload.terminal || '').trim(),
+      address: String(payload.address || '').trim(),
+      contact_number: String(payload.contact_number || '').trim(),
+      latitude,
+      longitude,
+      location:
+        latitude !== null && longitude !== null
+          ? {
             type: 'Point',
             coordinates: [longitude, latitude],
           }
-        : undefined,
-    boundary:
-      Array.isArray(payload.boundary_coordinates) && payload.boundary_coordinates.length >= 3
-        ? {
+          : undefined,
+      boundary:
+        Array.isArray(payload.boundary_coordinates) && payload.boundary_coordinates.length >= 3
+          ? {
             type: 'Polygon',
             coordinates: [normalizeAirportBoundary(payload.boundary_coordinates)],
           }
-        : undefined,
-    status,
-    active: status === 'active',
-  });
+          : undefined,
+      status,
+      active: status === 'active',
+    });
 
-  const populatedItem = await Airport.findById(item._id)
-    .populate('service_location_id', 'name service_location_name country')
-    .populate('zone_id', 'name')
-    .lean();
+    const populatedItem = await Airport.findById(item._id)
+      .populate('service_location_id', 'name service_location_name country')
+      .populate('zone_id', 'name')
+      .lean();
 
-  return serializeAirport(populatedItem);
-};
+    return serializeAirport(populatedItem);
+  };
 
-export const updateAirport = async (id, payload) => {
-  const item = await Airport.findById(id);
-  if (!item) throw new ApiError(404, 'Airport not found');
+  export const updateAirport = async (id, payload) => {
+    const item = await Airport.findById(id);
+    if (!item) throw new ApiError(404, 'Airport not found');
 
-  if (payload.name !== undefined) {
-    item.name = String(payload.name || '').trim();
-  }
-  if (payload.code !== undefined) {
-    item.code = String(payload.code || '').trim().toUpperCase();
-  }
-  if (payload.service_location_id !== undefined) {
-    item.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
-  }
-  if (payload.zone_id !== undefined) {
-    item.zone_id = payload.zone_id ? toObjectId(payload.zone_id) : null;
-  }
-  if (payload.terminal !== undefined) {
-    item.terminal = String(payload.terminal || '').trim();
-  }
-  if (payload.address !== undefined) {
-    item.address = String(payload.address || '').trim();
-  }
-  if (payload.contact_number !== undefined) {
-    item.contact_number = String(payload.contact_number || '').trim();
-  }
-  if (payload.latitude !== undefined) {
-    item.latitude = toNullableNumber(payload.latitude);
-  }
-  if (payload.longitude !== undefined) {
-    item.longitude = toNullableNumber(payload.longitude);
-  }
-  if (payload.status !== undefined || payload.active !== undefined) {
-    item.status = payload.status || (normalizeBoolean(payload.active) ? 'active' : 'inactive');
-    item.active = item.status === 'active';
-  }
-  if (payload.boundary_coordinates !== undefined) {
-    item.boundary =
-      Array.isArray(payload.boundary_coordinates) && payload.boundary_coordinates.length >= 3
-        ? {
+    if (payload.name !== undefined) {
+      item.name = String(payload.name || '').trim();
+    }
+    if (payload.code !== undefined) {
+      item.code = String(payload.code || '').trim().toUpperCase();
+    }
+    if (payload.service_location_id !== undefined) {
+      item.service_location_id = payload.service_location_id ? toObjectId(payload.service_location_id) : null;
+    }
+    if (payload.zone_id !== undefined) {
+      item.zone_id = payload.zone_id ? toObjectId(payload.zone_id) : null;
+    }
+    if (payload.terminal !== undefined) {
+      item.terminal = String(payload.terminal || '').trim();
+    }
+    if (payload.address !== undefined) {
+      item.address = String(payload.address || '').trim();
+    }
+    if (payload.contact_number !== undefined) {
+      item.contact_number = String(payload.contact_number || '').trim();
+    }
+    if (payload.latitude !== undefined) {
+      item.latitude = toNullableNumber(payload.latitude);
+    }
+    if (payload.longitude !== undefined) {
+      item.longitude = toNullableNumber(payload.longitude);
+    }
+    if (payload.status !== undefined || payload.active !== undefined) {
+      item.status = payload.status || (normalizeBoolean(payload.active) ? 'active' : 'inactive');
+      item.active = item.status === 'active';
+    }
+    if (payload.boundary_coordinates !== undefined) {
+      item.boundary =
+        Array.isArray(payload.boundary_coordinates) && payload.boundary_coordinates.length >= 3
+          ? {
             type: 'Polygon',
             coordinates: [normalizeAirportBoundary(payload.boundary_coordinates)],
           }
-        : undefined;
-  }
+          : undefined;
+    }
 
-  item.location =
-    item.latitude !== null && item.longitude !== null
-      ? {
+    item.location =
+      item.latitude !== null && item.longitude !== null
+        ? {
           type: 'Point',
           coordinates: [item.longitude, item.latitude],
         }
-      : undefined;
+        : undefined;
 
-  await item.save();
+    await item.save();
 
-  const populatedItem = await Airport.findById(item._id)
-    .populate('service_location_id', 'name service_location_name country')
-    .populate('zone_id', 'name')
-    .lean();
+    const populatedItem = await Airport.findById(item._id)
+      .populate('service_location_id', 'name service_location_name country')
+      .populate('zone_id', 'name')
+      .lean();
 
-  return serializeAirport(populatedItem);
-};
-
-export const deleteAirport = async (id) => {
-  const item = await Airport.findByIdAndDelete(id);
-  if (!item) throw new ApiError(404, 'Airport not found');
-  return true;
-};
-
-
-export const listGoodsTypes = async () => {
-  const items = await GoodsType.find().sort({ createdAt: -1 }).lean();
-  const results = items.map(serializeGoodsType);
-  
-  return {
-    success: true,
-    results,
-    paginator: {
-      current_page: 1,
-      data: results,
-      first_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
-      from: 1,
-      last_page: 1,
-      last_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
-      links: [
-        { url: null, label: "&laquo; Previous", active: false },
-        { url: "http://localhost:5000/api/v1/admin/goods-types?page=1", label: "1", active: true },
-        { url: null, label: "Next &raquo;", active: false }
-      ],
-      next_page_url: null,
-      path: "http://localhost:5000/api/v1/admin/goods-types",
-      per_page: 50,
-      prev_page_url: null,
-      to: results.length,
-      total: results.length
-    }
+    return serializeAirport(populatedItem);
   };
-};
 
-export const createGoodsType = async (payload) => {
-  const name = payload.goods_type_name || payload.name || '';
-  if (!name.trim()) {
-    throw new ApiError(400, 'Goods type name is required');
-  }
-
-  const active = payload.active !== undefined ? 
-                 (typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active)) : 
-                 1;
-
-  const item = await GoodsType.create({
-    goods_type_name: name.trim(),
-    name: name.trim(),
-    goods_types_for: payload.goods_types_for || payload.goods_type_for || 'both',
-    status: payload.status || (active === 1 ? 'active' : 'inactive'),
-    active: active,
-    translation_dataset: payload.translation_dataset || '',
-  });
-
-  return serializeGoodsType(item.toObject());
-};
-
-export const updateGoodsType = async (id, payload) => {
-  const item = await GoodsType.findById(id);
-  if (!item) throw new ApiError(404, 'Goods type not found');
-
-  const name = payload.goods_type_name || payload.name;
-  if (name !== undefined) {
-    item.goods_type_name = name.trim();
-    item.name = name.trim();
-  }
-  
-  if (payload.goods_types_for !== undefined || payload.goods_type_for !== undefined) {
-    item.goods_types_for = payload.goods_types_for || payload.goods_type_for || 'both';
-  }
-
-  if (payload.active !== undefined) {
-    item.active = typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active);
-  }
-
-  if (payload.status !== undefined) {
-    item.status = payload.status;
-  } else if (payload.active !== undefined) {
-    item.status = item.active === 1 ? 'active' : 'inactive';
-  }
-
-  if (payload.translation_dataset !== undefined) {
-    item.translation_dataset = payload.translation_dataset;
-  }
-
-  await item.save();
-  return serializeGoodsType(item.toObject());
-};
-
-export const deleteGoodsType = async (id) => {
-  const deleted = await GoodsType.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Goods type not found');
-  return true;
-};
-
-export const listRentalPackageTypes = async () => {
-  const items = await RentalPackageType.find().sort({ createdAt: -1 }).lean();
-  const results = items.map(serializeRentalPackageType);
-  
-  return {
-    results,
-    paginator: {
-      current_page: 1,
-      data: results,
-      total: results.length,
-      last_page: 1,
-      per_page: 50,
-      from: 1,
-      to: results.length,
-      links: [
-        { url: null, label: "&laquo; Previous", active: false },
-        { url: "http://localhost:5000/api/v1/admin/rental-package-types?page=1", label: "1", active: true },
-        { url: null, label: "Next &raquo;", active: false }
-      ],
-      path: "http://localhost:5000/api/v1/admin/rental-package-types"
-    }
+  export const deleteAirport = async (id) => {
+    const item = await Airport.findByIdAndDelete(id);
+    if (!item) throw new ApiError(404, 'Airport not found');
+    return true;
   };
-};
 
-export const createRentalPackageType = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Rental package type name is required');
-  }
 
-  if (!payload.transport_type?.trim()) {
-    throw new ApiError(400, 'Transport type is required');
-  }
+  export const listGoodsTypes = async () => {
+    const items = await GoodsType.find().sort({ createdAt: -1 }).lean();
+    const results = items.map(serializeGoodsType);
 
-  const status = payload.status || (normalizeBoolean(payload.active ?? true) ? 'active' : 'inactive');
-
-  const item = await RentalPackageType.create({
-    transport_type: String(payload.transport_type).trim().toLowerCase(),
-    name: String(payload.name).trim(),
-    short_description: String(payload.short_description || '').trim(),
-    description: String(payload.description || '').trim(),
-    status,
-    active: status === 'active',
-  });
-
-  return serializeRentalPackageType(item.toObject());
-};
-
-export const updateRentalPackageType = async (id, payload) => {
-  const item = await RentalPackageType.findById(id);
-  if (!item) throw new ApiError(404, 'Rental package type not found');
-
-  if (payload.transport_type !== undefined) {
-    item.transport_type = String(payload.transport_type || 'taxi').trim().toLowerCase();
-  }
-  if (payload.name !== undefined) {
-    item.name = String(payload.name || '').trim();
-  }
-  if (payload.short_description !== undefined) {
-    item.short_description = String(payload.short_description || '').trim();
-  }
-  if (payload.description !== undefined) {
-    item.description = String(payload.description || '').trim();
-  }
-  if (payload.status !== undefined) {
-    item.status = payload.status || 'active';
-    item.active = item.status === 'active';
-  } else if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-    item.status = item.active ? 'active' : 'inactive';
-  }
-
-  await item.save();
-  return serializeRentalPackageType(item.toObject());
-};
-
-export const deleteRentalPackageType = async (id) => {
-  const deleted = await RentalPackageType.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Rental package type not found');
-  return true;
-};
-
-const buildDriverNeededDocumentKeys = (payload = {}, existing = null) => {
-  const imageType = String(payload.image_type || existing?.image_type || 'front_back').trim();
-  const baseKey = toDocumentKey(payload.name || existing?.name || 'document');
-
-  if (imageType === 'front_back') {
     return {
-      key: '',
-      front_key:
-        existing?.front_key ||
-        String(payload.front_key || '').trim() ||
-        `${baseKey}Front`,
-      back_key:
-        existing?.back_key ||
-        String(payload.back_key || '').trim() ||
-        `${baseKey}Back`,
+      success: true,
+      results,
+      paginator: {
+        current_page: 1,
+        data: results,
+        first_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
+        from: 1,
+        last_page: 1,
+        last_page_url: "http://localhost:5000/api/v1/admin/goods-types?page=1",
+        links: [
+          { url: null, label: "&laquo; Previous", active: false },
+          { url: "http://localhost:5000/api/v1/admin/goods-types?page=1", label: "1", active: true },
+          { url: null, label: "Next &raquo;", active: false }
+        ],
+        next_page_url: null,
+        path: "http://localhost:5000/api/v1/admin/goods-types",
+        per_page: 50,
+        prev_page_url: null,
+        to: results.length,
+        total: results.length
+      }
     };
-  }
-
-  const suffix = imageType === 'front' ? 'Front' : imageType === 'back' ? 'Back' : '';
-
-  return {
-    key:
-      existing?.key ||
-      String(payload.key || '').trim() ||
-      `${baseKey}${suffix}`,
-    front_key: '',
-    back_key: '',
   };
-};
 
-export const listDriverNeededDocuments = async ({ activeOnly = false, includeFields = false } = {}) => {
-  await cleanupLegacySeededDriverNeededDocuments();
+  export const createGoodsType = async (payload) => {
+    const name = payload.goods_type_name || payload.name || '';
+    if (!name.trim()) {
+      throw new ApiError(400, 'Goods type name is required');
+    }
 
-  const query = activeOnly ? { active: true } : {};
-  const items = await DriverNeededDocument.find(query).sort({ createdAt: -1 }).lean();
-  return items.map(includeFields ? serializeDriverNeededDocumentTemplate : serializeDriverNeededDocument);
-};
+    const active = payload.active !== undefined ?
+      (typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active)) :
+      1;
 
-export const getDriverNeededDocumentById = async (id) => {
-  await cleanupLegacySeededDriverNeededDocuments();
+    const item = await GoodsType.create({
+      goods_type_name: name.trim(),
+      name: name.trim(),
+      goods_types_for: payload.goods_types_for || payload.goods_type_for || 'both',
+      status: payload.status || (active === 1 ? 'active' : 'inactive'),
+      active: active,
+      translation_dataset: payload.translation_dataset || '',
+    });
 
-  const item = await DriverNeededDocument.findById(id).lean();
-  if (!item) {
-    throw new ApiError(404, 'Driver needed document not found');
-  }
+    return serializeGoodsType(item.toObject());
+  };
 
-  return serializeDriverNeededDocument(item);
-};
+  export const updateGoodsType = async (id, payload) => {
+    const item = await GoodsType.findById(id);
+    if (!item) throw new ApiError(404, 'Goods type not found');
 
-export const listDriverDocumentUploadFields = async ({ activeOnly = true } = {}) => {
-  const items = await listDriverNeededDocuments({ activeOnly, includeFields: true });
-  return items.flatMap((item) =>
-    item.fields.map((field) => ({
-      ...field,
-      template_id: item.id,
-      template_name: item.name,
-      image_type: item.image_type,
-      has_expiry_date: item.has_expiry_date,
-      has_identify_number: item.has_identify_number,
-    })),
-  );
-};
+    const name = payload.goods_type_name || payload.name;
+    if (name !== undefined) {
+      item.goods_type_name = name.trim();
+      item.name = name.trim();
+    }
 
-export const createDriverNeededDocument = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Document name is required');
-  }
+    if (payload.goods_types_for !== undefined || payload.goods_type_for !== undefined) {
+      item.goods_types_for = payload.goods_types_for || payload.goods_type_for || 'both';
+    }
 
-  await cleanupLegacySeededDriverNeededDocuments();
+    if (payload.active !== undefined) {
+      item.active = typeof payload.active === 'boolean' ? (payload.active ? 1 : 0) : Number(payload.active);
+    }
 
-  const name = String(payload.name).trim();
-  const slug = slugify(payload.slug || name);
-  const existing = await DriverNeededDocument.findOne({ slug });
-  if (existing) {
-    throw new ApiError(409, 'A driver document with this name already exists');
-  }
+    if (payload.status !== undefined) {
+      item.status = payload.status;
+    } else if (payload.active !== undefined) {
+      item.status = item.active === 1 ? 'active' : 'inactive';
+    }
 
-  const keys = buildDriverNeededDocumentKeys(payload);
-  const item = await DriverNeededDocument.create({
-    name,
-    slug,
-    account_type: normalizeDriverAccountType(payload.account_type),
-    image_type: String(payload.image_type || 'front_back').trim(),
-    has_expiry_date: normalizeBoolean(payload.has_expiry_date),
-    has_identify_number: normalizeBoolean(payload.has_identify_number),
-    identify_number_key: normalizeBoolean(payload.has_identify_number)
-      ? String(payload.identify_number_key || '').trim()
-      : '',
-    is_editable: normalizeBoolean(payload.is_editable),
-    is_required: normalizeBoolean(payload.is_required),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-    ...keys,
-  });
+    if (payload.translation_dataset !== undefined) {
+      item.translation_dataset = payload.translation_dataset;
+    }
 
-  return serializeDriverNeededDocument(item.toObject());
-};
+    await item.save();
+    return serializeGoodsType(item.toObject());
+  };
 
-export const updateDriverNeededDocument = async (id, payload) => {
-  const item = await DriverNeededDocument.findById(id);
-  if (!item) {
-    throw new ApiError(404, 'Driver needed document not found');
-  }
+  export const deleteGoodsType = async (id) => {
+    const deleted = await GoodsType.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Goods type not found');
+    return true;
+  };
 
-  if (payload.name !== undefined) {
-    item.name = String(payload.name || '').trim();
-  }
-  if (payload.account_type !== undefined) {
-    item.account_type = normalizeDriverAccountType(payload.account_type);
-  }
-  if (payload.image_type !== undefined) {
-    item.image_type = String(payload.image_type || 'front_back').trim();
-  }
-  if (payload.has_expiry_date !== undefined) {
-    item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
-  }
-  if (payload.has_identify_number !== undefined) {
-    item.has_identify_number = normalizeBoolean(payload.has_identify_number);
-  }
-  if (payload.identify_number_key !== undefined || payload.has_identify_number !== undefined) {
-    item.identify_number_key = item.has_identify_number
-      ? String(payload.identify_number_key ?? item.identify_number_key ?? '').trim()
-      : '';
-  }
-  if (payload.is_editable !== undefined) {
-    item.is_editable = normalizeBoolean(payload.is_editable);
-  }
-  if (payload.is_required !== undefined) {
-    item.is_required = normalizeBoolean(payload.is_required);
-  }
-  if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-  }
+  export const listRentalPackageTypes = async () => {
+    const items = await RentalPackageType.find().sort({ createdAt: -1 }).lean();
+    const results = items.map(serializeRentalPackageType);
 
-  const keys = buildDriverNeededDocumentKeys(
-    {
-      ...item.toObject(),
-      ...payload,
-      name: item.name,
-      image_type: item.image_type,
-    },
-    item.toObject(),
-  );
+    return {
+      results,
+      paginator: {
+        current_page: 1,
+        data: results,
+        total: results.length,
+        last_page: 1,
+        per_page: 50,
+        from: 1,
+        to: results.length,
+        links: [
+          { url: null, label: "&laquo; Previous", active: false },
+          { url: "http://localhost:5000/api/v1/admin/rental-package-types?page=1", label: "1", active: true },
+          { url: null, label: "Next &raquo;", active: false }
+        ],
+        path: "http://localhost:5000/api/v1/admin/rental-package-types"
+      }
+    };
+  };
 
-  item.key = keys.key;
-  item.front_key = keys.front_key;
-  item.back_key = keys.back_key;
+  export const createRentalPackageType = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Rental package type name is required');
+    }
 
-  await item.save();
-  return serializeDriverNeededDocument(item.toObject());
-};
+    if (!payload.transport_type?.trim()) {
+      throw new ApiError(400, 'Transport type is required');
+    }
 
-export const deleteDriverNeededDocument = async (id) => {
-  const deleted = await DriverNeededDocument.findByIdAndDelete(id);
-  if (!deleted) {
-    throw new ApiError(404, 'Driver needed document not found');
-  }
+    const status = payload.status || (normalizeBoolean(payload.active ?? true) ? 'active' : 'inactive');
 
-  return true;
-};
+    const item = await RentalPackageType.create({
+      transport_type: String(payload.transport_type).trim().toLowerCase(),
+      name: String(payload.name).trim(),
+      short_description: String(payload.short_description || '').trim(),
+      description: String(payload.description || '').trim(),
+      status,
+      active: status === 'active',
+    });
 
-export const listOwnerNeededDocuments = async () => {
-  const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
-  return items.map(serializeOwnerNeededDocument);
-};
+    return serializeRentalPackageType(item.toObject());
+  };
 
-export const createOwnerNeededDocument = async (payload) => {
-  if (!payload.name?.trim()) {
-    throw new ApiError(400, 'Document name is required');
-  }
+  export const updateRentalPackageType = async (id, payload) => {
+    const item = await RentalPackageType.findById(id);
+    if (!item) throw new ApiError(404, 'Rental package type not found');
 
-  const item = await OwnerNeededDocument.create({
-    name: String(payload.name).trim(),
-    image_type: String(payload.image_type || 'front_back').trim(),
-    has_expiry_date: normalizeBoolean(payload.has_expiry_date),
-    has_identify_number: normalizeBoolean(payload.has_identify_number),
-    is_editable: normalizeBoolean(payload.is_editable),
-    is_required: normalizeBoolean(payload.is_required),
-    active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-  });
+    if (payload.transport_type !== undefined) {
+      item.transport_type = String(payload.transport_type || 'taxi').trim().toLowerCase();
+    }
+    if (payload.name !== undefined) {
+      item.name = String(payload.name || '').trim();
+    }
+    if (payload.short_description !== undefined) {
+      item.short_description = String(payload.short_description || '').trim();
+    }
+    if (payload.description !== undefined) {
+      item.description = String(payload.description || '').trim();
+    }
+    if (payload.status !== undefined) {
+      item.status = payload.status || 'active';
+      item.active = item.status === 'active';
+    } else if (payload.active !== undefined) {
+      item.active = normalizeBoolean(payload.active);
+      item.status = item.active ? 'active' : 'inactive';
+    }
 
-  return serializeOwnerNeededDocument(item.toObject());
-};
+    await item.save();
+    return serializeRentalPackageType(item.toObject());
+  };
 
-export const updateOwnerNeededDocument = async (id, payload) => {
-  const item = await OwnerNeededDocument.findById(id);
-  if (!item) throw new ApiError(404, 'Owner needed document not found');
+  export const deleteRentalPackageType = async (id) => {
+    const deleted = await RentalPackageType.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Rental package type not found');
+    return true;
+  };
 
-  if (payload.name !== undefined) {
-    item.name = String(payload.name || '').trim();
-  }
-  if (payload.image_type !== undefined) {
-    item.image_type = String(payload.image_type || 'front_back').trim();
-  }
-  if (payload.has_expiry_date !== undefined) {
-    item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
-  }
-  if (payload.has_identify_number !== undefined) {
-    item.has_identify_number = normalizeBoolean(payload.has_identify_number);
-  }
-  if (payload.is_editable !== undefined) {
-    item.is_editable = normalizeBoolean(payload.is_editable);
-  }
-  if (payload.is_required !== undefined) {
-    item.is_required = normalizeBoolean(payload.is_required);
-  }
-  if (payload.active !== undefined) {
-    item.active = normalizeBoolean(payload.active);
-  }
+  const buildDriverNeededDocumentKeys = (payload = {}, existing = null) => {
+    const imageType = String(payload.image_type || existing?.image_type || 'front_back').trim();
+    const baseKey = toDocumentKey(payload.name || existing?.name || 'document');
 
-  await item.save();
-  return serializeOwnerNeededDocument(item.toObject());
-};
+    if (imageType === 'front_back') {
+      return {
+        key: '',
+        front_key:
+          existing?.front_key ||
+          String(payload.front_key || '').trim() ||
+          `${baseKey}Front`,
+        back_key:
+          existing?.back_key ||
+          String(payload.back_key || '').trim() ||
+          `${baseKey}Back`,
+      };
+    }
 
-export const deleteOwnerNeededDocument = async (id) => {
-  const deleted = await OwnerNeededDocument.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Owner needed document not found');
-  return true;
-};
+    const suffix = imageType === 'front' ? 'Front' : imageType === 'back' ? 'Back' : '';
 
-export const listReferralTranslations = async () => {
-  const [languages, translations] = await Promise.all([
-    AppLanguage.find().sort({ default_status: -1, code: 1 }).lean(),
-    ReferralTranslation.find().sort({ language_code: 1 }).lean(),
-  ]);
+    return {
+      key:
+        existing?.key ||
+        String(payload.key || '').trim() ||
+        `${baseKey}${suffix}`,
+      front_key: '',
+      back_key: '',
+    };
+  };
 
-  const translationMap = new Map(
-    translations.map((item) => [String(item.language_code || '').toLowerCase(), item]),
-  );
+  export const listDriverNeededDocuments = async ({ activeOnly = false, includeFields = false } = {}) => {
+    await cleanupLegacySeededDriverNeededDocuments();
 
-  const languageRows = languages.map((language) =>
-    serializeReferralTranslation({
-      language,
-      translation: translationMap.get(String(language.code || '').toLowerCase()) || null,
-    }),
-  );
+    const query = activeOnly ? { active: true } : {};
+    const items = await DriverNeededDocument.find(query).sort({ createdAt: -1 }).lean();
+    return items.map(includeFields ? serializeDriverNeededDocumentTemplate : serializeDriverNeededDocument);
+  };
 
-  const existingCodes = new Set(languageRows.map((item) => item.language_code));
+  export const getDriverNeededDocumentById = async (id) => {
+    await cleanupLegacySeededDriverNeededDocuments();
 
-  const orphanRows = translations
-    .filter((item) => !existingCodes.has(String(item.language_code || '').toLowerCase()))
-    .map((item) =>
+    const item = await DriverNeededDocument.findById(id).lean();
+    if (!item) {
+      throw new ApiError(404, 'Driver needed document not found');
+    }
+
+    return serializeDriverNeededDocument(item);
+  };
+
+  export const listDriverDocumentUploadFields = async ({ activeOnly = true } = {}) => {
+    const items = await listDriverNeededDocuments({ activeOnly, includeFields: true });
+    return items.flatMap((item) =>
+      item.fields.map((field) => ({
+        ...field,
+        template_id: item.id,
+        template_name: item.name,
+        image_type: item.image_type,
+        has_expiry_date: item.has_expiry_date,
+        has_identify_number: item.has_identify_number,
+      })),
+    );
+  };
+
+  export const createDriverNeededDocument = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Document name is required');
+    }
+
+    await cleanupLegacySeededDriverNeededDocuments();
+
+    const name = String(payload.name).trim();
+    const slug = slugify(payload.slug || name);
+    const existing = await DriverNeededDocument.findOne({ slug });
+    if (existing) {
+      throw new ApiError(409, 'A driver document with this name already exists');
+    }
+
+    const keys = buildDriverNeededDocumentKeys(payload);
+    const item = await DriverNeededDocument.create({
+      name,
+      slug,
+      account_type: normalizeDriverAccountType(payload.account_type),
+      image_type: String(payload.image_type || 'front_back').trim(),
+      has_expiry_date: normalizeBoolean(payload.has_expiry_date),
+      has_identify_number: normalizeBoolean(payload.has_identify_number),
+      identify_number_key: normalizeBoolean(payload.has_identify_number)
+        ? String(payload.identify_number_key || '').trim()
+        : '',
+      is_editable: normalizeBoolean(payload.is_editable),
+      is_required: normalizeBoolean(payload.is_required),
+      active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+      ...keys,
+    });
+
+    return serializeDriverNeededDocument(item.toObject());
+  };
+
+  export const updateDriverNeededDocument = async (id, payload) => {
+    const item = await DriverNeededDocument.findById(id);
+    if (!item) {
+      throw new ApiError(404, 'Driver needed document not found');
+    }
+
+    if (payload.name !== undefined) {
+      item.name = String(payload.name || '').trim();
+    }
+    if (payload.account_type !== undefined) {
+      item.account_type = normalizeDriverAccountType(payload.account_type);
+    }
+    if (payload.image_type !== undefined) {
+      item.image_type = String(payload.image_type || 'front_back').trim();
+    }
+    if (payload.has_expiry_date !== undefined) {
+      item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
+    }
+    if (payload.has_identify_number !== undefined) {
+      item.has_identify_number = normalizeBoolean(payload.has_identify_number);
+    }
+    if (payload.identify_number_key !== undefined || payload.has_identify_number !== undefined) {
+      item.identify_number_key = item.has_identify_number
+        ? String(payload.identify_number_key ?? item.identify_number_key ?? '').trim()
+        : '';
+    }
+    if (payload.is_editable !== undefined) {
+      item.is_editable = normalizeBoolean(payload.is_editable);
+    }
+    if (payload.is_required !== undefined) {
+      item.is_required = normalizeBoolean(payload.is_required);
+    }
+    if (payload.active !== undefined) {
+      item.active = normalizeBoolean(payload.active);
+    }
+
+    const keys = buildDriverNeededDocumentKeys(
+      {
+        ...item.toObject(),
+        ...payload,
+        name: item.name,
+        image_type: item.image_type,
+      },
+      item.toObject(),
+    );
+
+    item.key = keys.key;
+    item.front_key = keys.front_key;
+    item.back_key = keys.back_key;
+
+    await item.save();
+    return serializeDriverNeededDocument(item.toObject());
+  };
+
+  export const deleteDriverNeededDocument = async (id) => {
+    const deleted = await DriverNeededDocument.findByIdAndDelete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Driver needed document not found');
+    }
+
+    return true;
+  };
+
+  export const listOwnerNeededDocuments = async () => {
+    const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
+    return items.map(serializeOwnerNeededDocument);
+  };
+
+  export const createOwnerNeededDocument = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Document name is required');
+    }
+
+    const item = await OwnerNeededDocument.create({
+      name: String(payload.name).trim(),
+      image_type: String(payload.image_type || 'front_back').trim(),
+      has_expiry_date: normalizeBoolean(payload.has_expiry_date),
+      has_identify_number: normalizeBoolean(payload.has_identify_number),
+      is_editable: normalizeBoolean(payload.is_editable),
+      is_required: normalizeBoolean(payload.is_required),
+      active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+    });
+
+    return serializeOwnerNeededDocument(item.toObject());
+  };
+
+  export const updateOwnerNeededDocument = async (id, payload) => {
+    const item = await OwnerNeededDocument.findById(id);
+    if (!item) throw new ApiError(404, 'Owner needed document not found');
+
+    if (payload.name !== undefined) {
+      item.name = String(payload.name || '').trim();
+    }
+    if (payload.image_type !== undefined) {
+      item.image_type = String(payload.image_type || 'front_back').trim();
+    }
+    if (payload.has_expiry_date !== undefined) {
+      item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
+    }
+    if (payload.has_identify_number !== undefined) {
+      item.has_identify_number = normalizeBoolean(payload.has_identify_number);
+    }
+    if (payload.is_editable !== undefined) {
+      item.is_editable = normalizeBoolean(payload.is_editable);
+    }
+    if (payload.is_required !== undefined) {
+      item.is_required = normalizeBoolean(payload.is_required);
+    }
+    if (payload.active !== undefined) {
+      item.active = normalizeBoolean(payload.active);
+    }
+
+    await item.save();
+    return serializeOwnerNeededDocument(item.toObject());
+  };
+
+  export const deleteOwnerNeededDocument = async (id) => {
+    const deleted = await OwnerNeededDocument.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Owner needed document not found');
+    return true;
+  };
+
+  export const listReferralTranslations = async () => {
+    const [languages, translations] = await Promise.all([
+      AppLanguage.find().sort({ default_status: -1, code: 1 }).lean(),
+      ReferralTranslation.find().sort({ language_code: 1 }).lean(),
+    ]);
+
+    const translationMap = new Map(
+      translations.map((item) => [String(item.language_code || '').toLowerCase(), item]),
+    );
+
+    const languageRows = languages.map((language) =>
       serializeReferralTranslation({
-        language: null,
-        translation: item,
+        language,
+        translation: translationMap.get(String(language.code || '').toLowerCase()) || null,
       }),
     );
 
-  return [...languageRows, ...orphanRows];
-};
+    const existingCodes = new Set(languageRows.map((item) => item.language_code));
 
-export const updateReferralTranslation = async (languageCode, payload = {}) => {
-  const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
+    const orphanRows = translations
+      .filter((item) => !existingCodes.has(String(item.language_code || '').toLowerCase()))
+      .map((item) =>
+        serializeReferralTranslation({
+          language: null,
+          translation: item,
+        }),
+      );
 
-  if (!normalizedLanguageCode) {
-    throw new ApiError(400, 'languageCode is required');
-  }
-
-  const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
-
-  const item = await ReferralTranslation.findOneAndUpdate(
-    { language_code: normalizedLanguageCode },
-    {
-      $set: {
-        language_code: normalizedLanguageCode,
-        language_name: language?.name || String(payload.language_name || ''),
-        user_referral: normalizeReferralTranslationSection(payload.user_referral),
-        driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
-      },
-    },
-    {
-      new: true,
-      upsert: true,
-      setDefaultsOnInsert: true,
-    },
-  ).lean();
-
-  return serializeReferralTranslation({
-    language,
-    translation: item,
-  });
-};
-
-export const getReferralTranslationContent = async (languageCode = '') => {
-  const { languages, preferredLanguage, normalizedLanguageCode } =
-    await resolveReferralTranslationLanguage(languageCode);
-
-  const codesToTry = [
-    normalizedLanguageCode,
-    preferredLanguage?.code,
-    languages.find((item) => Number(item.default_status) === 1)?.code,
-    'en',
-  ]
-    .map((item) => String(item || '').trim().toLowerCase())
-    .filter(Boolean);
-
-  let translation = null;
-  let resolvedLanguage = preferredLanguage;
-
-  if (codesToTry.length > 0) {
-    translation = await ReferralTranslation.findOne({
-      language_code: { $in: codesToTry },
-    })
-      .sort({ updatedAt: -1 })
-      .lean();
-
-    if (translation) {
-      resolvedLanguage =
-        languages.find(
-          (item) =>
-            String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
-        ) || resolvedLanguage;
-    }
-  }
-
-  return {
-    language_code: String(
-      resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
-    )
-      .trim()
-      .toLowerCase(),
-    language_name: resolvedLanguage?.name || translation?.language_name || '',
-    user_referral: {
-      ...REFERRAL_TRANSLATION_DEFAULTS,
-      ...normalizeReferralTranslationSection(translation?.user_referral),
-    },
-    driver_referral: {
-      ...REFERRAL_TRANSLATION_DEFAULTS,
-      ...normalizeReferralTranslationSection(translation?.driver_referral),
-    },
-    available_languages: languages.map((item) => ({
-      code: String(item.code || '').toLowerCase(),
-      name: item.name || '',
-      active: Number(item.active ?? 1) === 1,
-      default_status: Number(item.default_status ?? 0) === 1,
-    })),
+    return [...languageRows, ...orphanRows];
   };
-};
 
-export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
+  export const updateReferralTranslation = async (languageCode, payload = {}) => {
+    const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
 
-export const updateLanguageStatus = async (id, payload) => {
-  const language = await AppLanguage.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
-  if (!language) throw new ApiError(404, 'Language not found');
-  return language.toObject();
-};
+    if (!normalizedLanguageCode) {
+      throw new ApiError(400, 'languageCode is required');
+    }
 
-export const deleteLanguage = async (id) => {
-  const deleted = await AppLanguage.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Language not found');
-  return true;
-};
+    const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
 
-export const listPreferences = async () => UserPreference.find().sort({ createdAt: -1 }).lean();
+    const item = await ReferralTranslation.findOneAndUpdate(
+      { language_code: normalizedLanguageCode },
+      {
+        $set: {
+          language_code: normalizedLanguageCode,
+          language_name: language?.name || String(payload.language_name || ''),
+          user_referral: normalizeReferralTranslationSection(payload.user_referral),
+          driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    ).lean();
 
-export const createPreference = async (payload) => {
-  const firstLetter = (payload.name || 'P').trim().charAt(0).toUpperCase() || 'P';
-  const preference = await UserPreference.create({
-    name: payload.name,
-    icon: payload.icon || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23E0E7FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">${firstLetter}</text></svg>`,
-    active: 1,
-  });
-  return preference.toObject();
-};
+    return serializeReferralTranslation({
+      language,
+      translation: item,
+    });
+  };
 
-export const updatePreferenceStatus = async (id, payload) => {
-  const preference = await UserPreference.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
-  if (!preference) throw new ApiError(404, 'Preference not found');
-  return preference.toObject();
-};
+  export const getReferralTranslationContent = async (languageCode = '') => {
+    const { languages, preferredLanguage, normalizedLanguageCode } =
+      await resolveReferralTranslationLanguage(languageCode);
 
-export const deletePreference = async (id) => {
-  const deleted = await UserPreference.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Preference not found');
-  return true;
-};
+    const codesToTry = [
+      normalizedLanguageCode,
+      preferredLanguage?.code,
+      languages.find((item) => Number(item.default_status) === 1)?.code,
+      'en',
+    ]
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean);
 
-export const listRoles = async () => AdminRole.find().sort({ createdAt: -1 }).lean();
+    let translation = null;
+    let resolvedLanguage = preferredLanguage;
 
-export const createRole = async (payload) => {
-  const role = await AdminRole.create({
-    name: payload.name,
-    description: payload.description || '',
-    slug: payload.name?.trim().toLowerCase().replace(/\s+/g, '-') || `role-${Date.now()}`,
-  });
-  return role.toObject();
-};
+    if (codesToTry.length > 0) {
+      translation = await ReferralTranslation.findOne({
+        language_code: { $in: codesToTry },
+      })
+        .sort({ updatedAt: -1 })
+        .lean();
 
-export const deleteRole = async (id) => {
-  const deleted = await AdminRole.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'Role not found');
-  return true;
-};
+      if (translation) {
+        resolvedLanguage =
+          languages.find(
+            (item) =>
+              String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
+          ) || resolvedLanguage;
+      }
+    }
+
+    return {
+      language_code: String(
+        resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
+      )
+        .trim()
+        .toLowerCase(),
+      language_name: resolvedLanguage?.name || translation?.language_name || '',
+      user_referral: {
+        ...REFERRAL_TRANSLATION_DEFAULTS,
+        ...normalizeReferralTranslationSection(translation?.user_referral),
+      },
+      driver_referral: {
+        ...REFERRAL_TRANSLATION_DEFAULTS,
+        ...normalizeReferralTranslationSection(translation?.driver_referral),
+      },
+      available_languages: languages.map((item) => ({
+        code: String(item.code || '').toLowerCase(),
+        name: item.name || '',
+        active: Number(item.active ?? 1) === 1,
+        default_status: Number(item.default_status ?? 0) === 1,
+      })),
+    };
+  };
+
+  export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
+
+  export const updateLanguageStatus = async (id, payload) => {
+    const language = await AppLanguage.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
+    if (!language) throw new ApiError(404, 'Language not found');
+    return language.toObject();
+  };
+
+  export const deleteLanguage = async (id) => {
+    const deleted = await AppLanguage.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Language not found');
+    return true;
+  };
+
+  export const listPreferences = async () => UserPreference.find().sort({ createdAt: -1 }).lean();
+
+  export const createPreference = async (payload) => {
+    const firstLetter = (payload.name || 'P').trim().charAt(0).toUpperCase() || 'P';
+    const preference = await UserPreference.create({
+      name: payload.name,
+      icon: payload.icon || `data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64"><rect rx="16" width="64" height="64" fill="%23E0E7FF"/><text x="50%" y="54%" dominant-baseline="middle" text-anchor="middle" font-size="28">${firstLetter}</text></svg>`,
+      active: 1,
+    });
+    return preference.toObject();
+  };
+
+  export const updatePreferenceStatus = async (id, payload) => {
+    const preference = await UserPreference.findByIdAndUpdate(id, { active: Number(payload.active) }, { new: true });
+    if (!preference) throw new ApiError(404, 'Preference not found');
+    return preference.toObject();
+  };
+
+  export const deletePreference = async (id) => {
+    const deleted = await UserPreference.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Preference not found');
+    return true;
+  };
+
+  export const listRoles = async () => AdminRole.find().sort({ createdAt: -1 }).lean();
+
+  export const createRole = async (payload) => {
+    const role = await AdminRole.create({
+      name: payload.name,
+      description: payload.description || '',
+      slug: payload.name?.trim().toLowerCase().replace(/\s+/g, '-') || `role-${Date.now()}`,
+    });
+    return role.toObject();
+  };
+
+  export const deleteRole = async (id) => {
+    const deleted = await AdminRole.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'Role not found');
+    return true;
+  };
 
 
 
-export const listNotificationChannels = async () => NotificationChannel.find().sort({ createdAt: 1 }).lean();
+  export const listNotificationChannels = async () => NotificationChannel.find().sort({ createdAt: 1 }).lean();
 
-export const toggleChannelPush = async (id, status) => {
-  const channel = await NotificationChannel.findByIdAndUpdate(id, { push_notification: !!status }, { new: true });
-  if (!channel) throw new ApiError(404, 'Channel not found');
-  return channel.toObject();
-};
+  export const toggleChannelPush = async (id, status) => {
+    const channel = await NotificationChannel.findByIdAndUpdate(id, { push_notification: !!status }, { new: true });
+    if (!channel) throw new ApiError(404, 'Channel not found');
+    return channel.toObject();
+  };
 
-export const toggleChannelMail = async (id, status) => {
-  const channel = await NotificationChannel.findByIdAndUpdate(id, { mail: !!status }, { new: true });
-  if (!channel) throw new ApiError(404, 'Channel not found');
-  return channel.toObject();
-};
+  export const toggleChannelMail = async (id, status) => {
+    const channel = await NotificationChannel.findByIdAndUpdate(id, { mail: !!status }, { new: true });
+    if (!channel) throw new ApiError(404, 'Channel not found');
+    return channel.toObject();
+  };
 
-export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
+  export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
 
-export const listPaymentMethods = async () =>
-  PaymentMethod.find().sort({ createdAt: -1 }).lean();
+  export const listPaymentMethods = async () =>
+    PaymentMethod.find().sort({ createdAt: -1 }).lean();
 
-export const createPaymentMethod = async (payload = {}) => {
-  const name = String(payload.method_name ?? payload.name ?? '').trim();
-  if (!name) {
-    throw new ApiError(400, 'Method name is required');
-  }
+  export const createPaymentMethod = async (payload = {}) => {
+    const name = String(payload.method_name ?? payload.name ?? '').trim();
+    if (!name) {
+      throw new ApiError(400, 'Method name is required');
+    }
 
-  const fields = Array.isArray(payload.fields)
-    ? payload.fields
+    const fields = Array.isArray(payload.fields)
+      ? payload.fields
         .map((field) => ({
           type: String(field?.type || 'text'),
           name: String(field?.name || '').trim(),
@@ -3356,31 +4321,31 @@ export const createPaymentMethod = async (payload = {}) => {
           is_required: Boolean(field?.is_required),
         }))
         .filter((field) => field.name)
-    : [];
+      : [];
 
-  const method = await PaymentMethod.create({
-    name,
-    fields,
-    active: payload.active !== undefined ? Boolean(payload.active) : true,
-  });
+    const method = await PaymentMethod.create({
+      name,
+      fields,
+      active: payload.active !== undefined ? Boolean(payload.active) : true,
+    });
 
-  return method.toObject();
-};
+    return method.toObject();
+  };
 
-export const updatePaymentMethod = async (id, payload = {}) => {
-  const update = {};
+  export const updatePaymentMethod = async (id, payload = {}) => {
+    const update = {};
 
-  if (payload.method_name !== undefined || payload.name !== undefined) {
-    const name = String(payload.method_name ?? payload.name ?? '').trim();
-    if (!name) {
-      throw new ApiError(400, 'Method name is required');
+    if (payload.method_name !== undefined || payload.name !== undefined) {
+      const name = String(payload.method_name ?? payload.name ?? '').trim();
+      if (!name) {
+        throw new ApiError(400, 'Method name is required');
+      }
+      update.name = name;
     }
-    update.name = name;
-  }
 
-  if (payload.fields !== undefined) {
-    const fields = Array.isArray(payload.fields)
-      ? payload.fields
+    if (payload.fields !== undefined) {
+      const fields = Array.isArray(payload.fields)
+        ? payload.fields
           .map((field) => ({
             type: String(field?.type || 'text'),
             name: String(field?.name || '').trim(),
@@ -3388,360 +4353,360 @@ export const updatePaymentMethod = async (id, payload = {}) => {
             is_required: Boolean(field?.is_required),
           }))
           .filter((field) => field.name)
-      : [];
-    update.fields = fields;
-  }
+        : [];
+      update.fields = fields;
+    }
 
-  if (payload.active !== undefined) {
-    update.active = Boolean(payload.active);
-  }
+    if (payload.active !== undefined) {
+      update.active = Boolean(payload.active);
+    }
 
-  const method = await PaymentMethod.findByIdAndUpdate(id, update, {
-    new: true,
-    runValidators: true,
-  });
-  if (!method) {
-    throw new ApiError(404, 'Payment method not found');
-  }
-  return method.toObject();
-};
-
-export const deletePaymentMethod = async (id) => {
-  const deleted = await PaymentMethod.findByIdAndDelete(id);
-  if (!deleted) {
-    throw new ApiError(404, 'Payment method not found');
-  }
-  return true;
-};
-
-export const getPaymentSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.payment || {} };
-};
-
-export const updatePaymentSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.payment = deepMerge(settings.payment || {}, payload);
-  settings.markModified('payment');
-  await settings.save();
-  return { settings: settings.payment };
-};
-
-export const getSMSSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.sms || {} };
-};
-
-export const updateSMSSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.sms = deepMerge(settings.sms || {}, payload);
-  settings.markModified('sms');
-  await settings.save();
-  return { settings: settings.sms };
-};
-
-export const getFirebaseSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.firebase || {} };
-};
-
-export const updateFirebaseSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.firebase = {
-    ...settings.firebase,
-    ...payload,
-    firebase_json_name: payload.firebase_json_name || settings.firebase.firebase_json_name,
-  };
-  settings.markModified('firebase');
-  await settings.save();
-  return { settings: settings.firebase };
-};
-
-export const getMapSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.map_apis || {} };
-};
-
-export const updateMapSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.map_apis = { ...settings.map_apis, ...payload };
-  settings.markModified('map_apis');
-  await settings.save();
-  return { settings: settings.map_apis };
-};
-
-export const getMailSettings = async () => {
-  const settings = await ensureThirdPartySettings();
-  return { settings: settings.mail || {} };
-};
-
-export const updateMailSettings = async (payload) => {
-  const settings = await ensureThirdPartySettings();
-  settings.mail = { ...settings.mail, ...payload };
-  settings.markModified('mail');
-  await settings.save();
-  return { settings: settings.mail };
-};
-
-
-
-export const buildUserReport = async () => {
-  const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
-  return csvFromRows(
-    ['name', 'email', 'mobile', 'active'],
-    users.map((item) => ({
-      name: item.name || '',
-      email: item.email || '',
-      mobile: item.phone || item.mobile || '',
-      active: item.active !== false && !item.deletedAt,
-    })),
-  );
-};
-
-export const buildDriverReport = async () => {
-  const items = await Driver.find().lean();
-  return csvFromRows(
-    ['name', 'mobile', 'city', 'status'],
-    items.map((item) => ({ name: item.name, mobile: item.phone, city: item.city, status: item.status })),
-  );
-};
-
-export const buildDriverDutyReport = async () => {
-  const items = await Driver.find().lean();
-  return csvFromRows(
-    ['driver', 'city', 'status', 'rating'],
-    items.map((item) => ({ driver: item.name, city: item.city, status: item.status, rating: item.rating })),
-  );
-};
-
-export const buildOwnerReport = async () => {
-  const owners = await listOwners();
-  return csvFromRows(
-    ['company_name', 'name', 'email', 'transport_type', 'active'],
-    owners.map((item) => ({
-      company_name: item.company_name,
-      name: item.name,
-      email: item.email,
-      transport_type: item.transport_type,
-      active: item.active,
-    })),
-  );
-};
-
-export const buildFinanceReport = async () => {
-  const items = await WithdrawalRequest.find().populate('driver_id').lean();
-  return csvFromRows(
-    ['transactionId', 'driver', 'amount', 'payment_method', 'status'],
-    items.map((item) => ({
-      transactionId: item.transactionId,
-      driver: item.driver_id?.name,
-      amount: item.amount,
-      payment_method: item.payment_method,
-      status: item.status,
-    })),
-  );
-};
-
-export const buildFleetFinanceReport = async () => {
-  const owners = await listOwners();
-  return csvFromRows(
-    ['company_name', 'owner', 'transport_type', 'active'],
-    owners.map((item) => ({
-      company_name: item.company_name,
-      owner: item.name,
-      transport_type: item.transport_type,
-      active: item.active,
-    })),
-  );
-};
-
-export const ensureBusinessSettings = async () => {
-  let settings = await AdminBusinessSetting.findOne({ scope: 'default' });
-  if (!settings) {
-    settings = await AdminBusinessSetting.create(createDefaultBusinessSettings());
-  }
-  return settings;
-};
-
-/**
- * Ensures a default third-party settings document exists.
- */
-export const ensureThirdPartySettings = async () => {
-  let settings = await AdminThirdPartySetting.findOne({ scope: 'default' });
-  if (!settings) {
-    settings = await AdminThirdPartySetting.create(createDefaultThirdPartySettings());
-  }
-  return settings;
-};
-
-import { AdminAppSetting } from '../models/AdminAppSetting.js';
-import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
-
-/**
- * Ensures a default administrative application settings document exists.
- */
-export const ensureAppSettings = async () => {
-  let settings = await AdminAppSetting.findOne({ scope: 'default' });
-  if (!settings) {
-    settings = await AdminAppSetting.create(createDefaultAppSettings());
-  }
-  return settings;
-};
-
-export const ensureAppModules = async () => {
-  // No-op: AppModule is now nested inside AdminAppSetting
-  return;
-};
-
-export const getGeneralSettings = async (category) => {
-  const bizSettings = await ensureBusinessSettings();
-  const appSettings = await ensureAppSettings();
-
-  const businessMapper = {
-    customize: 'customization',
-    'transport-ride': 'transport_ride',
-    'bid-ride': 'bid_ride',
-    general: 'general',
+    const method = await PaymentMethod.findByIdAndUpdate(id, update, {
+      new: true,
+      runValidators: true,
+    });
+    if (!method) {
+      throw new ApiError(404, 'Payment method not found');
+    }
+    return method.toObject();
   };
 
-  const appMapper = {
-    wallet: 'wallet_setting',
-    tip: 'tip_setting',
+  export const deletePaymentMethod = async (id) => {
+    const deleted = await PaymentMethod.findByIdAndDelete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Payment method not found');
+    }
+    return true;
   };
 
-  if (appMapper[category]) {
-    return { settings: appSettings[appMapper[category]] || {} };
-  }
-
-  const key = businessMapper[category] || category;
-  return { settings: bizSettings[key] || {} };
-};
-
-export const updateGeneralSettings = async (category, payload) => {
-  const bizSettings = await ensureBusinessSettings();
-  const appSettings = await ensureAppSettings();
-
-  const businessMapper = {
-    customize: 'customization',
-    'transport-ride': 'transport_ride',
-    'bid-ride': 'bid_ride',
-    general: 'general',
+  export const getPaymentSettings = async () => {
+    const settings = await ensureThirdPartySettings();
+    return { settings: settings.payment || {} };
   };
 
-  const appMapper = {
-    wallet: 'wallet_setting',
-    tip: 'tip_setting',
+  export const updatePaymentSettings = async (payload) => {
+    const settings = await ensureThirdPartySettings();
+    settings.payment = deepMerge(settings.payment || {}, payload);
+    settings.markModified('payment');
+    await settings.save();
+    return { settings: settings.payment };
   };
 
-  const newValues = payload.settings || payload;
-
-  if (appMapper[category]) {
-    const key = appMapper[category];
-    appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
-    appSettings.markModified(key);
-    await appSettings.save();
-    return { settings: appSettings[key] };
-  }
-
-  const bizKey = businessMapper[category] || category;
-  if (!bizSettings.schema.path(bizKey)) {
-    return { settings: {} };
-  }
-
-  bizSettings[bizKey] = { ...(bizSettings[bizKey] || {}), ...newValues };
-  bizSettings.markModified(bizKey);
-  await bizSettings.save();
-  return { settings: bizSettings[bizKey] };
-};
-
-export const listAppModules = async (query = {}) => {
-  const safePage = Number(query.page) || 1;
-  const safeLimit = Number(query.limit) || 10;
-  const start = (safePage - 1) * safeLimit;
-
-  const [modules, total] = await Promise.all([
-    TaxiAppModule.find()
-      .sort({ order_by: 1, createdAt: -1 })
-      .skip(start)
-      .limit(safeLimit)
-      .lean(),
-    TaxiAppModule.countDocuments(),
-  ]);
-
-  const results = modules.map(m => ({
-    _id: m._id,
-    id: String(m._id),
-    name: m.name,
-    transport_type: m.transport_type,
-    service_type: m.service_type,
-    icon_types_for: m.icon_types_for,
-    order_by: m.order_by,
-    short_description: m.short_description,
-    description: m.description,
-    mobile_menu_icon: m.mobile_menu_icon,
-    mobile_menu_cover_image: m.mobile_menu_cover_image,
-    active: m.active,
-    created_at: m.createdAt,
-    updated_at: m.updatedAt
-  }));
-
-  return {
-    results,
-    paginator: {
-      total,
-      current_page: safePage,
-      per_page: safeLimit,
-      last_page: Math.max(1, Math.ceil(total / safeLimit)),
-    },
+  export const getSMSSettings = async () => {
+    const settings = await ensureThirdPartySettings();
+    return { settings: settings.sms || {} };
   };
-};
 
-export const createAppModule = async (payload) => {
-  const item = await TaxiAppModule.create({
-    name: String(payload.name || '').trim(),
-    transport_type: payload.transport_type || 'taxi',
-    service_type: payload.service_type || 'normal',
-    icon_types_for: payload.icon_types_for || null,
-    order_by: Number(payload.order_by || 1),
-    short_description: String(payload.short_description || '').trim(),
-    description: String(payload.description || '').trim(),
-    mobile_menu_icon: String(payload.mobile_menu_icon || '').trim(),
-    mobile_menu_cover_image: payload.mobile_menu_cover_image || null,
-    active: payload.active !== undefined ? (normalizeBoolean(payload.active) ? 1 : 0) : 1,
-    company_key: payload.company_key || null
-  });
-  return item.toObject();
-};
+  export const updateSMSSettings = async (payload) => {
+    const settings = await ensureThirdPartySettings();
+    settings.sms = deepMerge(settings.sms || {}, payload);
+    settings.markModified('sms');
+    await settings.save();
+    return { settings: settings.sms };
+  };
 
-export const updateAppModule = async (id, payload) => {
-  const update = {};
-  if (payload.name !== undefined) update.name = String(payload.name).trim();
-  if (payload.transport_type !== undefined) update.transport_type = payload.transport_type;
-  if (payload.service_type !== undefined) update.service_type = payload.service_type;
-  if (payload.icon_types_for !== undefined) update.icon_types_for = payload.icon_types_for;
-  if (payload.order_by !== undefined) update.order_by = Number(payload.order_by);
-  if (payload.short_description !== undefined) update.short_description = String(payload.short_description);
-  if (payload.description !== undefined) update.description = String(payload.description);
-  if (payload.mobile_menu_icon !== undefined) update.mobile_menu_icon = String(payload.mobile_menu_icon);
-  if (payload.mobile_menu_cover_image !== undefined) update.mobile_menu_cover_image = payload.mobile_menu_cover_image;
-  if (payload.active !== undefined) update.active = normalizeBoolean(payload.active) ? 1 : 0;
-  if (payload.company_key !== undefined) update.company_key = payload.company_key;
+  export const getFirebaseSettings = async () => {
+    const settings = await ensureThirdPartySettings();
+    return { settings: settings.firebase || {} };
+  };
 
-  const item = await TaxiAppModule.findByIdAndUpdate(id, { $set: update }, { new: true });
-  if (!item) throw new ApiError(404, 'App module not found in database registry');
-  return item.toObject();
-};
+  export const updateFirebaseSettings = async (payload) => {
+    const settings = await ensureThirdPartySettings();
+    settings.firebase = {
+      ...settings.firebase,
+      ...payload,
+      firebase_json_name: payload.firebase_json_name || settings.firebase.firebase_json_name,
+    };
+    settings.markModified('firebase');
+    await settings.save();
+    return { settings: settings.firebase };
+  };
 
-export const deleteAppModule = async (id) => {
-  const deleted = await TaxiAppModule.findByIdAndDelete(id);
-  if (!deleted) throw new ApiError(404, 'App module registration not found');
-  return true;
-};
+  export const getMapSettings = async () => {
+    const settings = await ensureThirdPartySettings();
+    return { settings: settings.map_apis || {} };
+  };
 
-export const listOnboardingScreens = async (audience) => {
-  const query = {};
-  if (audience) {
-    query.$or = [{ audience: audience }, { screen: audience }];
-  }
-  return OnboardingScreen.find(query).sort({ order: 1 }).lean();
-};
+  export const updateMapSettings = async (payload) => {
+    const settings = await ensureThirdPartySettings();
+    settings.map_apis = { ...settings.map_apis, ...payload };
+    settings.markModified('map_apis');
+    await settings.save();
+    return { settings: settings.map_apis };
+  };
+
+  export const getMailSettings = async () => {
+    const settings = await ensureThirdPartySettings();
+    return { settings: settings.mail || {} };
+  };
+
+  export const updateMailSettings = async (payload) => {
+    const settings = await ensureThirdPartySettings();
+    settings.mail = { ...settings.mail, ...payload };
+    settings.markModified('mail');
+    await settings.save();
+    return { settings: settings.mail };
+  };
+
+
+
+  export const buildUserReport = async () => {
+    const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
+    return csvFromRows(
+      ['name', 'email', 'mobile', 'active'],
+      users.map((item) => ({
+        name: item.name || '',
+        email: item.email || '',
+        mobile: item.phone || item.mobile || '',
+        active: item.active !== false && !item.deletedAt,
+      })),
+    );
+  };
+
+  export const buildDriverReport = async () => {
+    const items = await Driver.find().lean();
+    return csvFromRows(
+      ['name', 'mobile', 'city', 'status'],
+      items.map((item) => ({ name: item.name, mobile: item.phone, city: item.city, status: item.status })),
+    );
+  };
+
+  export const buildDriverDutyReport = async () => {
+    const items = await Driver.find().lean();
+    return csvFromRows(
+      ['driver', 'city', 'status', 'rating'],
+      items.map((item) => ({ driver: item.name, city: item.city, status: item.status, rating: item.rating })),
+    );
+  };
+
+  export const buildOwnerReport = async () => {
+    const owners = await listOwners();
+    return csvFromRows(
+      ['company_name', 'name', 'email', 'transport_type', 'active'],
+      owners.map((item) => ({
+        company_name: item.company_name,
+        name: item.name,
+        email: item.email,
+        transport_type: item.transport_type,
+        active: item.active,
+      })),
+    );
+  };
+
+  export const buildFinanceReport = async () => {
+    const items = await WithdrawalRequest.find().populate('driver_id').lean();
+    return csvFromRows(
+      ['transactionId', 'driver', 'amount', 'payment_method', 'status'],
+      items.map((item) => ({
+        transactionId: item.transactionId,
+        driver: item.driver_id?.name,
+        amount: item.amount,
+        payment_method: item.payment_method,
+        status: item.status,
+      })),
+    );
+  };
+
+  export const buildFleetFinanceReport = async () => {
+    const owners = await listOwners();
+    return csvFromRows(
+      ['company_name', 'owner', 'transport_type', 'active'],
+      owners.map((item) => ({
+        company_name: item.company_name,
+        owner: item.name,
+        transport_type: item.transport_type,
+        active: item.active,
+      })),
+    );
+  };
+
+  export const ensureBusinessSettings = async () => {
+    let settings = await AdminBusinessSetting.findOne({ scope: 'default' });
+    if (!settings) {
+      settings = await AdminBusinessSetting.create(createDefaultBusinessSettings());
+    }
+    return settings;
+  };
+
+  /**
+   * Ensures a default third-party settings document exists.
+   */
+  export const ensureThirdPartySettings = async () => {
+    let settings = await AdminThirdPartySetting.findOne({ scope: 'default' });
+    if (!settings) {
+      settings = await AdminThirdPartySetting.create(createDefaultThirdPartySettings());
+    }
+    return settings;
+  };
+
+  import { AdminAppSetting } from '../models/AdminAppSetting.js';
+  import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
+
+  /**
+   * Ensures a default administrative application settings document exists.
+   */
+  export const ensureAppSettings = async () => {
+    let settings = await AdminAppSetting.findOne({ scope: 'default' });
+    if (!settings) {
+      settings = await AdminAppSetting.create(createDefaultAppSettings());
+    }
+    return settings;
+  };
+
+  export const ensureAppModules = async () => {
+    // No-op: AppModule is now nested inside AdminAppSetting
+    return;
+  };
+
+  export const getGeneralSettings = async (category) => {
+    const bizSettings = await ensureBusinessSettings();
+    const appSettings = await ensureAppSettings();
+
+    const businessMapper = {
+      customize: 'customization',
+      'transport-ride': 'transport_ride',
+      'bid-ride': 'bid_ride',
+      general: 'general',
+    };
+
+    const appMapper = {
+      wallet: 'wallet_setting',
+      tip: 'tip_setting',
+    };
+
+    if (appMapper[category]) {
+      return { settings: appSettings[appMapper[category]] || {} };
+    }
+
+    const key = businessMapper[category] || category;
+    return { settings: bizSettings[key] || {} };
+  };
+
+  export const updateGeneralSettings = async (category, payload) => {
+    const bizSettings = await ensureBusinessSettings();
+    const appSettings = await ensureAppSettings();
+
+    const businessMapper = {
+      customize: 'customization',
+      'transport-ride': 'transport_ride',
+      'bid-ride': 'bid_ride',
+      general: 'general',
+    };
+
+    const appMapper = {
+      wallet: 'wallet_setting',
+      tip: 'tip_setting',
+    };
+
+    const newValues = payload.settings || payload;
+
+    if (appMapper[category]) {
+      const key = appMapper[category];
+      appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
+      appSettings.markModified(key);
+      await appSettings.save();
+      return { settings: appSettings[key] };
+    }
+
+    const bizKey = businessMapper[category] || category;
+    if (!bizSettings.schema.path(bizKey)) {
+      return { settings: {} };
+    }
+
+    bizSettings[bizKey] = { ...(bizSettings[bizKey] || {}), ...newValues };
+    bizSettings.markModified(bizKey);
+    await bizSettings.save();
+    return { settings: bizSettings[bizKey] };
+  };
+
+  export const listAppModules = async (query = {}) => {
+    const safePage = Number(query.page) || 1;
+    const safeLimit = Number(query.limit) || 10;
+    const start = (safePage - 1) * safeLimit;
+
+    const [modules, total] = await Promise.all([
+      TaxiAppModule.find()
+        .sort({ order_by: 1, createdAt: -1 })
+        .skip(start)
+        .limit(safeLimit)
+        .lean(),
+      TaxiAppModule.countDocuments(),
+    ]);
+
+    const results = modules.map(m => ({
+      _id: m._id,
+      id: String(m._id),
+      name: m.name,
+      transport_type: m.transport_type,
+      service_type: m.service_type,
+      icon_types_for: m.icon_types_for,
+      order_by: m.order_by,
+      short_description: m.short_description,
+      description: m.description,
+      mobile_menu_icon: m.mobile_menu_icon,
+      mobile_menu_cover_image: m.mobile_menu_cover_image,
+      active: m.active,
+      created_at: m.createdAt,
+      updated_at: m.updatedAt
+    }));
+
+    return {
+      results,
+      paginator: {
+        total,
+        current_page: safePage,
+        per_page: safeLimit,
+        last_page: Math.max(1, Math.ceil(total / safeLimit)),
+      },
+    };
+  };
+
+  export const createAppModule = async (payload) => {
+    const item = await TaxiAppModule.create({
+      name: String(payload.name || '').trim(),
+      transport_type: payload.transport_type || 'taxi',
+      service_type: payload.service_type || 'normal',
+      icon_types_for: payload.icon_types_for || null,
+      order_by: Number(payload.order_by || 1),
+      short_description: String(payload.short_description || '').trim(),
+      description: String(payload.description || '').trim(),
+      mobile_menu_icon: String(payload.mobile_menu_icon || '').trim(),
+      mobile_menu_cover_image: payload.mobile_menu_cover_image || null,
+      active: payload.active !== undefined ? (normalizeBoolean(payload.active) ? 1 : 0) : 1,
+      company_key: payload.company_key || null
+    });
+    return item.toObject();
+  };
+
+  export const updateAppModule = async (id, payload) => {
+    const update = {};
+    if (payload.name !== undefined) update.name = String(payload.name).trim();
+    if (payload.transport_type !== undefined) update.transport_type = payload.transport_type;
+    if (payload.service_type !== undefined) update.service_type = payload.service_type;
+    if (payload.icon_types_for !== undefined) update.icon_types_for = payload.icon_types_for;
+    if (payload.order_by !== undefined) update.order_by = Number(payload.order_by);
+    if (payload.short_description !== undefined) update.short_description = String(payload.short_description);
+    if (payload.description !== undefined) update.description = String(payload.description);
+    if (payload.mobile_menu_icon !== undefined) update.mobile_menu_icon = String(payload.mobile_menu_icon);
+    if (payload.mobile_menu_cover_image !== undefined) update.mobile_menu_cover_image = payload.mobile_menu_cover_image;
+    if (payload.active !== undefined) update.active = normalizeBoolean(payload.active) ? 1 : 0;
+    if (payload.company_key !== undefined) update.company_key = payload.company_key;
+
+    const item = await TaxiAppModule.findByIdAndUpdate(id, { $set: update }, { new: true });
+    if (!item) throw new ApiError(404, 'App module not found in database registry');
+    return item.toObject();
+  };
+
+  export const deleteAppModule = async (id) => {
+    const deleted = await TaxiAppModule.findByIdAndDelete(id);
+    if (!deleted) throw new ApiError(404, 'App module registration not found');
+    return true;
+  };
+
+  export const listOnboardingScreens = async (audience) => {
+    const query = {};
+    if (audience) {
+      query.$or = [{ audience: audience }, { screen: audience }];
+    }
+    return OnboardingScreen.find(query).sort({ order: 1 }).lean();
+  };

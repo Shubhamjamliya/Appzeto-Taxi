@@ -107,6 +107,11 @@ const driverSchema = new mongoose.Schema(
       min: 0,
       max: 5,
     },
+    deletedAt: {
+      type: Date,
+      default: null,
+      index: true,
+    },
     wallet: {
       balance: {
         type: Number,

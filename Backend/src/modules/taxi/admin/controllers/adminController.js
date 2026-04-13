@@ -58,8 +58,37 @@ export const getUserWalletHistory = asyncHandler(async (req, res) =>
 export const getDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDrivers(req.query)),
 );
+
+export const getDeletedDrivers = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDeletedDrivers(req.query)),
+);
+
+export const restoreDeletedDriver = asyncHandler(async (req, res) =>
+  ok(res, await adminService.restoreDeletedDriver(req.params.id)),
+);
+
+export const permanentlyDeleteDeletedDriver = asyncHandler(async (req, res) => {
+  await adminService.permanentlyDeleteDeletedDriver(req.params.id);
+  ok(res, { deleted: true });
+});
+
+export const createDriver = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createDriver(req.body)),
+);
 export const getDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.getDriverById(req.params.id)),
+);
+export const getDriverProfile = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverProfile(req.params.id)),
+);
+export const adjustDriverWallet = asyncHandler(async (req, res) =>
+  ok(res, await adminService.adjustDriverWallet(req.params.id, req.body)),
+);
+export const getDriverRatings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverRatings(req.query)),
+);
+export const getDriverRatingDetail = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getDriverRatingDetail(req.params.id)),
 );
 export const updateDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateDriver(req.params.id, req.body)),

@@ -3,6 +3,8 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { User } from '../../user/models/User.js';
+import { UserWallet } from '../../user/models/UserWallet.js';
+import { WalletTransaction } from '../../driver/models/WalletTransaction.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 // AppModule import removed
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
@@ -1199,18 +1201,24 @@ export const loginAdmin = async ({ email, password }) => {
   };
 };
 
-export const listUsers = async ({ page = 1, limit = 50 }) => {
+export const listUsers = async ({ page = 1, limit = 50, search = '' }) => {
   const safePage = Number(page) || 1;
   const safeLimit = Number(limit) || 50;
   const start = (safePage - 1) * safeLimit;
+  const query = { deletedAt: null };
+
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { phone: regex }, { email: regex }];
+  }
 
   const [users, total] = await Promise.all([
-    User.find({ deletedAt: null })
+    User.find(query)
       .sort({ createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
       .lean(),
-    User.countDocuments({ deletedAt: null }),
+    User.countDocuments(query),
   ]);
 
   return {
@@ -1740,9 +1748,53 @@ export const listUserWalletHistory = async (id) => {
     throw new ApiError(404, 'User not found');
   }
 
+  const wallet = await UserWallet.findOne({ userId: id }).lean();
+
   return {
-    results: [],
+    balance: wallet?.balance || 0,
+    results: (wallet?.transactions || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
   };
+};
+
+export const adjustUserWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  let wallet = await UserWallet.findOne({ userId: id });
+  if (!wallet) {
+    wallet = new UserWallet({ userId: id, balance: 0, transactions: [] });
+  }
+
+  const currentBalance = wallet.balance || 0;
+  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
+
+  wallet.balance = nextBalance;
+  wallet.transactions.push({
+    kind: operation,
+    amount,
+    title: payload.description || `Admin adjustment (${operation})`,
+  });
+
+  await wallet.save();
+  return { balance: Number(nextBalance.toFixed(2)) };
 };
 
 export const listDrivers = async ({ page = 1, limit = 50 }) => {
@@ -2034,7 +2086,96 @@ export const adjustDriverWallet = async (id, payload = {}) => {
   driver.markModified('wallet');
   await driver.save();
 
+  await WalletTransaction.create({
+    driverId: id,
+    amount,
+    kind: operation,
+    title: payload.description || `Admin adjustment (${operation})`,
+    balance: nextBalance
+  });
+
   return { balance: Number(nextBalance.toFixed(2)) };
+};
+
+export const listDriverWalletHistory = async (id) => {
+  const driver = await Driver.findById(id).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const transactions = await WalletTransaction.find({ driverId: id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    balance: Number(driver.wallet?.balance || 0),
+    results: transactions.map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
+  };
+};
+
+export const adjustOwnerWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const owner = await Owner.findById(id);
+  if (!owner) {
+    throw new ApiError(404, 'Owner not found');
+  }
+
+  const currentBalance = Number(owner.wallet?.balance || 0);
+  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
+
+  owner.wallet = owner.wallet || {};
+  owner.wallet.balance = nextBalance;
+  owner.markModified('wallet');
+  await owner.save();
+
+  await OwnerWalletTransaction.create({
+    ownerId: id,
+    amount,
+    kind: operation,
+    title: payload.description || `Admin adjustment (${operation})`,
+    balance: nextBalance
+  });
+
+  return { balance: Number(nextBalance.toFixed(2)) };
+};
+
+export const listOwnerWalletHistory = async (id) => {
+  const owner = await Owner.findById(id).lean();
+
+  if (!owner) {
+    throw new ApiError(404, 'Owner not found');
+  }
+
+  const transactions = await OwnerWalletTransaction.find({ ownerId: id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    balance: Number(owner.wallet?.balance || 0),
+    results: transactions.map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
+  };
 };
 
 export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
@@ -2318,30 +2459,6 @@ export const updateReferralSettings = async (type, payload) => {
   );
 
   return setting.referral[type];
-};
-
-export const getJoiningBonusSettings = async () => {
-  const settings = await AdminAppSetting.findOne({ scope: 'default' }).lean();
-  return {
-    joining_bonus_enabled: settings?.wallet_setting?.enable_joining_bonus || "0",
-    joining_bonus_amount_for_user: Number(settings?.wallet_setting?.joining_bonus_for_user || 0),
-    joining_bonus_amount_for_driver: Number(settings?.wallet_setting?.joining_bonus_for_driver || 0)
-  };
-};
-
-export const updateJoiningBonusSettings = async (payload) => {
-  const settings = await AdminAppSetting.findOneAndUpdate(
-    { scope: 'default' },
-    { 
-      $set: { 
-        "wallet_setting.enable_joining_bonus": String(payload.joining_bonus_enabled),
-        "wallet_setting.joining_bonus_for_user": String(payload.joining_bonus_amount_for_user),
-        "wallet_setting.joining_bonus_for_driver": String(payload.joining_bonus_amount_for_driver)
-      } 
-    },
-    { new: true, upsert: true }
-  );
-  return getJoiningBonusSettings();
 };
 
 export const getReferralDashboard = async () => {
@@ -3153,19 +3270,26 @@ export const listVehicleCatalog = async () => {
     return true;
   };
 
-  export const listOwners = async () => {
-    await ensureFleetOwnersSeeded();
+  export const listOwners = async (queryArgs = {}) => {
+  await ensureFleetOwnersSeeded();
+  const search = String(queryArgs.search || '').trim();
 
-    const owners = await Owner.find()
-      .populate(
-        'service_location_id',
-        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-      )
-      .sort({ createdAt: -1 })
-      .lean();
+  const query = {};
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { mobile: regex }, { email: regex }, { company_name: regex }];
+  }
 
-    return owners.map(serializeOwner);
-  };
+  const owners = await Owner.find(query)
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return owners.map(serializeOwner);
+};
 
   export const getOwnerById = async (id) => {
     await ensureFleetOwnersSeeded();

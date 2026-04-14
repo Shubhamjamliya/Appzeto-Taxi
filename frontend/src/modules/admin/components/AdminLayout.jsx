@@ -325,7 +325,7 @@ const AdminLayout = () => {
               { label: 'User Bulk Upload', path: '/admin/users/bulk-upload' },
             ],
           },
-          { icon: Wallet, label: 'Payment History', path: '/admin/wallet/payment' },
+          { icon: Wallet, label: 'Wallet Payment', path: '/admin/wallet/payment' },
           {
             icon: Car,
             label: 'Driver Management',
@@ -354,7 +354,6 @@ const AdminLayout = () => {
               { label: 'Referral Dashboard', path: '/admin/referrals/dashboard' },
               { label: 'User Referral Settings', path: '/admin/referrals/user-settings' },
               { label: 'Driver Referral Settings', path: '/admin/referrals/driver-settings' },
-              { label: 'Joining Bonus Settings', path: '/admin/referrals/joining-bonus' },
               { label: 'Referral Translation', path: '/admin/referrals/translation' },
             ],
           },

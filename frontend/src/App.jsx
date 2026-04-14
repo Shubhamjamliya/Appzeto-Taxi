@@ -137,7 +137,7 @@ const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
-const AdminPaymentHistory = lazy(() => import('./modules/admin/pages/wallet/PaymentHistory'));
+const AdminWalletPayment = lazy(() => import('./modules/admin/pages/wallet/WalletPayment'));
 const AdminUserList = lazy(() => import('./modules/admin/pages/users/UserList'));
 const AdminUserCreate = lazy(() => import('./modules/admin/pages/users/UserCreate'));
 const AdminUserDetails = lazy(() => import('./modules/admin/pages/users/UserDetails'));
@@ -169,7 +169,6 @@ const AdminDriverEdit = lazy(() => import('./modules/admin/pages/drivers/EditDri
 const AdminReferralDashboard = lazy(() => import('./modules/admin/pages/referrals/ReferralDashboard'));
 const AdminUserReferralSettings = lazy(() => import('./modules/admin/pages/referrals/UserReferralSettings'));
 const AdminDriverReferralSettings = lazy(() => import('./modules/admin/pages/referrals/DriverReferralSettings'));
-const AdminJoiningBonusSettings = lazy(() => import('./modules/admin/pages/referrals/JoiningBonusSettings'));
 const AdminReferralTranslation = lazy(() => import('./modules/admin/pages/referrals/ReferralTranslation'));
 
 const AdminPromoCodes = lazy(() => import('./modules/admin/pages/promotions/PromoCodes'));
@@ -570,7 +569,7 @@ function App() {
               <Route path="trips" element={<AdminTrips />} />
               <Route path="deliveries" element={<AdminDeliveries />} />
               <Route path="ongoing" element={<AdminOngoing />} />
-              <Route path="wallet/payment" element={<AdminPaymentHistory />} />
+              <Route path="wallet/payment" element={<AdminWalletPayment />} />
               <Route path="users" element={<AdminUserList />} />
               <Route path="users/create" element={<AdminUserCreate />} />
               <Route path="users/:id" element={<AdminUserDetails />} />
@@ -602,9 +601,7 @@ function App() {
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
               <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-              <Route path="referrals/joining-bonus" element={<AdminJoiningBonusSettings />} />
               <Route path="referrals/translation" element={<AdminReferralTranslation />} />
-               
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
                <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />

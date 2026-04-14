@@ -471,6 +471,23 @@ const normalizeVehicleType = (type, index) => {
   };
 };
 
+const ScrollIndicator = ({ show }) => (
+  <AnimatePresence>
+    {show && (
+      <motion.div
+        initial={{ opacity: 0, y: -4 }}
+        animate={{ opacity: 1, y: 0 }}
+        exit={{ opacity: 0, y: -4 }}
+        className="pointer-events-none absolute bottom-3 left-1/2 z-50 flex -translate-x-1/2 flex-col items-center"
+      >
+        <div className="flex h-6 w-6 animate-bounce items-center justify-center rounded-full border border-slate-100 bg-white/95 text-slate-400 shadow-[0_4px_12px_rgba(15,23,42,0.12)] backdrop-blur-sm">
+          <ChevronDown size={14} strokeWidth={3} />
+        </div>
+      </motion.div>
+    )}
+  </AnimatePresence>
+);
+
 const SelectVehicle = () => {
   const [vehicles, setVehicles] = useState([]);
   const [availabilityByVehicleId, setAvailabilityByVehicleId] = useState({});
@@ -484,6 +501,8 @@ const SelectVehicle = () => {
   const [driverLoadError, setDriverLoadError] = useState('');
   const [pricingRules, setPricingRules] = useState([]);
   const [tripMetrics, setTripMetrics] = useState({ distanceMeters: 0, durationMinutes: 0 });
+  const [showScrollArrow, setShowScrollArrow] = useState(false);
+  const scrollRef = React.useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = location.state || {};
@@ -497,6 +516,19 @@ const SelectVehicle = () => {
   const pickupPosition = useMemo(() => toLatLng(pickupCoords), [pickupCoords]);
   const dropPosition = useMemo(() => toLatLng(dropCoords, null), [dropCoords]);
   const { isLoaded: isMapLoaded, loadError: mapLoadError } = useAppGoogleMapsLoader();
+
+  const handleScroll = () => {
+    if (!scrollRef.current) return;
+    const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
+    const hasMore = scrollTop + clientHeight < scrollHeight - 8;
+    setShowScrollArrow(hasMore);
+  };
+
+  useEffect(() => {
+    // Check scroll state when vehicles are loaded or trip metrics change
+    const timer = setTimeout(handleScroll, 200);
+    return () => clearTimeout(timer);
+  }, [vehicles, tripMetrics]);
 
   useEffect(() => {
     let active = true;
@@ -804,30 +836,35 @@ const SelectVehicle = () => {
         </div>
       </div>
 
-      <div className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[66dvh] min-h-[260px] flex-col overflow-hidden rounded-t-[28px] bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_100%)] shadow-[0_-8px_32px_rgba(15,23,42,0.08)]">
+      <div className="absolute bottom-0 left-0 right-0 z-40 flex max-h-[66dvh] min-h-[260px] flex-col overflow-hidden rounded-t-[28px] bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.15)]">
         <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-1 shrink-0" />
 
-        <div className="flex-1 overflow-y-auto no-scrollbar px-4 pt-2 pb-4 space-y-2">
-          {isLoadingVehicles && (
-            <div className="min-h-[220px] flex flex-col items-center justify-center gap-3 text-slate-400">
-              <LoaderCircle size={26} className="animate-spin" />
-              <p className="text-[11px] font-bold uppercase tracking-widest">Loading vehicle types</p>
-            </div>
-          )}
+        <div className="relative flex-1 overflow-hidden">
+          <div 
+            ref={scrollRef}
+            onScroll={handleScroll}
+            className="flex-1 overflow-y-auto no-scrollbar px-4 pt-2 pb-2 space-y-2 max-h-[230px]"
+          >
+            {isLoadingVehicles && (
+              <div className="min-h-[180px] flex flex-col items-center justify-center gap-3 text-slate-400">
+                <LoaderCircle size={26} className="animate-spin" />
+                <p className="text-[11px] font-bold uppercase tracking-widest">Finding available rides</p>
+              </div>
+            )}
 
-          {!isLoadingVehicles && vehicleLoadError && (
-            <div className="bg-white/90 border border-red-100 rounded-[18px] px-4 py-5 text-center">
-              <p className="text-[12px] font-black text-red-500">{vehicleLoadError}</p>
-              <p className="text-[10px] font-bold text-slate-400 mt-1">Ask admin to check vehicle type catalog.</p>
-            </div>
-          )}
+            {!isLoadingVehicles && vehicleLoadError && (
+              <div className="bg-white border border-red-50 rounded-[18px] px-4 py-5 text-center">
+                <p className="text-[12px] font-black text-red-500">{vehicleLoadError}</p>
+                <p className="text-[10px] font-bold text-slate-400 mt-1">Please try again later.</p>
+              </div>
+            )}
 
-          {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.length === 0 && (
-            <div className="bg-white/90 border border-slate-100 rounded-[18px] px-4 py-5 text-center">
-              <p className="text-[13px] font-bold text-slate-900">No vehicle types available</p>
-              <p className="text-[11px] font-bold text-slate-400 mt-1">Admin needs to create active taxi vehicle types first.</p>
-            </div>
-          )}
+            {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.length === 0 && (
+              <div className="bg-white border border-slate-50 rounded-[18px] px-4 py-5 text-center">
+                <p className="text-[13px] font-bold text-slate-900">No vehicles available</p>
+                <p className="text-[11px] font-bold text-slate-400 mt-1">Try changing your location or method.</p>
+              </div>
+            )}
 
           {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.map((v, i) => {
             const isSelected = selected === v.id;
@@ -848,12 +885,12 @@ const SelectVehicle = () => {
                     setSelected(v.id);
                   }
                 }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[20px] border transition-all text-left relative overflow-hidden ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[24px] border-2 transition-all text-left relative overflow-hidden ${
                   isSelected
-                    ? 'bg-white border-orange-200 shadow-[0_10px_20px_-8px_rgba(249,115,22,0.12)] ring-1 ring-orange-100'
+                    ? 'bg-orange-50/50 border-orange-500 shadow-[0_12px_24px_-8px_rgba(249,115,22,0.22)]'
                     : isUnavailable
-                      ? 'bg-slate-100/60 border-slate-200 opacity-60 grayscale-[0.5]'
-                      : 'bg-white border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.02)] hover:border-slate-200'
+                      ? 'bg-slate-100/60 border-transparent opacity-60'
+                      : 'bg-white border-slate-50 shadow-[0_2px_8px_rgba(15,23,42,0.02)] hover:border-slate-200'
                 }`}
               >
                 {isSelected && (
@@ -863,25 +900,25 @@ const SelectVehicle = () => {
                   />
                 )}
 
-                <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center shrink-0 transition-all duration-300 ${
-                  isSelected ? 'bg-orange-50 scale-105' : isUnavailable ? 'bg-slate-200' : 'bg-slate-50'
+                <div className={`w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  isSelected ? 'bg-white shadow-sm scale-110' : isUnavailable ? 'bg-slate-200' : 'bg-slate-50'
                 }`}>
-                  <img src={v.icon} alt={v.name} className="w-10 h-10 object-contain drop-shadow-md" />
+                  <img src={v.icon} alt={v.name} className="w-9 h-9 object-contain drop-shadow-sm" />
                 </div>
 
                 <div className="flex-1 min-w-0 z-10">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[14px] font-bold leading-tight ${isUnavailable ? 'text-slate-500' : 'text-slate-900'}`}>
+                    <span className={`text-[13px] font-extrabold leading-tight ${isUnavailable ? 'text-slate-500' : 'text-slate-900'}`}>
                       {v.name}
                     </span>
-                    <div className="flex items-center gap-1 text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-md">
-                      <Users size={11} strokeWidth={3} />
-                      <span className="text-[10px] font-bold">{v.capacity}</span>
+                    <div className="flex items-center gap-1 text-slate-400 bg-slate-50 px-1 py-0.5 rounded-md">
+                      <Users size={10} strokeWidth={3} />
+                      <span className="text-[9px] font-bold">{v.capacity}</span>
                     </div>
                     {badge && (
-                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                      <span className={`text-[7px] font-black px-1 py-0.5 rounded-md border uppercase tracking-tighter ${
                         isUnavailable 
-                          ? 'bg-white text-slate-400 border-slate-200' 
+                          ? 'bg-white text-slate-300 border-slate-100' 
                           : badge === 'FASTEST' 
                             ? 'bg-orange-500 text-white border-orange-400' 
                             : 'bg-orange-50 text-orange-600 border-orange-100'
@@ -890,26 +927,26 @@ const SelectVehicle = () => {
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] font-medium text-slate-500 mt-0.5 leading-tight">{v.sublabel}</p>
-                  <div className="flex items-center gap-1 mt-1">
+                  <p className="text-[10px] font-bold text-slate-400 leading-tight truncate max-w-[140px]">{v.sublabel}</p>
+                  <div className="flex items-center gap-1.5 mt-1 border-t border-slate-50 pt-0.5">
                     <div className={`w-1 h-1 rounded-full ${isUnavailable ? 'bg-slate-300' : 'bg-emerald-500 animate-pulse'}`} />
-                    <p className={`text-[10px] font-semibold ${isUnavailable ? 'text-slate-400' : 'text-slate-500'}`}>
-                      {formatAvailabilityLine(availability)}
+                    <p className={`text-[9px] font-bold truncate flex-1 ${isUnavailable ? 'text-slate-400' : 'text-slate-600'}`}>
+                      {isUnavailable ? 'Unavailable' : formatAvailabilityLine(availability)}
                     </p>
+                    {!isUnavailable && tripMetrics.distanceMeters > 0 && (
+                      <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter shrink-0 bg-slate-100 px-1 py-0.5 rounded">
+                        {tripMetrics.durationMinutes || 1}m
+                      </span>
+                    )}
                   </div>
-                  {!isUnavailable && tripMetrics.distanceMeters > 0 && (
-                    <p className="mt-1 text-[10px] font-semibold text-slate-400">
-                      {formatDistanceLabel(tripMetrics.distanceMeters)} trip · ~{tripMetrics.durationMinutes || 1} min
-                    </p>
-                  )}
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5 shrink-0 z-10">
+                <div className="flex flex-col items-end gap-1 shrink-0 z-10">
                   <div className="text-right">
-                    <span className={`text-[16px] font-extrabold tracking-tight block ${isUnavailable ? 'text-slate-300' : 'text-slate-900'}`}>
+                    <span className={`text-[15px] font-black tracking-tight block ${isUnavailable ? 'text-slate-300' : 'text-slate-900'}`}>
                       {isUnavailable ? 'N/A' : formatCurrency(v.price)}
                     </span>
-                    {!isUnavailable && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">est.</span>}
+                    {!isUnavailable && <span className="text-[8px] font-black text-slate-400 uppercase tracking-tighter opacity-70">est.</span>}
                   </div>
                   {isSelected && (
                     <motion.div
@@ -927,6 +964,8 @@ const SelectVehicle = () => {
               </motion.button>
             );
           })}
+          </div>
+          <ScrollIndicator show={showScrollArrow} />
         </div>
 
         <div className="shrink-0 border-t border-slate-100 bg-white/80 backdrop-blur-xl px-5 pb-6 pt-3.5 space-y-3.5 shadow-[0_-12px_40px_rgba(15,23,42,0.08)]">

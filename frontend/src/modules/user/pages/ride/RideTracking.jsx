@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 } from 'lucide-react';
@@ -11,7 +11,6 @@ import carIcon from '../../../../assets/icons/car.png';
 import bikeIcon from '../../../../assets/icons/bike.png';
 import autoIcon from '../../../../assets/icons/auto.png';
 import deliveryIcon from '../../../../assets/icons/Delivery.png';
-import { subscribeRideRealtime } from '../../../../shared/services/rideRealtime';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
@@ -34,70 +33,10 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
   Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
 
-const isFiniteLatLng = (value) => (
-  Number.isFinite(Number(value?.lat)) &&
-  Number.isFinite(Number(value?.lng))
-);
-
-const toOptionalLatLng = (value) => {
-  const coordinates = Array.isArray(value?.coordinates) ? value.coordinates : value;
-
-  if (Array.isArray(coordinates) && coordinates.length >= 2) {
-    const [lng, lat] = coordinates;
-
-    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
-      return { lat: Number(lat), lng: Number(lng) };
-    }
-  }
-
-  const lat = Number(value?.lat ?? value?.latitude);
-  const lng = Number(value?.lng ?? value?.longitude ?? value?.lon);
-
-  if (Number.isFinite(lat) && Number.isFinite(lng)) {
-    return { lat, lng };
-  }
-
-  return null;
-};
-
-const toRouteLatLng = (point) => {
-  if (isFiniteLatLng(point)) {
-    return { lat: Number(point.lat), lng: Number(point.lng) };
-  }
-
-  if (Number.isFinite(Number(point?.y)) && Number.isFinite(Number(point?.x))) {
-    return { lat: Number(point.y), lng: Number(point.x) };
-  }
-
-  return toOptionalLatLng(point);
-};
-
-const appendUniquePoint = (points, nextPoint, threshold = 0.00005) => {
-  if (!isFiniteLatLng(nextPoint)) {
-    return points;
-  }
-
-  if (!points.length) {
-    return [nextPoint];
-  }
-
-  const lastPoint = points[points.length - 1];
-  if (arePositionsNearlyEqual(lastPoint, nextPoint, threshold)) {
-    return points;
-  }
-
-  return [...points, nextPoint];
-};
-
-const createHeadingMarkerIcon = (heading = 0, serviceType = 'ride') => ({
-  path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW,
-  scale: serviceType === 'parcel' ? 5.5 : 6,
-  rotation: Number.isFinite(Number(heading)) ? Number(heading) : 0,
-  fillColor: serviceType === 'parcel' ? '#f97316' : '#0f172a',
-  fillOpacity: 1,
-  strokeColor: '#ffffff',
-  strokeWeight: 1.6,
-  anchor: new window.google.maps.Point(0, 2.6),
+const createTrackingMarkerIcon = (iconUrl) => ({
+  url: iconUrl,
+  scaledSize: new window.google.maps.Size(44, 44),
+  anchor: new window.google.maps.Point(22, 22),
 });
 
 const getTrackingVehicleIcon = (ride, driver) => {
@@ -128,12 +67,8 @@ const RideTracking = () => {
   const [rideRealtime, setRideRealtime] = useState(null);
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
-  const [driverHeading, setDriverHeading] = useState(0);
-  const [socketRoutePath, setSocketRoutePath] = useState([]);
-  const [firebaseRoutePath, setFirebaseRoutePath] = useState([]);
   const [map, setMap] = useState(null);
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
-  const fittedRouteKeyRef = useRef('');
   const navigate = useNavigate();
   const location = useLocation();
   const storedRide = useMemo(() => getCurrentRide(), []);
@@ -183,12 +118,6 @@ const RideTracking = () => {
       : 'Captain is on the way';
   const vehicleDetails = [driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ');
   const activeRideEndpoint = serviceType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
-
-  useEffect(() => {
-    if (Number.isFinite(Number(rideRealtime?.driverLocation?.heading))) {
-      setDriverHeading(Number(rideRealtime.driverLocation.heading));
-    }
-  }, [rideRealtime?.driverLocation?.heading]);
 
   const handleCancelRide = async () => {
     try {
@@ -410,31 +339,12 @@ const RideTracking = () => {
         return;
       }
 
-      if (Number.isFinite(Number(payload.heading))) {
-        setDriverHeading(Number(payload.heading));
-      }
-
       setRideRealtime((prev) => ({
         ...(prev || {}),
         driverLocation: {
           coordinates: payload.coordinates,
-          heading: Number.isFinite(Number(payload.heading)) ? Number(payload.heading) : prev?.driverLocation?.heading ?? null,
         },
       }));
-    };
-
-    const onRouteUpdated = (payload) => {
-      if (!payload || String(payload.rideId || '') !== String(rideId)) {
-        return;
-      }
-
-      const nextRoute = Array.isArray(payload.points)
-        ? payload.points.map(toRouteLatLng).filter(Boolean)
-        : [];
-
-      if (nextRoute.length > 1) {
-        setSocketRoutePath(nextRoute);
-      }
     };
 
     const onStatusUpdated = (payload) => {
@@ -475,57 +385,20 @@ const RideTracking = () => {
 
     socketService.on('ride:state', onRideState);
     socketService.on('ride:driver-location:updated', onLocationUpdated);
-    socketService.on('ride:driver-route:updated', onRouteUpdated);
     socketService.on('ride:status:updated', onStatusUpdated);
     socketService.emit('ride:join', { rideId });
 
     return () => {
       socketService.off('ride:state', onRideState);
       socketService.off('ride:driver-location:updated', onLocationUpdated);
-      socketService.off('ride:driver-route:updated', onRouteUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
     };
   }, [completeTracking, fallbackDriver, rideId, state, state.drop, state.pickup]);
 
   useEffect(() => {
-    if (!rideId) {
-      setFirebaseRoutePath([]);
-      return () => {};
-    }
-
-    return subscribeRideRealtime(
-      rideId,
-      (snapshot) => {
-        const nextPoint = toOptionalLatLng(snapshot?.driverLocation);
-
-        if (nextPoint) {
-          setFirebaseRoutePath((previous) => appendUniquePoint(previous, nextPoint));
-        }
-
-        if (Number.isFinite(Number(snapshot?.driverLocation?.heading))) {
-          setDriverHeading(Number(snapshot.driverLocation.heading));
-        }
-      },
-      () => {},
-    );
-  }, [rideId]);
-
-  useEffect(() => {
-    if (socketRoutePath.length > 1) {
-      setRoutePath(socketRoutePath);
-      setRouteError('');
-      return;
-    }
-
-    if (firebaseRoutePath.length > 1) {
-      setRoutePath(firebaseRoutePath);
-      setRouteError('Using Firebase fallback path.');
-      return;
-    }
-
     if (!isLoaded || !window.google?.maps?.DirectionsService) {
       setRoutePath([driverPosition, activeDestination]);
-      setRouteError('Using direct fallback path.');
+      setRouteError('');
       return;
     }
 
@@ -562,14 +435,14 @@ const RideTracking = () => {
         }
 
         setRoutePath([driverPosition, activeDestination]);
-        setRouteError(status ? `Directions unavailable (${status}).` : 'Directions unavailable.');
+        setRouteError(status || 'Directions unavailable');
       },
     );
 
     return () => {
       active = false;
     };
-  }, [activeDestination, driverPosition, firebaseRoutePath, isLoaded, socketRoutePath]);
+  }, [activeDestination, driverPosition, isLoaded]);
 
   useEffect(() => {
     if (!map || !window.google?.maps) {
@@ -577,26 +450,16 @@ const RideTracking = () => {
     }
 
     if (routePath.length > 1) {
-      const fitKey = `${tripStatus}:${activeDestination.lat.toFixed(5)},${activeDestination.lng.toFixed(5)}`;
-      if (fittedRouteKeyRef.current === fitKey) {
-        map.panTo(driverPosition);
-        return;
-      }
-
       const bounds = new window.google.maps.LatLngBounds();
       routePath.forEach((point) => bounds.extend(point));
       bounds.extend(driverPosition);
       bounds.extend(activeDestination);
       map.fitBounds(bounds, { top: 120, right: 48, bottom: 300, left: 48 });
-      fittedRouteKeyRef.current = fitKey;
       return;
     }
 
     map.panTo(driverPosition);
-    if (!fittedRouteKeyRef.current) {
-      map.setZoom(15);
-      fittedRouteKeyRef.current = `${tripStatus}:single-point`;
-    }
+    map.setZoom(15);
   }, [activeDestination, driverPosition, map, routePath, tripStatus]);
 
   const handleShare = () => {
@@ -682,7 +545,7 @@ const RideTracking = () => {
             <MarkerF
               position={driverPosition}
               title="Driver"
-              icon={createHeadingMarkerIcon(driverHeading, serviceType)}
+              icon={createTrackingMarkerIcon(vehicleIcon)}
             />
             <MarkerF
               position={activeDestination}
@@ -730,7 +593,7 @@ const RideTracking = () => {
       {routeError && (
         <div className="absolute top-24 left-4 z-10 rounded-[12px] border border-amber-100 bg-white/90 px-3 py-2 shadow-sm">
           <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Route</p>
-          <p className="text-[11px] font-bold text-slate-700">{routeError}</p>
+          <p className="text-[11px] font-bold text-slate-700">Using fallback path while directions load.</p>
         </div>
       )}
 

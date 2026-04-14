@@ -135,37 +135,6 @@ const WalletSettings = () => {
                </div>
             </div>
 
-            <div className="pt-4">
-              <SectionHeader title="Acquisition Rewards" description="Configure sign-up bonuses for various user segments" icon={Gem} />
-              
-              <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-6 mb-6">
-                 <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                       <div className="w-10 h-10 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-[10px] tracking-widest">
-                          PROMO
-                       </div>
-                       <div>
-                          <span className="text-sm font-bold text-gray-900 block">Enable Registration Bonus</span>
-                          <p className="text-[11px] text-gray-400">Apply automatic credits to new wallets</p>
-                       </div>
-                    </div>
-                    <button
-                      onClick={() => handleChange('enable_joining_bonus', settings.enable_joining_bonus === "1" ? "0" : "1")}
-                      className={`w-11 h-6 rounded-full relative transition-all duration-300 ${
-                        settings.enable_joining_bonus === "1" ? 'bg-indigo-600' : 'bg-gray-200'
-                      }`}
-                    >
-                      <div className={`w-3.5 h-3.5 bg-white rounded-full absolute top-[5px] transition-all duration-300 ${settings.enable_joining_bonus === "1" ? 'right-[5px]' : 'left-[5px]'}`} />
-                    </button>
-                 </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 opacity-100 transition-opacity">
-                 <InputField label="User Welcome Amount" name="joining_bonus_for_user" value={settings.joining_bonus_for_user} onChange={handleChange} type="number" />
-                 <InputField label="Driver Welcome Amount" name="joining_bonus_for_driver" value={settings.joining_bonus_for_driver} onChange={handleChange} type="number" />
-              </div>
-            </div>
-
             <div className="pt-6 border-t border-gray-100 flex justify-end">
                <button 
                 onClick={handleUpdate}

@@ -59,10 +59,10 @@ const RentalPackageTypes = ({ mode: propMode }) => {
     try {
       setLoading(true);
       const res = await adminService.getRentalPackageTypes();
-      if (res.success) {
-        // Backend pattern consistency: check data.results or data.rental_packages
-        const data = res.data?.results || res.data?.rental_packages || (Array.isArray(res.data) ? res.data : []);
-        setPackages(data);
+      if (res && res.success) {
+        // Backend pattern consistency: check data.results or rental_packages.results
+        const rawPackages = res.data?.rental_packages?.results || res.data?.rental_packages || res.rental_packages?.results || res.rental_packages || res.results || res.data?.results || [];
+        setPackages(Array.isArray(rawPackages) ? rawPackages : []);
       }
     } catch (err) {
       toast.error('Failed to load rental packages');
@@ -78,8 +78,9 @@ const RentalPackageTypes = ({ mode: propMode }) => {
       const fetchItem = async () => {
         try {
           const res = await adminService.getRentalPackageTypes();
-          const items = res.data?.results || res.data?.rental_packages || (Array.isArray(res.data) ? res.data : []);
-          const item = items.find(p => String(p._id || p.id) === String(id));
+          const items = res.data?.rental_packages?.results || res.data?.rental_packages || res.rental_packages?.results || res.rental_packages || res.results || res.data?.results || [];
+          const itemsArr = Array.isArray(items) ? items : [];
+          const item = itemsArr.find(p => String(p._id || p.id) === String(id));
           if (item) {
             setFormData({
               name: item.name || '',

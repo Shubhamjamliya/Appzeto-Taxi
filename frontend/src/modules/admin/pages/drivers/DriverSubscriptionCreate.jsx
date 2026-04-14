@@ -69,6 +69,8 @@ const DriverSubscriptionCreate = () => {
       if (data.success) {
         toast.success("Subscription plan created successfully");
         navigate('/admin/drivers/subscription');
+      } else {
+        toast.error(data.message || "Failed to save subscription");
       }
     } catch (err) {
       toast.error(err.message || "Failed to save subscription");

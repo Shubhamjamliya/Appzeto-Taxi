@@ -1,175 +1,243 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ChevronRight, 
-  HelpCircle,
+import {
+  ChevronRight,
+  Share2,
+  Save,
   Loader2,
-  CheckCircle2
+  Info,
+  UserCheck,
+  ArrowLeft
 } from 'lucide-react';
+import { adminService } from '../../services/adminService';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const UserReferralSettings = () => {
-  const [formData, setFormData] = useState({
-    enable_user_referral_earnings: false,
-    referral_type: 'instant',
-    referral_commission_amount_for_user: '0'
-  });
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [success, setSuccess] = useState(false);
+  const [showSuccess, setShowSuccess] = useState(false);
+  const [settings, setSettings] = useState({
+    enabled: false,
+    type: 'instant_referrer',
+    amount: 0,
+    ride_count: 0,
+  });
 
-  const token = localStorage.getItem('adminToken') || '';
+  const referralTypes = [
+    { value: 'instant_referrer', label: 'Instant for Referrer User' },
+    { value: 'instant_referrer_new', label: 'Instant for Referrer User and New User' },
+    { value: 'conditional_referrer', label: 'Conditional for Referrer User' },
+    { value: 'conditional_referrer_new', label: 'Conditional for Referrer User and New User' },
+  ];
 
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const json = await res.json();
-        if (json.success && json.data) {
-          setFormData({
-            enable_user_referral_earnings: json.data.enable_user_referral_earnings === true,
-            referral_type: json.data.referral_type || 'instant',
-            referral_commission_amount_for_user: json.data.referral_commission_amount_for_user || '0'
+        const res = await adminService.getReferralSettings('user');
+        if (res.data) {
+          setSettings({
+            enabled: res.data.enabled ?? false,
+            type: res.data.type || 'instant_referrer',
+            amount: res.data.amount || 0,
+            ride_count: res.data.ride_count || 0,
           });
         }
       } catch (err) {
-        console.error("Fetch error:", err);
+        console.error('Fetch error:', err);
+        toast.error('Failed to load settings');
       } finally {
         setLoading(false);
       }
     };
     fetchSettings();
-  }, [token]);
+  }, []);
 
   const handleUpdate = async () => {
     setSaving(true);
     try {
-      const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', {
-        method: 'PATCH',
-        headers: { 
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify(formData)
-      });
-      const json = await res.json();
-      if (json.success) {
-        setSuccess(true);
-        setTimeout(() => setSuccess(false), 3000);
+      const res = await adminService.updateReferralSettings('user', settings);
+      if (res) {
+        setShowSuccess(true);
+        toast.success('Referral settings updated successfully');
+        setTimeout(() => setShowSuccess(false), 3000);
       }
     } catch (err) {
-      alert("Update failed");
+      console.error('Update error:', err);
+      toast.error('Failed to update settings');
     } finally {
       setSaving(false);
     }
   };
 
+  const handleToggle = async (newVal) => {
+    const updated = { ...settings, enabled: newVal };
+    setSettings(updated);
+    try {
+      await adminService.updateReferralSettings('user', updated);
+      setShowSuccess(true);
+      toast.success('Referral settings toggled successfully');
+      setTimeout(() => setShowSuccess(false), 3000);
+    } catch (err) {
+      toast.error('Failed to toggle settings');
+      setSettings(settings); // revert
+    }
+  };
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[500px]">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
+          <span className="text-sm text-gray-500 font-medium">Loading settings...</span>
+        </div>
       </div>
     );
   }
 
+  const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider";
+  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
+
+  const isConditional = settings.type?.includes('conditional');
+
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 font-sans text-gray-900 pb-20">
-      {/* BREADCRUMB & TITLE */}
-      <div className="flex items-center justify-between mb-8">
-        <h1 className="text-[12px] font-black tracking-widest text-[#2D3748] uppercase">USER REFERRAL SETTINGS</h1>
-        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400">
-           <span>User Referral Settings</span>
-           <ChevronRight size={12} />
-           <span className="text-gray-950">User Referral Settings</span>
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      {/* HEADER BLOCK */}
+      <div className="mb-6">
+        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
+          <span>User Referral Settings</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">User Referral Settings</span>
+        </div>
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-semibold text-gray-900 uppercase tracking-tight">User Referral Settings</h1>
+          <button 
+            onClick={() => navigate(-1)}
+            className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+          >
+            <ArrowLeft size={16} /> Back
+          </button>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg border border-[#E2E8F0] shadow-sm p-8 space-y-10">
-        
-        {/* Earnings Setup Header Card */}
-        <div className="flex items-start justify-between border border-[#E2E8F0] rounded-xl p-8 bg-white">
-           <div className="space-y-1">
-              <h3 className="text-[18px] font-bold text-[#2D3748]">User Referral Earnings Setup</h3>
-              <p className="text-[14px] text-gray-500">Invite others to use our app with your unique referral code and earn exciting rewards!</p>
-           </div>
-           <button 
-             onClick={() => setFormData({...formData, enable_user_referral_earnings: !formData.enable_user_referral_earnings})}
-             className={`relative inline-flex h-[24px] w-[46px] items-center rounded-full transition-colors duration-300 focus:outline-none ${formData.enable_user_referral_earnings ? 'bg-[#2D3748]' : 'bg-gray-200'}`}
-           >
-             <span className={`inline-block h-[18px] w-[18px] transform rounded-full bg-white transition-transform duration-300 ${formData.enable_user_referral_earnings ? 'translate-x-[24px]' : 'translate-x-[4px]'}`} />
-           </button>
-        </div>
+      <div className="max-w-5xl space-y-6">
+        {/* FORM CARD */}
+        <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden">
+          {/* Main Toggle Section */}
+          <div className="p-6 border-b border-gray-100 flex items-center justify-between">
+            <div className="flex items-center gap-4">
+              <div className="w-10 h-10 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                <UserCheck size={20} />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900 uppercase">User Referral Earnings Setup</h3>
+                <p className="text-xs text-gray-400 mt-0.5 font-medium">Invite others to use our app with your unique referral code and earn exciting rewards!</p>
+              </div>
+            </div>
+            <button 
+              onClick={() => handleToggle(!settings.enabled)}
+              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors focus:outline-none ${settings.enabled ? 'bg-indigo-600' : 'bg-gray-200'}`}
+            >
+              <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${settings.enabled ? 'translate-x-6' : 'translate-x-1'}`} />
+            </button>
+          </div>
 
-        {/* Commission Selection */}
-        <div className="space-y-4">
-           <div className="flex items-center gap-2">
-              <span className="text-[14px] font-bold text-[#2D3748]">Referral Commission Type</span>
-              <HelpCircle size={16} className="text-gray-400" />
-           </div>
-           <div className="relative max-w-lg">
-             <select 
-               value={formData.referral_type}
-               onChange={(e) => setFormData({...formData, referral_type: e.target.value})}
-               className="w-full h-[48px] px-4 border border-[#CBD5E0] rounded-lg bg-white text-[14px] font-medium text-[#4A5568] focus:ring-1 focus:ring-indigo-500 outline-none appearance-none transition-all"
-             >
-                <option value="instant">Instant for Referrer User</option>
-                <option value="milestone">Milestone for Referrer User</option>
-             </select>
-             <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none">
-                <ChevronRight size={16} className="rotate-90 text-gray-400" />
-             </div>
-           </div>
-        </div>
+          <div className="p-8 space-y-8">
+            {/* Referral Type Selection */}
+            <div className="max-w-xl space-y-2">
+              <label className={labelClass}>
+                Referral Commission Type <Info size={14} className="inline ml-1 text-gray-400 cursor-help" />
+              </label>
+              <div className="relative">
+                <select
+                  value={settings.type}
+                  onChange={(e) => setSettings({ ...settings, type: e.target.value })}
+                  className={`${inputClass} appearance-none pr-10`}
+                >
+                  <option value="">Select</option>
+                  {referralTypes.map((type) => (
+                    <option key={type.value} value={type.value}>{type.label}</option>
+                  ))}
+                </select>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={16} className="rotate-90" />
+                </div>
+              </div>
+            </div>
 
-        {/* Earnings Card Inner */}
-        <div className="bg-[#F8FAFC] border border-[#E2E8F0] rounded-xl p-8 flex flex-col md:flex-row items-center gap-8">
-           <div className="flex-1 space-y-1">
-              <h4 className="text-[16px] font-bold text-[#2D3748]">User Share the code To Refer User</h4>
-              <p className="text-[14px] text-gray-500">Offer a reward to Users for each referral when they share their code.</p>
-           </div>
-           <div className="w-full md:w-[450px] bg-white border border-[#E2E8F0] rounded-xl p-6">
-              <label className="block text-[14px] font-medium text-[#4A5568] mb-3">Earnings to Each Referral</label>
-              <input 
-                type="text" 
-                value={formData.referral_commission_amount_for_user}
-                onChange={(e) => setFormData({...formData, referral_commission_amount_for_user: e.target.value.replace(/[^0-9.]/g, '')})}
-                className="w-full h-[48px] px-4 bg-white border border-[#E2E8F0] rounded-lg text-[14px] text-[#2D3748] outline-none mb-2"
-                placeholder="0"
-              />
-              <p className="text-[12px] text-gray-400">Enter the amount Users earn for each referral.</p>
-           </div>
-        </div>
+            {/* Referral Info Card Grid */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 pt-4">
+              <div className="bg-white rounded-xl border border-dashed border-gray-200 p-6 flex items-center gap-5 transition-all hover:border-indigo-200">
+                <div className="w-12 h-12 rounded-xl bg-indigo-50 flex items-center justify-center text-indigo-600 shadow-sm">
+                  <Share2 size={24} />
+                </div>
+                <div>
+                  <h4 className="text-sm font-bold text-gray-900">User Share the code To Refer User</h4>
+                  <p className="text-xs text-gray-500 mt-1 leading-relaxed">Offer a reward to Users for each referral when they share their code.</p>
+                </div>
+              </div>
 
-        {/* Update Button */}
-        <div className="pt-4 flex items-center gap-4">
-           <button 
-             onClick={handleUpdate}
-             disabled={saving}
-             className="px-6 py-3.5 bg-[#3F51B5] text-white rounded-lg text-[14px] font-bold hover:bg-[#303F9F] transition-all flex items-center gap-2"
-           >
-             {saving && <Loader2 className="animate-spin" size={16} />}
-             Update Referral Settings
-           </button>
-           {success && (
-             <div className="flex items-center gap-2 text-emerald-600 font-bold text-[14px] animate-in fade-in duration-300">
-                <CheckCircle2 size={18} /> Settings Updated
-             </div>
-           )}
-        </div>
+              <div className="space-y-4">
+                {isConditional && (
+                  <div className="bg-gray-50/50 rounded-xl border border-gray-200 p-6 space-y-3">
+                    <label className={labelClass}>Required Ride Count</label>
+                    <div className="relative">
+                      <input
+                        type="number"
+                        value={settings.ride_count}
+                        onChange={(e) => setSettings({ ...settings, ride_count: e.target.value })}
+                        className={inputClass}
+                        placeholder="5"
+                      />
+                    </div>
+                    <p className="text-[11px] text-gray-400 font-medium">Number of rides required before earning rewards.</p>
+                  </div>
+                )}
 
+                <div className="bg-gray-50/50 rounded-xl border border-gray-200 p-6 space-y-3">
+                  <label className={labelClass}>Earnings to Each Referral</label>
+                  <div className="relative">
+                    <input
+                      type="number"
+                      value={settings.amount}
+                      onChange={(e) => setSettings({ ...settings, amount: e.target.value })}
+                      className={inputClass}
+                      placeholder="100"
+                    />
+                  </div>
+                  <p className="text-[11px] text-gray-400 font-medium">Enter the amount Users earn for each referral.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Action Footer */}
+          <div className="p-6 bg-gray-50 border-t border-gray-100 flex flex-col gap-4">
+            <button
+              onClick={handleUpdate}
+              disabled={saving}
+              className="w-fit flex items-center gap-2 px-6 py-2.5 bg-indigo-900 text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-800 transition-colors shadow-sm disabled:opacity-50"
+            >
+              {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+              Update Referral Settings
+            </button>
+
+            {showSuccess && (
+              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-100 animate-in fade-in slide-in-from-bottom-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <ChevronRight size={12} className="rotate-45" />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-tight">Referral settings updated successfully</span>
+                <button onClick={() => setShowSuccess(false)} className="ml-auto text-emerald-400 hover:text-emerald-600">
+                  <span className="text-lg">×</span>
+                </button>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
-
-      {/* FOOTER */}
-      <footer className="mt-20 flex items-center justify-between text-[11px] font-bold text-gray-400 uppercase tracking-widest pt-6 opacity-60">
-         <div>2026 © Appzeto.</div>
-         <div className="flex items-center gap-4">
-            <span>Design & Develop by Appzeto</span>
-            <span>App version 2.3</span>
-         </div>
-      </footer>
     </div>
   );
 };
 
 export default UserReferralSettings;
-

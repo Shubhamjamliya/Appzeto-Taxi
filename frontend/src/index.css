@@ -87,3 +87,30 @@ body {
     -webkit-backdrop-filter: blur(12px);
     border: 1px solid rgba(255, 255, 255, 0.3);
 }
+
+.admin-user-field,
+.admin-user-field:focus {
+  color-scheme: light;
+  background-color: #ffffff !important;
+  color: #000000 !important;
+}
+
+.admin-user-field::placeholder {
+  color: #6b7280 !important;
+  opacity: 1;
+}
+
+.admin-user-field option {
+  background-color: #ffffff;
+  color: #000000;
+}
+
+.admin-user-field:-webkit-autofill,
+.admin-user-field:-webkit-autofill:hover,
+.admin-user-field:-webkit-autofill:focus,
+.admin-user-field:-webkit-autofill:active {
+  -webkit-text-fill-color: #000000 !important;
+  caret-color: #000000 !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+  transition: background-color 9999s ease-out 0s;
+}

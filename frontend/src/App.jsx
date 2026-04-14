@@ -1,7 +1,8 @@
-import { Suspense, lazy } from 'react';
+import { Suspense, lazy, useEffect } from 'react';
 import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
+import { socketService } from './shared/api/socket';
 import './App.css';
 
 
@@ -136,11 +137,13 @@ const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
 const AdminOngoing = lazy(() => import('./modules/admin/pages/operations/Ongoing'));
-const AdminPaymentHistory = lazy(() => import('./modules/admin/pages/wallet/PaymentHistory'));
+const AdminWalletPayment = lazy(() => import('./modules/admin/pages/wallet/WalletPayment'));
 const AdminUserList = lazy(() => import('./modules/admin/pages/users/UserList'));
+const AdminUserCreate = lazy(() => import('./modules/admin/pages/users/UserCreate'));
 const AdminUserDetails = lazy(() => import('./modules/admin/pages/users/UserDetails'));
 const AdminDeleteRequestUsers = lazy(() => import('./modules/admin/pages/users/DeleteRequestUsers'));
 const AdminUserBulkUpload = lazy(() => import('./modules/admin/pages/users/UserBulkUpload'));
+const AdminUserImportCreate = lazy(() => import('./modules/admin/pages/users/UserImportCreate'));
 
 // DRIVER MANAGEMENT IMPORTS
 const AdminDriverList = lazy(() => import('./modules/admin/pages/drivers/DriverList'));
@@ -158,6 +161,7 @@ const AdminDriverDeleteRequests = lazy(() => import('./modules/admin/pages/drive
 const AdminGlobalDocuments = lazy(() => import('./modules/admin/pages/drivers/GlobalDocuments'));
 const AdminDriverDocumentForm = lazy(() => import('./modules/admin/pages/drivers/DriverDocumentForm'));
 const AdminDriverBulkUpload = lazy(() => import('./modules/admin/pages/drivers/DriverBulkUpload'));
+const AdminDriverImportCreate = lazy(() => import('./modules/admin/pages/drivers/DriverImportCreate'));
 const AdminDriverAudit = lazy(() => import('./modules/admin/pages/drivers/DriverAudit'));
 const AdminPaymentMethods = lazy(() => import('./modules/admin/pages/drivers/PaymentMethods'));
 const AdminDriverCreate = lazy(() => import('./modules/admin/pages/drivers/CreateDriver'));
@@ -189,11 +193,18 @@ const AdminPricingPlaceholder = ({ title }) => (
 
 const AdminOwnerDashboard = lazy(() => import('./modules/admin/pages/owners/OwnerDashboard'));
 const AdminManageOwners = lazy(() => import('./modules/admin/pages/owners/ManageOwners'));
+const AdminOwnerDetails = lazy(() => import('./modules/admin/pages/owners/OwnerDetails'));
+const AdminOwnerCreate = lazy(() => import('./modules/admin/pages/owners/OwnerCreate'));
+const AdminOwnerPasswordUpdate = lazy(() => import('./modules/admin/pages/owners/OwnerPasswordUpdate'));
 const AdminOwnerNeededDocuments = lazy(() => import('./modules/admin/pages/owners/OwnerNeededDocuments'));
+const AdminOwnerNeededDocumentsCreate = lazy(() => import('./modules/admin/pages/owners/OwnerNeededDocumentsCreate'));
 const AdminManageFleet = lazy(() => import('./modules/admin/pages/owners/ManageFleet'));
+const AdminManageFleetCreate = lazy(() => import('./modules/admin/pages/owners/ManageFleetCreate'));
 const AdminFleetDrivers = lazy(() => import('./modules/admin/pages/owners/FleetDrivers'));
+const AdminFleetDriverCreate = lazy(() => import('./modules/admin/pages/owners/FleetDriverCreate'));
 const AdminBlockedFleetDrivers = lazy(() => import('./modules/admin/pages/owners/BlockedFleetDrivers'));
 const AdminFleetNeededDocuments = lazy(() => import('./modules/admin/pages/owners/FleetNeededDocuments'));
+const AdminFleetNeededDocumentsCreate = lazy(() => import('./modules/admin/pages/owners/FleetNeededDocumentsCreate'));
 const AdminWithdrawalRequestOwners = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwners'));
 const AdminWithdrawalRequestOwnerDetail = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwnerDetail'));
 const AdminDeletedOwners = lazy(() => import('./modules/admin/pages/owners/DeletedOwners'));
@@ -285,7 +296,11 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
-  const isAdminPath = location.pathname.startsWith('/admin');
+  const isAdminPath =
+    location.pathname.startsWith('/admin') ||
+    location.pathname.startsWith('/user-import') ||
+    location.pathname.startsWith('/driver-import') ||
+    location.pathname.startsWith('/owner');
 
   if (isAdminPath) {
     return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
@@ -300,9 +315,63 @@ const MainLayout = ({ children }) => {
   );
 };
 
+const clearUserSession = () => {
+  localStorage.removeItem('token');
+  localStorage.removeItem('userToken');
+  localStorage.removeItem('userInfo');
+  localStorage.removeItem('chatRole');
+};
+
+const UserAccountInvalidationListener = () => {
+  const location = useLocation();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    const isUserRoute =
+      !location.pathname.startsWith('/admin') &&
+      !location.pathname.startsWith('/user-import') &&
+      !location.pathname.startsWith('/driver-import') &&
+      !location.pathname.startsWith('/owner') &&
+      !location.pathname.startsWith('/taxi/driver');
+
+    if (!isUserRoute) {
+      return undefined;
+    }
+
+    const handleLogout = () => {
+      clearUserSession();
+      socketService.disconnect();
+      navigate('/taxi/user/login', { replace: true });
+    };
+
+    const socket = socketService.connect({ role: 'user' });
+    socketService.on('account:deleted', handleLogout);
+
+    const handleAuthStale = (event) => {
+      if (event.detail?.role === 'user') {
+        handleLogout();
+      }
+    };
+
+    window.addEventListener('app:auth-stale', handleAuthStale);
+
+    return () => {
+      socketService.off('account:deleted', handleLogout);
+      window.removeEventListener('app:auth-stale', handleAuthStale);
+
+      if (socket) {
+        socketService.disconnect();
+      }
+    };
+  }, [location.pathname, navigate]);
+
+  return null;
+};
+
 function App() {
   return (
     <Router>
+      <UserAccountInvalidationListener />
       <MainLayout>
         <Suspense fallback={
           <div className="flex items-center justify-center min-h-screen bg-white">
@@ -487,6 +556,15 @@ function App() {
 
             {/* Admin Module Routes */}
             <Route path="/admin/login" element={<AdminLogin />} />
+            <Route path="/user-import/create" element={<AdminLayout />}>
+              <Route index element={<AdminUserImportCreate />} />
+            </Route>
+            <Route path="/driver-import/create" element={<AdminLayout />}>
+              <Route index element={<AdminDriverImportCreate />} />
+            </Route>
+            <Route path="/owner/create" element={<AdminLayout />}>
+              <Route index element={<AdminOwnerCreate />} />
+            </Route>
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" />} />
               <Route path="dashboard" element={<AdminDashboard />} />
@@ -494,11 +572,13 @@ function App() {
               <Route path="trips" element={<AdminTrips />} />
               <Route path="deliveries" element={<AdminDeliveries />} />
               <Route path="ongoing" element={<AdminOngoing />} />
-              <Route path="wallet/payment" element={<AdminPaymentHistory />} />
+              <Route path="wallet/payment" element={<AdminWalletPayment />} />
               <Route path="users" element={<AdminUserList />} />
+              <Route path="users/create" element={<AdminUserCreate />} />
               <Route path="users/:id" element={<AdminUserDetails />} />
               <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
               <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />
+              <Route path="user-import/create" element={<AdminUserImportCreate />} />
               
               <Route path="drivers" element={<AdminDriverList />} />
               <Route path="drivers/create" element={<AdminDriverCreate />} />
@@ -518,14 +598,13 @@ function App() {
               <Route path="drivers/documents/create" element={<AdminDriverDocumentForm />} />
               <Route path="drivers/documents/edit/:id" element={<AdminDriverDocumentForm />} />
               <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
+              <Route path="driver-import/create" element={<AdminDriverImportCreate />} />
               <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
                <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
               <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
               <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
               <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-              <Route path="referrals/joining-bonus" element={<Navigate to="/admin/referrals/dashboard" replace />} />
               <Route path="referrals/translation" element={<AdminReferralTranslation />} />
-               
                {/* Promotions Management */}
                <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
                <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />
@@ -541,13 +620,19 @@ function App() {
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />
               <Route path="owners" element={<AdminManageOwners />} />
+              <Route path="owners/:id/password" element={<AdminOwnerPasswordUpdate />} />
+              <Route path="owners/:id" element={<AdminOwnerDetails />} />
               <Route path="owners/wallet/withdrawals" element={<AdminWithdrawalRequestOwners />} />
               <Route path="owners/wallet/withdrawals/:id" element={<AdminWithdrawalRequestOwnerDetail />} />
               <Route path="fleet/drivers" element={<AdminFleetDrivers />} />
+              <Route path="fleet/drivers/create" element={<AdminFleetDriverCreate />} />
               <Route path="fleet/blocked" element={<AdminBlockedFleetDrivers />} />
               <Route path="fleet/documents" element={<AdminFleetNeededDocuments />} />
+              <Route path="fleet/documents/create" element={<AdminFleetNeededDocumentsCreate />} />
               <Route path="fleet/manage" element={<AdminManageFleet />} />
+              <Route path="fleet/manage/create" element={<AdminManageFleetCreate />} />
               <Route path="owners/documents" element={<AdminOwnerNeededDocuments />} />
+              <Route path="owners/documents/create" element={<AdminOwnerNeededDocumentsCreate />} />
               <Route path="owners/deleted" element={<AdminDeletedOwners />} />
               <Route path="owners/bookings" element={<AdminOwnerBookings />} />
               <Route path="referrals/config" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Referral Configuration - Under Setup</div>} />
@@ -576,6 +661,8 @@ function App() {
                 <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
                 <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
                 <Route path="set-price" element={<AdminSetPrices />} />
+                <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
+                <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
                 <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />

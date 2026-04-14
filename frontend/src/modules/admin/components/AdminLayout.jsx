@@ -325,7 +325,7 @@ const AdminLayout = () => {
               { label: 'User Bulk Upload', path: '/admin/users/bulk-upload' },
             ],
           },
-          { icon: Wallet, label: 'Payment History', path: '/admin/wallet/payment' },
+          { icon: Wallet, label: 'Wallet Payment', path: '/admin/wallet/payment' },
           {
             icon: Car,
             label: 'Driver Management',

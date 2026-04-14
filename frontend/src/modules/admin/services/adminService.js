@@ -11,17 +11,24 @@ export const adminService = {
    */
   getUsers: (page = 1, limit = 50) => api.get(`/admin/users?page=${page}&limit=${limit}`),
   
+  bulkImportUsers: (payload) => api.post('/admin/users/bulk-import', payload),
+
   createUser: (userData) => api.post('/admin/users', userData),
   
   updateUser: (id, userData) => api.patch(`/admin/users/${id}`, userData),
   
   deleteUser: (id) => api.delete(`/admin/users/${id}`),
+  getUserDeleteRequests: () => api.get('/admin/users/delete-requests'),
+  approveUserDeleteRequest: (id) => api.patch(`/admin/users/delete-requests/${id}/approve`),
+  rejectUserDeleteRequest: (id, adminNote = '') => api.patch(`/admin/users/delete-requests/${id}/reject`, { adminNote }),
 
   /**
    * Driver Management
    */
   getDrivers: (page = 1, limit = 50) => api.get(`/admin/drivers?page=${page}&limit=${limit}`),
+  bulkImportDrivers: (payload) => api.post('/admin/drivers/bulk-import', payload),
   getDriver: (id) => api.get(`/admin/drivers/${id}`),
+  createDriver: (driverData) => api.post('/admin/drivers', driverData),
   updateDriverStatus: (id, data) => api.patch(`/admin/drivers/${id}`, data),
   updateDriverPassword: (id, password) => api.patch(`/admin/drivers/update-password/${id}`, { password }),
   deleteDriver: (id) => api.delete(`/admin/drivers/${id}`),
@@ -33,6 +40,23 @@ export const adminService = {
   getReferralTranslations: () => api.get('/admin/referrals/translation'),
   updateReferralTranslation: (languageCode, data) =>
     api.patch(`/admin/referrals/translation/${languageCode}`, data),
+  getReferralSettings: (type) => api.get(`/admin/referrals/settings/${type}`),
+  updateReferralSettings: (type, data) => api.patch(`/admin/referrals/settings/${type}`, data),
+  // Wallet Payment APIs
+  searchUsers: (query) => api.get(`/admin/users?search=${query}`),
+  searchDrivers: (query) => api.get(`/admin/drivers?search=${query}`),
+  searchOwners: (query) => api.get(`/admin/owners?search=${query}`),
+
+  adjustUserWallet: (id, data) => api.post(`/admin/wallet/users/${id}/adjust`, data),
+  getUserWalletHistory: (id) => api.get(`/admin/wallet/users/${id}/history`),
+
+  adjustDriverWallet: (id, data) => api.post(`/admin/wallet/drivers/${id}/adjust`, data),
+  getDriverWalletHistory: (id) => api.get(`/admin/wallet/drivers/${id}/history`),
+
+  adjustOwnerWallet: (id, data) => api.post(`/admin/wallet/owners/${id}/adjust`, data),
+  getOwnerWalletHistory: (id) => api.get(`/admin/wallet/owners/${id}/history`),
+
+  getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 
   /**
    * Subscription Management
@@ -58,6 +82,7 @@ export const adminService = {
    * Owner Management
    */
   getOwners: () => api.get('/admin/owner-management/manage-owners'),
+  getOwner: (id) => api.get(`/admin/owner-management/manage-owners/${id}`),
   createOwner: (ownerData) => api.post('/admin/owner-management/manage-owners', ownerData),
   updateOwner: (id, ownerData) => api.patch(`/admin/owner-management/manage-owners/${id}`, ownerData),
   deleteOwner: (id) => api.delete(`/admin/owner-management/manage-owners/${id}`),
@@ -107,6 +132,8 @@ export const adminService = {
   getCancelChart: () => api.get('/admin/dashboard/cancel-chart'),
   getOngoingRides: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/ongoing-rides?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
+  getRideRequests: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
+    api.get(`/admin/ride-requests?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getDeliveries: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>
     api.get(`/admin/deliveries?page=${page}&limit=${limit}&tab=${encodeURIComponent(tab)}&search=${encodeURIComponent(search)}`),
   getTrips: ({ page = 1, limit = 10, tab = 'all', search = '' } = {}) =>

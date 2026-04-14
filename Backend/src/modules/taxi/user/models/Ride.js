@@ -181,6 +181,17 @@ const rideSchema = new mongoose.Schema(
         default: '',
         trim: true,
       },
+      deliveryScope: {
+        type: String,
+        enum: ['city', 'outstation'],
+        default: 'city',
+        lowercase: true,
+        trim: true,
+      },
+      isOutstation: {
+        type: Boolean,
+        default: false,
+      },
       senderName: {
         type: String,
         default: '',

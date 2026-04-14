@@ -406,7 +406,7 @@ const SearchingDriver = () => {
   const isAccepted  = stage === STAGES.ACCEPTED || stage === STAGES.COMPLETING;
 
   return (
-    <div className="min-h-screen bg-gray-100 max-w-lg mx-auto relative font-sans overflow-hidden">
+    <div className="min-h-screen bg-slate-50 max-w-lg mx-auto relative font-['Plus_Jakarta_Sans'] overflow-hidden">
       {/* Real Google Map Background */}
       <div className="absolute inset-0 z-0">
         {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
@@ -522,9 +522,9 @@ const SearchingDriver = () => {
 
 
       {/* Route pill */}
-      <div className="absolute top-8 left-4 right-16 z-20 bg-white/90 backdrop-blur-md rounded-[14px] px-4 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80">
-        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">Route</p>
-        <p className="text-[12px] font-bold text-slate-900 leading-tight truncate">{routeState.pickup || 'Pickup'} → {routeState.drop || 'Drop'}</p>
+      <div className="absolute top-8 left-4 right-16 z-20 bg-white/90 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border border-white/80">
+        <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em] leading-none mb-1">Current Route</p>
+        <p className="text-[13px] font-extrabold text-slate-900 leading-tight truncate">{routeState.pickup || 'Pickup'} → {routeState.drop || 'Drop'}</p>
       </div>
 
       {isSearching && (
@@ -546,16 +546,17 @@ const SearchingDriver = () => {
               {/* Intentional Bottom Sheet Handle */}
               <div className="w-10 h-1.5 bg-slate-100 rounded-full mx-auto mb-2" />
 
-              <div className="text-center space-y-1">
-                <h1 className="text-[20px] font-bold text-slate-950 tracking-tight">Finding nearby drivers</h1>
-                <p className="text-[12px] font-medium text-slate-400 max-w-[240px] mx-auto leading-normal">{searchStatus}</p>
+              <div className="text-center space-y-1.5">
+                <h1 className="text-[22px] font-extrabold text-slate-950 tracking-tight">Finding your ride</h1>
+                <p className="text-[13px] font-semibold text-slate-400 max-w-[260px] mx-auto leading-normal">{searchStatus}</p>
               </div>
 
               {/* Animated Progress Dots */}
-              <div className="flex justify-center gap-2 py-1">
+              <div className="flex justify-center gap-2.5 py-1">
                 {[0, 1, 2, 3].map(i => (
                   <motion.div key={i} animate={{ 
                     scale: [1, 1.4, 1],
+                    opacity: [0.3, 1, 0.3],
                     backgroundColor: ['#e2e8f0', '#f97316', '#e2e8f0'] 
                   }} transition={{ repeat: Infinity, duration: 1.5, delay: i * 0.2 }}
                     className="w-2.5 h-2.5 rounded-full" />
@@ -563,26 +564,26 @@ const SearchingDriver = () => {
               </div>
 
               {/* Stats Row */}
-              <div className="flex items-center justify-between px-4 py-4 rounded-[22px] bg-slate-50/50 border border-slate-100/50">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-full bg-emerald-50 flex items-center justify-center">
+              <div className="flex items-center justify-between px-5 py-4 rounded-[24px] bg-slate-50/80 border border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center">
                     <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
                   </div>
-                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">High Chance</span>
+                  <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Fast Matching</span>
                 </div>
-                <div className="w-px h-6 bg-slate-200" />
-                <div className="flex items-center gap-2.5">
-                   <ShieldCheck size={18} className="text-blue-500" strokeWidth={2.5} />
-                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Safety Verified</span>
+                <div className="w-px h-8 bg-slate-200" />
+                <div className="flex items-center gap-3">
+                   <ShieldCheck size={20} className="text-blue-500" strokeWidth={2.5} />
+                   <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider">Top Safety</span>
                 </div>
               </div>
 
               <motion.button 
                 whileTap={{ scale: 0.98 }}
                 onClick={() => setShowCancelConfirm(true)}
-                className="w-full py-4 rounded-2xl bg-slate-950 text-[13px] font-bold text-white uppercase tracking-widest hover:bg-black transition-colors shadow-lg shadow-slate-900/10"
+                className="w-full py-4.5 rounded-[22px] bg-red-50 text-[13px] font-extrabold text-red-500 uppercase tracking-[0.1em] hover:bg-red-100 transition-colors border border-red-100/50"
               >
-                Cancel My Search
+                Cancel Search
               </motion.button>
             </motion.div>
           )}

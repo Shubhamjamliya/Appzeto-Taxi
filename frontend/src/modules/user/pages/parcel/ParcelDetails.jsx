@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Box, ShieldCheck, ChevronRight, Scale, AlertTriangle } from 'lucide-react';
+import { ArrowLeft, Box, ShieldCheck, ChevronRight, Scale, AlertTriangle, Building2, Route } from 'lucide-react';
 
 const WEIGHT_PRICES = {
   'Under 5kg': { min: 45, max: 80 },
@@ -11,12 +11,14 @@ const WEIGHT_PRICES = {
 const ParcelDetails = () => {
   const location = useLocation();
   const parcelState = location.state || {};
-  const [weight, setWeight] = useState('Under 5kg');
-  const [description, setDescription] = useState('');
+  const [weight, setWeight] = useState(() => parcelState.weight || 'Under 5kg');
+  const [deliveryScope, setDeliveryScope] = useState(() => parcelState.deliveryScope || 'city');
+  const [description, setDescription] = useState(() => parcelState.description || '');
   const [descError, setDescError] = useState('');
   const navigate = useNavigate();
   const parcelType = parcelState.parcelType || 'Documents';
   const priceRange = WEIGHT_PRICES[weight];
+  const isOutstation = deliveryScope === 'outstation';
 
   const handleNext = () => {
     if (description.trim().length < 3) {
@@ -29,6 +31,8 @@ const ParcelDetails = () => {
         ...parcelState,
         parcelType,
         weight,
+        deliveryScope,
+        isOutstation,
         description,
         estimatedFare: priceRange,
       },
@@ -94,6 +98,41 @@ const ParcelDetails = () => {
               </p>
             </motion.div>
           </AnimatePresence>
+        </motion.div>
+
+        <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }}
+          className="rounded-[20px] border border-white/80 bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.05)] p-4 space-y-3">
+          <div>
+            <p className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Delivery Reach</p>
+            <p className="mt-1 text-[12px] font-bold text-slate-500">Choose whether this parcel stays in city or goes outstation.</p>
+          </div>
+          <div className="grid grid-cols-2 gap-2 bg-slate-50/80 p-1.5 rounded-[16px]">
+            {[
+              { key: 'city', icon: Building2, label: 'In City', hint: 'Local delivery' },
+              { key: 'outstation', icon: Route, label: 'Outstation', hint: 'Outside city' },
+            ].map(({ key, icon: Icon, label, hint }) => (
+              <motion.button key={key} whileTap={{ scale: 0.97 }} onClick={() => setDeliveryScope(key)}
+                className={`flex flex-col items-center gap-1.5 py-4 rounded-[13px] transition-all ${
+                  deliveryScope === key
+                    ? 'bg-white shadow-[0_4px_12px_rgba(15,23,42,0.08)] text-slate-900'
+                    : 'text-slate-400'
+                }`}>
+                <div className={`w-9 h-9 rounded-[11px] flex items-center justify-center transition-all ${
+                  deliveryScope === key ? 'bg-slate-900 shadow-[0_4px_10px_rgba(15,23,42,0.18)]' : 'bg-slate-100'
+                }`}>
+                  <Icon size={17} className={deliveryScope === key ? 'text-white' : 'text-slate-400'} strokeWidth={2} />
+                </div>
+                <span className="text-[12px] font-black uppercase tracking-tight">{label}</span>
+                <span className="text-[10px] font-bold text-slate-400">{hint}</span>
+              </motion.button>
+            ))}
+          </div>
+          {isOutstation ? (
+            <div className="rounded-[14px] border border-blue-100 bg-blue-50 px-3.5 py-2.5">
+              <p className="text-[11px] font-black text-blue-900">Outstation selected</p>
+              <p className="mt-1 text-[10px] font-bold text-blue-700">We will pass this parcel as an outstation request and save it with the booking.</p>
+            </div>
+          ) : null}
         </motion.div>
 
         {/* Description */}

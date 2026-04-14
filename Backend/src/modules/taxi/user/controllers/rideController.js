@@ -16,6 +16,40 @@ import {
 } from '../../services/rideService.js';
 import { startDispatchFlow } from '../../services/dispatchService.js';
 
+const EARTH_RADIUS_METERS = 6371000;
+const AVERAGE_CITY_SPEED_KMPH = 24;
+
+const toRadians = (value) => (Number(value) * Math.PI) / 180;
+
+const calculateDistanceMeters = (fromCoords = [], toCoords = []) => {
+  const [fromLng, fromLat] = fromCoords;
+  const [toLng, toLat] = toCoords;
+
+  if (![fromLng, fromLat, toLng, toLat].every((value) => Number.isFinite(Number(value)))) {
+    return null;
+  }
+
+  const latDelta = toRadians(toLat - fromLat);
+  const lngDelta = toRadians(toLng - fromLng);
+  const startLat = toRadians(fromLat);
+  const endLat = toRadians(toLat);
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDelta / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(EARTH_RADIUS_METERS * c);
+};
+
+const estimateEtaMinutes = (distanceMeters) => {
+  if (!Number.isFinite(distanceMeters) || distanceMeters <= 0) {
+    return 1;
+  }
+
+  const metersPerMinute = (AVERAGE_CITY_SPEED_KMPH * 1000) / 60;
+  return Math.max(1, Math.round(distanceMeters / metersPerMinute));
+};
+
 export const createRide = async (req, res) => {
   const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleIconType, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type } =
     req.body;
@@ -181,22 +215,36 @@ export const listAvailableDrivers = async (req, res) => {
     .select('name phone vehicleTypeId vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel rating location')
     .lean();
 
+  const enrichedDrivers = drivers.map((driver) => {
+    const distanceMeters = calculateDistanceMeters([longitude, latitude], driver.location?.coordinates || []);
+    const etaMinutes = estimateEtaMinutes(distanceMeters);
+
+    return {
+      id: driver._id,
+      name: driver.name,
+      vehicleTypeId: driver.vehicleTypeId,
+      vehicleType: driver.vehicleType,
+      vehicleIconType: driver.vehicleIconType,
+      vehicleNumber: driver.vehicleNumber,
+      vehicleColor: driver.vehicleColor,
+      vehicleMake: driver.vehicleMake,
+      vehicleModel: driver.vehicleModel,
+      rating: driver.rating,
+      location: driver.location,
+      distanceMeters,
+      etaMinutes,
+    };
+  });
+
+  const closestDriver = enrichedDrivers[0] || null;
+
   res.json({
     success: true,
     data: {
-      drivers: drivers.map((driver) => ({
-        id: driver._id,
-        name: driver.name,
-        vehicleTypeId: driver.vehicleTypeId,
-        vehicleType: driver.vehicleType,
-        vehicleIconType: driver.vehicleIconType,
-        vehicleNumber: driver.vehicleNumber,
-        vehicleColor: driver.vehicleColor,
-        vehicleMake: driver.vehicleMake,
-        vehicleModel: driver.vehicleModel,
-        rating: driver.rating,
-        location: driver.location,
-      })),
+      totalDrivers: enrichedDrivers.length,
+      closestDriverDistanceMeters: closestDriver?.distanceMeters ?? null,
+      closestDriverEtaMinutes: closestDriver?.etaMinutes ?? null,
+      drivers: enrichedDrivers,
     },
   });
 };

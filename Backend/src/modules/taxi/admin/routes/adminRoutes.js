@@ -154,6 +154,7 @@ import {
   createVehicleType,
   deleteAirport,
   deleteVehicleType,
+  getTransportTypes,
 } from '../controllers/adminController.js';
 import { promotionsRouter } from '../promotions/routes/index.js';
 
@@ -238,6 +239,7 @@ adminRouter.get('/admin/types/rental-packages', getRentalPackageTypes);
 adminRouter.post('/admin/types/rental-packages', createRentalPackageType);
 adminRouter.patch('/admin/types/rental-packages/:id', updateRentalPackageType);
 adminRouter.delete('/admin/types/rental-packages/:id', deleteRentalPackageType);
+adminRouter.get('/admin/types/transport-types', getTransportTypes);
 adminRouter.get('/admin/vehicle_preference', getVehiclePreferenceOptions);
 
 adminRouter.get('/admin/owner-management/manage-owners', getOwners);

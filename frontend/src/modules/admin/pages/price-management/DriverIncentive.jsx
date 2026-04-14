@@ -17,13 +17,30 @@ const DriverIncentive = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('daily');
   const [incentives, setIncentives] = useState([{ min_rides: '0', amount: '0' }]);
-  const [details, setDetails] = useState({ zone_name: 'India', vehicle_type: 'Premium Car' });
+  const [details, setDetails] = useState({ zone_name: '', vehicle_type: '' });
 
   useEffect(() => {
-    // Simulated fetch
-    setTimeout(() => {
-      setLoading(false);
-    }, 600);
+    const fetchPriceDetails = async () => {
+      try {
+        setLoading(true);
+        // axiosInstance interceptor already returns response.data
+        const res = await api.get('/admin/types/set-prices');
+        const items = res.results || res.data?.results || res.data || [];
+        const target = items.find(i => String(i.id || i._id) === String(id));
+        
+        if (target) {
+          setDetails({
+            zone_name: target.zone_id?.name || target.zone_name || 'Global',
+            vehicle_type: target.vehicle_type?.name || target.vehicle_type_name || 'Vehicle'
+          });
+        }
+      } catch (err) {
+        console.error('Fetch incentive details failed:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+    fetchPriceDetails();
   }, [id]);
 
   const addRow = () => {

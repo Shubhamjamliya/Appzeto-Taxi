@@ -15,6 +15,7 @@ import {
   Loader2
 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const EditDriver = () => {
   const navigate = useNavigate();
@@ -23,7 +24,7 @@ const EditDriver = () => {
   const [isFetching, setIsFetching] = useState(true);
   const [locations, setLocations] = useState([]);
   const [countries, setCountries] = useState([]);
-  const [transportTypes, setTransportTypes] = useState([]);
+  const { transportTypes } = useTaxiTransportTypes();
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [success, setSuccess] = useState(false);
   const [imagePreview, setImagePreview] = useState(null);
@@ -73,31 +74,7 @@ const EditDriver = () => {
           setCountries(Array.isArray(results) ? results : []);
         }
 
-        try {
-          const transRes = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/common/ride_modules', {
-            headers: { 'Authorization': `Bearer ${token}` }
-          });
-          const transData = await transRes.json();
-          if (transData.success || transData.data) {
-            const rawData = transData.data || transData.results || transData;
-            const rawTrans = Array.isArray(rawData) ? rawData : (typeof rawData === 'object' ? Object.keys(rawData) : []);
-            const mapped = rawTrans
-              .map(t => {
-                const id = (typeof t === 'string' ? t.toLowerCase() : (t.id || t._id)) || '';
-                const name = (typeof t === 'string' ? t.charAt(0).toUpperCase() + t.slice(1) : (t.name || t.id)) || '';
-                return { _id: id, name };
-              })
-              .filter(t => t._id === 'taxi' || t._id === 'delivery');
-
-            setTransportTypes(mapped.length > 0 ? mapped : [
-              { _id: 'taxi', name: 'Taxi' },
-              { _id: 'delivery', name: 'Delivery' }
-            ]);
-          }
-        } catch (e) {
-          setTransportTypes([{ _id: 'taxi', name: 'Taxi' }, { _id: 'delivery', name: 'Delivery' }]);
-        }
-
+        // Fetching driver details
         const response = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/drivers/${id}`, {
           headers: { 'Authorization': `Bearer ${token}` }
         });
@@ -422,8 +399,10 @@ const EditDriver = () => {
                   onChange={handleChange}
                   className={inputClass}
                 >
-                  <option value="taxi">Taxi / Car / Auto</option>
-                  <option value="delivery">Delivery</option>
+                  <option value="">Select Transport Type</option>
+                  {transportTypes.map(t => (
+                    <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+                  ))}
                 </select>
               </div>
 

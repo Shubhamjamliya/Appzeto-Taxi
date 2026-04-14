@@ -35,6 +35,7 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
+import TaxiTransportType from '../models/TaxiTransportType.js';
 import { hashPassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
@@ -4807,4 +4808,31 @@ export const deleteVehicleType = async (id) => {
       query.$or = [{ audience: audience }, { screen: audience }];
     }
     return OnboardingScreen.find(query).sort({ order: 1 }).lean();
+  };
+
+  export const listTransportTypes = async () => {
+    const types = await TaxiTransportType.find({ active: true }).lean();
+    if (types.length === 0) {
+      return await seedTransportTypes();
+    }
+    return types;
+  };
+
+  export const seedTransportTypes = async () => {
+    const defaults = [
+      { name: 'taxi', display_name: 'Taxi' },
+      { name: 'delivery', display_name: 'Delivery' },
+      { name: 'all', display_name: 'Both' }
+    ];
+    
+    const results = [];
+    for (const item of defaults) {
+      const existing = await TaxiTransportType.findOne({ name: item.name });
+      if (!existing) {
+        results.push(await TaxiTransportType.create(item));
+      } else {
+        results.push(existing);
+      }
+    }
+    return results;
   };

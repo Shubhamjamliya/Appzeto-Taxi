@@ -34,6 +34,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from '../../../../shared/api/runtimeConfig';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const inputClass = "w-full border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 transition-all outline-none";
 const labelClass = "block text-[13px] font-semibold text-gray-700 mb-2.5";
@@ -49,7 +50,7 @@ const StatusToggle = ({ active, onToggle }) => (
 
 const initialFormState = {
   zone_id: '',
-  transport_type: 'taxi',
+  transport_type: '',
   vehicle_type: '',
   payment_type: ['cash'],
   admin_commision_type: '1',
@@ -94,6 +95,7 @@ const SetPrices = ({ mode }) => {
   
   const [zones, setZones] = useState([]);
   const [vehicleTypes, setVehicleTypes] = useState([]);
+  const { transportTypes } = useTaxiTransportTypes();
 
   const [formData, setFormData] = useState(initialFormState);
 
@@ -281,14 +283,19 @@ const SetPrices = ({ mode }) => {
                                     <Gift size={14} />
                                  </button>
                                  <button 
+                                   title="Surge"
+                                   onClick={() => navigate(`/admin/pricing/set-price/surge/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors hover:bg-red-100"
+                                 >
+                                    <Zap size={14} />
+                                 </button>
+                                 <button 
                                    title="driver incentive"
                                    onClick={() => navigate(`/admin/pricing/set-price/incentive/${prize.id || prize._id}`)}
-                                   className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors hover:bg-blue-100"
+                                   className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors hover:bg-indigo-100"
                                  >
-                                    <Layers size={14} />
+                                    <Cone size={14} />
                                  </button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors"><Zap size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors"><Cone size={14} /></button>
                              </div>
                           </td>
                         </tr>
@@ -342,12 +349,12 @@ const SetPrices = ({ mode }) => {
                      <div>
                         <label className={labelClass}>Transport Type <span className="text-rose-500">*</span></label>
                         <div className="relative">
-                           <select required className={inputClass + " appearance-none cursor-pointer"} value={formData.transport_type} onChange={e => setFormData(p=>({...p, transport_type: e.target.value}))}>
-                              <option value="">Select Transport Type</option>
-                              <option value="taxi">Ride Hailing</option>
-                              <option value="delivery">Logistics</option>
-                              <option value="both">Both</option>
-                           </select>
+                            <select required className={inputClass + " appearance-none cursor-pointer"} value={formData.transport_type} onChange={e => setFormData(p=>({...p, transport_type: e.target.value}))}>
+                               <option value="">Select Transport Type</option>
+                               {transportTypes.map(t => (
+                                 <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+                               ))}
+                            </select>
                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                      </div>

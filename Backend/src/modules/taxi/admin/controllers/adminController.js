@@ -603,3 +603,6 @@ export const updateGeneralSettingsCategory = asyncHandler(async (req, res) =>
     await adminService.updateGeneralSettings(req.params.category, req.body),
   ),
 );
+export const getTransportTypes = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.listTransportTypes()),
+);

@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const BASE = `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin`;
 
@@ -16,6 +17,7 @@ const ManageFleetCreate = () => {
   const navigate = useNavigate();
   const token = localStorage.getItem('adminToken') || '';
   const authHeaders = useMemo(() => (token ? { Authorization: `Bearer ${token}` } : {}), [token]);
+  const { transportTypes } = useTaxiTransportTypes();
 
   const [isBootLoading, setIsBootLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -33,7 +35,7 @@ const ManageFleetCreate = () => {
 
     // Backend-required fields (kept off-UI to match your screenshot).
     service_location_id: '',
-    transport_type: 'taxi',
+    transport_type: '',
   });
 
   useEffect(() => {
@@ -165,6 +167,28 @@ const ManageFleetCreate = () => {
 
           <form onSubmit={handleSubmit} className="p-8">
             <div className="grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-2">
+              <div>
+                <label className={labelClass}>
+                  Transport Type <span className="text-rose-500">*</span>
+                </label>
+                <div className="relative">
+                  <select
+                    value={formData.transport_type}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, transport_type: e.target.value }))}
+                    className={`${inputClass} appearance-none pr-10`}
+                    required
+                  >
+                    <option value="">Select Transport Type</option>
+                    {transportTypes.map((t) => (
+                      <option key={t.id || t._id} value={t.name}>
+                        {t.display_name}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown size={18} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                </div>
+              </div>
+
               <div>
                 <label className={labelClass}>
                   Owner <span className="text-rose-500">*</span>

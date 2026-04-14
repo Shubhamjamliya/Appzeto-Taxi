@@ -100,12 +100,6 @@ const Profile = () => {
             <h1 className="text-2xl font-bold text-slate-900 tracking-tight leading-none">My Account</h1>
             <p className="text-[11px] font-semibold text-slate-400 uppercase tracking-widest mt-1.5 opacity-70">Manage your profile & settings</p>
           </div>
-          <button
-            onClick={() => navigate('/taxi/user/profile/settings')}
-            className="w-10 h-10 rounded-2xl bg-white border border-slate-100 flex items-center justify-center shadow-sm text-slate-400 hover:text-slate-900 active:scale-95 transition-all"
-          >
-            <User size={18} strokeWidth={2.5} />
-          </button>
         </div>
 
         {/* Hero Profile Card */}

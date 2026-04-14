@@ -3,6 +3,7 @@ import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
+import { Notification } from '../../admin/promotions/models/Notification.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { emitToDriver } from '../../services/dispatchService.js';
 import { findZoneByPickup } from '../services/locationService.js';
@@ -41,6 +42,17 @@ const serializeEmergencyContact = (contact = {}) => ({
   name: String(contact.name || '').trim(),
   phone: sanitizeEmergencyPhone(contact.phone),
   source: String(contact.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual',
+});
+
+const serializeDriverNotification = (item = {}) => ({
+  id: String(item._id || ''),
+  title: String(item.push_title || '').trim(),
+  body: String(item.message || '').trim(),
+  image: String(item.image || '').trim(),
+  sendTo: String(item.send_to || 'all').trim(),
+  serviceLocationName: String(item.service_location_name || '').trim(),
+  sentAt: item.sent_at || item.createdAt || null,
+  createdAt: item.createdAt || null,
 });
 
 export const registerDriver = async (req, res) => {
@@ -225,6 +237,40 @@ export const getDriverEmergencyContacts = async (req, res) => {
         ? driver.emergencyContacts.map(serializeEmergencyContact)
         : [],
       limit: MAX_EMERGENCY_CONTACTS,
+    },
+  });
+};
+
+export const getDriverNotifications = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const serviceLocationId = driver.service_location_id || null;
+  const query = {
+    status: 'sent',
+    send_to: { $in: ['all', 'drivers'] },
+  };
+
+  if (serviceLocationId) {
+    query.$or = [
+      { service_location_id: serviceLocationId },
+      { send_to: 'all' },
+      { send_to: 'drivers' },
+    ];
+  }
+
+  const notifications = await Notification.find(query)
+    .sort({ sent_at: -1, createdAt: -1 })
+    .limit(100)
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      results: notifications.map(serializeDriverNotification),
     },
   });
 };

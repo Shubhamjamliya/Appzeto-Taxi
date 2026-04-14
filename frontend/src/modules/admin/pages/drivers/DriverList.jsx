@@ -51,7 +51,9 @@ const DriverList = () => {
             serviceLocation: d.service_location_name || d.city || d.service_location?.name || 'India',
             phone: d.phone || d.mobile || 'N/A',
             transportType: d.transport_type || d.register_for || d.vehicle_type || 'All - Bike',
-            rating: d.rating || d.average_rating || d.avg_rating || 0,
+            rating: Number(d.rating_count || d.ratingCount || 0) > 0
+              ? Number(d.rating || d.average_rating || d.avg_rating || 0)
+              : 0,
             registeredAt: d.createdAt || null,
             status: d.approve ? 'Approved' : (d.status || 'Approved')
           }));

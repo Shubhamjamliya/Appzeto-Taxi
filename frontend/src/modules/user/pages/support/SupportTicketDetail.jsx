@@ -1,38 +1,77 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useLocation, useParams } from 'react-router-dom';
 import { motion } from 'framer-motion';
-import { ArrowLeft, Send } from 'lucide-react';
+import { ArrowLeft, Loader2, Send } from 'lucide-react';
+import { supportTicketService } from '../../../shared/services/supportTicketService';
 
 const STATUS_STYLES = {
-  'Open':        'bg-orange-50 text-orange-600 border-orange-100',
-  'In Progress': 'bg-blue-50 text-blue-600 border-blue-100',
-  'Resolved':    'bg-emerald-50 text-emerald-600 border-emerald-100',
+  pending: 'bg-orange-50 text-orange-600 border-orange-100',
+  assigned: 'bg-blue-50 text-blue-600 border-blue-100',
+  closed: 'bg-emerald-50 text-emerald-600 border-emerald-100',
 };
-
-const MOCK_MESSAGES = [
-  { id: 'm1', sender: 'user',    text: 'The driver took a completely different route and charged extra.',  time: '10:30 AM' },
-  { id: 'm2', sender: 'support', text: 'We are sorry to hear that. Could you share the trip ID?',          time: '10:45 AM' },
-  { id: 'm3', sender: 'user',    text: 'Trip ID is #8231.',                                                time: '10:47 AM' },
-];
 
 const SupportTicketDetail = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { id } = useParams();
-  const ticket = location.state?.ticket || { id, subject: 'Support Ticket', category: 'General', status: 'Open', updatedAt: 'Now' };
+  const { id: ticketCode } = useParams();
+  const pathRole = window.location.pathname.includes('/taxi/driver') ? 'driver' : 'user';
+  const ticketFromState = location.state?.ticket || null;
 
-  const [messages, setMessages] = useState(MOCK_MESSAGES);
+  const [ticket, setTicket] = useState(ticketFromState);
+  const [messages, setMessages] = useState((ticketFromState?.messages || []).map((item) => ({
+    id: item.id,
+    senderRole: item.senderRole,
+    senderName: item.senderName,
+    message: item.message,
+    createdAt: item.createdAt,
+  })));
   const [reply, setReply]       = useState('');
   const [sending, setSending]   = useState(false);
+  const [loading, setLoading] = useState(!ticketFromState);
+  const [error, setError] = useState('');
+
+  const fetchTicket = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const response = await supportTicketService.getMyTicket(ticketCode);
+      const nextTicket = response?.data || null;
+      setTicket(nextTicket);
+      setMessages(
+        (nextTicket?.messages || []).map((item) => ({
+          id: item.id,
+          senderRole: item.senderRole,
+          senderName: item.senderName,
+          message: item.message,
+          createdAt: item.createdAt,
+        })),
+      );
+    } catch (apiError) {
+      setError(apiError?.message || 'Unable to load support ticket');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (!ticketCode) return;
+    fetchTicket();
+  }, [ticketCode]);
 
   const handleSend = async () => {
     const text = reply.trim();
     if (!text) return;
     setSending(true);
-    await new Promise(r => setTimeout(r, 400)); // POST /api/v1/common/reply-message/:id
-    setMessages(prev => [...prev, { id: `m${Date.now()}`, sender: 'user', text, time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) }]);
-    setReply('');
-    setSending(false);
+    setError('');
+    try {
+      await supportTicketService.replyMyTicket(ticketCode, { message: text });
+      setReply('');
+      await fetchTicket();
+    } catch (apiError) {
+      setError(apiError?.message || 'Unable to send reply');
+    } finally {
+      setSending(false);
+    }
   };
 
   return (
@@ -44,27 +83,39 @@ const SupportTicketDetail = () => {
             <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0">
-            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">{ticket.category}</p>
-            <h1 className="text-[16px] font-black tracking-tight text-slate-900 leading-tight truncate">{ticket.subject}</h1>
+            <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">{ticket?.supportType || 'support'}</p>
+            <h1 className="text-[16px] font-black tracking-tight text-slate-900 leading-tight truncate">{ticket?.title || 'Support Ticket'}</h1>
           </div>
-          <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border shrink-0 mt-1 ${STATUS_STYLES[ticket.status]}`}>{ticket.status}</span>
+          <span className={`text-[9px] font-black px-2.5 py-1 rounded-full border shrink-0 mt-1 ${STATUS_STYLES[ticket?.status] || STATUS_STYLES.pending}`}>{ticket?.status || 'pending'}</span>
         </div>
       </header>
 
       {/* Messages */}
       <div className="flex-1 px-5 py-4 space-y-3 overflow-y-auto pb-24">
+        {loading ? (
+          <div className="flex items-center justify-center py-10">
+            <Loader2 size={20} className="animate-spin text-slate-400" />
+          </div>
+        ) : null}
+        {error ? (
+          <div className="rounded-[12px] border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-bold text-red-600">
+            {error}
+          </div>
+        ) : null}
         {messages.map((m, i) => (
           <motion.div key={m.id}
             initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.04 }}
-            className={`flex ${m.sender === 'user' ? 'justify-end' : 'justify-start'}`}>
+            className={`flex ${m.senderRole === pathRole ? 'justify-end' : 'justify-start'}`}>
             <div className={`max-w-[78%] rounded-[16px] px-4 py-3 ${
-              m.sender === 'user'
+              m.senderRole === pathRole
                 ? 'bg-slate-900 text-white rounded-br-[4px]'
                 : 'bg-white border border-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.06)] text-slate-900 rounded-bl-[4px]'
             }`}>
-              <p className={`text-[13px] font-bold leading-relaxed ${m.sender === 'user' ? 'text-white' : 'text-slate-800'}`}>{m.text}</p>
-              <p className={`text-[9px] font-bold mt-1 ${m.sender === 'user' ? 'text-white/50 text-right' : 'text-slate-400'}`}>{m.time}</p>
+              <p className={`text-[13px] font-bold leading-relaxed ${m.senderRole === pathRole ? 'text-white' : 'text-slate-800'}`}>{m.message}</p>
+              <p className={`text-[9px] font-bold mt-1 ${m.senderRole === pathRole ? 'text-white/50 text-right' : 'text-slate-400'}`}>
+                {new Date(m.createdAt).toLocaleString()}
+              </p>
             </div>
           </motion.div>
         ))}

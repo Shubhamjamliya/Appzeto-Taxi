@@ -1,4 +1,5 @@
 import { Admin } from '../admin/models/Admin.js';
+import { Owner } from '../admin/models/Owner.js';
 import { ApiError } from '../../../utils/ApiError.js';
 import { Driver } from '../driver/models/Driver.js';
 import { User } from '../user/models/User.js';
@@ -7,6 +8,7 @@ import { verifyAccessToken } from '../services/tokenService.js';
 const roleModelMap = {
   admin: Admin,
   driver: Driver,
+  owner: Owner,
   user: User,
 };
 

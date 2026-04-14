@@ -377,6 +377,14 @@ const AdminLayout = () => {
               { label: 'Fleet Finance Report', path: '/admin/reports/fleet-finance' },
             ],
           },
+          {
+            icon: ShieldCheck,
+            label: 'Support Management',
+            subItems: [
+              { label: 'Ticket Title', path: '/admin/support/ticket-title' },
+              { label: 'Support Tickets', path: '/admin/support/tickets' },
+            ],
+          },
         ],
       },
       {

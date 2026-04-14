@@ -91,8 +91,44 @@ export const stopDispatchFlow = (rideId) => {
   activeDispatches.delete(String(rideId));
 };
 
+const getDispatchState = (rideId) => {
+  const rideKey = String(rideId);
+  const state = activeDispatches.get(rideKey) || {};
+
+  return {
+    radiusIndex: Number.isInteger(state.radiusIndex) ? state.radiusIndex : 0,
+    timer: state.timer || null,
+    driverIds: Array.isArray(state.driverIds) ? state.driverIds : [],
+    notifiedDriverIds: Array.isArray(state.notifiedDriverIds) ? state.notifiedDriverIds : [],
+    rejectedDriverIds: Array.isArray(state.rejectedDriverIds) ? state.rejectedDriverIds : [],
+  };
+};
+
+const saveDispatchState = (rideId, nextState = {}) => {
+  const rideKey = String(rideId);
+  const currentState = getDispatchState(rideKey);
+
+  activeDispatches.set(rideKey, {
+    ...currentState,
+    ...nextState,
+  });
+
+  return activeDispatches.get(rideKey);
+};
+
+export const markDriverRejectedFromDispatch = (rideId, driverId) => {
+  if (!rideId || !driverId) {
+    return;
+  }
+
+  const state = getDispatchState(rideId);
+  const rejectedDriverIds = [...new Set([...state.rejectedDriverIds, String(driverId)])];
+
+  saveDispatchState(rideId, { rejectedDriverIds });
+};
+
 const closeRideAsUnmatched = async (rideId) => {
-  const dispatchState = activeDispatches.get(String(rideId));
+  const dispatchState = getDispatchState(rideId);
   const ride = await Ride.findOneAndUpdate(
     { _id: rideId, status: RIDE_STATUS.SEARCHING },
     { status: RIDE_STATUS.CANCELLED, liveStatus: RIDE_LIVE_STATUS.CANCELLED },
@@ -123,7 +159,7 @@ const closeRideAsUnmatched = async (rideId) => {
     reason: 'unmatched',
   });
 
-  for (const driverId of dispatchState?.driverIds || []) {
+  for (const driverId of dispatchState.notifiedDriverIds) {
     emitToDriver(driverId, 'rideRequestClosed', {
       rideId: String(ride._id),
       reason: 'unmatched',
@@ -191,7 +227,7 @@ export const cancelRideByAdmin = async (rideId) => {
 };
 
 export const cancelRideByUser = async ({ rideId, userId }) => {
-  const dispatchState = activeDispatches.get(String(rideId));
+  const dispatchState = getDispatchState(rideId);
   stopDispatchFlow(rideId);
 
   const ride = await Ride.findOne({ _id: rideId, userId });
@@ -239,7 +275,7 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
     });
   }
 
-  for (const driverId of dispatchState?.driverIds || []) {
+  for (const driverId of dispatchState.notifiedDriverIds) {
     emitToDriver(driverId, 'rideRequestClosed', {
       rideId: String(ride._id),
       reason: 'user-cancelled',
@@ -275,8 +311,7 @@ const scheduleNextAttempt = (rideId, nextRadiusIndex) => {
     });
   }, DISPATCH_RETRY_DELAY_MS);
 
-  const currentState = activeDispatches.get(String(rideId)) || {};
-  activeDispatches.set(String(rideId), { ...currentState, timer });
+  saveDispatchState(rideId, { timer });
 };
 
 const dispatchAttempt = async (rideId, radiusIndex = 0) => {
@@ -297,11 +332,22 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       vehicleTypeIds: dispatchVehicleTypeIds,
     });
 
-    const targetDrivers = drivers;
+    const dispatchState = getDispatchState(rideId);
+    const rejectedDriverIds = new Set(dispatchState.rejectedDriverIds);
+    const notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
+    const targetDrivers = drivers.filter((driver) => {
+      const driverId = String(driver._id);
+      return !rejectedDriverIds.has(driverId) && !notifiedDriverIds.has(driverId);
+    });
+    const nextNotifiedDriverIds = [
+      ...dispatchState.notifiedDriverIds,
+      ...targetDrivers.map((driver) => String(driver._id)),
+    ];
 
-    activeDispatches.set(String(rideId), {
+    saveDispatchState(rideId, {
       radiusIndex,
       driverIds: targetDrivers.map((driver) => String(driver._id)),
+      notifiedDriverIds: nextNotifiedDriverIds,
       timer: null,
     });
 
@@ -334,6 +380,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       status: ride.status,
       radius,
       matchedDrivers: targetDrivers.length,
+      totalNotifiedDrivers: nextNotifiedDriverIds.length,
     });
 
     if (radiusIndex === dispatchRadii.length - 1) {
@@ -344,11 +391,12 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
           .finally(() => stopDispatchFlow(rideId));
       }, DISPATCH_RETRY_DELAY_MS);
 
-      activeDispatches.set(String(rideId), {
-        radiusIndex,
-        driverIds: targetDrivers.map((driver) => String(driver._id)),
-        timer,
-      });
+        saveDispatchState(rideId, {
+          radiusIndex,
+          driverIds: targetDrivers.map((driver) => String(driver._id)),
+          notifiedDriverIds: nextNotifiedDriverIds,
+          timer,
+        });
 
       return;
     }
@@ -367,7 +415,7 @@ export const startDispatchFlow = async (ride) => {
 };
 
 export const notifyRideAccepted = async (ride) => {
-  const state = activeDispatches.get(String(ride._id));
+  const state = getDispatchState(ride._id);
   stopDispatchFlow(ride._id);
 
   // Once one driver wins the race, the rider is updated and the rest are told to stop.
@@ -434,12 +482,12 @@ export const notifyRideAccepted = async (ride) => {
 
   emitToRoom(getRideRoom(populatedRide._id), 'rideRequestClosed', {
     rideId: String(populatedRide._id),
-    acceptedDriverId: String(populatedRide.driverId._id),
-    notifiedDriverIds: state?.driverIds || [],
-    reason: 'accepted-by-another-driver',
+        acceptedDriverId: String(populatedRide.driverId._id),
+        notifiedDriverIds: state.notifiedDriverIds,
+        reason: 'accepted-by-another-driver',
   });
 
-  for (const driverId of state?.driverIds || []) {
+  for (const driverId of state.notifiedDriverIds) {
     emitToDriver(driverId, 'rideRequestClosed', {
       rideId: String(populatedRide._id),
       acceptedDriverId: String(populatedRide.driverId._id),

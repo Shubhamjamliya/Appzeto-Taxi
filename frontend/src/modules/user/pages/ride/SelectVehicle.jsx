@@ -236,7 +236,39 @@ const getVehicleIcon = (type) => {
     return '/2_AutoRickshaw.png';
   }
 
-  return type?.image || '/4_Taxi.png';
+  if (value.includes('ehc')) {
+    return '/ehcv.png';
+  }
+
+  if (value.includes('hcv')) {
+    return '/hcv.png';
+  }
+
+  if (value.includes('lcv')) {
+    return '/LCV.png';
+  }
+
+  if (value.includes('mcv')) {
+    return '/mcv.png';
+  }
+
+  if (value.includes('truck')) {
+    return '/truck.png';
+  }
+
+  if (value.includes('lux')) {
+    return '/Luxury.png';
+  }
+
+  if (value.includes('premium')) {
+    return '/Premium.png';
+  }
+
+  if (value.includes('suv')) {
+    return '/SUV.png';
+  }
+
+  return '/4_Taxi.png';
 };
 
 const getCapacity = (type) => {

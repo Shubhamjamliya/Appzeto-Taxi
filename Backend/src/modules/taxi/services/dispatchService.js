@@ -190,6 +190,84 @@ export const cancelRideByAdmin = async (rideId) => {
   return ride;
 };
 
+export const cancelRideByUser = async ({ rideId, userId }) => {
+  const dispatchState = activeDispatches.get(String(rideId));
+  stopDispatchFlow(rideId);
+
+  const ride = await Ride.findOne({ _id: rideId, userId });
+
+  if (!ride) {
+    return null;
+  }
+
+  if (ride.status === RIDE_STATUS.COMPLETED || ride.liveStatus === RIDE_LIVE_STATUS.COMPLETED) {
+    throw new Error('Completed rides cannot be cancelled');
+  }
+
+  if (ride.status === RIDE_STATUS.CANCELLED || ride.liveStatus === RIDE_LIVE_STATUS.CANCELLED) {
+    return ride;
+  }
+
+  ride.status = RIDE_STATUS.CANCELLED;
+  ride.liveStatus = RIDE_LIVE_STATUS.CANCELLED;
+  await ride.save();
+
+  if (ride.deliveryId) {
+    await Delivery.findByIdAndUpdate(ride.deliveryId, {
+      driverId: ride.driverId || null,
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    });
+  }
+
+  await Promise.all([
+    User.findByIdAndUpdate(ride.userId, { currentRideId: null }),
+    ride.driverId ? Driver.findByIdAndUpdate(ride.driverId, { isOnRide: false }) : Promise.resolve(),
+  ]);
+
+  emitToRoom(getUserRoom(ride.userId), 'rideCancelled', {
+    rideId: String(ride._id),
+    room: getRideRoom(ride._id),
+    reason: 'You cancelled the ride',
+  });
+
+  if (ride.driverId) {
+    emitToRoom(getDriverRoom(ride.driverId), 'rideRequestClosed', {
+      rideId: String(ride._id),
+      reason: 'user-cancelled',
+      message: 'User cancelled the ride.',
+    });
+  }
+
+  for (const driverId of dispatchState?.driverIds || []) {
+    emitToDriver(driverId, 'rideRequestClosed', {
+      rideId: String(ride._id),
+      reason: 'user-cancelled',
+      message: 'User cancelled the ride.',
+    });
+  }
+
+  emitToRoom(getRideRoom(ride._id), 'rideCancelled', {
+    rideId: String(ride._id),
+    room: getRideRoom(ride._id),
+    reason: 'User cancelled the ride',
+  });
+
+  emitToRoom(getRideRoom(ride._id), 'rideRequestClosed', {
+    rideId: String(ride._id),
+    reason: 'user-cancelled',
+    message: 'User cancelled the ride.',
+  });
+
+  emitToRoom(getRideRoom(ride._id), SOCKET_EVENTS.RIDE_STATUS_UPDATED, {
+    rideId: String(ride._id),
+    status: ride.status,
+    liveStatus: ride.liveStatus,
+  });
+
+  return ride;
+};
+
 const scheduleNextAttempt = (rideId, nextRadiusIndex) => {
   const timer = setTimeout(() => {
     dispatchAttempt(rideId, nextRadiusIndex).catch((error) => {
@@ -237,6 +315,8 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
         pickupAddress: ride.pickupAddress || '',
         dropLocation: ride.dropLocation,
         dropAddress: ride.dropAddress || '',
+        estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
+        estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
         vehicleTypeId: ride.vehicleTypeId ? String(ride.vehicleTypeId) : null,
         vehicleTypeIds: dispatchVehicleTypeIds,
         vehicleIconType: ride.vehicleIconType,
@@ -319,6 +399,8 @@ export const notifyRideAccepted = async (ride) => {
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
     fare: populatedRide.fare,
+    estimatedDistanceMeters: populatedRide.estimatedDistanceMeters || 0,
+    estimatedDurationMinutes: populatedRide.estimatedDurationMinutes || 0,
     paymentMethod: populatedRide.paymentMethod,
     parcel: populatedRide.parcel || null,
     intercity: populatedRide.intercity || null,

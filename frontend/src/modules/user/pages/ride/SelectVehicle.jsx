@@ -257,7 +257,40 @@ const getCapacity = (type) => {
   return 4;
 };
 
-const getFareEstimate = (type) => {
+const AVERAGE_CITY_SPEED_KMPH = 24;
+
+const calculateDistanceMeters = (fromCoords = [], toCoords = []) => {
+  const [fromLng, fromLat] = fromCoords;
+  const [toLng, toLat] = toCoords;
+
+  if (![fromLng, fromLat, toLng, toLat].every((value) => Number.isFinite(Number(value)))) {
+    return 0;
+  }
+
+  const toRadians = (value) => (Number(value) * Math.PI) / 180;
+  const earthRadiusMeters = 6371000;
+  const latDelta = toRadians(toLat - fromLat);
+  const lngDelta = toRadians(toLng - fromLng);
+  const startLat = toRadians(fromLat);
+  const endLat = toRadians(toLat);
+  const a =
+    Math.sin(latDelta / 2) ** 2 +
+    Math.cos(startLat) * Math.cos(endLat) * Math.sin(lngDelta / 2) ** 2;
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+  return Math.round(earthRadiusMeters * c);
+};
+
+const estimateDurationMinutes = (distanceMeters = 0) => {
+  if (!Number.isFinite(Number(distanceMeters)) || Number(distanceMeters) <= 0) {
+    return 0;
+  }
+
+  const metersPerMinute = (AVERAGE_CITY_SPEED_KMPH * 1000) / 60;
+  return Math.max(1, Math.round(Number(distanceMeters) / metersPerMinute));
+};
+
+const getFallbackVehicleEstimate = (type) => {
   const value = getIconValue(type);
   const label = getTypeLabel(type).toLowerCase();
 
@@ -280,6 +313,66 @@ const getFareEstimate = (type) => {
   return 106;
 };
 
+const getSetPriceRows = (response) => {
+  const data = unwrap(response);
+  return data?.paginator?.data || data?.results || [];
+};
+
+const normalizeId = (value) => String(value?._id || value?.id || value || '').trim();
+
+const toFiniteNumber = (value, fallback = 0) => {
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : fallback;
+};
+
+const findBestPricingRule = ({ rules, vehicleTypeId, serviceLocationId }) => {
+  const normalizedVehicleTypeId = normalizeId(vehicleTypeId);
+  const normalizedServiceLocationId = normalizeId(serviceLocationId);
+
+  const candidates = rules.filter((rule) => {
+    const matchesVehicle = normalizeId(rule?.vehicle_type?._id || rule?.vehicle_type || rule?.type_id) === normalizedVehicleTypeId;
+    const isActive = Number(rule?.active ?? 1) === 1 && String(rule?.status || 'active').toLowerCase() !== 'inactive';
+    const transportType = String(rule?.transport_type || 'taxi').toLowerCase();
+    const isTaxi = transportType === 'taxi' || transportType === 'both';
+
+    return matchesVehicle && isActive && isTaxi;
+  });
+
+  if (!candidates.length) {
+    return null;
+  }
+
+  const exactServiceLocation = candidates.find(
+    (rule) => normalizedServiceLocationId && normalizeId(rule?.service_location_id?._id || rule?.service_location_id) === normalizedServiceLocationId,
+  );
+
+  return exactServiceLocation || candidates[0];
+};
+
+const calculateEstimatedFare = ({ vehicle, pricingRule, distanceMeters, durationMinutes }) => {
+  const fallbackFare = getFallbackVehicleEstimate(vehicle?.raw || vehicle);
+
+  if (!pricingRule) {
+    return fallbackFare;
+  }
+
+  const distanceKm = Math.max(0, Number(distanceMeters || 0) / 1000);
+  const basePrice = toFiniteNumber(pricingRule.base_price, 0);
+  const baseDistance = Math.max(0, toFiniteNumber(pricingRule.base_distance, 0));
+  const pricePerDistance = toFiniteNumber(pricingRule.price_per_distance, 0);
+  const timePrice = toFiniteNumber(pricingRule.time_price, 0);
+  const serviceTax = toFiniteNumber(pricingRule.service_tax, 0);
+  const extraDistanceKm = Math.max(0, distanceKm - baseDistance);
+  const subtotal = basePrice + (extraDistanceKm * pricePerDistance) + (Math.max(0, Number(durationMinutes || 0)) * timePrice);
+
+  if (subtotal <= 0) {
+    return fallbackFare;
+  }
+
+  const total = subtotal + (subtotal * serviceTax) / 100;
+  return Math.max(0, Math.round(total));
+};
+
 const getDropTime = (minutesAway = 0) => {
   const safeMinutes = Math.max(6, Number(minutesAway) || 0);
   const date = new Date(Date.now() + safeMinutes * 60 * 1000);
@@ -299,6 +392,8 @@ const formatDistanceLabel = (distanceMeters) => {
 
   return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
 };
+
+const formatCurrency = (amount) => `₹${Math.round(Number(amount) || 0)}`;
 
 const formatAvailabilityLine = (availability) => {
   if (!availability?.totalDrivers) {
@@ -339,7 +434,7 @@ const normalizeVehicleType = (type, index) => {
     badge: null,
     badgeColor: 'bg-orange-50 text-orange-500 border-orange-100',
     sublabel: type?.short_description || type?.description || 'Available ride',
-    price: getFareEstimate(type),
+    price: getFallbackVehicleEstimate(type),
     raw: type,
   };
 };
@@ -355,6 +450,8 @@ const SelectVehicle = () => {
   const [isLoadingDrivers, setIsLoadingDrivers] = useState(false);
   const [vehicleLoadError, setVehicleLoadError] = useState('');
   const [driverLoadError, setDriverLoadError] = useState('');
+  const [pricingRules, setPricingRules] = useState([]);
+  const [tripMetrics, setTripMetrics] = useState({ distanceMeters: 0, durationMinutes: 0 });
   const navigate = useNavigate();
   const location = useLocation();
   const routeState = location.state || {};
@@ -363,6 +460,7 @@ const SelectVehicle = () => {
   const pickupCoords = useMemo(() => routeState.pickupCoords || [75.9048, 22.7039], [routeState.pickupCoords]);
   const dropCoords = useMemo(() => routeState.dropCoords || [75.8937, 22.7533], [routeState.dropCoords]);
   const stops = routeState.stops || [];
+  const serviceLocationId = routeState.service_location_id || routeState.serviceLocationId || '';
   const routePrefix = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
   const pickupPosition = useMemo(() => toLatLng(pickupCoords), [pickupCoords]);
   const dropPosition = useMemo(() => toLatLng(dropCoords, null), [dropCoords]);
@@ -409,8 +507,115 @@ const SelectVehicle = () => {
     };
   }, []);
 
-  const selectedVehicle = useMemo(() => vehicles.find((v) => v.id === selected), [selected, vehicles]);
-  const selectedVehicleName = selectedVehicle?.name || 'vehicle';
+  useEffect(() => {
+    let active = true;
+
+    const loadPricingRules = async () => {
+      try {
+        const response = await api.get('/admin/types/set-prices');
+
+        if (!active) {
+          return;
+        }
+
+        setPricingRules(getSetPriceRows(response));
+      } catch {
+        if (active) {
+          setPricingRules([]);
+        }
+      }
+    };
+
+    loadPricingRules();
+
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    const fallbackDistanceMeters = calculateDistanceMeters(pickupCoords, dropCoords);
+    const fallbackDurationMinutes = estimateDurationMinutes(fallbackDistanceMeters);
+
+    if (!dropPosition) {
+      setTripMetrics({
+        distanceMeters: fallbackDistanceMeters,
+        durationMinutes: fallbackDurationMinutes,
+      });
+      return;
+    }
+
+    if (!isMapLoaded || !window.google?.maps?.DirectionsService) {
+      setTripMetrics({
+        distanceMeters: fallbackDistanceMeters,
+        durationMinutes: fallbackDurationMinutes,
+      });
+      return;
+    }
+
+    let active = true;
+    const directionsService = new window.google.maps.DirectionsService();
+
+    directionsService.route(
+      {
+        origin: pickupPosition,
+        destination: dropPosition,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+        provideRouteAlternatives: false,
+      },
+      (result, status) => {
+        if (!active) {
+          return;
+        }
+
+        const leg = result?.routes?.[0]?.legs?.[0];
+        const distanceMeters = toFiniteNumber(leg?.distance?.value, fallbackDistanceMeters);
+        const durationMinutes = Math.max(
+          1,
+          Math.round(toFiniteNumber(leg?.duration?.value, fallbackDurationMinutes * 60) / 60),
+        );
+
+        if (status === 'OK' && leg) {
+          setTripMetrics({ distanceMeters, durationMinutes });
+          return;
+        }
+
+        setTripMetrics({
+          distanceMeters: fallbackDistanceMeters,
+          durationMinutes: fallbackDurationMinutes,
+        });
+      },
+    );
+
+    return () => {
+      active = false;
+    };
+  }, [dropCoords, dropPosition, isMapLoaded, pickupCoords, pickupPosition]);
+
+  const pricedVehicles = useMemo(
+    () =>
+      vehicles.map((vehicle) => {
+        const pricingRule = findBestPricingRule({
+          rules: pricingRules,
+          vehicleTypeId: vehicle.vehicleTypeId,
+          serviceLocationId,
+        });
+
+        return {
+          ...vehicle,
+          pricingRule,
+          price: calculateEstimatedFare({
+            vehicle,
+            pricingRule,
+            distanceMeters: tripMetrics.distanceMeters,
+            durationMinutes: tripMetrics.durationMinutes,
+          }),
+        };
+      }),
+    [pricingRules, serviceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles],
+  );
+
+  const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === selected), [pricedVehicles, selected]);
   const selectedAvailability = selectedVehicle ? (availabilityByVehicleId[selectedVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
   const onlineDrivers = selectedAvailability.drivers || [];
 
@@ -483,6 +688,8 @@ const SelectVehicle = () => {
         vehicleIconType: selectedVehicle.iconType,
         paymentMethod,
         fare: selectedVehicle.price,
+        estimatedDistanceMeters: tripMetrics.distanceMeters,
+        estimatedDurationMinutes: tripMetrics.durationMinutes,
       },
     });
   };
@@ -508,8 +715,25 @@ const SelectVehicle = () => {
             <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
           </motion.button>
           <div className="flex-1 min-w-0 bg-white/95 rounded-[14px] px-4 py-2.5 shadow-[0_4px_14px_rgba(15,23,42,0.10)] flex items-center gap-2">
-            <span className="text-[14px] font-bold text-slate-800 truncate flex-1">{pickup}</span>
-            <X size={15} className="text-slate-400 shrink-0" />
+            <span className="text-[14px] font-bold text-slate-800 truncate flex-1">{drop}</span>
+            <button
+              type="button"
+              onClick={() =>
+                navigate(`${routePrefix}/ride/select-location`, {
+                  state: {
+                    pickup,
+                    drop,
+                    pickupCoords,
+                    dropCoords,
+                    stops,
+                  },
+                })
+              }
+              className="shrink-0 rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+              aria-label="Change destination"
+            >
+              <X size={15} className="shrink-0" />
+            </button>
           </div>
         </div>
 
@@ -566,14 +790,14 @@ const SelectVehicle = () => {
             </div>
           )}
 
-          {!isLoadingVehicles && !vehicleLoadError && vehicles.length === 0 && (
+          {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.length === 0 && (
             <div className="bg-white/90 border border-slate-100 rounded-[18px] px-4 py-5 text-center">
               <p className="text-[13px] font-bold text-slate-900">No vehicle types available</p>
               <p className="text-[11px] font-bold text-slate-400 mt-1">Admin needs to create active taxi vehicle types first.</p>
             </div>
           )}
 
-          {!isLoadingVehicles && !vehicleLoadError && vehicles.map((v, i) => {
+          {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.map((v, i) => {
             const isSelected = selected === v.id;
             const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
             const badge = getAvailabilityBadge(availability) || v.badge;
@@ -641,12 +865,17 @@ const SelectVehicle = () => {
                       {formatAvailabilityLine(availability)}
                     </p>
                   </div>
+                  {!isUnavailable && tripMetrics.distanceMeters > 0 && (
+                    <p className="mt-1 text-[10px] font-semibold text-slate-400">
+                      {formatDistanceLabel(tripMetrics.distanceMeters)} trip · ~{tripMetrics.durationMinutes || 1} min
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-col items-end gap-1.5 shrink-0 z-10">
                   <div className="text-right">
                     <span className={`text-[16px] font-extrabold tracking-tight block ${isUnavailable ? 'text-slate-300' : 'text-slate-900'}`}>
-                      {isUnavailable ? 'N/A' : `₹${v.price}`}
+                      {isUnavailable ? 'N/A' : formatCurrency(v.price)}
                     </span>
                     {!isUnavailable && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">est.</span>}
                   </div>
@@ -706,7 +935,7 @@ const SelectVehicle = () => {
                   <>
                     <span>Book {selectedVehicle.name}</span>
                     <div className="w-1.5 h-1.5 rounded-full bg-slate-900/20" />
-                    <span>₹{selectedVehicle.price}</span>
+                    <span>{formatCurrency(selectedVehicle.price)}</span>
                   </>
                 )
                 : `${selectedVehicle.name} Unavailable`

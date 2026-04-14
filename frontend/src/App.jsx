@@ -88,8 +88,6 @@ const CabSharing = lazy(() => import('./modules/user/pages/cabsharing/CabSharing
 const ProfileSettings = lazy(() => import('./modules/user/pages/profile/ProfileSettings'));
 const PaymentSettings = lazy(() => import('./modules/user/pages/profile/PaymentSettings'));
 const AddressSettings = lazy(() => import('./modules/user/pages/profile/AddressSettings'));
-const NotificationSettings = lazy(() => import('./modules/user/pages/profile/NotificationSettings'));
-
 // Driver Module - Common
 import DriverLayout from './modules/driver/components/DriverLayout';
 
@@ -443,7 +441,7 @@ function App() {
             <Route path="/profile/settings" element={<ProfileSettings />} />
             <Route path="/profile/payments" element={<PaymentSettings />} />
             <Route path="/profile/addresses" element={<AddressSettings />} />
-            <Route path="/profile/notifications" element={<NotificationSettings />} />
+            <Route path="/profile/notifications" element={<UserNotifications />} />
             <Route path="/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/safety/sos" element={<SOSContacts />} />
             <Route path="/support/tickets" element={<SupportTickets />} />
@@ -509,7 +507,7 @@ function App() {
             <Route path="/taxi/user/profile/settings" element={<ProfileSettings />} />
             <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
             <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
-            <Route path="/taxi/user/profile/notifications" element={<NotificationSettings />} />
+            <Route path="/taxi/user/profile/notifications" element={<UserNotifications />} />
             <Route path="/taxi/user/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
             <Route path="/taxi/user/support/tickets" element={<SupportTickets />} />

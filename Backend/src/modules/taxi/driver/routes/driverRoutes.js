@@ -11,6 +11,7 @@ import {
   getDriverApprovalStatus,
   getDriverDocumentTemplates,
   getDriverEmergencyContacts,
+  getDriverNotifications,
   getMyWallet,
   getOnboardingSession,
   getServiceLocations,
@@ -42,6 +43,7 @@ driverRouter.post('/me/delete-request', authenticate(['driver']), asyncHandler(r
 driverRouter.get('/emergency-contacts', authenticate(['driver']), asyncHandler(getDriverEmergencyContacts));
 driverRouter.post('/emergency-contacts', authenticate(['driver']), asyncHandler(addDriverEmergencyContact));
 driverRouter.delete('/emergency-contacts/:contactId', authenticate(['driver']), asyncHandler(deleteDriverEmergencyContact));
+driverRouter.get('/notifications', authenticate(['driver']), asyncHandler(getDriverNotifications));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));

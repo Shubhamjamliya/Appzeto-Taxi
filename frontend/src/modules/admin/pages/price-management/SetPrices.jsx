@@ -102,13 +102,14 @@ const SetPrices = ({ mode }) => {
 
   useEffect(() => {
     fetchInitialData();
-  }, []);
+  }, [id]);
 
   useEffect(() => {
     if (mode === 'edit' && id && prizesFull.length > 0) {
-      const pData = prizesFull.find(d => (String(d._id) === String(id) || String(d.id) === String(id)));
+      const pData = prizesFull.find(d => (String(d._id || '') === String(id) || String(d.id || '') === String(id)));
       if (pData) {
         setFormData({
+          ...initialFormState,
           ...pData,
           zone_id: pData.zone_id?._id || pData.zone_id || '',
           vehicle_type: pData.vehicle_type?._id || pData.vehicle_type || '',
@@ -119,6 +120,9 @@ const SetPrices = ({ mode }) => {
           admin_commission_for_owner: pData.admin_commission_for_owner ?? 0,
           admin_commission_type_for_owner: String(pData.admin_commission_type_for_owner ?? 1),
           order_number: pData.order_number ?? pData.eta_sequence ?? '',
+          payment_type: Array.isArray(pData.payment_type) ? pData.payment_type : (pData.payment_type ? [pData.payment_type] : ['cash']),
+          user_cancellation_fee_type: pData.user_cancellation_fee_type || 'percentage',
+          driver_cancellation_fee_type: pData.driver_cancellation_fee_type || 'percentage',
         });
       }
     } else if (mode === 'create') {
@@ -129,10 +133,11 @@ const SetPrices = ({ mode }) => {
   const fetchInitialData = async () => {
     setLoading(true);
     try {
+      const auth = { 'Authorization': `Bearer ${token}` };
       const [prizesRes, zonesRes, vehiclesRes] = await Promise.all([
-        fetch(`${baseUrl}/types/set-prices`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${baseUrl}/zones`, { headers: { 'Authorization': `Bearer ${token}` } }),
-        fetch(`${baseUrl}/types/vehicle-types`, { headers: { 'Authorization': `Bearer ${token}` } })
+        fetch(`${baseUrl}/types/set-prices`, { headers: auth }),
+        fetch(`${baseUrl}/zones`, { headers: auth }),
+        fetch(`${baseUrl}/types/vehicle-types`, { headers: auth })
       ]);
 
       const [prizesData, zonesData, vehiclesData] = await Promise.all([
@@ -140,12 +145,23 @@ const SetPrices = ({ mode }) => {
       ]);
 
       if (prizesData.success) {
-        setPrizes(prizesData.results || []);
-        setPrizesFull(prizesData.paginator?.data || prizesData.results || []);
+        const items = prizesData.results || prizesData.data?.results || [];
+        const fullItems = prizesData.paginator?.data || items || [];
+        setPrizes(items);
+        setPrizesFull(fullItems);
       }
-      if (zonesData.success) setZones(zonesData.results || zonesData.data?.zones || []);
-      if (vehiclesData.success) setVehicleTypes(vehiclesData.results || vehiclesData.data?.vehicle_types || []);
-    } catch (error) { console.error(error); } finally { setLoading(false); }
+      
+      const zItems = zonesData.results || zonesData.data?.zones || JSON.parse(JSON.stringify(zonesData.data?.results || []));
+      setZones(Array.isArray(zItems) ? zItems : []);
+      
+      const vItems = vehiclesData.results || vehiclesData.data?.vehicle_types || JSON.parse(JSON.stringify(vehiclesData.data?.results || []));
+      setVehicleTypes(Array.isArray(vItems) ? vItems : []);
+      
+    } catch (error) { 
+      console.error("Fetch Data Error:", error);
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   const handleSave = async (e) => {
@@ -157,7 +173,10 @@ const SetPrices = ({ mode }) => {
       const res = await fetch(url, {
         method,
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify({
+          ...formData,
+          payment_type: Array.isArray(formData.payment_type) ? formData.payment_type.join(',') : formData.payment_type
+        })
       });
       const data = await res.json();
       if (data.success) {
@@ -184,9 +203,9 @@ const SetPrices = ({ mode }) => {
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-6">
                <h1 className="text-sm font-bold text-[#1E293B] uppercase tracking-[0.15em]">SET PRICES</h1>
                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium tracking-tight">
-                  <span className="hover:text-slate-600 transition-colors cursor-pointer">Set Prices</span>
+                  <span className="hover:text-slate-600 transition-colors cursor-pointer" onClick={() => fetchInitialData()}>Set Prices</span>
                   <ChevronRight size={10} className="text-slate-300" />
-                  <span className="text-slate-800 font-bold">Set Prices</span>
+                  <span className="text-slate-800 font-bold">Listing</span>
                </div>
             </div>
 
@@ -203,8 +222,8 @@ const SetPrices = ({ mode }) => {
                     <span>entries</span>
                   </div>
                   <div className="flex items-center gap-3">
-                    <button className="w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-full text-slate-400 hover:text-indigo-600 transition-all shadow-sm">
-                      <Search size={18} />
+                    <button onClick={() => fetchInitialData()} className={`w-10 h-10 flex items-center justify-center bg-white border border-gray-200 rounded-full text-slate-400 hover:text-indigo-600 transition-all shadow-sm ${loading ? 'animate-spin' : ''}`}>
+                      {loading ? <Loader2 size={18} /> : <Search size={18} />}
                     </button>
                     <button className="flex items-center gap-2 px-6 py-2 bg-[#F37048] text-white rounded text-sm font-bold shadow-sm">
                       <Filter size={16} /> Filters
@@ -227,36 +246,43 @@ const SetPrices = ({ mode }) => {
                      </tr>
                    </thead>
                    <tbody className="divide-y divide-gray-50">
-                    {loading ? (
+                    {loading && prizes.length === 0 ? (
                        <tr><td colSpan="5" className="py-24 text-center text-slate-300 font-bold uppercase tracking-widest text-xs animate-pulse">Syncing Price Matrix...</td></tr>
-                    ) : filteredPrizes.map((prize) => (
-                      <tr key={prize.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="px-8 py-6 text-sm font-semibold text-slate-700">{prize.zone_name || 'India'}</td>
-                        <td className="px-8 py-6 text-sm text-slate-600 font-medium">{prize.transport_type || 'All'}</td>
-                        <td className="px-8 py-6 text-sm text-slate-800 font-bold">{prize.vehicle_type_name || 'Premium Car'}</td>
-                        <td className="px-8 py-6">
-                           <StatusToggle active={Number(prize.active) === 1} onToggle={async () => {
-                             await fetch(`${baseUrl}/types/set-prices/${prize.id}`, {
-                               method: 'PATCH',
-                               headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-                               body: JSON.stringify({ active: Number(prize.active) === 1 ? 0 : 1 })
-                             });
-                             fetchInitialData();
-                           }} />
-                        </td>
-                        <td className="px-8 py-6 text-right pr-12">
-                           <div className="flex items-center justify-end gap-2">
-                              {/* Action buttons matching screenshot */}
-                              <button onClick={() => navigate(`/admin/pricing/set-price/edit/${prize.id}`)} className="w-8 h-8 flex items-center justify-center bg-[#FFF7ED] text-[#F97316] rounded"><Edit2 size={14} /></button>
-                              <button className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded"><Gift size={14} /></button>
-                              <button className="w-8 h-8 flex items-center justify-center bg-[#F8FAFC] text-[#64748B] rounded"><Eye size={14} /></button>
-                              <button className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded"><Layers size={14} /></button>
-                              <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded"><Zap size={14} /></button>
-                              <button className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded"><Cone size={14} /></button>
-                           </div>
-                        </td>
-                      </tr>
-                    ))}
+                    ) : filteredPrizes.length === 0 ? (
+                       <tr><td colSpan="5" className="py-24 text-center text-slate-400 italic">No price rules configured.</td></tr>
+                    ) : (
+                      filteredPrizes.map((prize) => (
+                        <tr key={prize.id || prize._id} className="hover:bg-slate-50/50 transition-colors">
+                          <td className="px-8 py-6 text-sm font-semibold text-slate-700">{prize.zone_name || 'India'}</td>
+                          <td className="px-8 py-6 text-sm text-slate-600 font-medium">
+                            {prize.transport_type === 'both' ? 'All' : (prize.transport_type === 'taxi' ? 'Ride Hailing' : (prize.transport_type || 'All'))}
+                          </td>
+                          <td className="px-8 py-6 text-sm text-slate-800 font-bold">{prize.vehicle_type_name || 'Premium Car'}</td>
+                          <td className="px-8 py-6">
+                             <StatusToggle active={Number(prize.active) === 1} onToggle={async () => {
+                               try {
+                                 await fetch(`${baseUrl}/types/set-prices/${prize.id || prize._id}`, {
+                                   method: 'PATCH',
+                                   headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                                   body: JSON.stringify({ active: Number(prize.active) === 1 ? 0 : 1 })
+                                 });
+                                 fetchInitialData();
+                               } catch(e) {}
+                             }} />
+                          </td>
+                          <td className="px-8 py-6 text-right pr-12">
+                             <div className="flex items-center justify-end gap-2">
+                                <button onClick={() => navigate(`/admin/pricing/set-price/edit/${prize.id || prize._id}`)} className="w-8 h-8 flex items-center justify-center bg-[#FFF7ED] text-[#F97316] rounded transition-colors hover:bg-orange-100"><Edit2 size={14} /></button>
+                                <button className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors"><Gift size={14} /></button>
+                                <button className="w-8 h-8 flex items-center justify-center bg-[#F8FAFC] text-[#64748B] rounded transition-colors"><Eye size={14} /></button>
+                                <button className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors"><Layers size={14} /></button>
+                                <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors"><Zap size={14} /></button>
+                                <button className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors"><Cone size={14} /></button>
+                             </div>
+                          </td>
+                        </tr>
+                      ))
+                    )}
                    </tbody>
                  </table>
                </div>
@@ -271,20 +297,27 @@ const SetPrices = ({ mode }) => {
             <div className="flex items-center justify-between border-b border-gray-100 pb-3 mb-8">
                <h1 className="text-sm font-bold text-[#1E293B] uppercase tracking-[0.15em]">{mode === 'edit' ? 'EDIT' : 'CREATE'}</h1>
                <div className="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium">
-                  <span className="hover:text-slate-600 cursor-pointer" onClick={() => navigate('/admin/pricing/set-price')}>Set Prices</span>
+                  <span className="hover:text-slate-600 transition-colors cursor-pointer" onClick={() => navigate('/admin/pricing/set-price')}>Set Prices</span>
                   <ChevronRight size={10} className="text-slate-300" />
                   <span className="text-slate-800 font-bold">{mode === 'edit' ? 'Edit' : 'Create'}</span>
                </div>
             </div>
 
             <div className="bg-white rounded-md border border-gray-100 shadow-sm p-4 lg:p-10 relative">
+               {loading && mode === 'edit' && (
+                  <div className="absolute inset-0 bg-white/80 z-20 flex flex-col items-center justify-center gap-4">
+                     <Loader2 className="animate-spin text-indigo-600" size={40} />
+                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Hydrating Form State...</p>
+                  </div>
+               )}
+               
                <div className="flex justify-end mb-4">
                   <button className="text-[11px] font-bold text-[#00BFA5] underline decoration-dotted underline-offset-4">How It Works</button>
                </div>
 
                <form onSubmit={handleSave} className="space-y-10">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-                     {/* Row 1 */}
+                     {/* Column System */}
                      <div>
                         <label className={labelClass}>Zone <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -307,8 +340,6 @@ const SetPrices = ({ mode }) => {
                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                      </div>
-
-                     {/* Row 2 */}
                      <div>
                         <label className={labelClass}>Vehicle Type <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -322,7 +353,7 @@ const SetPrices = ({ mode }) => {
                      <div>
                         <label className={labelClass}>Payment Type <span className="text-rose-500">*</span></label>
                         <div className="relative">
-                           <select required className={inputClass + " appearance-none cursor-pointer"} value={formData.payment_type[0]} onChange={e => setFormData(p=>({...p, payment_type: [e.target.value]}))}>
+                           <select required className={inputClass + " appearance-none cursor-pointer"} value={Array.isArray(formData.payment_type) ? (formData.payment_type[0] || 'cash') : (formData.payment_type || 'cash')} onChange={e => setFormData(p=>({...p, payment_type: [e.target.value]}))}>
                               <option value="">Select Payment Type</option>
                               <option value="cash">Cash</option>
                               <option value="online">Online</option>
@@ -331,8 +362,6 @@ const SetPrices = ({ mode }) => {
                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                      </div>
-
-                     {/* Row 3 - Customer Commission */}
                      <div>
                         <label className={labelClass}>Admin Commission Type From Customer <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -348,8 +377,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>Admin Commission From Customer <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Admin Commission From Customer" value={formData.admin_commision} onChange={e => setFormData(p=>({...p, admin_commision: e.target.value}))} />
                      </div>
-
-                     {/* Row 4 - Driver Commission */}
                      <div>
                         <label className={labelClass}>Admin Commission Type From Driver <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -365,8 +392,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>Admin Commission From Driver <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Admin Commission From Driver" value={formData.admin_commission_from_driver} onChange={e => setFormData(p=>({...p, admin_commission_from_driver: e.target.value}))} />
                      </div>
-
-                     {/* Row 5 - Owner Commission */}
                      <div>
                         <label className={labelClass}>Admin Commission Type From Owner <span className="text-rose-500">*</span></label>
                         <div className="relative">
@@ -382,8 +407,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>Admin Commission From Owner <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Admin Commission From Owner" value={formData.admin_commission_for_owner} onChange={e => setFormData(p=>({...p, admin_commission_for_owner: e.target.value}))} />
                      </div>
-
-                     {/* Row 6 - Fiscal */}
                      <div>
                         <label className={labelClass}>Service Tax (%) <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Service Tax (%)" value={formData.service_tax} onChange={e => setFormData(p=>({...p, service_tax: e.target.value}))} />
@@ -392,8 +415,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>ETA Sequence <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Order Number" value={formData.order_number} onChange={e => setFormData(p=>({...p, order_number: e.target.value}))} />
                      </div>
-
-                     {/* Row 7 - Base Pricing */}
                      <div>
                         <label className={labelClass}>Base Price <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Base Price" value={formData.base_price} onChange={e => setFormData(p=>({...p, base_price: e.target.value}))} />
@@ -402,8 +423,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>Base Distance <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Base Distance" value={formData.base_distance} onChange={e => setFormData(p=>({...p, base_distance: e.target.value}))} />
                      </div>
-
-                     {/* Row 8 - Distance/Time */}
                      <div>
                         <label className={labelClass}>Price Per Distance <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Price Per Distance" value={formData.price_per_distance} onChange={e => setFormData(p=>({...p, price_per_distance: e.target.value}))} />
@@ -412,8 +431,6 @@ const SetPrices = ({ mode }) => {
                         <label className={labelClass}>Time Price in Mintue <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Time Price" value={formData.time_price} onChange={e => setFormData(p=>({...p, time_price: e.target.value}))} />
                      </div>
-
-                     {/* Row 9 - Waiting */}
                      <div>
                         <label className={labelClass}>Waiting Charge <span className="text-rose-500">*</span></label>
                         <input type="number" required className={inputClass} placeholder="Enter Waiting Charge" value={formData.waiting_charge} onChange={e => setFormData(p=>({...p, waiting_charge: e.target.value}))} />
@@ -423,34 +440,33 @@ const SetPrices = ({ mode }) => {
                         <input type="number" required className={inputClass} placeholder="Free Waiting Time In Minutes Before Start A Ride" value={formData.free_waiting_before} onChange={e => setFormData(p=>({...p, free_waiting_before: e.target.value}))} />
                      </div>
 
-                     {/* Row 10 - Flags & Waiting After */}
                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12">
                         <div>
                            <label className={labelClass}>Free Waiting Time In Minutes After Start A Ride <span className="text-rose-500">*</span></label>
                            <input type="number" required className={inputClass} placeholder="Free Waiting Time In Minutes After Start A Ride" value={formData.free_waiting_after} onChange={e => setFormData(p=>({...p, free_waiting_after: e.target.value}))} />
                         </div>
-                        <div className="flex items-center gap-2 pt-8">
-                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300" checked={formData.enable_airport_ride} onChange={e => setFormData(p=>({...p, enable_airport_ride: e.target.checked}))} />
+                        <div className="flex items-center gap-2 pt-8 ml-1">
+                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_airport_ride} onChange={e => setFormData(p=>({...p, enable_airport_ride: e.target.checked}))} />
                            <span className="text-[13px] font-semibold text-gray-700">Enable Airport Ride</span>
                         </div>
                      </div>
 
                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12">
-                        <div className="flex items-center gap-2">
-                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300" checked={formData.enable_outstation_ride} onChange={e => setFormData(p=>({...p, enable_outstation_ride: e.target.checked}))} />
+                        <div className="flex items-center gap-2 pt-2 ml-1">
+                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_outstation_ride} onChange={e => setFormData(p=>({...p, enable_outstation_ride: e.target.checked}))} />
                            <span className="text-[13px] font-semibold text-gray-700">Enable Outstation Ride</span>
                         </div>
                      </div>
                   </div>
 
                   {/* Section: Cancellation Fee */}
-                  <div className="space-y-6 pt-4 border-t border-gray-50">
-                     <h2 className="text-base font-bold text-gray-800 tracking-tight">Cancellation Fee</h2>
+                  <div className="space-y-6 pt-6 border-t border-gray-100">
+                     <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Cancellation Fee</h2>
                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
                         <div>
                            <label className={labelClass}>Cancellation Fee for User <span className="text-rose-500">*</span></label>
-                           <div className="flex border border-gray-200 rounded-md overflow-hidden">
-                              <select className="bg-gray-50 px-3 text-xs font-bold border-r outline-none" value={formData.user_cancellation_fee_type} onChange={e => setFormData(p=>({...p, user_cancellation_fee_type: e.target.value}))}>
+                           <div className="flex border border-gray-200 rounded-md overflow-hidden focus-within:border-indigo-500">
+                              <select className="bg-gray-50 px-3 text-[11px] font-black border-r outline-none cursor-pointer" value={formData.user_cancellation_fee_type} onChange={e => setFormData(p=>({...p, user_cancellation_fee_type: e.target.value}))}>
                                  <option value="percentage">%</option>
                                  <option value="fixed">FIXED</option>
                               </select>
@@ -459,8 +475,8 @@ const SetPrices = ({ mode }) => {
                         </div>
                         <div>
                            <label className={labelClass}>Cancellation Fee for Driver <span className="text-rose-500">*</span></label>
-                           <div className="flex border border-gray-200 rounded-md overflow-hidden">
-                              <select className="bg-gray-50 px-3 text-xs font-bold border-r outline-none" value={formData.driver_cancellation_fee_type} onChange={e => setFormData(p=>({...p, driver_cancellation_fee_type: e.target.value}))}>
+                           <div className="flex border border-gray-200 rounded-md overflow-hidden focus-within:border-indigo-500">
+                              <select className="bg-gray-50 px-3 text-[11px] font-black border-r outline-none cursor-pointer" value={formData.driver_cancellation_fee_type} onChange={e => setFormData(p=>({...p, driver_cancellation_fee_type: e.target.value}))}>
                                  <option value="percentage">%</option>
                                  <option value="fixed">FIXED</option>
                               </select>
@@ -482,30 +498,30 @@ const SetPrices = ({ mode }) => {
                   </div>
 
                   {/* Section: Shared Ride */}
-                  <div className="space-y-6 pt-4 border-t border-gray-50">
-                     <h2 className="text-base font-bold text-gray-800 tracking-tight">Shared Ride</h2>
-                     <div className="flex items-center gap-2">
-                        <input type="checkbox" className="w-4 h-4 rounded border-gray-300" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked}))} />
+                  <div className="space-y-6 pt-6 border-t border-gray-100">
+                     <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Shared Ride</h2>
+                     <div className="flex items-center gap-2 pt-2 ml-1">
+                        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked, enable_shared_ride: e.target.checked ? 1 : 0}))} />
                         <span className="text-[13px] font-semibold text-gray-700">Enable Ride Sharing</span>
                      </div>
                   </div>
 
                   {/* Footer Action */}
-                  <div className="pt-6 flex justify-end">
-                     <button type="submit" disabled={saving} className="px-10 py-3 bg-[#00BFA5] text-white rounded text-sm font-bold shadow-md hover:opacity-90 transition-opacity active:scale-95 flex items-center gap-2">
+                  <div className="pt-8 flex justify-end">
+                     <button type="submit" disabled={saving} className="px-12 py-3.5 bg-[#00BFA5] text-white rounded text-[13px] font-bold shadow-lg hover:opacity-90 transition-all active:scale-95 flex items-center gap-2">
                         {saving && <Loader2 size={16} className="animate-spin" />}
-                        Save
+                        {saving ? 'Saving Changes...' : 'Save'}
                      </button>
                   </div>
                </form>
 
-               {/* Mockup Floating Button */}
-               <div className="absolute right-8 top-[360px] z-50">
-                  <button type="button" className="w-12 h-12 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-lg transition-transform hover:scale-105 active:scale-95">
+               {/* Design Floating Action Button */}
+               <div className="absolute right-8 top-[380px] z-50">
+                  <button type="button" className="w-14 h-14 bg-[#00BFA5] text-white rounded-full flex items-center justify-center shadow-2xl hover:rotate-[360deg] transition-all duration-700">
                      <div className="flex flex-col gap-1.5 items-center">
-                        <div className="w-5 h-[2px] bg-white rounded-full"></div>
-                        <div className="w-5 h-[2px] bg-white rounded-full"></div>
-                        <div className="w-5 h-[2px] bg-white rounded-full"></div>
+                        <div className="w-6 h-[2.5px] bg-white rounded-full"></div>
+                        <div className="w-6 h-[2px] bg-white/70 rounded-full"></div>
+                        <div className="w-6 h-[1.5px] bg-white/40 rounded-full"></div>
                      </div>
                   </button>
                </div>

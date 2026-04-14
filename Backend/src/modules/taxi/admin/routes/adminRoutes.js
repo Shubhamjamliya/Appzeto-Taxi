@@ -8,14 +8,12 @@ import {
   createDriver,
   createDriverNeededDocument,
   bulkImportDrivers,
-  createDriverNeededDocument,
   createRentalPackageType,
   createOwner,
   createOwnerBooking,
   createOwnerNeededDocument,
   createPreference,
   createRole,
-  createPaymentMethod,
   createPaymentMethod,
   createServiceLocation,
   createSetPrice,
@@ -27,7 +25,6 @@ import {
   deleteAppModule,
   deleteDriver,
   deleteDriverNeededDocument,
-  deleteDriverNeededDocument,
   deleteGoodsType,
   deleteRentalPackageType,
   deleteLanguage,
@@ -37,7 +34,6 @@ import {
   deleteOwnerNeededDocument,
   deletePreference,
   deleteRole,
-  deletePaymentMethod,
   deletePaymentMethod,
   deleteSetPrice,
   deleteServiceLocation,
@@ -56,10 +52,7 @@ import {
   getCountries,
   getDashboardData,
   getDeliveries,
-  getDeliveries,
   getDriver,
-  getDriverNeededDocument,
-  getDriverNeededDocuments,
   getDriverNeededDocument,
   getDriverNeededDocuments,
   getDriverProfile,
@@ -70,18 +63,11 @@ import {
   getNegativeBalanceDrivers,
   getDriverWithdrawalSummaries,
   getDriverWithdrawals,
-  getDriverRatings,
-  getDriverRatingDetail,
-  getNegativeBalanceDrivers,
-  getDriverWithdrawalSummaries,
-  getDriverWithdrawals,
   getDeletedDrivers,
   getFirebaseSettings,
   getGoodsTypes,
   getIntercityTrips,
-  getIntercityTrips,
   getRentalPackageTypes,
-  getReferralTranslations,
   getReferralTranslations,
   getGeneralSettingsCategory,
   getLanguages,
@@ -99,7 +85,6 @@ import {
   getOwnerNeededDocuments,
   getPaymentGateways,
   getPaymentMethods,
-  getPaymentMethods,
   getPaymentSettings,
   getPreferences,
   getRideModules,
@@ -108,8 +93,6 @@ import {
   getServiceLocations,
   getSmsSettings,
   getSubscriptionPlans,
-  getSubscriptionSettings,
-  updateSubscriptionSettings,
   getSubscriptionSettings,
   updateSubscriptionSettings,
   getTodayEarnings,
@@ -140,7 +123,6 @@ import {
   updateAirport,
   updateDriver,
   updateDriverNeededDocument,
-  updateDriverNeededDocument,
   updateDriverPassword,
   updateFirebaseSettings,
   updateGoodsType,
@@ -154,9 +136,7 @@ import {
   updateOwnerNeededDocument,
   updatePaymentSettings,
   updatePaymentMethod,
-  updatePaymentMethod,
   updatePreferenceStatus,
-  updateReferralTranslation,
   updateReferralTranslation,
   updateSetPrice,
   updateServiceLocation,
@@ -208,16 +188,9 @@ adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), ge
 adminRouter.get('/admin/wallet/drivers/:id/withdrawals', authenticate(['admin']), getDriverWithdrawals);
 adminRouter.get('/admin/driver-ratings', authenticate(['admin']), getDriverRatings);
 adminRouter.get('/admin/driver-ratings/:id', authenticate(['admin']), getDriverRatingDetail);
-adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']), getNegativeBalanceDrivers);
-adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);
-adminRouter.get('/admin/wallet/drivers/:id/withdrawals', authenticate(['admin']), getDriverWithdrawals);
-adminRouter.get('/admin/driver-ratings', authenticate(['admin']), getDriverRatings);
-adminRouter.get('/admin/driver-ratings/:id', authenticate(['admin']), getDriverRatingDetail);
 
 adminRouter.get('/admin/driver-subscriptions/plans/list', getSubscriptionPlans);
 adminRouter.post('/admin/driver-subscriptions/plans/create', createSubscriptionPlan);
-adminRouter.get('/admin/driver-subscriptions/settings', getSubscriptionSettings);
-adminRouter.post('/admin/driver-subscriptions/settings', updateSubscriptionSettings);
 adminRouter.get('/admin/driver-subscriptions/settings', getSubscriptionSettings);
 adminRouter.post('/admin/driver-subscriptions/settings', updateSubscriptionSettings);
 
@@ -229,7 +202,6 @@ adminRouter.post('/admin/service-locations', createServiceLocation);
 adminRouter.patch('/admin/service-locations/:id', updateServiceLocation);
 adminRouter.delete('/admin/service-locations/:id', deleteServiceLocation);
 adminRouter.get('/common/ride_modules', getRideModules);
-adminRouter.get('/admin/types/vehicle-types/list', getVehicleTypes);
 adminRouter.get('/admin/types/vehicle-types/list', getVehicleTypes);
 adminRouter.get('/admin/types/vehicle-types', getVehicleTypeCatalog);
 adminRouter.post('/admin/types/vehicle-types', createVehicleType);
@@ -275,13 +247,6 @@ adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDr
 adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
 adminRouter.get('/admin/referrals/translation', getReferralTranslations);
 adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
-adminRouter.get('/admin/owner-management/driver-needed-document', getDriverNeededDocuments);
-adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverNeededDocument);
-adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);
-adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDriverNeededDocument);
-adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
-adminRouter.get('/admin/referrals/translation', getReferralTranslations);
-adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
@@ -290,8 +255,6 @@ adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);
 adminRouter.get('/admin/ongoing-rides', getOngoingRides);
 adminRouter.get('/admin/ride-requests', getRideRequests);
 adminRouter.delete('/admin/ongoing-rides/:id', deleteOngoingRide);
-adminRouter.get('/admin/deliveries', getDeliveries);
-adminRouter.get('/admin/trips', getIntercityTrips);
 adminRouter.get('/admin/deliveries', getDeliveries);
 adminRouter.get('/admin/trips', getIntercityTrips);
 
@@ -328,12 +291,6 @@ adminRouter.patch('/admin/notification-channels/:id/mail', toggleChannelMail);
 adminRouter.get('/admin/integration-settings/payment-gateways', getPaymentGateways);
 adminRouter.get('/admin/integration-settings/payment-settings', getPaymentSettings);
 adminRouter.patch('/admin/integration-settings/payment-settings', updatePaymentSettings);
-
-adminRouter.get('/admin/payment-methods', authenticate(['admin']), getPaymentMethods);
-adminRouter.post('/admin/payment-methods', authenticate(['admin']), createPaymentMethod);
-adminRouter.patch('/admin/payment-methods/:id', authenticate(['admin']), updatePaymentMethod);
-adminRouter.delete('/admin/payment-methods/:id', authenticate(['admin']), deletePaymentMethod);
-
 
 adminRouter.get('/admin/payment-methods', authenticate(['admin']), getPaymentMethods);
 adminRouter.post('/admin/payment-methods', authenticate(['admin']), createPaymentMethod);

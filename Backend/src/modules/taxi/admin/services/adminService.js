@@ -2438,7 +2438,6 @@ export const updateSubscriptionSettings = async (payload) => {
 };
 
 export const getReferralSettings = async (type) => {
-export const getSubscriptionSettings = async () => {
   const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
   const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
   return type ? referral[type] : referral;
@@ -2744,11 +2743,6 @@ export const listDeliveries = async (query = {}) => {
   const limit = Number(query.limit || 10);
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
-export const listDeliveries = async (query = {}) => {
-  const page = Number(query.page || 1);
-  const limit = Number(query.limit || 10);
-  const tab = String(query.tab || 'all').toLowerCase();
-  const search = String(query.search || '').trim().toLowerCase();
 
   const rides = await Ride.find({ serviceType: 'parcel' })
     .sort({ createdAt: -1 })
@@ -2756,14 +2750,7 @@ export const listDeliveries = async (query = {}) => {
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
-  const rides = await Ride.find({ serviceType: 'parcel' })
-    .sort({ createdAt: -1 })
-    .populate('deliveryId')
-    .populate('userId', 'name phone')
-    .populate('driverId', 'name phone vehicleType vehicleNumber')
-    .lean();
 
-  let rows = rides.map(toAdminDeliveryRow);
   let rows = rides.map(toAdminDeliveryRow);
 
   if (tab === 'completed') {
@@ -2785,7 +2772,6 @@ export const listDeliveries = async (query = {}) => {
     rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
   }
 
-  if (search) {
   if (search) {
     rows = rows.filter((row) =>
       [
@@ -2884,26 +2870,8 @@ export const listVehicleTypes = async (queryParams = {}) => {
     }
   };
 };
-export const listVehicleTypes = async (queryParams = {}) => {
-  const query = {};
-  if (queryParams.transport_type) query.transport_type = queryParams.transport_type;
-  const items = await Vehicle.find(query).sort({ createdAt: -1 }).lean();
-  return {
-    results: items,
-    paginator: {
-      data: items,
-      total: items.length,
-      current_page: 1,
-      last_page: 1,
-      per_page: items.length,
-      from: 1,
-      to: items.length
-    }
-  };
-};
 
-export const listVehicleCatalog = async () => {
-    const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
+
 export const listVehicleCatalog = async () => {
   const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
 
@@ -4132,103 +4100,6 @@ export const deleteVehicleType = async (id) => {
     return true;
   };
 
-  export const createDriverNeededDocument = async (payload) => {
-    if (!payload.name?.trim()) {
-      throw new ApiError(400, 'Document name is required');
-    }
-
-    await cleanupLegacySeededDriverNeededDocuments();
-
-    const name = String(payload.name).trim();
-    const slug = slugify(payload.slug || name);
-    const existing = await DriverNeededDocument.findOne({ slug });
-    if (existing) {
-      throw new ApiError(409, 'A driver document with this name already exists');
-    }
-
-    const keys = buildDriverNeededDocumentKeys(payload);
-    const item = await DriverNeededDocument.create({
-      name,
-      slug,
-      account_type: normalizeDriverAccountType(payload.account_type),
-      image_type: String(payload.image_type || 'front_back').trim(),
-      has_expiry_date: normalizeBoolean(payload.has_expiry_date),
-      has_identify_number: normalizeBoolean(payload.has_identify_number),
-      identify_number_key: normalizeBoolean(payload.has_identify_number)
-        ? String(payload.identify_number_key || '').trim()
-        : '',
-      is_editable: normalizeBoolean(payload.is_editable),
-      is_required: normalizeBoolean(payload.is_required),
-      active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
-      ...keys,
-    });
-
-    return serializeDriverNeededDocument(item.toObject());
-  };
-
-  export const updateDriverNeededDocument = async (id, payload) => {
-    const item = await DriverNeededDocument.findById(id);
-    if (!item) {
-      throw new ApiError(404, 'Driver needed document not found');
-    }
-
-    if (payload.name !== undefined) {
-      item.name = String(payload.name || '').trim();
-    }
-    if (payload.account_type !== undefined) {
-      item.account_type = normalizeDriverAccountType(payload.account_type);
-    }
-    if (payload.image_type !== undefined) {
-      item.image_type = String(payload.image_type || 'front_back').trim();
-    }
-    if (payload.has_expiry_date !== undefined) {
-      item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
-    }
-    if (payload.has_identify_number !== undefined) {
-      item.has_identify_number = normalizeBoolean(payload.has_identify_number);
-    }
-    if (payload.identify_number_key !== undefined || payload.has_identify_number !== undefined) {
-      item.identify_number_key = item.has_identify_number
-        ? String(payload.identify_number_key ?? item.identify_number_key ?? '').trim()
-        : '';
-    }
-    if (payload.is_editable !== undefined) {
-      item.is_editable = normalizeBoolean(payload.is_editable);
-    }
-    if (payload.is_required !== undefined) {
-      item.is_required = normalizeBoolean(payload.is_required);
-    }
-    if (payload.active !== undefined) {
-      item.active = normalizeBoolean(payload.active);
-    }
-
-    const keys = buildDriverNeededDocumentKeys(
-      {
-        ...item.toObject(),
-        ...payload,
-        name: item.name,
-        image_type: item.image_type,
-      },
-      item.toObject(),
-    );
-
-    item.key = keys.key;
-    item.front_key = keys.front_key;
-    item.back_key = keys.back_key;
-
-    await item.save();
-    return serializeDriverNeededDocument(item.toObject());
-  };
-
-  export const deleteDriverNeededDocument = async (id) => {
-    const deleted = await DriverNeededDocument.findByIdAndDelete(id);
-    if (!deleted) {
-      throw new ApiError(404, 'Driver needed document not found');
-    }
-
-    return true;
-  };
-
 
   export const listOwnerNeededDocuments = async () => {
     const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
@@ -4408,93 +4279,6 @@ export const deleteVehicleType = async (id) => {
     };
   };
 
-  export const updateReferralTranslation = async (languageCode, payload = {}) => {
-    const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
-
-    if (!normalizedLanguageCode) {
-      throw new ApiError(400, 'languageCode is required');
-    }
-
-    const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
-
-    const item = await ReferralTranslation.findOneAndUpdate(
-      { language_code: normalizedLanguageCode },
-      {
-        $set: {
-          language_code: normalizedLanguageCode,
-          language_name: language?.name || String(payload.language_name || ''),
-          user_referral: normalizeReferralTranslationSection(payload.user_referral),
-          driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
-        },
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true,
-      },
-    ).lean();
-
-    return serializeReferralTranslation({
-      language,
-      translation: item,
-    });
-  };
-
-  export const getReferralTranslationContent = async (languageCode = '') => {
-    const { languages, preferredLanguage, normalizedLanguageCode } =
-      await resolveReferralTranslationLanguage(languageCode);
-
-    const codesToTry = [
-      normalizedLanguageCode,
-      preferredLanguage?.code,
-      languages.find((item) => Number(item.default_status) === 1)?.code,
-      'en',
-    ]
-      .map((item) => String(item || '').trim().toLowerCase())
-      .filter(Boolean);
-
-    let translation = null;
-    let resolvedLanguage = preferredLanguage;
-
-    if (codesToTry.length > 0) {
-      translation = await ReferralTranslation.findOne({
-        language_code: { $in: codesToTry },
-      })
-        .sort({ updatedAt: -1 })
-        .lean();
-
-      if (translation) {
-        resolvedLanguage =
-          languages.find(
-            (item) =>
-              String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
-          ) || resolvedLanguage;
-      }
-    }
-
-    return {
-      language_code: String(
-        resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
-      )
-        .trim()
-        .toLowerCase(),
-      language_name: resolvedLanguage?.name || translation?.language_name || '',
-      user_referral: {
-        ...REFERRAL_TRANSLATION_DEFAULTS,
-        ...normalizeReferralTranslationSection(translation?.user_referral),
-      },
-      driver_referral: {
-        ...REFERRAL_TRANSLATION_DEFAULTS,
-        ...normalizeReferralTranslationSection(translation?.driver_referral),
-      },
-      available_languages: languages.map((item) => ({
-        code: String(item.code || '').toLowerCase(),
-        name: item.name || '',
-        active: Number(item.active ?? 1) === 1,
-        default_status: Number(item.default_status ?? 0) === 1,
-      })),
-    };
-  };
 
 
   export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();

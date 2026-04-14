@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route, Navigate, useLocation, useNavig
 import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { socketService } from './shared/api/socket';
+import { SettingsProvider } from './shared/context/SettingsContext';
 import './App.css';
 
 
@@ -378,8 +379,9 @@ const UserAccountInvalidationListener = () => {
 function App() {
   return (
     <Router>
-      <UserAccountInvalidationListener />
-      <MainLayout>
+      <SettingsProvider>
+        <UserAccountInvalidationListener />
+        <MainLayout>
         <Suspense fallback={
           <div className="flex items-center justify-center min-h-screen bg-white">
             <span className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></span>
@@ -730,6 +732,7 @@ function App() {
           </Routes>
         </Suspense>
       </MainLayout>
+    </SettingsProvider>
     </Router>
   );
 }

@@ -3,10 +3,13 @@ import { motion } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
 import { ChevronRight, ShieldCheck, Wallet, Clock, Star, TrendingUp } from 'lucide-react';
 import DriverHero from '@/assets/driver_welcome_hero.png';
-import Rydon24Logo from '@/assets/rydon24_logo.png';
+import { useSettings } from '@/shared/context/SettingsContext';
 
 const DriverWelcome = () => {
     const navigate = useNavigate();
+    const { settings } = useSettings();
+    const appName = settings.general?.app_name || 'App';
+    const appLogo = settings.general?.logo || settings.customization?.logo;
 
     const perks = [
         { icon: <Wallet size={20} />, title: 'Weekly Payouts', sub: 'Instant earnings transfer' },
@@ -22,13 +25,17 @@ const DriverWelcome = () => {
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent z-10" />
                 <img 
                     src={DriverHero} 
-                    alt="Drive with RYDON24" 
+                    alt={`Drive with ${appName}`} 
                     className="w-full h-full object-cover opacity-70"
                 />
                 
                 {/* Branding Top Overlay */}
                 <div className="absolute top-8 left-6 z-20">
-                     <img src={Rydon24Logo} alt="RYDON24" className="h-10 drop-shadow-xl" />
+                     {appLogo ? (
+                         <img src={appLogo} alt={appName} className="h-10 drop-shadow-xl" />
+                     ) : (
+                         <span className="text-xl font-bold text-white drop-shadow-lg">{appName}</span>
+                     )}
                 </div>
 
                 {/* Overlay Greeting */}
@@ -39,7 +46,7 @@ const DriverWelcome = () => {
                         transition={{ duration: 0.5 }}
                     >
                         <h1 className="text-3xl font-display font-bold leading-tight tracking-tight">
-                            Partner with <span className="text-primary">Redigo</span>
+                            Partner with <span className="text-primary">{appName}</span>
                         </h1>
                         <p className="text-[14px] text-white/70 mt-1 font-medium">
                             The smartest way to drive and earn.
@@ -53,7 +60,7 @@ const DriverWelcome = () => {
                 <div className="space-y-6">
                     <div className="flex items-center justify-between px-1">
                         <h3 className="text-[13px] font-bold text-slate-400 tracking-wider uppercase">
-                            Why Choose Redigo?
+                            Why Choose {appName}?
                         </h3>
                         <div className="flex -space-x-2">
                             {[1, 2, 3].map((i) => (
@@ -105,7 +112,7 @@ const DriverWelcome = () => {
                         </div>
                     </div>
                     <p className="text-[13px] font-medium text-slate-500 italic leading-relaxed">
-                        "Joining RYDON24 was the best decision for my family. The payouts are always on time and the support team is incredible."
+                        "Joining {appName} was the best decision for my family. The payouts are always on time and the support team is incredible."
                     </p>
                 </div>
             </main>

@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import Rydon24Logo from '../../../assets/rydon24_logo.png';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { socketService } from '../../../shared/api/socket';
+import { useSettings } from '../../../shared/context/SettingsContext';
 import {
   BarChart3,
   Bell,
@@ -53,7 +53,7 @@ const hasActiveChild = (pathname, items = []) =>
 const flattenItems = (sections = []) =>
   sections.flatMap((section) => section.items ?? []);
 
-const resolvePageTitle = (pathname, sections) => {
+const resolvePageTitle = (pathname, sections, appName) => {
   const findLabel = (items = []) => {
     for (const item of items) {
       if (item.path && pathMatches(pathname, item.path)) return item.label;
@@ -71,8 +71,7 @@ const resolvePageTitle = (pathname, sections) => {
   if (pathname.includes('/fleet')) return 'Fleet Management';
   if (pathname.includes('/settings')) return 'Settings';
   if (pathname.includes('/reports')) return 'Reports';
-  if (pathname.includes('/drivers')) return 'Driver Management';
-  return 'RYDON24 Admin';
+  return `${appName || 'App'} Admin`;
 };
 
 const SidebarItem = ({ icon, label, path, isCollapsed }) => (
@@ -264,10 +263,14 @@ const ModeSwitcher = ({ mode, setMode }) => {
 const AdminLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { settings } = useSettings();
   const [isSidebarOpen] = useState(true);
   const [isCollapsed, setCollapsed] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
+
+  const appName = settings.general.app_name || 'RYDON24';
+  const appLogo = settings.general.logo || settings.customization.logo || Rydon24Logo;
 
   const adminSections = useMemo(
     () => [
@@ -491,7 +494,7 @@ const AdminLayout = () => {
   const isOwnerRoute = location.pathname.startsWith('/admin/owners') || location.pathname.startsWith('/admin/fleet');
   const mode = isOwnerRoute ? OWNER_MODE : ADMIN_MODE;
   const sidebarSections = mode === OWNER_MODE ? ownerSections : adminSections;
-  const pageTitle = resolvePageTitle(location.pathname, sidebarSections);
+  const pageTitle = resolvePageTitle(location.pathname, sidebarSections, appName);
 
   const setMode = (nextMode) => {
     localStorage.setItem(MODE_STORAGE_KEY, nextMode);
@@ -563,12 +566,16 @@ const AdminLayout = () => {
           <div className="group/sidebar-head relative mb-4 flex h-24 items-center border-b border-white/5 px-6">
             <div className="flex items-center gap-4">
               <div className="flex h-12 w-12 items-center justify-center rounded-xl border border-white/5 bg-white/5 p-1 transition-all group-hover/sidebar-head:scale-105">
-                <img src={Rydon24Logo} alt="RYDON24" className="h-10 w-10 object-contain" />
+                {settings.general?.logo || settings.customization?.logo ? (
+                  <img src={settings.general?.logo || settings.customization?.logo} alt={appName} className="h-10 w-10 object-contain" />
+                ) : (
+                  <Zap size={24} className="text-white fill-white" />
+                )}
               </div>
               {!isCollapsed && (
                 <div className="flex flex-col">
                   <h3 className="text-[15px] font-extrabold leading-tight text-white tracking-tight">
-                    {mode === OWNER_MODE ? 'Owner Dashboard' : 'Super Console'}
+                    {mode === OWNER_MODE ? 'Owner Dashboard' : `${appName || 'App'} Admin`}
                   </h3>
                   <div className="mt-1 flex items-center gap-1.5">
                     <div className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_8px_rgba(16,185,129,0.5)]" />

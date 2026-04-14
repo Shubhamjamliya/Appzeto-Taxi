@@ -4822,7 +4822,7 @@ export const deleteVehicleType = async (id) => {
     const defaults = [
       { name: 'taxi', display_name: 'Taxi' },
       { name: 'delivery', display_name: 'Delivery' },
-      { name: 'all', display_name: 'Both' }
+      { name: 'both', display_name: 'Both' }
     ];
     
     const results = [];

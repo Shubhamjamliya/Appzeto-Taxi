@@ -8,15 +8,19 @@ import {
     sendDriverOtp,
 } from '../../services/registrationService';
 
+import { useSettings } from '../../../../shared/context/SettingsContext';
+
 const PhoneRegistration = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { settings } = useSettings();
     const [phone, setPhone] = useState('');
     const [role, setRole] = useState('driver');
     const [agreed, setAgreed] = useState(true);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const isLoginPage = location.pathname === '/taxi/driver/login';
+    const appName = settings.general?.app_name || 'App';
 
     useEffect(() => {
         clearDriverRegistrationSession();
@@ -74,7 +78,7 @@ const PhoneRegistration = () => {
             <main className="space-y-6 max-w-sm mx-auto">
                 <div className="space-y-1.5">
                     <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
-                        {isLoginPage ? 'Driver Login' : `Join Redigo ${role === 'owner' ? 'as Owner' : ''}`}
+                        {isLoginPage ? 'Driver Login' : `Join ${appName} ${role === 'owner' ? 'as Owner' : ''}`}
                     </h1>
                     <p className="text-[12px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">
                         {isLoginPage ? 'Enter your registered mobile number to receive OTP' : "Let's verify your mobile to get started"}

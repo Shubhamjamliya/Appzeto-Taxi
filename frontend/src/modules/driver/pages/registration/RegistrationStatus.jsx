@@ -8,7 +8,7 @@ import {
     Phone,
     ShieldCheck
 } from 'lucide-react';
-import Rydon24Logo from '@/assets/rydon24_logo.png';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 import { clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
 
 const APPROVAL_POLL_MS = 2500;
@@ -34,11 +34,15 @@ const isDriverApproved = (driver) => {
 const RegistrationStatus = () => {
     const navigate = useNavigate();
     const location = useLocation();
+    const { settings } = useSettings();
     const [checking, setChecking] = useState(true);
     const [statusMessage, setStatusMessage] = useState('Waiting for admin approval');
     const timeoutRef = useRef(null);
     const requestInFlightRef = useRef(false);
     const mountedRef = useRef(false);
+
+    const appName = settings.general?.app_name || 'App';
+    const appLogo = settings.general?.logo || settings.customization?.logo;
 
     const handleDashboard = () => {
         if (checking) {
@@ -133,11 +137,15 @@ const RegistrationStatus = () => {
     return (
         <div className="min-h-screen bg-taxi-bg font-sans p-5 pt-8 select-none overflow-x-hidden flex flex-col items-center text-center">
             <div className="mb-8 flex items-center justify-center">
-                <img
-                    src={Rydon24Logo}
-                    alt="Rydon24"
-                    className="h-8 object-contain drop-shadow-sm"
-                />
+                {appLogo ? (
+                    <img
+                        src={appLogo}
+                        alt={appName}
+                        className="h-8 object-contain drop-shadow-sm"
+                    />
+                ) : (
+                    <span className="text-xl font-black text-slate-900">{appName}</span>
+                )}
             </div>
 
             <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-amber-500 shadow-2xl shadow-amber-500/10 mb-6">

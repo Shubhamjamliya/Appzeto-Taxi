@@ -3,11 +3,15 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, ShieldCheck, Phone, Plus, Trash2, Zap, X, CheckCircle2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
+import { useSettings } from '../../../../shared/context/SettingsContext';
+
 const SecuritySOS = () => {
     const navigate = useNavigate();
+    const { settings } = useSettings();
+    const appName = settings.general?.app_name || 'App';
     const [contacts, setContacts] = useState([
         { id: 1, name: 'Police Helpline', phone: '100', type: 'Official' },
-        { id: 2, name: 'Redigo Support', phone: '1800 123 456', type: 'Official' }
+        { id: 2, name: `${appName} Support`, phone: '1800 123 456', type: 'Official' }
     ]);
     const [showToast, setShowToast] = useState(false);
 

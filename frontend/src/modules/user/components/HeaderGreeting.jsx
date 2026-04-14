@@ -9,8 +9,13 @@ const fallingCoins = [
   { id: 3, left: '72%', delay: 1.2 },
 ];
 
+import { useSettings } from '../../../shared/context/SettingsContext';
+
 const HeaderGreeting = () => {
   const navigate = useNavigate();
+  const { settings } = useSettings();
+  const appLogo = settings.general.logo || settings.customization.logo || '/Rydon24.png';
+  const appName = settings.general.app_name || 'Rydon24';
 
   return (
     <div className="px-5 pt-6">
@@ -29,8 +34,8 @@ const HeaderGreeting = () => {
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
             />
             <motion.img
-              src="/Rydon24.png"
-              alt="Rydon24"
+              src={appLogo}
+              alt={appName}
               className="relative z-10 h-10 object-contain drop-shadow-sm"
               animate={{ y: [0, -2, 0], scale: [1, 1.02, 1] }}
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}

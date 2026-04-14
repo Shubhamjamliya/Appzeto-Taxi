@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const SectionCard = ({ title, children, id }) => (
   <div className="bg-white rounded-xl border border-gray-200 shadow-sm overflow-hidden mb-8" id={id}>
@@ -82,9 +83,18 @@ const ImageUploadBox = ({ title, size, preview, onUpload, onClear }) => {
   );
 };
 
+const fileToDataUrl = (file) =>
+  new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ''));
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+
 const GeneralSettings = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const { refreshSettings } = useSettings();
   const [settings, setSettings] = useState({
     general: {},
     customization: {}
@@ -121,6 +131,7 @@ const GeneralSettings = () => {
         api.patch('/admin/general-settings/general', { settings: settings.general }),
         api.patch('/admin/general-settings/customize', { settings: settings.customization })
       ]);
+      await refreshSettings();
       toast.success('Configuration saved successfully!');
     } catch (err) {
       toast.error('Failed to save settings');
@@ -137,6 +148,16 @@ const GeneralSettings = () => {
         [name]: value
       }
     }));
+  };
+
+  const handleLogoUpload = async (file) => {
+    const dataUrl = await fileToDataUrl(file);
+    handleChange('general', 'logo', dataUrl);
+  };
+
+  const handleFaviconUpload = async (file) => {
+    const dataUrl = await fileToDataUrl(file);
+    handleChange('general', 'favicon', dataUrl);
   };
 
   if (loading) {
@@ -178,35 +199,11 @@ const GeneralSettings = () => {
            </div>
         </SectionCard>
 
-        {/* URL Setup */}
-        <SectionCard title="URL Setup">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-12">
-              <InputField label="Admin Login URL" name="admin_login_url" value={settings.general.admin_login_url} onChange={(n, v) => handleChange('general', n, v)} info={{ prefix: 'https://zyder.co.in/login/', default: 'admin' }} />
-              <InputField label="Owner Login URL" name="owner_login_url" value={settings.general.owner_login_url} onChange={(n, v) => handleChange('general', n, v)} info={{ prefix: 'https://zyder.co.in/login/', default: 'owner-login' }} />
-              <InputField label="Dispatcher Login URL" name="dispatcher_login_url" value={settings.general.dispatcher_login_url} onChange={(n, v) => handleChange('general', n, v)} info={{ prefix: 'https://zyder.co.in/login/', default: 'dispatch' }} />
-              <InputField label="User Login URL" name="user_login_url" value={settings.general.user_login_url} onChange={(n, v) => handleChange('general', n, v)} info={{ prefix: 'https://zyder.co.in/login/', default: 'user-login' }} />
-           </div>
-        </SectionCard>
-
-        {/* Dynamic App Links */}
-        <SectionCard title="URL Setup">
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
-              <InputField label="Android User URL" name="android_user_url" value={settings.general.android_user_url} onChange={(n, v) => handleChange('general', n, v)} placeholder="https://play.google.com/store/apps/details?id=com.zydercabs.user" />
-              <InputField label="Android Driver URL" name="android_driver_url" value={settings.general.android_driver_url} onChange={(n, v) => handleChange('general', n, v)} placeholder="https://play.google.com/store/apps/details?id=com.zydercabs.driver" />
-              <InputField label="IOS User URL" name="ios_user_url" value={settings.general.ios_user_url} onChange={(n, v) => handleChange('general', n, v)} placeholder="Your IOS User App Link" />
-              <InputField label="IOS Driver URL" name="ios_driver_url" value={settings.general.ios_driver_url} onChange={(n, v) => handleChange('general', n, v)} placeholder="Your IOS Driver App Link" />
-           </div>
-        </SectionCard>
-
         {/* Media Assets */}
         <SectionCard title="Image Section">
            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
-              <ImageUploadBox title="Admin Login Page Background Image" size="5450px x 3650px" preview={settings.general.login_bg || settings.customization.login_bg} onUpload={() => {}} onClear={() => handleChange('general', 'login_bg', '')} />
-              <ImageUploadBox title="Admin Panel Logo" size="750px x 100px" preview={settings.general.logo || settings.customization.logo} onUpload={() => {}} onClear={() => handleChange('general', 'logo', '')} />
-              <div className="md:col-start-2">
-                 <ImageUploadBox title="Favicon" size="80px x 80px" preview={settings.general.favicon || settings.customization.favicon} onUpload={() => {}} onClear={() => handleChange('general', 'favicon', '')} />
-              </div>
-              <ImageUploadBox title="Owner Login Page Background Image" size="5450px x 3650px" preview={settings.general.owner_bg || settings.customization.owner_bg} onUpload={() => {}} onClear={() => handleChange('general', 'owner_bg', '')} />
+              <ImageUploadBox title="Brand Logo" size="750px x 100px" preview={settings.general.logo || settings.customization.logo || settings.general.brand_logo} onUpload={(file) => handleLogoUpload(file)} onClear={() => handleChange('general', 'logo', '')} />
+              <ImageUploadBox title="Favicon" size="80px x 80px" preview={settings.general.favicon || settings.customization.favicon} onUpload={(file) => handleFaviconUpload(file)} onClear={() => handleChange('general', 'favicon', '')} />
            </div>
         </SectionCard>
 

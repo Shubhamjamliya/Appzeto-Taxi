@@ -21,10 +21,10 @@ import { useNavigate } from 'react-router-dom';
 import { GoogleMap, Marker } from '@react-google-maps/api';
 
 import MapGrid from '@/assets/premium_grid_map.png';
-import Rydon24Logo from '@/assets/rydon24_logo.png';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
 import IncomingRideRequest from './IncomingRideRequest';
 import api from '../../../shared/api/axiosInstance';
+import { useSettings } from '../../../shared/context/SettingsContext';
 
 // Vehicle Icons for Map
 import BikeIcon from '@/assets/icons/bike.png';
@@ -182,6 +182,9 @@ const mapStyles = [
 
 const DriverHome = () => {
     const navigate = useNavigate();
+    const { settings } = useSettings();
+    const appName = settings.general?.app_name || 'App';
+    const appLogo = settings.general?.logo || settings.customization?.logo;
     const [isOnline, setIsOnline] = useState(false);
     const [showRequest, setShowRequest] = useState(false);
     const [currentRequest, setCurrentRequest] = useState(null);
@@ -589,7 +592,11 @@ const DriverHome = () => {
 
             <header className="fixed top-0 left-0 right-0 px-6 pt-6 pb-2.5 flex items-center justify-between z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-md">
                 <div className="flex items-center gap-3 pt-2">
-                    <img src={Rydon24Logo} alt="Rydon24" className="h-7 drop-shadow-sm" />
+                    {appLogo ? (
+                        <img src={appLogo} alt={appName} className="h-7 drop-shadow-sm" />
+                    ) : (
+                        <span className="text-lg font-black tracking-tight text-slate-900">{appName}</span>
+                    )}
                     <div className="h-5 w-px bg-slate-200" />
                     <div className="flex items-center gap-1.5">
                         <div className={`w-2 h-2 rounded-full shadow-sm ${isHydratingDriver ? 'bg-amber-400 animate-pulse' : isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />

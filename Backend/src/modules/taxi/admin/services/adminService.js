@@ -2073,28 +2073,60 @@ export const adjustDriverWallet = async (id, payload = {}) => {
     throw new ApiError(400, 'Operation must be credit or debit');
   }
 
-  const driver = await Driver.findById(id);
-  if (!driver) {
-    throw new ApiError(404, 'Driver not found');
+  const normalizedAmount = Math.round(amount * 100) / 100;
+  const signedAmount = operation === 'credit' ? normalizedAmount : -normalizedAmount;
+  const description = payload.description || `Admin adjustment (${operation})`;
+  const session = await mongoose.startSession();
+
+  try {
+    session.startTransaction();
+
+    const driver = await Driver.findById(id).session(session);
+    if (!driver) {
+      throw new ApiError(404, 'Driver not found');
+    }
+
+    const currentBalance = Number(driver.wallet?.balance || 0);
+    const cashLimit = Number(driver.wallet?.cashLimit ?? 500);
+    const nextBalance = Math.round((currentBalance + signedAmount) * 100) / 100;
+    const isBlockedAfter = nextBalance < -cashLimit;
+
+    driver.wallet = driver.wallet || {};
+    driver.wallet.balance = nextBalance;
+    driver.wallet.cashLimit = cashLimit;
+    driver.wallet.isBlocked = isBlockedAfter;
+    driver.markModified('wallet');
+    await driver.save({ session });
+
+    await WalletTransaction.create(
+      [
+        {
+          driverId: id,
+          type: 'adjustment',
+          amount: signedAmount,
+          balanceBefore: currentBalance,
+          balanceAfter: nextBalance,
+          cashLimit,
+          isBlockedAfter,
+          description,
+          metadata: {
+            source: 'admin',
+            operation,
+            rawAmount: normalizedAmount,
+          },
+        },
+      ],
+      { session },
+    );
+
+    await session.commitTransaction();
+    return { balance: Number(nextBalance.toFixed(2)) };
+  } catch (error) {
+    await session.abortTransaction();
+    throw error;
+  } finally {
+    session.endSession();
   }
-
-  const currentBalance = Number(driver.wallet?.balance || 0);
-  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
-
-  driver.wallet = driver.wallet || {};
-  driver.wallet.balance = nextBalance;
-  driver.markModified('wallet');
-  await driver.save();
-
-  await WalletTransaction.create({
-    driverId: id,
-    amount,
-    kind: operation,
-    title: payload.description || `Admin adjustment (${operation})`,
-    balance: nextBalance
-  });
-
-  return { balance: Number(nextBalance.toFixed(2)) };
 };
 
 export const listDriverWalletHistory = async (id) => {
@@ -2113,8 +2145,8 @@ export const listDriverWalletHistory = async (id) => {
     results: transactions.map(t => ({
       _id: String(t._id),
       amount: t.amount,
-      type: t.kind,
-      description: t.title,
+      type: t.metadata?.operation || t.kind || (t.amount < 0 ? 'debit' : 'credit'),
+      description: t.description || t.title || '',
       createdAt: t.createdAt,
     })),
   };

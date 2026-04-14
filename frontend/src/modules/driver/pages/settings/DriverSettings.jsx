@@ -51,10 +51,14 @@ const DriverSettings = () => {
                      <h3 className="text-[10px] font-black text-slate-400 uppercase tracking-widest opacity-60 ml-2">General Info</h3>
                      <div className="bg-white rounded-[2rem] border border-white shadow-sm overflow-hidden">
                           {[
-                              { label: 'About Redigo', icon: <Info size={18} />, sub: 'v2.4.0 (Latest)' },
-                              { label: 'Support & Feedback', icon: <HelpCircle size={18} />, sub: 'Get help' }
+                             { label: 'About Redigo', icon: <Info size={18} />, sub: 'v2.4.0 (Latest)', path: null },
+                             { label: 'Support & Feedback', icon: <HelpCircle size={18} />, sub: 'Get help', path: '/taxi/driver/help-support' }
                           ].map((item, idx) => (
-                              <div key={idx} className="p-5 flex items-center justify-between border-b border-slate-50 last:border-none group active:bg-slate-50">
+                              <div
+                                key={idx}
+                                onClick={() => item.path && navigate(item.path)}
+                                className="p-5 flex items-center justify-between border-b border-slate-50 last:border-none group active:bg-slate-50 cursor-pointer"
+                              >
                                    <div className="flex items-center gap-4">
                                        <div className="w-10 h-10 bg-slate-50 text-slate-400 rounded-xl flex items-center justify-center transition-colors group-hover:bg-slate-900 group-hover:text-white">{item.icon}</div>
                                        <div>

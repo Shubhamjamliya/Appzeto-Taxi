@@ -1,44 +1,67 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Plus, ChevronRight, Headset, X, AlertCircle } from 'lucide-react';
-
-const CATEGORIES = ['Ride Issue', 'Payment', 'Driver Behaviour', 'App Bug', 'Other'];
+import { ArrowLeft, Plus, ChevronRight, Headset, X, AlertCircle, Loader2 } from 'lucide-react';
+import { supportTicketService } from '../../../shared/services/supportTicketService';
 
 const STATUS_STYLES = {
-  'Open':        'bg-orange-50 text-orange-600 border-orange-100',
-  'In Progress': 'bg-blue-50 text-blue-600 border-blue-100',
-  'Resolved':    'bg-emerald-50 text-emerald-600 border-emerald-100',
+  pending: 'bg-orange-50 text-orange-600 border-orange-100',
+  assigned: 'bg-blue-50 text-blue-600 border-blue-100',
+  closed: 'bg-emerald-50 text-emerald-600 border-emerald-100',
 };
-
-const MOCK_TICKETS = [
-  { id: 't1', subject: 'Driver took wrong route', category: 'Ride Issue',  status: 'Open',        updatedAt: '2 hr ago',   messages: 1 },
-  { id: 't2', subject: 'Payment deducted twice',  category: 'Payment',     status: 'In Progress', updatedAt: 'Yesterday',  messages: 3 },
-  { id: 't3', subject: 'App crashed on booking',  category: 'App Bug',     status: 'Resolved',    updatedAt: '3 days ago', messages: 5 },
-];
 
 const TABS = ['All', 'Open', 'Resolved'];
 
 const SupportTickets = () => {
   const navigate = useNavigate();
-  const [tickets, setTickets]       = useState(MOCK_TICKETS);
+  const [tickets, setTickets] = useState([]);
+  const [titleOptions, setTitleOptions] = useState([]);
   const [activeTab, setActiveTab]   = useState('All');
   const [showForm, setShowForm]     = useState(false);
-  const [subject, setSubject]       = useState('');
-  const [category, setCategory]     = useState('');
+  const [titleId, setTitleId]       = useState('');
+  const [customTitle, setCustomTitle] = useState('');
   const [description, setDesc]      = useState('');
   const [errors, setErrors]         = useState({});
   const [submitting, setSubmitting] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const filtered = tickets.filter(t => {
-    if (activeTab === 'All') return true;
-    if (activeTab === 'Open') return t.status === 'Open' || t.status === 'In Progress';
-    return t.status === 'Resolved';
-  });
+  const rolePrefix = window.location.pathname.includes('/taxi/driver') ? '/taxi/driver' : '/taxi/user';
+  const requesterType = rolePrefix.includes('/driver') ? 'driver' : 'user';
+
+  const loadData = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const [titlesResponse, ticketsResponse] = await Promise.all([
+        supportTicketService.getTitles(requesterType),
+        supportTicketService.listMyTickets({ page: 1, limit: 100 }),
+      ]);
+
+      setTitleOptions(titlesResponse?.data?.results || []);
+      setTickets(ticketsResponse?.data?.results || []);
+    } catch (apiError) {
+      setError(apiError?.message || 'Unable to load support data');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, [requesterType]);
+
+  const filtered = useMemo(() => {
+    return tickets.filter((ticket) => {
+      if (activeTab === 'All') return true;
+      if (activeTab === 'Open') return ['pending', 'assigned'].includes(ticket.status);
+      return ticket.status === 'closed';
+    });
+  }, [tickets, activeTab]);
 
   const validate = () => {
     const e = {};
-    if (!subject.trim())     e.subject = 'Subject is required';
+    if (!titleId && !customTitle.trim()) e.title = 'Select title or write custom title';
     if (!description.trim()) e.description = 'Description is required';
     setErrors(e);
     return Object.keys(e).length === 0;
@@ -47,19 +70,26 @@ const SupportTickets = () => {
   const handleSubmit = async () => {
     if (!validate()) return;
     setSubmitting(true);
-    await new Promise(r => setTimeout(r, 600));
-    const newTicket = {
-      id: `t${Date.now()}`,
-      subject: subject.trim(),
-      category: category || 'Other',
-      status: 'Open',
-      updatedAt: 'Just now',
-      messages: 0,
-    };
-    setTickets(prev => [newTicket, ...prev]);
-    setSubject(''); setCategory(''); setDesc(''); setErrors({});
-    setShowForm(false);
-    setSubmitting(false);
+    setError('');
+    try {
+      const created = await supportTicketService.createTicket({
+        titleId: titleId || undefined,
+        title: customTitle || undefined,
+        description,
+        message: description,
+      });
+      const newTicket = created?.data;
+      setTickets((prev) => [newTicket, ...prev]);
+      setTitleId('');
+      setCustomTitle('');
+      setDesc('');
+      setErrors({});
+      setShowForm(false);
+    } catch (apiError) {
+      setError(apiError?.message || 'Unable to raise support ticket');
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -95,7 +125,19 @@ const SupportTickets = () => {
       </header>
 
       <div className="px-5 pt-4 space-y-2.5">
-        {filtered.length === 0 && (
+        {error ? (
+          <div className="rounded-[14px] border border-red-100 bg-red-50 px-4 py-3 text-[12px] font-bold text-red-600">
+            {error}
+          </div>
+        ) : null}
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 size={22} className="animate-spin text-slate-400" />
+          </div>
+        ) : null}
+
+        {!loading && filtered.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 gap-4 text-center">
             <div className="w-20 h-20 bg-white/80 border border-white/80 rounded-3xl flex items-center justify-center">
               <Headset size={36} className="text-slate-300" strokeWidth={1.5} />
@@ -107,22 +149,26 @@ const SupportTickets = () => {
           </div>
         )}
 
-        {filtered.map((t, i) => (
+        {!loading && filtered.map((t, i) => (
           <motion.button key={t.id} type="button"
             initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.05 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => navigate(`/support/ticket/${t.id}`, { state: { ticket: t } })}
+            onClick={() => navigate(`${rolePrefix}/support/ticket/${t.ticketCode}`, { state: { ticket: t } })}
             className="w-full text-left rounded-[20px] border border-white/80 bg-white/90 shadow-[0_4px_14px_rgba(15,23,42,0.06)] px-4 py-4 flex items-start gap-3">
             <div className="w-10 h-10 rounded-[12px] bg-blue-50 flex items-center justify-center shrink-0">
               <Headset size={16} className="text-blue-500" strokeWidth={2} />
             </div>
             <div className="flex-1 min-w-0">
               <div className="flex items-start justify-between gap-2">
-                <p className="text-[14px] font-black text-slate-900 leading-tight truncate flex-1">{t.subject}</p>
-                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shrink-0 ${STATUS_STYLES[t.status]}`}>{t.status}</span>
+                <p className="text-[14px] font-black text-slate-900 leading-tight truncate flex-1">{t.title}</p>
+                <span className={`text-[9px] font-black px-2 py-0.5 rounded-full border shrink-0 ${STATUS_STYLES[t.status] || STATUS_STYLES.pending}`}>
+                  {t.status}
+                </span>
               </div>
-              <p className="text-[11px] font-bold text-slate-400 mt-1">{t.category} · {t.updatedAt}</p>
+              <p className="text-[11px] font-bold text-slate-400 mt-1">
+                {t.supportType} · {new Date(t.updatedAt).toLocaleString()}
+              </p>
             </div>
             <ChevronRight size={15} className="text-slate-300 shrink-0 mt-1" strokeWidth={2.5} />
           </motion.button>
@@ -148,19 +194,30 @@ const SupportTickets = () => {
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Subject</label>
-                  <input type="text" value={subject} onChange={e => { setSubject(e.target.value); setErrors(p => ({ ...p, subject: '' })); }}
-                    placeholder="Brief description of your issue"
-                    className={`w-full rounded-[14px] px-4 py-3 text-[14px] font-bold text-slate-900 border-2 focus:outline-none transition-all placeholder:text-slate-300 ${errors.subject ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50'}`} />
-                  {errors.subject && <p className="text-[11px] font-black text-red-500 ml-1 mt-1 flex items-center gap-1"><AlertCircle size={11} strokeWidth={3} />{errors.subject}</p>}
-                </div>
-                <div>
-                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Category</label>
-                  <select value={category} onChange={e => setCategory(e.target.value)}
-                    className="w-full rounded-[14px] px-4 py-3 text-[14px] font-bold text-slate-900 border-2 border-slate-100 bg-slate-50 focus:outline-none">
-                    <option value="">Select category</option>
-                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Ticket Title</label>
+                  <select
+                    value={titleId}
+                    onChange={(event) => {
+                      setTitleId(event.target.value);
+                      setErrors((prev) => ({ ...prev, title: '' }));
+                    }}
+                    className="w-full rounded-[14px] px-4 py-3 text-[14px] font-bold text-slate-900 border-2 border-slate-100 bg-slate-50 focus:outline-none"
+                  >
+                    <option value="">Select title</option>
+                    {titleOptions.map((option) => (
+                      <option key={option.id} value={option.id}>
+                        {option.title}
+                      </option>
+                    ))}
                   </select>
+                </div>
+
+                <div>
+                  <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Or Custom Title</label>
+                  <input type="text" value={customTitle} onChange={e => { setCustomTitle(e.target.value); setErrors(p => ({ ...p, title: '' })); }}
+                    placeholder="Write custom title if not listed"
+                    className={`w-full rounded-[14px] px-4 py-3 text-[14px] font-bold text-slate-900 border-2 focus:outline-none transition-all placeholder:text-slate-300 ${errors.title ? 'border-red-200 bg-red-50' : 'border-slate-100 bg-slate-50'}`} />
+                  {errors.title && <p className="text-[11px] font-black text-red-500 ml-1 mt-1 flex items-center gap-1"><AlertCircle size={11} strokeWidth={3} />{errors.title}</p>}
                 </div>
                 <div>
                   <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest ml-1 mb-1 block">Description</label>

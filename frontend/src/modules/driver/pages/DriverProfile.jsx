@@ -11,7 +11,6 @@ import {
     ShieldCheck, 
     HelpCircle, 
     LogOut, 
-    Settings, 
     ArrowRight, 
     Star, 
     Route, 
@@ -141,9 +140,9 @@ const DriverProfile = () => {
             ]
         },
         {
-            title: 'Settings',
+            title: 'Danger Zone',
             items: [
-                { id: 'settings', label: 'App Settings', icon: <Settings size={20} />, path: '/taxi/driver/settings' },
+                { id: 'deleteAccount', label: 'Delete Account', icon: <LogOut size={20} />, path: '/taxi/driver/delete-account' },
             ]
         }
     ];

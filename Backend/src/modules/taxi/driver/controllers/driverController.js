@@ -26,6 +26,12 @@ import {
   verifyDriverOtp,
 } from '../services/onboardingService.js';
 
+const generateDriverReferralCode = (driver) => {
+  const idPart = String(driver?._id || '').slice(-6).toUpperCase();
+  const phonePart = String(driver?.phone || '').slice(-4);
+  return `DRV${phonePart}${idPart}`.replace(/\W/g, '');
+};
+
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;
 
@@ -149,6 +155,11 @@ export const getCurrentDriver = async (req, res) => {
     throw new ApiError(404, 'Driver not found');
   }
 
+  if (!String(driver.referralCode || '').trim()) {
+    driver.referralCode = generateDriverReferralCode(driver);
+    await driver.save();
+  }
+
   await clearDriverActiveRideIfStale(driver);
 
   res.json({
@@ -175,6 +186,7 @@ export const getCurrentDriver = async (req, res) => {
       rating: driver.rating,
       wallet: serializeDriverWallet(driver),
       referralCode: driver.referralCode || '',
+      deletionRequest: driver.deletionRequest || { status: 'none' },
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
       location: driver.location,
@@ -214,6 +226,56 @@ export const updateCurrentDriver = async (req, res) => {
       phone: driver.phone,
       email: driver.email,
       profileImage: driver.profileImage || '',
+    },
+  });
+};
+
+export const requestDriverAccountDeletion = async (req, res) => {
+  const driverId = req.auth?.sub;
+  const reason = String(req.body?.reason || '').trim();
+
+  if (!reason) {
+    throw new ApiError(400, 'Deletion reason is required');
+  }
+
+  const driver = await Driver.findById(driverId);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  if (driver.deletedAt || driver.approve === false || String(driver.status || '').toLowerCase() === 'inactive') {
+    throw new ApiError(400, 'Account is already inactive');
+  }
+
+  if (driver.deletionRequest?.status === 'pending') {
+    res.json({
+      success: true,
+      data: {
+        deletionRequestStatus: 'pending',
+        requestedAt: driver.deletionRequest.requestedAt || null,
+      },
+      message: 'Deletion request is already pending admin review',
+    });
+    return;
+  }
+
+  driver.deletionRequest = {
+    status: 'pending',
+    reason: reason.slice(0, 300),
+    requestedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+    adminNote: '',
+  };
+
+  await driver.save();
+
+  res.status(201).json({
+    success: true,
+    data: {
+      deletionRequestStatus: driver.deletionRequest.status,
+      requestedAt: driver.deletionRequest.requestedAt,
     },
   });
 };

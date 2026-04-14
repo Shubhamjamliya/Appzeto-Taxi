@@ -87,6 +87,40 @@ const stripHtml = (value = '') =>
     .replace(/\s+/g, ' ')
     .trim();
 
+const formatReferralAmount = (value) => {
+  const amount = Number(value || 0);
+  return Number.isFinite(amount) ? `₹${amount}` : '₹0';
+};
+
+export const applyReferralSettingPlaceholders = (section = {}, settings = {}) => {
+  const amount = formatReferralAmount(settings.amount || 0);
+  const rideCount = String(settings.ride_count || 0);
+  const replacements = {
+    amount,
+    referral_amount: amount,
+    referred_user_amount: amount,
+    referred_driver_amount: amount,
+    new_user_amount: amount,
+    new_driver_amount: amount,
+    user_spent_amount: amount,
+    driver_earning_amount: amount,
+    ride_count: rideCount,
+    user_ride_count: rideCount,
+    driver_ride_count: rideCount,
+  };
+
+  return Object.entries(section || {}).reduce((accumulator, [key, value]) => {
+    let nextValue = String(value || '');
+
+    Object.entries(replacements).forEach(([placeholder, replacement]) => {
+      nextValue = nextValue.replaceAll(`{${placeholder}}`, replacement);
+    });
+
+    accumulator[key] = nextValue;
+    return accumulator;
+  }, {});
+};
+
 export const buildReferralPreviewBlocks = (section = {}, fields = []) =>
   fields
     .filter((field) => field.key !== 'banner_text')

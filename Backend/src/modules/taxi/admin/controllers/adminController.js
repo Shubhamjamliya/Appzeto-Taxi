@@ -144,6 +144,28 @@ export const permanentlyDeleteDeletedDriver = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
+export const getDriverDeletionRequests = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverDeletionRequests(req.query)),
+);
+
+export const approveDriverDeletionRequest = asyncHandler(async (req, res) =>
+  ok(
+    res,
+    await adminService.approveDriverDeletionRequest(req.params.id, req.auth?.sub),
+  ),
+);
+
+export const rejectDriverDeletionRequest = asyncHandler(async (req, res) =>
+  ok(
+    res,
+    await adminService.rejectDriverDeletionRequest(
+      req.params.id,
+      req.body,
+      req.auth?.sub,
+    ),
+  ),
+);
+
 export const createDriver = asyncHandler(async (req, res) =>
   ok(res, await adminService.createDriver(req.body)),
 );

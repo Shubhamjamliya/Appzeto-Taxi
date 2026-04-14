@@ -174,7 +174,6 @@ const CustomizationSettings = () => {
               <ToggleField label="Enable Driver Disapprove When Updating Feature" name="enable_driver_disapprove_on_update" value={settings.enable_driver_disapprove_on_update} onChange={handleChange} />
               <ToggleField label="Enable Support Ticket Feature" name="enable_support_ticket_feature" value={settings.enable_support_ticket_feature} onChange={handleChange} />
               <ToggleField label="Enable Map Appearance Edit on Mobile App" name="enable_map_appearance_change_on_mobile_app" value={settings.enable_map_appearance_change_on_mobile_app} onChange={handleChange} />
-              <ToggleField label="Enable Driver Leaderboard Feature" name="enable_driver_leaderboard_feature" value={settings.enable_driver_leaderboard_feature} onChange={handleChange} />
               <ToggleField label="Enable Multiple Ride Feature" name="enable_multiple_ride_feature" value={settings.enable_multiple_ride_feature} onChange={handleChange} />
               <ToggleField label="Enable Maximum Distance Feature" name="enable_max_dist_feature" value={settings.enable_max_dist_feature} onChange={handleChange} />
               <ToggleField label="Enable Fixed Fare" name="enable_fixed_fare" value={settings.enable_fixed_fare} onChange={handleChange} />

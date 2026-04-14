@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle, Navigation, AlertTriangle, ChevronRight } from 'lucide-react';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
@@ -27,11 +27,13 @@ const LOCATION_COORDS = {
 const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[title] || fallback;
 
 const SelectLocation = () => {
-  const [pickup, setPickup] = useState('Pipaliyahana, Indore');
-  const [drop, setDrop] = useState('');
-  const [pickupCoords, setPickupCoords] = useState(() => getCoords('Pipaliyahana, Indore'));
-  const [dropCoords, setDropCoords] = useState(null);
-  const [stops, setStops] = useState([]);          // array of stop strings
+  const location = useLocation();
+  const routeState = location.state || {};
+  const [pickup, setPickup] = useState(() => routeState.pickup || 'Pipaliyahana, Indore');
+  const [drop, setDrop] = useState(() => routeState.drop || '');
+  const [pickupCoords, setPickupCoords] = useState(() => routeState.pickupCoords || getCoords(routeState.pickup || 'Pipaliyahana, Indore'));
+  const [dropCoords, setDropCoords] = useState(() => routeState.dropCoords || null);
+  const [stops, setStops] = useState(() => routeState.stops || []);          // array of stop strings
   const [activeInput, setActiveInput] = useState('drop'); // 'pickup' | 'drop' | stopIdx
   const [showMapPicker, setShowMapPicker] = useState(false);
   const [mapCenter, setMapCenter] = useState(INDIA_CENTER);

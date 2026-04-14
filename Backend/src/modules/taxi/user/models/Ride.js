@@ -158,6 +158,16 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    estimatedDistanceMeters: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    estimatedDurationMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     paymentMethod: {
       type: String,
       enum: ['cash', 'online'],

@@ -151,7 +151,7 @@ export const configureTaxiSocketServer = (httpServer) => {
 
     socket.on(
       'requestRide',
-      onAsync(socket, async ({ pickup, drop, fare, vehicleTypeId, vehicleIconType, paymentMethod, serviceType, intercity }) => {
+      onAsync(socket, async ({ pickup, drop, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleIconType, paymentMethod, serviceType, intercity }) => {
         if (identity.role !== 'user') {
           return;
         }
@@ -162,6 +162,8 @@ export const configureTaxiSocketServer = (httpServer) => {
           pickupCoords: normalizePoint(pickup, 'pickup'),
           dropCoords: normalizePoint(drop, 'drop'),
           fare: Number(fare || 0),
+          estimatedDistanceMeters: Number(estimatedDistanceMeters || 0),
+          estimatedDurationMinutes: Number(estimatedDurationMinutes || 0),
           vehicleTypeId,
           vehicleIconType,
           paymentMethod,

@@ -191,6 +191,8 @@ export const createRideRecord = async ({
   pickupAddress,
   dropAddress,
   fare,
+  estimatedDistanceMeters,
+  estimatedDurationMinutes,
   vehicleTypeId,
   vehicleTypeIds,
   vehicleIconType,
@@ -211,6 +213,8 @@ export const createRideRecord = async ({
   await clearUserActiveRideIfPresent(user);
 
   const safeFare = Number(fare);
+  const safeEstimatedDistanceMeters = Math.max(0, Number(estimatedDistanceMeters || 0));
+  const safeEstimatedDurationMinutes = Math.max(0, Number(estimatedDurationMinutes || 0));
 
   if (!Number.isFinite(safeFare) || safeFare < 0) {
     throw new ApiError(400, 'fare must be a positive number or zero');
@@ -238,6 +242,8 @@ export const createRideRecord = async ({
       dropLocation: toPoint(dropCoords, 'drop'),
       dropAddress: normalizeAddress(dropAddress),
       fare: safeFare,
+      estimatedDistanceMeters: safeEstimatedDistanceMeters,
+      estimatedDurationMinutes: safeEstimatedDurationMinutes,
       paymentMethod: normalizeRidePaymentMethod(paymentMethod),
       parcel: normalizeParcelPayload(parcel),
       intercity: normalizeIntercityPayload(intercity),
@@ -273,6 +279,8 @@ export const createRideRecord = async ({
             dropLocation: toPoint(dropCoords, 'drop'),
             dropAddress: normalizeAddress(dropAddress),
             fare: safeFare,
+            estimatedDistanceMeters: safeEstimatedDistanceMeters,
+            estimatedDurationMinutes: safeEstimatedDurationMinutes,
             paymentMethod: normalizeRidePaymentMethod(paymentMethod),
             parcel: normalizeParcelPayload(parcel),
             intercity: normalizeIntercityPayload(intercity),
@@ -352,6 +360,8 @@ export const serializeRideRealtime = (ride) => ({
   status: ride.status,
   liveStatus: ride.liveStatus,
   fare: ride.fare,
+  estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
+  estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
   paymentMethod: ride.paymentMethod,
   parcel: ride.deliveryId?.parcel || ride.parcel || null,
   intercity: ride.intercity || null,
@@ -450,6 +460,8 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     status: ride.status,
     liveStatus: ride.liveStatus,
     fare: ride.fare,
+    estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
+    estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
     paymentMethod: ride.paymentMethod,
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
     intercity: ride.intercity || null,

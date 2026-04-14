@@ -175,6 +175,50 @@ const rideSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    service_location_id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'TaxiServiceLocation',
+      default: null,
+    },
+    transport_type: {
+      type: String,
+      enum: ['taxi', 'delivery', 'all'],
+      default: 'taxi',
+      trim: true,
+    },
+    pricingSnapshot: {
+      setPriceId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'TaxiSetPrice',
+        default: null,
+      },
+      admin_commission_type_from_driver: {
+        type: Number,
+        default: 1,
+      },
+      admin_commission_from_driver: {
+        type: Number,
+        default: 0,
+      },
+      resolvedAt: {
+        type: Date,
+        default: null,
+      },
+    },
+    commissionAmount: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    driverEarnings: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    walletSettledAt: {
+      type: Date,
+      default: null,
+    },
     parcel: {
       category: {
         type: String,

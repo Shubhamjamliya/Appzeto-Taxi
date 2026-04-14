@@ -114,6 +114,19 @@ const RideTracking = () => {
   const vehicleDetails = [driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ');
   const activeRideEndpoint = serviceType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
 
+  const handleCancelRide = async () => {
+    try {
+      if (rideId) {
+        await api.patch(`/rides/${rideId}/cancel`);
+      }
+    } catch (_error) {
+      // If the ride has already advanced or ended, we still clear the local state below.
+    } finally {
+      clearCurrentRide();
+      navigate('/taxi/user');
+    }
+  };
+
   useEffect(() => {
     setVehicleImageBroken(false);
   }, [vehicleImage]);
@@ -701,10 +714,7 @@ const RideTracking = () => {
               <div className="space-y-2.5">
                 <motion.button
                   whileTap={{ scale: 0.97 }}
-                  onClick={() => {
-                    clearCurrentRide();
-                    navigate('/taxi/user');
-                  }}
+                  onClick={handleCancelRide}
                   className="w-full bg-slate-900 text-white py-3.5 rounded-[16px] text-[13px] font-bold uppercase tracking-widest"
                 >
                   Yes, Cancel

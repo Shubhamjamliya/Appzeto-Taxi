@@ -14,7 +14,7 @@ import {
   submitRideFeedback,
   updateRideLifecycle,
 } from '../../services/rideService.js';
-import { startDispatchFlow } from '../../services/dispatchService.js';
+import { cancelRideByUser, startDispatchFlow } from '../../services/dispatchService.js';
 
 const EARTH_RADIUS_METERS = 6371000;
 const AVERAGE_CITY_SPEED_KMPH = 24;
@@ -173,6 +173,26 @@ export const submitRideReview = async (req, res) => {
   res.json({
     success: true,
     data: serializeRideRealtime(ride),
+  });
+};
+
+export const cancelRide = async (req, res) => {
+  const ride = await cancelRideByUser({
+    rideId: req.params.rideId,
+    userId: req.auth.sub,
+  });
+
+  if (!ride) {
+    throw new ApiError(404, 'Ride not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      rideId: String(ride._id),
+      status: ride.status,
+      liveStatus: ride.liveStatus,
+    },
   });
 };
 

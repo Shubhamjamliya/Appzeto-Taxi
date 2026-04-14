@@ -402,7 +402,21 @@ const SearchingDriver = () => {
     };
   }, [navigate, otp, routePrefix, routeState, selectedVehicleTypeId]);
 
-  const handleCancel = () => { clearTimeout(timerRef.current); navigate(routePrefix || '/'); };
+  const handleCancel = async () => {
+    clearTimeout(timerRef.current);
+
+    const rideId = activeRideIdRef.current;
+
+    try {
+      if (rideId) {
+        await api.patch(`/rides/${rideId}/cancel`);
+      }
+    } catch (_error) {
+      // Navigation still proceeds even if the cancel request races with another state update.
+    }
+
+    navigate(routePrefix || '/');
+  };
   const isSearching = stage === STAGES.SEARCHING;
   const isAssigned  = stage === STAGES.ASSIGNED;
   const isAccepted  = stage === STAGES.ACCEPTED || stage === STAGES.COMPLETING;

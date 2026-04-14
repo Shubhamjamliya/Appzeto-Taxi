@@ -437,13 +437,21 @@ const DriverHome = () => {
                 setStatusMessage('New booking received.');
             };
 
-            const onRideRequestClosed = ({ rideId }) => {
-                console.info('[driver-home] rideRequestClosed received', { rideId });
+            const onRideRequestClosed = ({ rideId, reason, message }) => {
+                console.info('[driver-home] rideRequestClosed received', { rideId, reason, message });
                 if (acceptingRideIdRef.current && acceptingRideIdRef.current === rideId) {
                     return;
                 }
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
+                    setCurrentRequest(null);
+                    if (reason === 'user-cancelled') {
+                        setStatusMessage(message || 'User cancelled the ride.');
+                    } else if (reason === 'deleted-by-admin') {
+                        setStatusMessage('Ride was cancelled by admin.');
+                    } else if (reason === 'unmatched') {
+                        setStatusMessage('Ride request expired without a match.');
+                    }
                 }
             };
 

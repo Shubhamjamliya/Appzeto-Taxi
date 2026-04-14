@@ -20,7 +20,6 @@ const referralTranslationSchema = new mongoose.Schema(
       required: true,
       trim: true,
       lowercase: true,
-      index: true,
     },
     language_name: {
       type: String,

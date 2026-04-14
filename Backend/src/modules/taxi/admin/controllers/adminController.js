@@ -83,6 +83,10 @@ export const getUserWalletHistory = asyncHandler(async (req, res) =>
   ok(res, await adminService.listUserWalletHistory(req.params.id)),
 );
 
+export const adjustUserWallet = asyncHandler(async (req, res) =>
+  ok(res, await adminService.adjustUserWallet(req.params.id, req.body)),
+);
+
 export const getDrivers = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDrivers(req.query)),
 );
@@ -93,6 +97,18 @@ export const getDriverRatings = asyncHandler(async (req, res) =>
 
 export const getDriverRatingDetail = asyncHandler(async (req, res) =>
   ok(res, await adminService.getDriverRatingDetail(req.params.id)),
+);
+
+export const listDriverWalletHistory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listDriverWalletHistory(req.params.id)),
+);
+
+export const adjustOwnerWallet = asyncHandler(async (req, res) =>
+  ok(res, await adminService.adjustOwnerWallet(req.params.id, req.body)),
+);
+
+export const listOwnerWalletHistory = asyncHandler(async (req, res) =>
+  ok(res, await adminService.listOwnerWalletHistory(req.params.id)),
 );
 
 export const getNegativeBalanceDrivers = asyncHandler(async (req, res) =>
@@ -177,14 +193,6 @@ export const updateReferralSettings = asyncHandler(async (req, res) =>
   ok(res, await adminService.updateReferralSettings(req.params.type, req.body)),
 );
 
-export const getJoiningBonusSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.getJoiningBonusSettings()),
-);
-
-export const updateJoiningBonusSettings = asyncHandler(async (req, res) =>
-  ok(res, await adminService.updateJoiningBonusSettings(req.body)),
-);
-
 export const getReferralDashboard = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getReferralDashboard()),
 );
@@ -248,8 +256,8 @@ export const deleteVehicleType = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
-export const getOwners = asyncHandler(async (_req, res) =>
-  ok(res, { results: await adminService.listOwners() }),
+export const getOwners = asyncHandler(async (req, res) =>
+  ok(res, { results: await adminService.listOwners(req.query) }),
 );
 export const getOwner = asyncHandler(async (req, res) =>
   ok(res, await adminService.getOwnerById(req.params.id)),

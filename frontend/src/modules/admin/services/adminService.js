@@ -42,8 +42,20 @@ export const adminService = {
     api.patch(`/admin/referrals/translation/${languageCode}`, data),
   getReferralSettings: (type) => api.get(`/admin/referrals/settings/${type}`),
   updateReferralSettings: (type, data) => api.patch(`/admin/referrals/settings/${type}`, data),
-  getJoiningBonusSettings: () => api.get('/admin/referral/settings/joining-bonus'),
-  updateJoiningBonusSettings: (data) => api.patch('/admin/referral/settings/joining-bonus', data),
+  // Wallet Payment APIs
+  searchUsers: (query) => api.get(`/admin/users?search=${query}`),
+  searchDrivers: (query) => api.get(`/admin/drivers?search=${query}`),
+  searchOwners: (query) => api.get(`/admin/owners?search=${query}`),
+
+  adjustUserWallet: (id, data) => api.post(`/admin/wallet/users/${id}/adjust`, data),
+  getUserWalletHistory: (id) => api.get(`/admin/wallet/users/${id}/history`),
+
+  adjustDriverWallet: (id, data) => api.post(`/admin/wallet/drivers/${id}/adjust`, data),
+  getDriverWalletHistory: (id) => api.get(`/admin/wallet/drivers/${id}/history`),
+
+  adjustOwnerWallet: (id, data) => api.post(`/admin/wallet/owners/${id}/adjust`, data),
+  getOwnerWalletHistory: (id) => api.get(`/admin/wallet/owners/${id}/history`),
+
   getReferralDashboard: () => api.get('/admin/referral/dashboard'),
 
   /**

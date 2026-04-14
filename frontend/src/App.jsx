@@ -111,7 +111,6 @@ const ActiveTrip = lazy(() => import('./modules/driver/pages/ActiveTrip'));
 const DriverWallet = lazy(() => import('./modules/driver/pages/DriverWallet'));
 const DriverProfile = lazy(() => import('./modules/driver/pages/DriverProfile'));
 const RideRequests = lazy(() => import('./modules/driver/pages/RideRequests'));
-const Leaderboard = lazy(() => import('./modules/driver/pages/Leaderboard'));
 
 // Driver Module - Settings
 const EditProfile = lazy(() => import('./modules/driver/pages/settings/EditProfile'));
@@ -119,6 +118,7 @@ const DriverDocuments = lazy(() => import('./modules/driver/pages/settings/Drive
 const Notifications = lazy(() => import('./modules/driver/pages/settings/Notifications'));
 const PayoutMethods = lazy(() => import('./modules/driver/pages/settings/PayoutMethods'));
 const Referral = lazy(() => import('./modules/driver/pages/settings/Referral'));
+const DriverDeleteAccount = lazy(() => import('./modules/driver/pages/settings/DeleteAccount'));
 const SecuritySOS = lazy(() => import('./modules/driver/pages/settings/SecuritySOS'));
 const DriverSupport = lazy(() => import('./modules/driver/pages/settings/Support'));
 const DriverHelpSupportOptions = lazy(() => import('./modules/driver/pages/settings/HelpSupportOptions'));
@@ -535,13 +535,13 @@ function App() {
               <Route path="wallet" element={<DriverWallet />} />
               <Route path="profile" element={<DriverProfile />} />
               <Route path="history" element={<RideRequests />} />
-              <Route path="leaderboard" element={<Leaderboard />} />
 
               <Route path="edit-profile" element={<EditProfile />} />
               <Route path="documents" element={<DriverDocuments />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="payout-methods" element={<PayoutMethods />} />
               <Route path="referral" element={<Referral />} />
+              <Route path="delete-account" element={<DriverDeleteAccount />} />
               <Route path="security" element={<SecuritySOS />} />
               <Route path="support" element={<DriverSupport />} />
               <Route path="help-support" element={<DriverHelpSupportOptions />} />

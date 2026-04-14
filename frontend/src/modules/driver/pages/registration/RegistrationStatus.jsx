@@ -9,7 +9,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
-import { clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
+import { clearDriverAuthState, clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
 
 const APPROVAL_POLL_MS = 2500;
 
@@ -29,6 +29,11 @@ const isDriverApproved = (driver) => {
         ['true', '1', 'yes', 'approved'].includes(approval) ||
         ['approved', 'active', 'verified'].includes(status)
     );
+};
+
+const redirectToDriverLogin = (navigate) => {
+    clearDriverAuthState();
+    navigate('/taxi/driver/login', { replace: true });
 };
 
 const RegistrationStatus = () => {
@@ -79,7 +84,7 @@ const RegistrationStatus = () => {
                         setChecking(false);
                         setStatusMessage('Registration session not found. Please start again.');
                     }
-                navigate('/taxi/driver/login', { replace: true });
+                    redirectToDriverLogin(navigate);
                     requestInFlightRef.current = false;
                     return;
                 }
@@ -108,7 +113,14 @@ const RegistrationStatus = () => {
                 }
 
                 if (error?.status === 401) {
-                    navigate('/taxi/driver/login', { replace: true });
+                    redirectToDriverLogin(navigate);
+                    requestInFlightRef.current = false;
+                    return;
+                }
+
+                if (error?.status === 404) {
+                    setStatusMessage('Driver account deleted. Redirecting to login...');
+                    redirectToDriverLogin(navigate);
                     requestInFlightRef.current = false;
                     return;
                 }

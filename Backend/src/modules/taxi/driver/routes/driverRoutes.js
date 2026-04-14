@@ -18,6 +18,7 @@ import {
   saveOnboardingReferral,
   saveOnboardingVehicle,
   registerDriver,
+  requestDriverAccountDeletion,
   startOnboarding,
   topUpMyWallet,
   updateCurrentDriver,
@@ -34,6 +35,7 @@ driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
 driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
 driverRouter.patch('/me', authenticate(['driver']), asyncHandler(updateCurrentDriver));
+driverRouter.post('/me/delete-request', authenticate(['driver']), asyncHandler(requestDriverAccountDeletion));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));

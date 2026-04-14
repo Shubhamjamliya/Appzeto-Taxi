@@ -138,6 +138,12 @@ const DriverProfile = () => {
                 { id: 'languages', label: 'App Language', icon: <Languages size={20} />, path: '/taxi/driver/lang-select' },
                 { id: 'routeBooking', label: 'My Route Booking', icon: <Route size={20} />, type: 'toggle' },
             ]
+        },
+        {
+            title: 'Danger Zone',
+            items: [
+                { id: 'deleteAccount', label: 'Delete Account', icon: <LogOut size={20} />, path: '/taxi/driver/delete-account' },
+            ]
         }
     ];
 

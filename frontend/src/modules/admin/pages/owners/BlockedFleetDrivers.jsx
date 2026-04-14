@@ -1,203 +1,287 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Search,
+  ChevronDown,
   ChevronRight,
   Eye,
-  CheckCircle2,
-  XCircle,
-  MoreVertical,
-  Plus,
-  Loader2,
+  FileSearch,
+  FileText,
   Filter,
-  User,
-  Phone,
-  Mail,
-  MapPin,
-  Car
+  LayoutGrid,
+  List,
+  Loader2,
+  Menu,
+  Plus,
+  Search,
+  Star,
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { motion, AnimatePresence } from 'framer-motion';
 
-const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
+const BASE = `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin`;
+
+const isPending = (driver) => driver?.approve === false || String(driver?.status || '').toLowerCase() === 'pending';
+
+const isFleetDriver = (driver) => Boolean(driver?.owner_id || driver?.fleet_id);
+
+const getDriverName = (driver) => driver?.name || driver?.user_id?.name || driver?.full_name || '-';
+
+const getServiceLocation = (driver) =>
+  driver?.service_location_id?.service_location_name ||
+  driver?.service_location_id?.name ||
+  driver?.service_location_name ||
+  driver?.service_location ||
+  driver?.area_name ||
+  '-';
+
+const getTransportType = (driver) =>
+  driver?.transport_type ||
+  driver?.vehicle_type ||
+  driver?.car_type ||
+  driver?.driver_account_type ||
+  '-';
+
+const getMobile = (driver) => {
+  const mobile = driver?.mobile || driver?.user_id?.mobile || driver?.phone || '';
+  if (!mobile) return '-';
+  return String(mobile).startsWith('+') ? mobile : `+91${mobile}`;
+};
+
+const getEmail = (driver) => driver?.email || driver?.user_id?.email || '-';
+
+const getDeclinedReason = (driver) =>
+  driver?.declined_reason ||
+  driver?.declineReason ||
+  driver?.rejectionReason ||
+  driver?.rejected_reason ||
+  driver?.reason ||
+  '-';
 
 const BlockedFleetDrivers = () => {
   const navigate = useNavigate();
-  const [searchTerm, setSearchTerm] = useState('');
   const [isLoading, setIsLoading] = useState(true);
   const [drivers, setDrivers] = useState([]);
-  const [activeMenu, setActiveMenu] = useState(null);
-
-  const token = localStorage.getItem('adminToken') || '';
-
-  const fetchData = async () => {
-    setIsLoading(true);
-    try {
-      // Assuming blocked drivers have active=false or a specific status
-      const res = await fetch(`${BASE}/owner-management/blocked-fleet-drivers`, {
-        headers: { 'Authorization': `Bearer ${token}` }
-      });
-      const json = await res.json();
-      if (json.success) {
-        setDrivers(Array.isArray(json.data) ? json.data : (json.data?.results || []));
-      }
-    } catch (err) {
-      console.error('Failed to fetch blocked fleet drivers:', err);
-    } finally {
-      setIsLoading(false);
-    }
-  };
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
 
   useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+
+      try {
+        const token = localStorage.getItem('adminToken') || '';
+        const response = await fetch(`${BASE}/drivers?page=1&limit=100`, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        const json = await response.json();
+
+        if (response.ok && json.success) {
+          const allDrivers = json.data?.results || [];
+          setDrivers(allDrivers.filter((driver) => isPending(driver) && isFleetDriver(driver)));
+        }
+      } catch (error) {
+        console.error('Failed to fetch pending fleet drivers:', error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
     fetchData();
   }, []);
 
-  const handleAction = async (action, id) => {
-    if (action === 'unblock') {
-      if(!window.confirm('Unblock this driver?')) return;
-      try {
-        const res = await fetch(`${BASE}/owner-management/blocked-fleet-drivers/${id}`, {
-          method: 'DELETE', // Usually deleting a block record or status
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const d = await res.json();
-        if(d.success) fetchData();
-        else alert(d.message || "Failed to unblock");
-      } catch(e) { alert("Network error"); }
-    }
-    setActiveMenu(null);
-  };
+  useEffect(() => {
+    setPage(1);
+  }, [itemsPerPage]);
 
-  const filtered = drivers.filter(d =>
-    (d.name || d.user_id?.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (d.mobile || d.user_id?.mobile || d.phone || '').includes(searchTerm)
-  );
+  const totalEntries = drivers.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const pagedDrivers = useMemo(() => {
+    const start = (safePage - 1) * itemsPerPage;
+    return drivers.slice(start, start + itemsPerPage);
+  }, [drivers, itemsPerPage, safePage]);
+  const showingFrom = totalEntries === 0 ? 0 : (safePage - 1) * itemsPerPage + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(showingFrom + pagedDrivers.length - 1, totalEntries);
 
   return (
-    <div className="min-h-screen p-1 font-sans">
-      <div className="flex items-center justify-between mb-8 px-1">
-        <h1 className="text-[15px] font-black tracking-tight text-gray-800 uppercase italic">Blocked Fleet Drivers</h1>
-        <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-          <span>Fleet Management</span>
-          <ChevronRight size={12} className="opacity-50" />
-          <span className="text-gray-950 font-black">Blocked Drivers</span>
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
+      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
+        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Pending Drivers</h1>
+        <div className="flex items-center gap-2 text-sm text-slate-400">
+          <span className="text-gray-950">Pending Drivers</span>
+          <ChevronRight size={14} />
+          <span>Pending Drivers</span>
         </div>
       </div>
 
-      <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden border-t-4 border-t-rose-500/20">
-        <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/20">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-              <input
-                type="text"
-                placeholder="Search blocked drivers..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-10 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold outline-none focus:border-rose-200 transition-all w-64 shadow-sm"
-              />
+      <div className="px-5">
+        <div className="relative rounded border border-gray-200 bg-white shadow-sm">
+          <div className="flex flex-col gap-5 px-5 py-8 md:flex-row md:items-center md:justify-between">
+            <div className="flex items-center gap-3">
+              <button className="flex h-11 w-14 items-center justify-center rounded bg-teal-500 text-white transition-colors hover:bg-teal-600">
+                <List size={17} />
+              </button>
+              <button className="flex h-11 w-14 items-center justify-center rounded bg-gray-200 text-indigo-950 transition-colors hover:bg-gray-300">
+                <LayoutGrid size={16} />
+              </button>
+
+              <div className="ml-5 flex items-center gap-3 text-sm font-semibold text-slate-400">
+                <span>show</span>
+                <div className="relative">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(event) => setItemsPerPage(Number(event.target.value) || 10)}
+                    className="h-9 w-24 appearance-none rounded border border-gray-300 bg-white px-3 text-sm text-gray-950 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {[10, 25, 50, 100].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-700"
+                  />
+                </div>
+                <span>entries</span>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <button
+                type="button"
+                className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-slate-500 transition-colors hover:border-indigo-500 hover:text-indigo-600"
+              >
+                <Search size={17} />
+              </button>
+              <button className="flex h-12 items-center gap-2 rounded bg-[#F26A4C] px-5 text-sm font-semibold text-white transition-colors hover:bg-[#E85F44]">
+                <Filter size={15} /> Filters
+              </button>
+              <button
+                type="button"
+                onClick={() => navigate('/admin/fleet/drivers/create')}
+                className="flex h-12 items-center gap-3 rounded bg-indigo-950 px-6 text-sm font-semibold text-white transition-colors hover:bg-indigo-900"
+              >
+                <Plus size={16} /> Add Fleet Drivers
+              </button>
             </div>
           </div>
-          <div className="flex items-center gap-3 px-4 py-2 bg-rose-50 rounded-xl text-rose-500 text-[11px] font-black uppercase tracking-widest">
-            <XCircle size={16} /> Restricted Access Control
+
+          <div className="px-5">
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead className="bg-gray-50">
+                  <tr>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Name</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Service Locations</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Email</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Mobile Number</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Transport Type</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Document View</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Approved Status</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Declined Reason</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Rating</th>
+                    <th className="px-3 py-4 text-sm font-bold text-gray-950">Action</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {isLoading ? (
+                    <tr>
+                      <td colSpan="10" className="px-3 py-24 text-center">
+                        <div className="flex flex-col items-center gap-4 text-slate-400">
+                          <Loader2 size={34} className="animate-spin text-teal-500" />
+                          <p className="text-sm font-semibold">Loading pending drivers...</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : pagedDrivers.length === 0 ? (
+                    <tr>
+                      <td colSpan="10" className="border-b border-gray-200 px-3 py-12 text-center">
+                        <div className="flex min-h-[130px] flex-col items-center justify-center text-slate-700">
+                          <FileSearch size={92} strokeWidth={1.7} className="mb-2 text-indigo-950" />
+                          <p className="text-xl font-medium">No Data Found</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    pagedDrivers.map((driver) => (
+                      <tr key={driver._id} className="bg-white transition-colors hover:bg-gray-50">
+                        <td className="px-3 py-5 text-sm text-gray-950">{getDriverName(driver)}</td>
+                        <td className="px-3 py-5 text-sm text-gray-950">{getServiceLocation(driver)}</td>
+                        <td className="px-3 py-5 text-sm text-gray-950">{getEmail(driver)}</td>
+                        <td className="px-3 py-5 text-sm text-gray-950">{getMobile(driver)}</td>
+                        <td className="px-3 py-5 text-sm capitalize text-gray-950">{getTransportType(driver)}</td>
+                        <td className="px-3 py-5">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/drivers/${driver._id}?tab=Documents`)}
+                            className="text-indigo-950 transition-colors hover:text-indigo-700"
+                          >
+                            <FileText size={28} fill="currentColor" strokeWidth={1.5} />
+                          </button>
+                        </td>
+                        <td className="px-3 py-5">
+                          <span className="inline-flex rounded-full bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                            Pending
+                          </span>
+                        </td>
+                        <td className="px-3 py-5 text-sm text-gray-950">{getDeclinedReason(driver)}</td>
+                        <td className="px-3 py-5">
+                          <span className="inline-flex items-center gap-1 text-sm font-semibold text-amber-500">
+                            <Star size={15} fill="currentColor" />
+                            {Number(driver.rating || 0).toFixed(1)}
+                          </span>
+                        </td>
+                        <td className="px-3 py-5">
+                          <button
+                            type="button"
+                            onClick={() => navigate(`/admin/drivers/${driver._id}`)}
+                            className="inline-flex h-9 w-10 items-center justify-center rounded bg-teal-50 text-teal-500 transition-colors hover:bg-teal-100"
+                            title="View driver"
+                          >
+                            <Eye size={17} />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
+
+          <button
+            type="button"
+            className="absolute -right-1 top-[66%] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-teal-500 text-white shadow-xl transition-colors hover:bg-teal-600"
+          >
+            <Menu size={24} />
+          </button>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr className="bg-white border-b border-gray-50">
-                {['Driver Info', 'Fleet Owner', 'Blocking Reason', 'Area', 'Status', 'Actions'].map(col => (
-                  <th key={col} className="px-6 py-5 text-[11px] font-black text-gray-400 uppercase tracking-[0.15em] whitespace-nowrap text-center">
-                    {col}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-gray-50 text-center">
-              {isLoading ? (
-                <tr>
-                  <td colSpan="6" className="py-24 text-center">
-                    <Loader2 className="animate-spin text-rose-200 mx-auto" size={48} />
-                    <span className="text-[12px] font-black uppercase tracking-[0.3em] text-gray-200 mt-4 block">Loading Restrictions...</span>
-                  </td>
-                </tr>
-              ) : filtered.length === 0 ? (
-                <tr>
-                  <td colSpan="6" className="py-28 text-center">
-                    <CheckCircle2 size={48} className="text-emerald-100 mx-auto" />
-                    <p className="text-[12px] font-black uppercase tracking-widest text-gray-300 mt-4 underline decoration-emerald-200 decoration-wavy">Clean Slate</p>
-                    <p className="text-[11px] text-gray-200 mt-1 uppercase font-bold tracking-[0.2em]">No restricted fleet drivers found</p>
-                  </td>
-                </tr>
-              ) : (
-                filtered.map((driver) => (
-                  <tr key={driver._id} className="hover:bg-rose-50/10 transition-all group">
-                    <td className="px-6 py-5 text-left">
-                      <div className="flex items-center gap-4">
-                        <div className="w-11 h-11 rounded-2xl bg-rose-50 flex items-center justify-center text-rose-400 font-black text-[14px] shadow-inner group-hover:-scale-110 transition-transform">
-                          { (driver.name || driver.user_id?.name || 'D').charAt(0) }
-                        </div>
-                        <div>
-                          <p className="text-[13px] font-black text-gray-900 tracking-tight">{driver.name || driver.user_id?.name || 'Unknown'}</p>
-                          <p className="text-[11px] font-bold text-gray-400 italic">ID: {driver._id.slice(-6).toUpperCase()}</p>
-                        </div>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5 underline decoration-gray-100 underline-offset-4">
-                      <span className="text-[11px] font-black text-gray-600 bg-gray-50 px-3 py-1.5 rounded-lg border border-gray-100 uppercase tracking-wider">
-                        {driver.owner_id?.company_name || 'Global Fleet'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="text-[11px] font-black text-rose-500 uppercase tracking-widest italic">{driver.reason || 'Safety Violation'}</span>
-                        <span className="text-[10px] font-bold text-gray-300">{driver.updatedAt ? new Date(driver.updatedAt).toLocaleDateString() : 'Unknown'}</span>
-                      </div>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="text-[11px] font-bold text-gray-500 flex items-center justify-center gap-1.5 uppercase">
-                        <MapPin size={12} className="text-gray-300" /> {driver.service_location_id?.service_location_name || 'N/A'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-5">
-                      <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-rose-50 text-rose-600 border border-rose-100 rounded-full text-[10px] font-bold uppercase tracking-widest shadow-sm shadow-rose-50">
-                        <XCircle size={12} /> Restricted
-                      </span>
-                    </td>
-                    <td className="px-6 py-5 text-right relative">
-                      <button
-                        onClick={() => setActiveMenu(activeMenu === driver._id ? null : driver._id)}
-                        className="w-10 h-10 ml-auto flex items-center justify-center text-gray-400 bg-gray-50 rounded-xl hover:bg-rose-50 hover:text-rose-600 transition-all border border-gray-100"
-                      >
-                        <MoreVertical size={18} />
-                      </button>
-                      <AnimatePresence>
-                        {activeMenu === driver._id && (
-                          <>
-                            <div className="fixed inset-0 z-20" onClick={() => setActiveMenu(null)} />
-                            <motion.div
-                              initial={{ opacity: 0, scale: 0.9, y: -10 }}
-                              animate={{ opacity: 1, scale: 1, y: 0 }}
-                              exit={{ opacity: 0, scale: 0.9, y: -10 }}
-                              className="absolute right-16 top-0 z-30 bg-white border border-gray-100 shadow-2xl rounded-2xl p-2 min-w-[160px] text-left"
-                            >
-                              <button onClick={() => navigate(`/admin/drivers/${driver._id}`)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-indigo-50 text-indigo-600 rounded-xl transition-colors text-[11px] font-black uppercase tracking-widest">
-                                <Eye size={16} /> Audit Trail
-                              </button>
-                              <div className="h-px bg-gray-50 my-1 mx-2" />
-                              <button onClick={() => handleAction('unblock', driver._id)} className="w-full flex items-center gap-3 px-4 py-2.5 hover:bg-emerald-50 text-emerald-600 rounded-xl transition-colors text-[11px] font-black uppercase tracking-widest">
-                                <CheckCircle2 size={16} /> Unblock Driver
-                              </button>
-                            </motion.div>
-                          </>
-                        )}
-                      </AnimatePresence>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+        <div className="mt-8 flex items-center justify-between">
+          <p className="text-sm font-medium text-slate-400">
+            Showing {showingFrom} to {showingTo} of {totalEntries} entries
+          </p>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+              disabled={safePage <= 1}
+              className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Prev
+            </button>
+            <button type="button" className="rounded bg-indigo-950 px-4 py-2 text-sm font-semibold text-white">
+              {safePage}
+            </button>
+            <button
+              type="button"
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              disabled={safePage >= totalPages}
+              className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              Next
+            </button>
+          </div>
         </div>
       </div>
     </div>
@@ -205,4 +289,3 @@ const BlockedFleetDrivers = () => {
 };
 
 export default BlockedFleetDrivers;
-

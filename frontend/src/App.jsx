@@ -198,11 +198,14 @@ const AdminOwnerDetails = lazy(() => import('./modules/admin/pages/owners/OwnerD
 const AdminOwnerCreate = lazy(() => import('./modules/admin/pages/owners/OwnerCreate'));
 const AdminOwnerPasswordUpdate = lazy(() => import('./modules/admin/pages/owners/OwnerPasswordUpdate'));
 const AdminOwnerNeededDocuments = lazy(() => import('./modules/admin/pages/owners/OwnerNeededDocuments'));
+const AdminOwnerNeededDocumentsCreate = lazy(() => import('./modules/admin/pages/owners/OwnerNeededDocumentsCreate'));
 const AdminManageFleet = lazy(() => import('./modules/admin/pages/owners/ManageFleet'));
+const AdminManageFleetCreate = lazy(() => import('./modules/admin/pages/owners/ManageFleetCreate'));
 const AdminFleetDrivers = lazy(() => import('./modules/admin/pages/owners/FleetDrivers'));
 const AdminFleetDriverCreate = lazy(() => import('./modules/admin/pages/owners/FleetDriverCreate'));
 const AdminBlockedFleetDrivers = lazy(() => import('./modules/admin/pages/owners/BlockedFleetDrivers'));
 const AdminFleetNeededDocuments = lazy(() => import('./modules/admin/pages/owners/FleetNeededDocuments'));
+const AdminFleetNeededDocumentsCreate = lazy(() => import('./modules/admin/pages/owners/FleetNeededDocumentsCreate'));
 const AdminWithdrawalRequestOwners = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwners'));
 const AdminWithdrawalRequestOwnerDetail = lazy(() => import('./modules/admin/pages/owners/WithdrawalRequestOwnerDetail'));
 const AdminDeletedOwners = lazy(() => import('./modules/admin/pages/owners/DeletedOwners'));
@@ -628,8 +631,11 @@ function App() {
               <Route path="fleet/drivers/create" element={<AdminFleetDriverCreate />} />
               <Route path="fleet/blocked" element={<AdminBlockedFleetDrivers />} />
               <Route path="fleet/documents" element={<AdminFleetNeededDocuments />} />
+              <Route path="fleet/documents/create" element={<AdminFleetNeededDocumentsCreate />} />
               <Route path="fleet/manage" element={<AdminManageFleet />} />
+              <Route path="fleet/manage/create" element={<AdminManageFleetCreate />} />
               <Route path="owners/documents" element={<AdminOwnerNeededDocuments />} />
+              <Route path="owners/documents/create" element={<AdminOwnerNeededDocumentsCreate />} />
               <Route path="owners/deleted" element={<AdminDeletedOwners />} />
               <Route path="owners/bookings" element={<AdminOwnerBookings />} />
               <Route path="referrals/config" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Referral Configuration - Under Setup</div>} />

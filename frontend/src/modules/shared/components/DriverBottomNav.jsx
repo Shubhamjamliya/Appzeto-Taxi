@@ -1,13 +1,14 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, IndianRupee, User } from 'lucide-react';
+import { Home, IndianRupee, User, History } from 'lucide-react';
 
 const DriverBottomNav = () => {
     const location = useLocation();
 
-    // Matching user's latest screenshot labels: Home, LeaderBoard, Earnings, Accounts
+    // Matching user's latest screenshot labels: Home, History, Earnings, Accounts
     const navItems = [
         { icon: <Home size={22} />, label: 'Home', path: '/taxi/driver/home' },
+        { icon: <History size={22} />, label: 'History', path: '/taxi/driver/history' },
         { icon: <IndianRupee size={22} />, label: 'Earnings', path: '/taxi/driver/wallet' },
         { icon: <User size={22} />, label: 'Accounts', path: '/taxi/driver/profile' },
     ];

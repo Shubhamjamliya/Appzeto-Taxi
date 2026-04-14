@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, Eye, FileText, RefreshCw, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentDriver, getDriverDocumentTemplates } from '../../services/registrationService';

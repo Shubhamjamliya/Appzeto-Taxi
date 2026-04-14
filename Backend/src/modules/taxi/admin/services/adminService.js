@@ -646,7 +646,11 @@ const serializeDriver = (driver) => ({
   vehicle_type: driver.vehicleType || '',
   vehicle_number: driver.vehicleNumber || '',
   vehicle_color: driver.vehicleColor || '',
-  rating: driver.rating || 0,
+  rating:
+    Number(driver.ratingCount || 0) > 0
+      ? Number(driver.rating || 0)
+      : 0,
+  rating_count: Number(driver.ratingCount || 0),
   approve: Boolean(driver.approve),
   status: driver.status || (driver.approve ? 'approved' : 'pending'),
   active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
@@ -1849,7 +1853,8 @@ export const listDriverRatings = async ({ page = 1, limit = 50, search = '' }) =
       mobile: driver.phone || '',
       phone: driver.phone || '',
       email: driver.email || '',
-      rating: Number(driver.rating || 0),
+      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
+      rating_count: Number(driver.ratingCount || 0),
       transport_type: driver.registerFor || driver.vehicleType || '',
     })),
     paginator: {
@@ -1875,7 +1880,8 @@ export const getDriverRatingDetail = async (id) => {
       name: driver.name || '',
       phone: driver.phone || '',
       email: driver.email || '',
-      rating: Number(driver.rating || 0),
+      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
+      rating_count: Number(driver.ratingCount || 0),
       transport_type: driver.registerFor || driver.vehicleType || '',
       vehicle_make: driver.vehicleMake || '',
       vehicle_model: driver.vehicleModel || '',
@@ -1890,7 +1896,7 @@ export const getDriverRatingDetail = async (id) => {
       pickup_location: ride.pickupLocation?.coordinates
         ? `${ride.pickupLocation.coordinates[1]}, ${ride.pickupLocation.coordinates[0]}`
         : 'N/A',
-      rating: Number(driver.rating || 0),
+      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
     })),
   };
 };
@@ -2262,12 +2268,18 @@ export const createDriver = async (payload = {}) => {
   const name = String(payload.name || '').trim();
   const phone = String(payload.phone || payload.mobile || '').trim();
   const password = String(payload.password || '').trim();
+  const passwordConfirmation = String(
+    payload.password_confirmation || payload.passwordConfirmation || '',
+  ).trim();
   const email = String(payload.email || '').trim();
 
   if (!name) throw new ApiError(400, 'Driver name is required');
   if (!phone) throw new ApiError(400, 'Driver phone is required');
   if (!password || password.length < 6) {
     throw new ApiError(400, 'Password must be at least 6 characters');
+  }
+  if (passwordConfirmation && password !== passwordConfirmation) {
+    throw new ApiError(400, 'Password confirmation does not match');
   }
 
   const existing = await Driver.findOne({ phone }).lean();
@@ -2291,6 +2303,9 @@ export const createDriver = async (payload = {}) => {
     }
   }
 
+  const vehicleTypeId =
+    payload.vehicle_type_id || payload.vehicleTypeId || payload.vehicleType?._id || payload.vehicleType?.id || null;
+
   const driver = await Driver.create({
     name,
     phone,
@@ -2303,7 +2318,7 @@ export const createDriver = async (payload = {}) => {
     gender: String(payload.gender || '').trim(),
     password: await hashPassword(password),
     vehicleType,
-    vehicleTypeId: payload.vehicle_type_id || payload.vehicleTypeId || null,
+    vehicleTypeId: vehicleTypeId && mongoose.isValidObjectId(vehicleTypeId) ? toObjectId(vehicleTypeId) : null,
     vehicleMake: String(payload.vehicle_make || payload.vehicleMake || payload.car_make || '').trim(),
     vehicleModel: String(payload.vehicle_model || payload.vehicleModel || payload.car_model || '').trim(),
     vehicleColor: String(payload.vehicle_color || payload.vehicleColor || payload.car_color || '').trim(),

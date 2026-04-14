@@ -3,13 +3,13 @@ import { getFirebaseDatabase, firebaseServerTimestamp } from '../../../../config
 import { SOCKET_EVENTS } from '../events.js';
 import { getRideRoom } from '../../services/rideService.js';
 
-const SIMPLIFY_EVERY_POINTS = 10;
+const SIMPLIFY_INTERVAL_MS = 3_000;
 const ROUTE_TOLERANCE = 0.0001;
 const FIREBASE_WRITE_INTERVAL_MS = 10_000;
 
 const driverRouteBuffers = new Map();
-const driverPendingPointCounts = new Map();
 const driverFirebaseWriteTimestamps = new Map();
+const driverSimplifyTimestamps = new Map();
 
 const toRoutePoint = (coordinates) => ({
   x: Number(coordinates[0]),
@@ -17,14 +17,14 @@ const toRoutePoint = (coordinates) => ({
 });
 
 const shouldSimplifyRoute = (driverId) => {
-  const pendingPointCount = (driverPendingPointCounts.get(driverId) || 0) + 1;
+  const now = Date.now();
+  const lastSimplifiedAt = driverSimplifyTimestamps.get(driverId) || 0;
 
-  if (pendingPointCount < SIMPLIFY_EVERY_POINTS) {
-    driverPendingPointCounts.set(driverId, pendingPointCount);
+  if (now - lastSimplifiedAt < SIMPLIFY_INTERVAL_MS) {
     return false;
   }
 
-  driverPendingPointCounts.set(driverId, 0);
+  driverSimplifyTimestamps.set(driverId, now);
   return true;
 };
 
@@ -83,6 +83,6 @@ export const updateDriverRoute = ({ io, rideId, driverId, coordinates }) => {
 
 export const clearDriverRoute = (driverId) => {
   driverRouteBuffers.delete(driverId);
-  driverPendingPointCounts.delete(driverId);
   driverFirebaseWriteTimestamps.delete(driverId);
+  driverSimplifyTimestamps.delete(driverId);
 };

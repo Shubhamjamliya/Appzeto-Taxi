@@ -280,8 +280,13 @@ const SetPrices = ({ mode }) => {
                                  >
                                     <Gift size={14} />
                                  </button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#F8FAFC] text-[#64748B] rounded transition-colors"><Eye size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors"><Layers size={14} /></button>
+                                 <button 
+                                   title="driver incentive"
+                                   onClick={() => navigate(`/admin/pricing/set-price/incentive/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors hover:bg-blue-100"
+                                 >
+                                    <Layers size={14} />
+                                 </button>
                                 <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors"><Zap size={14} /></button>
                                 <button className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors"><Cone size={14} /></button>
                              </div>

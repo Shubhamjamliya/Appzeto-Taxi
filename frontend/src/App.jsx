@@ -181,6 +181,7 @@ const AdminAirportManagement = lazy(() => import('./modules/admin/pages/price-ma
 const AdminSetPrices = lazy(() => import('./modules/admin/pages/price-management/SetPrices'));
 const AdminSetPackagePrices = lazy(() => import('./modules/admin/pages/price-management/SetPackagePrices'));
 const AdminCreatePackagePrice = lazy(() => import('./modules/admin/pages/price-management/CreatePackagePrice'));
+const AdminDriverIncentive = lazy(() => import('./modules/admin/pages/price-management/DriverIncentive'));
 const AdminVehicleType = lazy(() => import('./modules/admin/pages/price-management/VehicleType'));
 const AdminRentalPackageTypes = lazy(() => import('./modules/admin/pages/price-management/RentalPackageTypes'));
 const AdminGoodsTypes = lazy(() => import('./modules/admin/pages/price-management/GoodsTypes'));
@@ -673,6 +674,7 @@ function App() {
                 <Route path="set-price/packages/:id" element={<AdminSetPackagePrices />} />
                 <Route path="set-price/packages/create/:id" element={<AdminCreatePackagePrice mode="create" />} />
                 <Route path="set-price/packages/edit/:packageId" element={<AdminCreatePackagePrice mode="edit" />} />
+                <Route path="set-price/incentive/:id" element={<AdminDriverIncentive />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
                 <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />

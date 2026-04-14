@@ -11,7 +11,6 @@ import {
     ShieldCheck, 
     HelpCircle, 
     LogOut, 
-    Settings, 
     ArrowRight, 
     Star, 
     Route, 
@@ -138,12 +137,6 @@ const DriverProfile = () => {
             items: [
                 { id: 'languages', label: 'App Language', icon: <Languages size={20} />, path: '/taxi/driver/lang-select' },
                 { id: 'routeBooking', label: 'My Route Booking', icon: <Route size={20} />, type: 'toggle' },
-            ]
-        },
-        {
-            title: 'Settings',
-            items: [
-                { id: 'settings', label: 'App Settings', icon: <Settings size={20} />, path: '/taxi/driver/settings' },
             ]
         }
     ];

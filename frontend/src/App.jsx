@@ -35,10 +35,9 @@ const Wallet = lazy(() => import('./modules/user/pages/Wallet'));
 // Coming Soon placeholder (for /tours and any unbuilt routes)
 const ComingSoon = lazy(() => import('./modules/shared/pages/ComingSoon'));
 
-// Phase 1 — Parcel flow completions + WorkshopRSA
+// Phase 1 — Parcel flow completions
 const ParcelSearchingDriver = lazy(() => import('./modules/user/pages/parcel/ParcelSearchingDriver'));
 const ParcelTracking = lazy(() => import('./modules/user/pages/parcel/ParcelTracking'));
-const WorkshopRSA = lazy(() => import('./modules/user/pages/services/WorkshopRSA'));
 
 // Phase 2 — Core utility pages
 const UserNotifications = lazy(() => import('./modules/user/pages/Notifications'));
@@ -90,7 +89,6 @@ const ProfileSettings = lazy(() => import('./modules/user/pages/profile/ProfileS
 const PaymentSettings = lazy(() => import('./modules/user/pages/profile/PaymentSettings'));
 const AddressSettings = lazy(() => import('./modules/user/pages/profile/AddressSettings'));
 const NotificationSettings = lazy(() => import('./modules/user/pages/profile/NotificationSettings'));
-const SecuritySettings = lazy(() => import('./modules/user/pages/profile/SecuritySettings'));
 
 // Driver Module - Common
 import DriverLayout from './modules/driver/components/DriverLayout';
@@ -116,7 +114,6 @@ const RideRequests = lazy(() => import('./modules/driver/pages/RideRequests'));
 const Leaderboard = lazy(() => import('./modules/driver/pages/Leaderboard'));
 
 // Driver Module - Settings
-const DriverSettings = lazy(() => import('./modules/driver/pages/settings/DriverSettings'));
 const EditProfile = lazy(() => import('./modules/driver/pages/settings/EditProfile'));
 const DriverDocuments = lazy(() => import('./modules/driver/pages/settings/DriverDocuments'));
 const Notifications = lazy(() => import('./modules/driver/pages/settings/Notifications'));
@@ -407,7 +404,6 @@ function App() {
             <Route path="/parcel/searching" element={<ParcelSearchingDriver />} />
             <Route path="/parcel/tracking" element={<ParcelTracking />} />
             <Route path="/parcel/detail/:id" element={<RideDetail />} />
-            <Route path="/services/workshop-rsa" element={<WorkshopRSA />} />
 
             {/* New Service Routes — Real pages replacing ComingSoon */}
             <Route path="/rental" element={<BikeRentalHome />} />
@@ -448,7 +444,6 @@ function App() {
             <Route path="/profile/payments" element={<PaymentSettings />} />
             <Route path="/profile/addresses" element={<AddressSettings />} />
             <Route path="/profile/notifications" element={<NotificationSettings />} />
-            <Route path="/profile/security" element={<SecuritySettings />} />
             <Route path="/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/safety/sos" element={<SOSContacts />} />
             <Route path="/support/tickets" element={<SupportTickets />} />
@@ -476,7 +471,6 @@ function App() {
             <Route path="/taxi/user/parcel/searching" element={<ParcelSearchingDriver />} />
             <Route path="/taxi/user/parcel/tracking" element={<ParcelTracking />} />
             <Route path="/taxi/user/parcel/detail/:id" element={<RideDetail />} />
-            <Route path="/taxi/user/services/workshop-rsa" element={<WorkshopRSA />} />
 
             <Route path="/taxi/user/rental" element={<BikeRentalHome />} />
             <Route path="/taxi/user/rental/vehicle" element={<RentalVehicleDetail />} />
@@ -516,7 +510,6 @@ function App() {
             <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
             <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
             <Route path="/taxi/user/profile/notifications" element={<NotificationSettings />} />
-            <Route path="/taxi/user/profile/security" element={<SecuritySettings />} />
             <Route path="/taxi/user/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
             <Route path="/taxi/user/support/tickets" element={<SupportTickets />} />
@@ -544,7 +537,6 @@ function App() {
               <Route path="history" element={<RideRequests />} />
               <Route path="leaderboard" element={<Leaderboard />} />
 
-              <Route path="settings" element={<DriverSettings />} />
               <Route path="edit-profile" element={<EditProfile />} />
               <Route path="documents" element={<DriverDocuments />} />
               <Route path="notifications" element={<Notifications />} />

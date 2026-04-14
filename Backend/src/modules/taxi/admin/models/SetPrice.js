@@ -91,6 +91,22 @@ const setPriceSchema = new mongoose.Schema(
       type: Number,
       default: null,
     },
+    outstation_base_price: {
+      type: Number,
+      default: 0,
+    },
+    outstation_base_distance: {
+      type: Number,
+      default: 0,
+    },
+    outstation_price_per_distance: {
+      type: Number,
+      default: 0,
+    },
+    outstation_time_price: {
+      type: Number,
+      default: 0,
+    },
     free_waiting_before: {
       type: Number,
       default: null,

@@ -414,25 +414,37 @@ const Airport = ({ mode: initialMode = "list" }) => {
                 </div>
               </div>
 
-              <div className="xl:col-span-12 lg:xl:col-span-7">
+<div className="xl:col-span-12 lg:xl:col-span-7">
                 <div className="bg-white rounded-xl border border-gray-200 p-2 h-[600px] shadow-sm relative overflow-hidden">
                   {isLoaded ? (
                     <div className="w-full h-full rounded-lg overflow-hidden relative">
-                       <div className="absolute top-4 left-4 right-4 z-10">
-                          <div className="max-w-md bg-white border border-gray-200 rounded-lg shadow-lg p-1 flex items-center">
-                             <Search className="ml-3 text-gray-400" size={16} />
-                             <Autocomplete 
-                                onLoad={a => setAutocomplete(a)} 
-                                onPlaceChanged={handlePlaceChanged}
-                                className="w-full"
-                              >
-                                <input 
-                                  type="text" placeholder="Search for a city..." 
-                                  className="px-3 py-2 text-sm text-gray-800 outline-none w-full bg-transparent font-medium"
-                                />
-                             </Autocomplete>
-                          </div>
-                       </div>
+                       <div className="absolute left-6 top-6 z-10 w-full max-w-md pr-12">
+        <div className="flex h-12 w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white/95 px-4 shadow-2xl backdrop-blur-sm">
+          <Search className="text-gray-400" size={18} />
+          <Autocomplete
+            onLoad={(a) => setAutocomplete(a)}
+            onPlaceChanged={handlePlaceChanged}
+            className="flex-1"
+          >
+            <input
+              type="text"
+              placeholder="Search for a city or airport"
+              className="w-full bg-transparent text-sm font-semibold text-gray-800 outline-none placeholder:text-gray-400"
+            />
+          </Autocomplete>
+        </div>
+      </div>
+
+      {boundaryCoords.length > 0 && (
+        <div className="absolute right-3 top-[100px] z-50 flex flex-col gap-2">
+          <button
+            onClick={clearBoundary}
+            className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 shadow-2xl transition-all border border-gray-100 hover:bg-rose-50 active:scale-95"
+          >
+            Clear Boundary
+          </button>
+        </div>
+      )}
                        
                        <GoogleMap
                          mapContainerStyle={MAP_CONTAINER_STYLE}
@@ -471,21 +483,14 @@ const Airport = ({ mode: initialMode = "list" }) => {
                             options={{
                               drawingControl: true,
                               drawingControlOptions: {
-                                position: window.google ? window.google.maps.ControlPosition.TOP_CENTER : 2,
+                                position: window.google ? window.google.maps.ControlPosition.RIGHT_TOP : 6,
                                 drawingModes: ['polygon']
                               },
                               polygonOptions: { fillColor: '#4f46e5', strokeColor: '#4f46e5', fillOpacity: 0.1, strokeWeight: 2 }
                             }}
                          />
                        </GoogleMap>
-
-                       <button 
-                         onClick={clearBoundary}
-                         className="absolute bottom-4 right-16 bg-white border border-gray-200 text-gray-600 p-2 rounded-lg shadow-lg hover:bg-gray-50 transition-all"
-                         title="Clear Boundary"
-                       >
-                          <Eraser size={18} />
-                       </button>
+                    </div>
                     </div>
                   ) : (
                     <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">

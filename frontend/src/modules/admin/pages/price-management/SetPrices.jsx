@@ -69,8 +69,18 @@ const initialFormState = {
   free_waiting_before: '',
   free_waiting_after: '',
   enable_airport_ride: false,
+  support_airport_fee: '',
+  airport_surge: '',
   enable_outstation_ride: false,
+  outstation_base_price: '',
+  outstation_base_distance: '',
+  outstation_price_per_distance: '',
+  outstation_time_price: '',
   enable_ride_sharing: false,
+  enable_shared_ride: 0,
+  price_per_seat: '',
+  shared_price_per_distance: '',
+  shared_cancel_fee: '',
   user_cancellation_fee: '',
   user_cancellation_fee_type: 'percentage',
   driver_cancellation_fee: '',
@@ -463,11 +473,30 @@ const SetPrices = ({ mode }) => {
                            <label className={labelClass}>Free Waiting Time In Minutes After Start A Ride <span className="text-rose-500">*</span></label>
                            <input type="number" required className={inputClass} placeholder="Free Waiting Time In Minutes After Start A Ride" value={formData.free_waiting_after} onChange={e => setFormData(p=>({...p, free_waiting_after: e.target.value}))} />
                         </div>
-                        <div className="flex items-center gap-2 pt-8 ml-1">
+                     </div>
+
+                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12 pt-4">
+                        <div className="flex items-center gap-2 pt-2 ml-1">
                            <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_airport_ride} onChange={e => setFormData(p=>({...p, enable_airport_ride: e.target.checked}))} />
                            <span className="text-[13px] font-semibold text-gray-700">Enable Airport Ride</span>
                         </div>
                      </div>
+
+                     {formData.enable_airport_ride && (
+                        <div className="md:col-span-2 space-y-6 pt-6 border-t border-gray-100 mt-4">
+                           <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Airport Ride</h2>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                              <div>
+                                 <label className={labelClass}>Airport Surge Fee <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_airport_ride} className={inputClass} placeholder="Enter Airport Surge Fee" value={formData.airport_surge} onChange={e => setFormData(p=>({...p, airport_surge: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Support Airport Fee <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_airport_ride} className={inputClass} placeholder="Enter Support Airport Fee" value={formData.support_airport_fee} onChange={e => setFormData(p=>({...p, support_airport_fee: e.target.value}))} />
+                              </div>
+                           </div>
+                        </div>
+                     )}
 
                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12">
                         <div className="flex items-center gap-2 pt-2 ml-1">
@@ -475,6 +504,30 @@ const SetPrices = ({ mode }) => {
                            <span className="text-[13px] font-semibold text-gray-700">Enable Outstation Ride</span>
                         </div>
                      </div>
+
+                     {formData.enable_outstation_ride && (
+                        <div className="md:col-span-2 space-y-6 pt-6 border-t border-gray-100 mt-4">
+                           <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Outstation</h2>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                              <div>
+                                 <label className={labelClass}>Base Price <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Base Price" value={formData.outstation_base_price} onChange={e => setFormData(p=>({...p, outstation_base_price: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Base Distance <span className="text-rose-500">*(Kilometers)</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Base Distance" value={formData.outstation_base_distance} onChange={e => setFormData(p=>({...p, outstation_base_distance: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Price Per Distance <span className="text-rose-500">*(Kilometers)</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Price Per Distance" value={formData.outstation_price_per_distance} onChange={e => setFormData(p=>({...p, outstation_price_per_distance: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Time Price in Mintue <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Time Price" value={formData.outstation_time_price} onChange={e => setFormData(p=>({...p, outstation_time_price: e.target.value}))} />
+                              </div>
+                           </div>
+                        </div>
+                     )}
                   </div>
 
                   {/* Section: Cancellation Fee */}
@@ -518,9 +571,29 @@ const SetPrices = ({ mode }) => {
                   {/* Section: Shared Ride */}
                   <div className="space-y-6 pt-6 border-t border-gray-100">
                      <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Shared Ride</h2>
-                     <div className="flex items-center gap-2 pt-2 ml-1">
-                        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked, enable_shared_ride: e.target.checked ? 1 : 0}))} />
-                        <span className="text-[13px] font-semibold text-gray-700">Enable Ride Sharing</span>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                        <div className="flex items-center gap-2 pt-2 ml-1">
+                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked, enable_shared_ride: e.target.checked ? 1 : 0}))} />
+                           <span className="text-[13px] font-semibold text-gray-700">Enable Ride Sharing</span>
+                        </div>
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Base Price per Seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="Enter Base Price per Seat" value={formData.price_per_seat} onChange={e => setFormData(p=>({...p, price_per_seat: e.target.value}))} />
+                           </div>
+                        )}
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Price per Distance Per Shared Seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="0" value={formData.shared_price_per_distance} onChange={e => setFormData(p=>({...p, shared_price_per_distance: e.target.value}))} />
+                           </div>
+                        )}
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Cancellation Fee per shared seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="0" value={formData.shared_cancel_fee} onChange={e => setFormData(p=>({...p, shared_cancel_fee: e.target.value}))} />
+                           </div>
+                        )}
                      </div>
                   </div>
 

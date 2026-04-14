@@ -577,38 +577,41 @@ const SupportChatPanel = ({
 
   return (
     <div className={`overflow-hidden rounded-[32px] border border-slate-200 bg-white shadow-[0_30px_80px_rgba(15,23,42,0.08)] ${className}`}>
-      <div className="flex items-center justify-between border-b border-slate-100 bg-white px-5 py-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-indigo-600 text-white">
-            <MessageCircle size={18} />
+      <div className="flex items-center justify-between border-b border-slate-200/60 bg-white px-6 py-5 shrink-0">
+        <div className="flex items-center gap-4">
+          <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-[#405189] text-white shadow-lg shadow-indigo-600/10">
+            <MessageCircle size={20} />
           </div>
           <div>
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-slate-400">Support Desk</p>
-            <h2 className="text-[18px] font-semibold text-slate-900">{title}</h2>
-            <p className="text-[11px] font-bold uppercase tracking-wider text-emerald-600">{subtitle}</p>
+            <h2 className="text-[18px] font-black text-slate-900 tracking-tight">{title}</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">Desk Terminal</span>
+              <span className="w-1 h-1 rounded-full bg-slate-300" />
+              <p className="text-[10px] font-black uppercase tracking-widest text-indigo-600">{subtitle}</p>
+            </div>
           </div>
         </div>
-        <div className={`flex items-center gap-2 rounded-full border px-3 py-2 transition-colors ${
-          isConnected ? 'border-emerald-100 bg-emerald-50 text-emerald-700' : 'border-rose-100 bg-rose-50 text-rose-700'
+        <div className={`flex items-center gap-2.5 rounded-xl border px-4 py-2 transition-all ${
+          isConnected ? 'border-emerald-100 bg-emerald-50 text-emerald-700 shadow-sm shadow-emerald-500/5' : 'border-rose-100 bg-rose-50 text-rose-700'
         }`}>
-          <div className={`h-2 w-2 rounded-full animate-pulse ${isConnected ? 'bg-emerald-500' : 'bg-rose-500'}`} />
-          <span className="text-[10px] font-semibold uppercase tracking-wider">
-            {isConnected ? 'Live' : 'Offline'}
+          <div className={`h-2 w-2 rounded-full ${isConnected ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500'}`} />
+          <span className="text-[11px] font-black uppercase tracking-widest">
+            {isConnected ? 'Connection: Live' : 'Connection: Offline'}
           </span>
         </div>
       </div>
 
-      <div className={`grid min-h-[calc(100vh-220px)] ${isAdminPanel ? 'xl:grid-cols-[320px_1fr]' : 'grid-cols-1'}`}>
+      <div className={`grid min-h-[calc(100vh-220px)] ${isAdminPanel ? 'xl:grid-cols-[380px_1fr]' : 'grid-cols-1'}`}>
         {isAdminPanel && (
-          <aside className="border-r border-slate-100 bg-slate-50/70">
-            <div className="border-b border-slate-100 p-4">
-              <div className="flex items-center gap-3 rounded-2xl border border-slate-200 bg-white px-4 py-3">
+          <aside className="border-r-[1.5px] border-slate-200/60 bg-[#F8FAFC]">
+            <div className="border-b border-slate-200/60 p-5 bg-white">
+              <div className="flex items-center gap-3 rounded-xl border border-slate-200 bg-slate-50/50 px-4 py-3.5 transition-all focus-within:border-indigo-600/30 focus-within:ring-4 focus-within:ring-indigo-600/5">
                 <Search size={16} className="text-slate-400" />
                 <input
                   value={search}
                   onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search conversations"
-                  className="w-full bg-transparent text-[13px] font-semibold text-slate-900 outline-none placeholder:text-slate-400"
+                  placeholder="Search by name, role or phone"
+                  className="w-full bg-transparent text-[13px] font-bold text-slate-700 outline-none placeholder:text-slate-400"
                 />
               </div>
             </div>
@@ -618,38 +621,42 @@ const SupportChatPanel = ({
                 <button
                   key={conversation.conversationKey}
                   onClick={() => handleSelectConversation(conversation.conversationKey)}
-                  className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition-all ${
+                  className={`flex w-full items-center gap-3 rounded-2xl border px-3 py-3.5 text-left transition-all relative group ${
                     selectedConversationKey === conversation.conversationKey
-                      ? 'border-indigo-600 bg-indigo-600 text-white'
-                      : 'border-transparent bg-white hover:border-slate-200'
+                      ? 'border-indigo-600/20 bg-white shadow-[0_8px_20px_-4px_rgba(79,70,229,0.12)] before:absolute before:left-[-12px] before:top-3 before:bottom-3 before:w-1 before:bg-indigo-600 before:rounded-r-full'
+                      : 'border-transparent bg-transparent hover:bg-slate-200/50'
                   }`}
                 >
-                  <div className={`flex h-11 w-11 items-center justify-center rounded-2xl ${
-                    selectedConversationKey === conversation.conversationKey ? 'bg-white/10 text-white' : 'bg-slate-100 text-slate-500'
+                  <div className={`flex h-12 w-12 shrink-0 items-center justify-center rounded-[18px] transition-colors ${
+                    selectedConversationKey === conversation.conversationKey ? 'bg-indigo-600 text-white' : 'bg-white border border-slate-200 text-slate-400'
                   }`}>
-                    {conversation.peer?.role === 'driver' ? <CircleUser size={18} /> : <UserRound size={18} />}
+                    {conversation.peer?.role === 'driver' ? <CircleUser size={20} /> : <UserRound size={20} />}
                   </div>
 
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <p className={`truncate text-[13px] font-semibold uppercase tracking-tight ${
-                        selectedConversationKey === conversation.conversationKey ? 'text-white' : 'text-slate-900'
+                      <p className={`truncate text-[13px] font-bold tracking-tight ${
+                        selectedConversationKey === conversation.conversationKey ? 'text-indigo-600' : 'text-slate-900'
                       }`}>
                         {conversation.peer?.name || 'Support Contact'}
                       </p>
                       {conversation.unreadCount > 0 && (
-                        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-semibold text-white">
+                        <span className="rounded-full bg-orange-500 px-2 py-0.5 text-[10px] font-black text-white">
                           {conversation.unreadCount}
                         </span>
                       )}
                     </div>
-                    <p className={`mt-0.5 text-[11px] font-bold uppercase tracking-wider ${
-                      selectedConversationKey === conversation.conversationKey ? 'text-white/70' : 'text-slate-500'
-                    }`}>
-                      {conversation.peer?.role || 'user'}
-                    </p>
-                    <p className={`mt-1 truncate text-[12px] font-medium ${
-                      selectedConversationKey === conversation.conversationKey ? 'text-white/75' : 'text-slate-500'
+                    <div className="flex items-center gap-1.5 mt-0.5">
+                      <p className={`text-[10px] font-black uppercase tracking-widest ${
+                        selectedConversationKey === conversation.conversationKey ? 'text-indigo-600/60' : 'text-slate-400'
+                      }`}>
+                        {conversation.peer?.role || 'user'}
+                      </p>
+                      <span className="w-1 h-1 rounded-full bg-slate-300" />
+                      <p className="text-[10px] font-bold text-slate-400">{formatTime(conversation.updatedAt).split(',')[1] || 'Today'}</p>
+                    </div>
+                    <p className={`mt-1.5 truncate text-[12px] font-medium leading-relaxed ${
+                      selectedConversationKey === conversation.conversationKey ? 'text-slate-600' : 'text-slate-500'
                     }`}>
                       {conversation.latestMessage?.message || 'No messages yet'}
                     </p>

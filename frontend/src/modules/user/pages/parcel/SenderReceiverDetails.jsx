@@ -582,10 +582,14 @@ const SenderReceiverDetails = () => {
         receiverMobile,
         paymentMethod: 'Cash',
         fare: parcelState.estimatedFare?.min || 45,
+        deliveryScope: parcelState.deliveryScope || 'city',
+        isOutstation: Boolean(parcelState.isOutstation || parcelState.deliveryScope === 'outstation'),
         parcel: {
           category: parcelState.parcelType || 'Parcel',
           weight: parcelState.weight || 'Under 5kg',
           description: parcelState.description || '',
+          deliveryScope: parcelState.deliveryScope || 'city',
+          isOutstation: Boolean(parcelState.isOutstation || parcelState.deliveryScope === 'outstation'),
           senderName,
           senderMobile,
           receiverName,
@@ -633,7 +637,7 @@ const SenderReceiverDetails = () => {
         </button>
         <div>
           <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-0.5">
-            {parcelState.parcelType || 'Parcel'} - {parcelState.weight || 'Under 5kg'}
+            {parcelState.parcelType || 'Parcel'} - {parcelState.weight || 'Under 5kg'} - {parcelState.deliveryScope === 'outstation' ? 'Outstation' : 'In City'}
           </p>
           <h1 className="text-[20px] font-extrabold text-gray-900 tracking-tight leading-none">Contacts & Route</h1>
         </div>

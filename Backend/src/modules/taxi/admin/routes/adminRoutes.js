@@ -267,6 +267,7 @@ adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
 adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
+
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);

@@ -179,6 +179,8 @@ const AdminServiceLocation = lazy(() => import('./modules/admin/pages/price-mana
 const AdminZoneManagement = lazy(() => import('./modules/admin/pages/price-management/ZoneManagement'));
 const AdminAirportManagement = lazy(() => import('./modules/admin/pages/price-management/Airport'));
 const AdminSetPrices = lazy(() => import('./modules/admin/pages/price-management/SetPrices'));
+const AdminSetPackagePrices = lazy(() => import('./modules/admin/pages/price-management/SetPackagePrices'));
+const AdminCreatePackagePrice = lazy(() => import('./modules/admin/pages/price-management/CreatePackagePrice'));
 const AdminVehicleType = lazy(() => import('./modules/admin/pages/price-management/VehicleType'));
 const AdminRentalPackageTypes = lazy(() => import('./modules/admin/pages/price-management/RentalPackageTypes'));
 const AdminGoodsTypes = lazy(() => import('./modules/admin/pages/price-management/GoodsTypes'));
@@ -210,6 +212,8 @@ const AdminDeletedOwners = lazy(() => import('./modules/admin/pages/owners/Delet
 const AdminOwnerBookings = lazy(() => import('./modules/admin/pages/owners/OwnerBookings'));
 
 const AdminGeoFencing = lazy(() => import('./modules/admin/pages/geo/GeoFencing'));
+const AdminHeatMap = lazy(() => import('./modules/admin/pages/geo/HeatMap'));
+const AdminGodsEye = lazy(() => import('./modules/admin/pages/geo/GodsEye'));
 const AdminFinance = lazy(() => import('./modules/admin/pages/finance/Finance'));
 const AdminFareConfig = lazy(() => import('./modules/admin/pages/finance/FareConfiguration'));
 const AdminSafetyCenter = lazy(() => import('./modules/admin/pages/safety/SafetyCenter'));
@@ -637,6 +641,9 @@ function App() {
               <Route path="owners/bookings" element={<AdminOwnerBookings />} />
               <Route path="referrals/config" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Referral Configuration - Under Setup</div>} />
               <Route path="referrals/active" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Active Referrals Logs - Under Setup</div>} />
+              <Route path="geo/heatmap" element={<AdminHeatMap />} />
+              <Route path="geo/gods-eye" element={<AdminGodsEye />} />
+              <Route path="geo/peak-zone" element={<AdminGeoFencing />} />
               <Route path="geo/*" element={<AdminGeoFencing />} />
               <Route path="finance" element={<AdminFinance />} />
               {/* Price Management */}
@@ -663,6 +670,9 @@ function App() {
                 <Route path="set-price" element={<AdminSetPrices />} />
                 <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
                 <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
+                <Route path="set-price/packages/:id" element={<AdminSetPackagePrices />} />
+                <Route path="set-price/packages/create/:id" element={<AdminCreatePackagePrice mode="create" />} />
+                <Route path="set-price/packages/edit/:packageId" element={<AdminCreatePackagePrice mode="edit" />} />
                 <Route path="goods-types" element={<AdminGoodsTypes />} />
                 <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
                 <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />

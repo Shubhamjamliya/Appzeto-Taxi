@@ -414,7 +414,6 @@ const AdminLayout = () => {
             subItems: [
               { label: 'Wallet Settings', path: '/admin/settings/app/wallet' },
               { label: 'Tip Settings', path: '/admin/settings/app/tip' },
-              { label: 'Country', path: '/admin/settings/app/country' },
               { label: 'Mobile App Landing/Onboard Screens Settings', path: '/admin/settings/app/onboard' },
             ],
           },

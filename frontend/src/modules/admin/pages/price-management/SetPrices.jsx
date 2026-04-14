@@ -273,7 +273,13 @@ const SetPrices = ({ mode }) => {
                           <td className="px-8 py-6 text-right pr-12">
                              <div className="flex items-center justify-end gap-2">
                                 <button onClick={() => navigate(`/admin/pricing/set-price/edit/${prize.id || prize._id}`)} className="w-8 h-8 flex items-center justify-center bg-[#FFF7ED] text-[#F97316] rounded transition-colors hover:bg-orange-100"><Edit2 size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors"><Gift size={14} /></button>
+                                 <button 
+                                   title="set package prices"
+                                   onClick={() => navigate(`/admin/pricing/set-price/packages/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors hover:bg-emerald-100"
+                                 >
+                                    <Gift size={14} />
+                                 </button>
                                 <button className="w-8 h-8 flex items-center justify-center bg-[#F8FAFC] text-[#64748B] rounded transition-colors"><Eye size={14} /></button>
                                 <button className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors"><Layers size={14} /></button>
                                 <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors"><Zap size={14} /></button>

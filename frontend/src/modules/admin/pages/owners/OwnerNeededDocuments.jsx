@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Edit2, FileSearch, Loader2, Plus, Trash2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const BASE = `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owner-management`;
 
@@ -75,16 +76,11 @@ const OwnerNeededDocuments = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Owner Needed Documents</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <span className="text-gray-950">Owner Needed Documents</span>
-          <ChevronRight size={14} />
-          <span>Owner Needed Documents</span>
-        </div>
+      <div className="px-5 pt-3">
+        <AdminPageHeader module="Owner Management" page="Owner Needed Documents" title="Owner Needed Documents" />
       </div>
 
-      <div className="px-5">
+      <div className="px-5 pb-6">
         <div className="relative rounded border border-gray-200 bg-white shadow-sm">
           <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
@@ -222,4 +218,3 @@ const OwnerNeededDocuments = () => {
 };
 
 export default OwnerNeededDocuments;
-

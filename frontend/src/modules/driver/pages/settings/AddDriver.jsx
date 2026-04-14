@@ -1,10 +1,14 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, UserPlus, CheckCircle2, ChevronRight, Upload, X, ShieldCheck, Mail, Phone, MapPin } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { createOwnerFleetDriver } from '../../services/registrationService';
 
 const AddDriver = () => {
     const navigate = useNavigate();
+    const location = useLocation();
+    const [submitting, setSubmitting] = useState(false);
+    const [error, setError] = useState('');
     const [step, setStep] = useState(1); // 1: Details, 2: Documents, 3: Success
     const [formData, setFormData] = useState({
         name: '',
@@ -20,12 +24,39 @@ const AddDriver = () => {
         if (file) setFormData(p => ({ ...p, [field]: file }));
     };
 
-    const handleSubmit = () => {
-        setStep(3);
-        setTimeout(() => {
-            const role = String(localStorage.getItem('role') || 'driver').toLowerCase();
-            navigate(role === 'owner' ? '/admin/fleet/blocked' : '/taxi/driver/manage-drivers');
-        }, 5000);
+    const returnTo = useMemo(
+        () =>
+            typeof location.state?.returnTo === 'string' && location.state.returnTo.trim()
+                ? location.state.returnTo.trim()
+                : '/taxi/driver/manage-drivers',
+        [location.state?.returnTo]
+    );
+
+    const handleSubmit = async () => {
+        if (submitting) {
+            return;
+        }
+
+        setSubmitting(true);
+        setError('');
+
+        try {
+            await createOwnerFleetDriver({
+                name: formData.name,
+                phone: formData.mobile,
+                email: formData.email,
+            });
+
+            setStep(3);
+
+            setTimeout(() => {
+                navigate(returnTo, { replace: true });
+            }, 5000);
+        } catch (err) {
+            setError(err?.message || 'Failed to submit driver request');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -57,6 +88,9 @@ const AddDriver = () => {
                             </div>
 
                             <div className="space-y-4">
+                                {error ? (
+                                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                                ) : null}
                                 <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
                                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Full Name</label>
                                     <input 
@@ -103,7 +137,7 @@ const AddDriver = () => {
                             <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
                                 <button 
                                     onClick={() => setStep(2)}
-                                    disabled={!formData.name || !formData.mobile}
+                                    disabled={submitting || !formData.name || !formData.mobile}
                                     className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                                         (formData.name && formData.mobile) 
                                         ? 'bg-slate-900 text-white shadow-slate-900/10' 
@@ -130,6 +164,9 @@ const AddDriver = () => {
                             </div>
 
                             <div className="space-y-5">
+                                {error ? (
+                                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                                ) : null}
                                 {/* Adhaar Card */}
                                 <div className="space-y-3">
                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Aadhar Card</label>
@@ -160,14 +197,14 @@ const AddDriver = () => {
                             <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
                                 <button 
                                     onClick={handleSubmit}
-                                    disabled={!formData.adhaarFile || !formData.licenseFile}
+                                    disabled={submitting || !formData.adhaarFile || !formData.licenseFile}
                                     className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
                                         (formData.adhaarFile && formData.licenseFile)
                                         ? 'bg-slate-900 text-white shadow-slate-900/10' 
                                         : 'bg-slate-100 text-slate-300 pointer-events-none'
                                     }`}
                                 >
-                                    Register Driver <UserPlus size={16} strokeWidth={3} />
+                                    {submitting ? 'Submitting...' : 'Register Driver'} <UserPlus size={16} strokeWidth={3} />
                                 </button>
                             </div>
                         </motion.div>

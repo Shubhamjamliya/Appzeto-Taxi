@@ -5,6 +5,7 @@ import { GoogleMap } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 
 const STORAGE_KEY = 'rydon24:lastLocation';
+const LOCATION_UPDATED_EVENT = 'rydon24:location-updated';
 const DEFAULT_CENTER = { lat: 17.385, lon: 78.4867 };
 const DEFAULT_ZOOM = 16;
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -23,7 +24,25 @@ const LocationMapSection = () => {
     setCenterCoords(next);
     setStatus('ready');
     try {
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...previous,
+        ...next,
+      }));
+    } catch {
+      // ignore
+    }
+    window.dispatchEvent(new Event(LOCATION_UPDATED_EVENT));
+  };
+
+  const persistAddress = (address) => {
+    try {
+      const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+        ...previous,
+        address: String(address || '').trim(),
+      }));
+      window.dispatchEvent(new Event(LOCATION_UPDATED_EVENT));
     } catch {
       // ignore
     }
@@ -68,6 +87,19 @@ const LocationMapSection = () => {
           map.panTo({ lat: next.lat, lng: next.lon });
           map.setZoom(DEFAULT_ZOOM);
         }
+
+        if (window.google?.maps?.Geocoder) {
+          const geocoder = new window.google.maps.Geocoder();
+          geocoder.geocode({ location: { lat: next.lat, lng: next.lon } }, (results, geocodeStatus) => {
+            if (geocodeStatus === 'OK' && results?.[0]?.formatted_address) {
+              try {
+                persistAddress(results[0].formatted_address);
+              } catch {
+                // ignore
+              }
+            }
+          });
+        }
       },
       (error) => {
         if (error?.code === 1) {
@@ -96,11 +128,11 @@ const LocationMapSection = () => {
       transition={{ duration: 0.45, ease: 'easeOut' }}
       className="px-5"
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
+      <div className="flex items-center justify-between gap-3">
+        <div className="min-w-0 flex-1">
           <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Map</p>
-          <h3 className="mt-1 flex items-baseline gap-1 text-[16px] font-black tracking-tight text-slate-900">
-            <span>Pin your location</span>
+          <h3 className="mt-0.5 flex items-baseline gap-1 text-[16px] font-black tracking-tight text-slate-900">
+            <span className="truncate">Pin your location</span>
             <span className="inline-flex" aria-hidden="true">
               {[0, 1, 2].map((dot) => (
                 <motion.span
@@ -119,35 +151,31 @@ const LocationMapSection = () => {
               ))}
             </span>
           </h3>
-          <p className="mt-0.5 text-[11px] font-bold text-slate-500">{helperText}</p>
+          <p className="mt-0.5 truncate text-[11px] font-bold text-slate-500">{helperText}</p>
         </div>
 
         <motion.button
           type="button"
-          whileTap={{ scale: 0.98 }}
+          whileTap={{ scale: 0.96 }}
           onClick={requestLocation}
-          className={`inline-flex items-center gap-2 rounded-full border border-white/80 bg-white/90 px-3 py-2 text-[11px] font-black text-slate-700 shadow-[0_10px_18px_rgba(15,23,42,0.05)] ${
-            coords ? 'mt-[30px]' : ''
-          }`}
+          className="inline-flex items-center gap-2.5 rounded-full border border-white/60 bg-white/95 px-3 py-2 text-[11px] font-black text-slate-800 shadow-[0_8px_16px_-4px_rgba(15,23,42,0.1)] transition-all active:shadow-inner"
         >
-          <Navigation size={14} strokeWidth={2.5} className={status === 'loading' ? 'animate-pulse' : ''} />
-          {coords && (
-            <motion.span
-              aria-hidden="true"
-              className="h-2 w-2 rounded-full bg-emerald-500"
-              animate={{
-                opacity: [0.25, 1, 0.25],
-                scale: [0.9, 1.08, 0.9],
-                boxShadow: [
-                  '0 0 0 0 rgba(16,185,129,0)',
-                  '0 0 0 4px rgba(16,185,129,0.12)',
-                  '0 0 0 0 rgba(16,185,129,0)',
-                ],
-              }}
-              transition={{ duration: 1.4, repeat: Infinity, ease: 'easeInOut' }}
+          <div className="relative">
+            <Navigation 
+              size={14} 
+              strokeWidth={2.8} 
+              className={`transition-colors ${status === 'loading' ? 'animate-pulse text-emerald-600' : 'text-slate-500'}`} 
             />
-          )}
-          <span>{coords ? 'Update' : 'Pin'}</span>
+            {coords && (
+              <motion.span
+                layoutId="active-dot"
+                className="absolute -right-0.5 -top-0.5 h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.5)]"
+                animate={{ scale: [1, 1.25, 1] }}
+                transition={{ duration: 2, repeat: Infinity }}
+              />
+            )}
+          </div>
+          <span className="uppercase tracking-wider">{coords ? 'Update' : 'Pin'}</span>
         </motion.button>
       </div>
 
@@ -216,6 +244,17 @@ const LocationMapSection = () => {
                   }
 
                   persistCoords({ lat: center.lat(), lon: center.lng() });
+                  if (window.google?.maps?.Geocoder) {
+                    const geocoder = new window.google.maps.Geocoder();
+                    geocoder.geocode(
+                      { location: { lat: center.lat(), lng: center.lng() } },
+                      (results, geocodeStatus) => {
+                        if (geocodeStatus === 'OK' && results?.[0]?.formatted_address) {
+                          persistAddress(results[0].formatted_address);
+                        }
+                      },
+                    );
+                  }
                 }}
                 onIdle={() => {
                   if (!map) {
@@ -231,7 +270,11 @@ const LocationMapSection = () => {
                   setCenterCoords(next);
 
                   if (!isDraggingRef.current && status === 'ready') {
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+                    const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
+                      ...previous,
+                      ...next,
+                    }));
                   }
                 }}
                 options={{
@@ -246,26 +289,44 @@ const LocationMapSection = () => {
               />
             )}
 
-            <motion.div
-              aria-hidden="true"
-              className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2 -translate-y-1/2"
-              animate={{
-                y: isDragging ? -6 : -10,
-                scale: isDragging ? 1.04 : 1,
-              }}
-              transition={{ duration: 0.18, ease: 'easeOut' }}
-            >
-              <div className="relative">
-                <motion.div
-                  className="absolute left-1/2 top-[38px] h-3.5 w-3.5 -translate-x-1/2 rounded-full bg-slate-900/20 blur-[2px]"
-                  animate={{ scale: isDragging ? 1.15 : 0.95, opacity: isDragging ? 0.5 : 0.35 }}
-                  transition={{ duration: 0.18, ease: 'easeOut' }}
-                />
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-white/95 shadow-[0_10px_22px_rgba(15,23,42,0.18)]">
-                  <MapPin size={18} strokeWidth={2.6} className="text-emerald-600" />
+            {/* The Pinpoint */}
+            <div className="pointer-events-none absolute left-1/2 top-1/2 z-20 -translate-x-1/2">
+              {/* Point Shadow - anchored at the map center */}
+              <motion.div
+                initial={false}
+                animate={{
+                  scale: isDragging ? [1, 1.3, 1.25] : 1,
+                  opacity: isDragging ? 0.35 : 0.7,
+                  y: isDragging ? 6 : 0,
+                }}
+                className="absolute left-1/2 top-0 h-[3px] w-4 -translate-x-1/2 rounded-[100%] bg-slate-900/30 blur-[1.5px]"
+              />
+
+              {/* Pin Body */}
+              <motion.div
+                initial={false}
+                animate={{
+                  y: isDragging ? -28 : -3, // Clean lift when dragging
+                  scale: isDragging ? 1.06 : 1,
+                }}
+                transition={{
+                  type: 'spring',
+                  stiffness: isDragging ? 450 : 350,
+                  damping: 25,
+                }}
+                className="relative flex flex-col items-center -translate-y-full"
+              >
+                {/* Floating Card */}
+                <div className="relative flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/60 bg-white/95 shadow-[0_12px_28px_-4px_rgba(15,23,42,0.22)] backdrop-blur-md">
+                  <div className="flex h-8 w-8 items-center justify-center rounded-[12px] bg-emerald-50/60">
+                    <MapPin size={22} strokeWidth={2.8} className="text-emerald-600" />
+                  </div>
+
+                  {/* Visual Tip */}
+                  <div className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 rounded-sm bg-white/95 border-r border-b border-black/5" />
                 </div>
-              </div>
-            </motion.div>
+              </motion.div>
+            </div>
 
             {!coords && status !== 'loading' && (
               <button

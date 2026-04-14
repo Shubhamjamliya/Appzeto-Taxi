@@ -111,6 +111,9 @@ export const getCurrentDriver = () => api.get('/drivers/me', withDriverAuth());
 export const updateDriverProfile = (payload) => api.patch('/drivers/me', payload, withDriverAuth());
 export const requestDriverAccountDeletion = (reason) =>
   api.post('/drivers/me/delete-request', { reason }, withDriverAuth());
+export const getDriverNotifications = () => api.get('/drivers/notifications', withDriverAuth());
+export const deleteDriverNotification = (id) => api.delete(`/drivers/notifications/${id}`, withDriverAuth());
+export const clearAllDriverNotifications = () => api.delete('/drivers/notifications', withDriverAuth());
 export const getDriverEmergencyContacts = () => api.get('/drivers/emergency-contacts', withDriverAuth());
 export const addDriverEmergencyContact = (payload) =>
   api.post('/drivers/emergency-contacts', payload, withDriverAuth());
@@ -131,6 +134,8 @@ export const getDriverApprovalStatus = () => {
 };
 
 export const getOwnerFleetDrivers = () => api.get('/drivers/fleet/drivers', withDriverAuth());
+
+export const createOwnerFleetDriver = (payload) => api.post('/drivers/fleet/drivers', payload, withDriverAuth());
 
 export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {

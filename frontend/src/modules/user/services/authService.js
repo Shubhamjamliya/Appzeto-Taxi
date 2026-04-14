@@ -88,4 +88,7 @@ export const userAuthService = {
   requestAccountDeletion: (reason) => api.post('/users/me/delete-request', { reason }),
   createWalletTopupOrder: (amount) => api.post('/users/wallet/razorpay/order', { amount }, withUserAuth()),
   verifyWalletTopup: (payload) => api.post('/users/wallet/razorpay/verify', payload, withUserAuth()),
+  getNotifications: () => api.get('/users/notifications', withUserAuth()),
+  deleteNotification: (id) => api.delete(`/users/notifications/${id}`, withUserAuth()),
+  clearAllNotifications: () => api.delete('/users/notifications', withUserAuth()),
 };

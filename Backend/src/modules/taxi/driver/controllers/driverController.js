@@ -1,8 +1,12 @@
+import crypto from 'node:crypto';
 import { ApiError } from '../../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../../utils/geo.js';
 import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
+import { Owner } from '../../admin/models/Owner.js';
+import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
+import { Notification } from '../../admin/promotions/models/Notification.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { emitToDriver } from '../../services/dispatchService.js';
 import { findZoneByPickup } from '../services/locationService.js';
@@ -41,6 +45,51 @@ const serializeEmergencyContact = (contact = {}) => ({
   name: String(contact.name || '').trim(),
   phone: sanitizeEmergencyPhone(contact.phone),
   source: String(contact.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual',
+});
+
+const normalizePhone = (value) => String(value || '').replace(/\D/g, '').trim();
+
+const isOwnerApproved = (owner) =>
+  Boolean(owner) &&
+  owner.active !== false &&
+  (owner.approve === true || String(owner.status || '').toLowerCase() === 'approved');
+
+const resolveOwnerForFleet = async (requester = {}) => {
+  const onboardingRole = String(requester?.onboarding?.role || '').toLowerCase();
+  const convertedOwnerId = requester?.onboarding?.convertedOwnerId || null;
+
+  if (onboardingRole === 'owner' && convertedOwnerId) {
+    const owner = await Owner.findById(convertedOwnerId)
+      .select('service_location_id active approve status')
+      .lean();
+    if (isOwnerApproved(owner)) return owner;
+  }
+
+  const mobile = String(requester?.phone || '').trim();
+  const email = String(requester?.email || '').trim().toLowerCase();
+
+  if (!mobile && !email) {
+    return null;
+  }
+
+  const owner = await Owner.findOne({
+    $or: [...(mobile ? [{ mobile }] : []), ...(email ? [{ email }] : [])],
+  })
+    .select('service_location_id active approve status')
+    .lean();
+
+  return isOwnerApproved(owner) ? owner : null;
+};
+
+const serializeDriverNotification = (item = {}) => ({
+  id: String(item._id || ''),
+  title: String(item.push_title || '').trim(),
+  body: String(item.message || '').trim(),
+  image: String(item.image || '').trim(),
+  sendTo: String(item.send_to || 'all').trim(),
+  serviceLocationName: String(item.service_location_name || '').trim(),
+  sentAt: item.sent_at || item.createdAt || null,
+  createdAt: item.createdAt || null,
 });
 
 export const registerDriver = async (req, res) => {
@@ -225,6 +274,40 @@ export const getDriverEmergencyContacts = async (req, res) => {
         ? driver.emergencyContacts.map(serializeEmergencyContact)
         : [],
       limit: MAX_EMERGENCY_CONTACTS,
+    },
+  });
+};
+
+export const getDriverNotifications = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const serviceLocationId = driver.service_location_id || null;
+  const query = {
+    status: 'sent',
+    send_to: { $in: ['all', 'drivers'] },
+  };
+
+  if (serviceLocationId) {
+    query.$or = [
+      { service_location_id: serviceLocationId },
+      { send_to: 'all' },
+      { send_to: 'drivers' },
+    ];
+  }
+
+  const notifications = await Notification.find(query)
+    .sort({ sent_at: -1, createdAt: -1 })
+    .limit(100)
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      results: notifications.map(serializeDriverNotification),
     },
   });
 };
@@ -573,20 +656,19 @@ export const getDriverDocumentTemplates = async (_req, res) => {
 };
 
 export const getOwnerFleetDrivers = async (req, res) => {
-  const requester = await Driver.findById(req.auth.sub).select('onboarding').lean();
+  const requester = await Driver.findById(req.auth.sub).select('onboarding phone email').lean();
 
   if (!requester) {
     throw new ApiError(404, 'Driver not found');
   }
 
-  const onboardingRole = String(requester?.onboarding?.role || '').toLowerCase();
-  const ownerId = requester?.onboarding?.convertedOwnerId || null;
+  const owner = await resolveOwnerForFleet(requester);
 
-  if (onboardingRole !== 'owner' || !ownerId) {
+  if (!owner?._id) {
     throw new ApiError(403, 'Fleet driver access is only available for owner accounts');
   }
 
-  const drivers = await Driver.find({ owner_id: ownerId, deletedAt: null })
+  const drivers = await Driver.find({ owner_id: owner._id, deletedAt: null })
     .sort({ createdAt: -1 })
     .select('name phone email city approve status isOnline isOnRide createdAt')
     .lean();
@@ -606,6 +688,81 @@ export const getOwnerFleetDrivers = async (req, res) => {
         isOnRide: Boolean(driver.isOnRide),
         createdAt: driver.createdAt,
       })),
+    },
+  });
+};
+
+export const createOwnerFleetDriver = async (req, res) => {
+  const requester = await Driver.findById(req.auth.sub).select('onboarding phone email').lean();
+
+  if (!requester) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const owner = await resolveOwnerForFleet(requester);
+
+  if (!owner?._id) {
+    throw new ApiError(403, 'Fleet driver access is only available for owner accounts');
+  }
+
+  const name = String(req.body?.name || '').trim();
+  const phone = normalizePhone(req.body?.phone || req.body?.mobile);
+  const email = String(req.body?.email || '').trim().toLowerCase();
+
+  if (!name) {
+    throw new ApiError(400, 'name is required');
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    throw new ApiError(400, 'A valid 10-digit mobile number is required');
+  }
+
+  const existing = await Driver.findOne({ phone }).lean();
+  if (existing) {
+    throw new ApiError(409, 'Phone number is already registered');
+  }
+
+  const serviceLocation = owner.service_location_id
+    ? await ServiceLocation.findById(owner.service_location_id).lean()
+    : null;
+  const coordinates =
+    Array.isArray(serviceLocation?.location?.coordinates) && serviceLocation.location.coordinates.length === 2
+      ? serviceLocation.location.coordinates
+      : typeof serviceLocation?.longitude === 'number' && typeof serviceLocation?.latitude === 'number'
+        ? [serviceLocation.longitude, serviceLocation.latitude]
+        : [75.8577, 22.7196];
+
+  const city =
+    String(req.body?.city || '').trim() ||
+    String(serviceLocation?.service_location_name || serviceLocation?.name || '').trim() ||
+    '';
+
+  const tempPassword = crypto.randomUUID().slice(0, 12);
+
+  const driver = await Driver.create({
+    owner_id: owner._id,
+    service_location_id: owner.service_location_id || null,
+    name,
+    phone,
+    email,
+    gender: '',
+    password: await hashPassword(tempPassword),
+    vehicleType: 'car',
+    vehicleIconType: 'car',
+    registerFor: 'taxi',
+    vehicleNumber: '',
+    vehicleColor: '',
+    city,
+    approve: false,
+    status: 'pending',
+    location: toPoint(coordinates, 'location'),
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      id: String(driver._id),
+      message: 'Fleet driver request created',
     },
   });
 };

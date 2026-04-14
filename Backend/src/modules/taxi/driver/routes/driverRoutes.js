@@ -4,6 +4,7 @@ import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   addDriverEmergencyContact,
   completeOnboarding,
+  createOwnerFleetDriver,
   deleteDriverEmergencyContact,
   goOffline,
   goOnline,
@@ -11,6 +12,7 @@ import {
   getDriverApprovalStatus,
   getDriverDocumentTemplates,
   getDriverEmergencyContacts,
+  getDriverNotifications,
   getOwnerFleetDrivers,
   getMyWallet,
   getOnboardingSession,
@@ -43,11 +45,13 @@ driverRouter.post('/me/delete-request', authenticate(['driver']), asyncHandler(r
 driverRouter.get('/emergency-contacts', authenticate(['driver']), asyncHandler(getDriverEmergencyContacts));
 driverRouter.post('/emergency-contacts', authenticate(['driver']), asyncHandler(addDriverEmergencyContact));
 driverRouter.delete('/emergency-contacts/:contactId', authenticate(['driver']), asyncHandler(deleteDriverEmergencyContact));
+driverRouter.get('/notifications', authenticate(['driver']), asyncHandler(getDriverNotifications));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
 driverRouter.get('/fleet/drivers', authenticate(['driver']), asyncHandler(getOwnerFleetDrivers));
+driverRouter.post('/fleet/drivers', authenticate(['driver']), asyncHandler(createOwnerFleetDriver));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.get('/document-templates', asyncHandler(getDriverDocumentTemplates));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));

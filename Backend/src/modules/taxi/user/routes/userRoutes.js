@@ -5,6 +5,9 @@ import {
   createRazorpayWalletTopupOrder,
   getUserWallet,
   getCurrentUser,
+  getUserNotifications,
+  deleteUserNotification,
+  clearAllUserNotifications,
   loginUser,
   registerUser,
   requestAccountDeletion,
@@ -35,6 +38,9 @@ userRouter.post('/otp-login', asyncHandler(verifyUserPhoneForOtpLogin));
 userRouter.get('/me', authenticateOrResolveUser(['user']), asyncHandler(getCurrentUser));
 userRouter.patch('/me', authenticateOrResolveUser(['user']), asyncHandler(updateCurrentUser));
 userRouter.post('/me/delete-request', authenticateOrResolveUser(['user']), asyncHandler(requestAccountDeletion));
+userRouter.get('/notifications', authenticateOrResolveUser(['user']), asyncHandler(getUserNotifications));
+userRouter.delete('/notifications/:id', authenticateOrResolveUser(['user']), asyncHandler(deleteUserNotification));
+userRouter.delete('/notifications', authenticateOrResolveUser(['user']), asyncHandler(clearAllUserNotifications));
 userRouter.get('/wallet', authenticateOrResolveUser(['user']), asyncHandler(getUserWallet));
 userRouter.post('/wallet/topup', authenticateOrResolveUser(['user']), asyncHandler(topupUserWallet));
 userRouter.post('/wallet/transfer', authenticateOrResolveUser(['user']), asyncHandler(transferUserWallet));

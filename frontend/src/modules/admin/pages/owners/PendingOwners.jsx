@@ -11,6 +11,7 @@ import {
 import { createPortal } from 'react-dom';
 import { useNavigate } from 'react-router-dom';
 import { adminService } from '../../services/adminService';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const ACTION_MENU_WIDTH = 238;
 const ACTION_MENU_GAP = 8;
@@ -207,16 +208,7 @@ const PendingOwners = () => {
         </div>
       )}
 
-      <div className="mb-6">
-        <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
-          <span>Owners</span>
-          <ChevronRight size={12} />
-          <span className="text-gray-700">Pending Owners</span>
-        </div>
-        <div className="flex items-center justify-between gap-4">
-          <h1 className="text-xl font-semibold text-gray-900">Pending Owners</h1>
-        </div>
-      </div>
+      <AdminPageHeader module="Owner Management" page="Pending Owners" title="Pending Owners" />
 
       <div className="bg-white rounded-xl border border-gray-200 p-5 mb-6">
         <div className="grid grid-cols-1 md:grid-cols-[1fr_auto_auto] gap-4 items-end">

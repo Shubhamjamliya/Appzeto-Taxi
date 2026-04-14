@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/owner-management';
 const MotionDiv = motion.div;
@@ -149,13 +150,8 @@ const FleetNeededDocuments = () => {
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
       {view === 'list' ? (
-        <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-          <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Fleet Needed Documents</h1>
-          <div className="flex items-center gap-2 text-sm text-slate-400">
-            <span className="text-gray-950">Fleet Needed Documents</span>
-            <ChevronRight size={14} />
-            <span>Fleet Needed Documents</span>
-          </div>
+        <div className="px-5 pt-3">
+          <AdminPageHeader module="Fleet Management" page="Fleet Needed Documents" title="Fleet Needed Documents" />
         </div>
       ) : (
         <div className="mb-8 flex items-center justify-between px-1">

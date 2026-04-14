@@ -14,6 +14,7 @@ import {
   Monitor
 } from 'lucide-react';
 import { motion } from 'framer-motion';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const StatCard = ({ icon: Icon, label, value, color, onViewAll }) => (
   <div className="bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex items-center justify-between hover:shadow-md transition-shadow">
@@ -112,17 +113,7 @@ const OwnerDashboard = () => {
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500">
-      {/* Breadcrumb */}
-      <div className="flex items-center justify-between border-b border-gray-100 pb-4">
-        <div>
-           <h1 className="text-xl font-black text-gray-900 uppercase tracking-tight">Owner Dashboard</h1>
-        </div>
-        <div className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest">
-           <span>Owner Dashboard</span>
-           <ChevronRight size={12} />
-           <span className="text-gray-900">Owner Dashboard</span>
-        </div>
-      </div>
+      <AdminPageHeader module="Owner Management" page="Owner Dashboard" title="Owner Dashboard" />
 
       {/* Stats Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">

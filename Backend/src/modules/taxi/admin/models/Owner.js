@@ -137,6 +137,12 @@ const ownerSchema = new mongoose.Schema(
       default: 'pending',
       trim: true,
     },
+    wallet: {
+      balance: {
+        type: Number,
+        default: 0,
+      }
+    },
     area_snapshot: {
       type: mongoose.Schema.Types.Mixed,
       default: null,

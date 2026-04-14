@@ -13,6 +13,21 @@ const adminBusinessSettingSchema = new mongoose.Schema(
     transport_ride: { type: mongoose.Schema.Types.Mixed, default: {} },
     bid_ride: { type: mongoose.Schema.Types.Mixed, default: {} },
     subscription: { type: mongoose.Schema.Types.Mixed, default: { mode: 'commissionOnly' } },
+    referral: {
+      type: mongoose.Schema.Types.Mixed,
+      default: {
+        driver: {
+          enabled: false,
+          type: 'instant_referrer',
+          amount: 0,
+        },
+        user: {
+          enabled: false,
+          type: 'instant_referrer',
+          amount: 0,
+        },
+      },
+    },
   },
   {
     timestamps: true,

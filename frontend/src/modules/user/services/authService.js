@@ -52,26 +52,6 @@ export const clearLocalUserSession = () => {
   }
 };
 
-export const clearLocalUserSession = () => {
-  const token = readLocalUserToken();
-  const fallbackToken = localStorage.getItem('token');
-
-  localStorage.removeItem('userToken');
-  localStorage.removeItem('userInfo');
-
-  if (token && fallbackToken === token) {
-    localStorage.removeItem('token');
-  }
-
-  if (String(localStorage.getItem('role') || '').toLowerCase() === 'user') {
-    localStorage.removeItem('role');
-  }
-
-  if (String(localStorage.getItem('chatRole') || '').toLowerCase() === 'user') {
-    localStorage.removeItem('chatRole');
-  }
-};
-
 export const withUserAuth = (config = {}) => {
   const token = readLocalUserToken();
 

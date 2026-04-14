@@ -6,13 +6,9 @@ import BottomNavbar from '../components/BottomNavbar';
 import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
 import { clearCurrentRide } from '../services/currentRideService';
 import { socketService } from '../../../shared/api/socket';
-import { userAuthService } from '../services/authService';
 
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
-import { clearLocalUserSession, getLocalUserToken, userAuthService } from '../services/authService';
-import { clearCurrentRide } from '../services/currentRideService';
-import { socketService } from '../../../shared/api/socket';
 
 const menuItems = [
   { icon: User, title: 'Profile Settings', sub: 'Manage your personal info', path: '/taxi/user/profile/settings', bg: 'bg-orange-50', color: 'text-orange-500' },
@@ -48,69 +44,28 @@ const Profile = () => {
       return;
     }
 
-    const [profile, setProfile] = useState(() => {
-      const token = getLocalUserToken();
-
-      if (!token) {
-        setProfile({
-          name: '',
-          phone: '',
-          profileImage: '',
-        });
-        navigate('/taxi/user/login', { replace: true });
-        return;
-      }
-
-      let stored = {};
+    const loadProfile = async () => {
       try {
-        stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
-      } catch {
-        stored = {};
-      }
-
-      return {
-        name: stored?.name || '',
-        phone: stored?.phone || '',
-        profileImage: stored?.profileImage || '',
-      };
-    });
-
-    useEffect(() => {
-      const loadProfile = async () => {
+        let stored = {};
         try {
-          let stored = {};
-          try {
-            stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
-          } catch {
-            stored = {};
-          }
-          const response = await userAuthService.getCurrentUser();
-          const user = response?.data?.user || {};
-          setProfile({
-            name: user.name || stored?.name || '',
-            phone: user.phone || stored?.phone || '',
-            profileImage: user.profileImage || stored?.profileImage || '',
-          });
-          localStorage.setItem('userInfo', JSON.stringify(user));
+          stored = JSON.parse(localStorage.getItem('userInfo') || '{}');
         } catch {
-          // Keep the local fallback if the network is unavailable.
+          stored = {};
         }
-      };
-
-      loadProfile();
-    }, [navigate]);
-
-    const handleLogout = () => {
-      clearCurrentRide();
-      socketService.disconnect();
-      clearLocalUserSession();
-      setProfile({
-        name: '',
-        phone: '',
-        profileImage: '',
-      });
-      navigate('/taxi/user/login', { replace: true });
+        const response = await userAuthService.getCurrentUser();
+        const user = response?.data?.user || {};
+        setProfile({
+          name: user.name || stored?.name || '',
+          phone: user.phone || stored?.phone || '',
+          profileImage: user.profileImage || stored?.profileImage || '',
+        });
+        localStorage.setItem('userInfo', JSON.stringify(user));
+      } catch {
+        // Keep the local fallback if the network is unavailable.
+      }
     };
+
+    loadProfile();
   }, [navigate]);
 
   const handleLogout = () => {

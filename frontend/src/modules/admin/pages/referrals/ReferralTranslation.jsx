@@ -1,13 +1,29 @@
-import React, { useEffect, useRef, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   ChevronRight,
   Copy,
-  Eye,
   Languages,
   Loader2,
   Save,
   Smartphone,
   Type,
+  RotateCcw,
+  RotateCw,
+  Bold,
+  Italic,
+  Link as LinkIcon,
+  Image as ImageIcon,
+  Table as TableIcon,
+  Quote,
+  Video,
+  List as ListIcon,
+  ListOrdered,
+  AlignLeft,
+  AlignCenter,
+  ChevronDown,
+  ArrowLeft,
+  CheckCircle2,
+  AlertCircle
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import {
@@ -16,17 +32,26 @@ import {
   DRIVER_REFERRAL_TRANSLATION_FIELDS,
   USER_REFERRAL_TRANSLATION_FIELDS,
 } from '../../../shared/utils/referralTranslationFields';
+import toast from 'react-hot-toast';
+import { useNavigate } from 'react-router-dom';
 
 const inputClass =
   'w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors';
-const labelClass = 'block text-xs font-semibold text-gray-500 mb-1.5';
+const labelClass = 'block text-xs font-semibold text-gray-500 mb-1.5 uppercase tracking-wider';
 
-const ToolbarButton = ({ children, onClick, title }) => (
+const ToolbarButton = ({ children, onClick, title, active = false }) => (
   <button
     type="button"
     title={title}
-    onClick={onClick}
-    className="h-9 min-w-9 px-2.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 transition-colors"
+    onMouseDown={(e) => {
+      e.preventDefault();
+      onClick(e);
+    }}
+    className={`h-8 min-w-8 px-1.5 rounded flex items-center justify-center transition-colors border ${
+      active 
+        ? 'bg-indigo-50 border-indigo-200 text-indigo-600' 
+        : 'border-transparent text-gray-600 hover:bg-gray-100'
+    }`}
   >
     {children}
   </button>
@@ -34,95 +59,225 @@ const ToolbarButton = ({ children, onClick, title }) => (
 
 const HtmlEditor = ({ label, value, onChange, plainText = false }) => {
   const editorRef = useRef(null);
+  const [activeHeading, setActiveHeading] = useState('P');
+  const [isFocused, setIsFocused] = useState(false);
+  const [activeStates, setActiveStates] = useState({
+    bold: false,
+    italic: false,
+    underline: false,
+    insertUnorderedList: false,
+    insertOrderedList: false,
+  });
 
   useEffect(() => {
     if (!editorRef.current || plainText) {
       return;
     }
 
-    if (document.activeElement !== editorRef.current && editorRef.current.innerHTML !== value) {
-      editorRef.current.innerHTML = value || '';
+    // Set default paragraph separator
+    try {
+      document.execCommand('defaultParagraphSeparator', false, 'p');
+    } catch (e) {
+      console.warn('Could not set default paragraph separator');
     }
-  }, [plainText, value]);
+
+    if (!isFocused && editorRef.current.innerHTML !== value) {
+      editorRef.current.innerHTML = value || '';
+      updateActiveStates();
+    }
+  }, [plainText, value, isFocused]);
 
   const syncEditor = () => {
-    if (plainText) {
+    if (plainText || !editorRef.current) {
       return;
     }
+    const content = editorRef.current.innerHTML;
+    if (content !== value) {
+      onChange(content);
+    }
+    updateActiveStates();
+  };
 
-    onChange(editorRef.current?.innerHTML || '');
+  const updateActiveStates = () => {
+    if (typeof document === 'undefined') return;
+    setActiveStates({
+      bold: document.queryCommandState('bold'),
+      italic: document.queryCommandState('italic'),
+      underline: document.queryCommandState('underline'),
+      insertUnorderedList: document.queryCommandState('insertUnorderedList'),
+      insertOrderedList: document.queryCommandState('insertOrderedList'),
+    });
   };
 
   const runCommand = (command, commandValue = null) => {
     if (!editorRef.current || plainText) {
       return;
     }
-
+    
     editorRef.current.focus();
-    document.execCommand(command, false, commandValue);
+    
+    try {
+      document.execCommand(command, false, commandValue);
+    } catch (err) {
+      console.error('Error executing command:', command, err);
+    }
+    
     syncEditor();
   };
 
-  const insertLink = () => {
-    const link = window.prompt('Enter link URL');
-    if (!link) {
-      return;
-    }
-    runCommand('createLink', link);
-  };
+  const headings = [
+    { label: 'Paragraph', value: 'P' },
+    { label: 'Heading 1', value: 'H1' },
+    { label: 'Heading 2', value: 'H2' },
+    { label: 'Heading 3', value: 'H3' },
+  ];
 
   return (
-    <div>
-      <label className={labelClass}>{label}</label>
+    <div className="space-y-1.5">
+      <style>{`
+        .custom-html-editor ul { list-style-type: disc !important; padding-left: 1.5rem !important; margin-bottom: 1rem !important; display: block !important; }
+        .custom-html-editor ol { list-style-type: decimal !important; padding-left: 1.5rem !important; margin-bottom: 1rem !important; display: block !important; }
+        .custom-html-editor li { display: list-item !important; margin-bottom: 0.25rem !important; }
+        .custom-html-editor blockquote { border-left: 4px solid #e5e7eb; padding-left: 1rem; font-style: italic; margin-bottom: 1rem; }
+        .custom-html-editor table { width: 100%; border-collapse: collapse; margin-bottom: 1rem; }
+        .custom-html-editor td { border: 1px solid #e5e7eb; padding: 0.5rem; }
+      `}</style>
+      <label className="text-[11px] font-bold text-gray-400 uppercase tracking-wider">{label} *</label>
       {plainText ? (
         <textarea
           value={value}
           onChange={(event) => onChange(event.target.value)}
-          className={`${inputClass} min-h-[110px] resize-y`}
-          placeholder="Enter banner text"
+          className={`${inputClass} min-h-[100px] resize-none text-xs font-medium`}
+          placeholder={`Enter ${label.toLowerCase()}...`}
         />
       ) : (
-        <div className="rounded-xl border border-gray-200 bg-white overflow-hidden">
-          <div className="flex flex-wrap items-center gap-2 border-b border-gray-100 p-3 bg-gray-50/70">
-            <select
-              defaultValue="P"
-              onChange={(event) => {
-                runCommand('formatBlock', event.target.value);
-                event.target.value = 'P';
-              }}
-              className="h-9 rounded-lg border border-gray-200 bg-white px-3 text-sm text-gray-700 outline-none"
-            >
-              <option value="P">Paragraph</option>
-              <option value="H3">Heading 3</option>
-              <option value="H4">Heading 4</option>
-              <option value="BLOCKQUOTE">Quote</option>
-            </select>
-            <ToolbarButton title="Bold" onClick={() => runCommand('bold')}>
-              <strong>B</strong>
+        <div className={`rounded-xl border bg-white overflow-hidden transition-all shadow-sm ${
+          isFocused ? 'border-indigo-400 ring-1 ring-indigo-400/20' : 'border-gray-200'
+        }`}>
+          <div className="flex flex-wrap items-center gap-0.5 border-b border-gray-100 p-1.5 bg-gray-50/50">
+            <ToolbarButton title="Undo" onClick={() => runCommand('undo')}>
+              <RotateCcw size={14} />
             </ToolbarButton>
-            <ToolbarButton title="Italic" onClick={() => runCommand('italic')}>
-              <em>I</em>
+            <ToolbarButton title="Redo" onClick={() => runCommand('redo')}>
+              <RotateCw size={14} />
             </ToolbarButton>
-            <ToolbarButton title="Link" onClick={insertLink}>
-              Link
+            
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+
+            <div className="relative group">
+              <select
+                value={activeHeading}
+                onMouseDown={(e) => e.stopPropagation()}
+                onChange={(e) => {
+                  const val = e.target.value;
+                  setActiveHeading(val);
+                  runCommand('formatBlock', val === 'P' ? '<p>' : val);
+                }}
+                className="h-8 pl-2 pr-6 bg-transparent text-xs font-bold text-gray-600 outline-none hover:bg-gray-100 rounded appearance-none cursor-pointer border-none uppercase tracking-tight"
+              >
+                {headings.map(h => (
+                  <option key={h.value} value={h.value}>{h.label}</option>
+                ))}
+              </select>
+              <ChevronDown size={10} className="absolute right-1.5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400" />
+            </div>
+
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+
+            <ToolbarButton title="Bold" active={activeStates.bold} onClick={() => runCommand('bold')}>
+              <Bold size={14} />
             </ToolbarButton>
-            <ToolbarButton title="Bullet list" onClick={() => runCommand('insertUnorderedList')}>
-              Bullets
+            <ToolbarButton title="Italic" active={activeStates.italic} onClick={() => runCommand('italic')}>
+              <Italic size={14} />
             </ToolbarButton>
-            <ToolbarButton title="Numbered list" onClick={() => runCommand('insertOrderedList')}>
-              1.
+            
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+
+            <ToolbarButton title="Link" onClick={() => {
+              const url = window.prompt('Enter URL:', 'https://');
+              if(url) runCommand('createLink', url);
+            }}>
+              <LinkIcon size={14} />
             </ToolbarButton>
-            <ToolbarButton title="Clear formatting" onClick={() => runCommand('removeFormat')}>
-              Clear
+            <ToolbarButton title="Insert Image" onClick={() => {
+              const url = window.prompt('Enter Image URL:');
+              if(url) runCommand('insertImage', url);
+            }}>
+              <ImageIcon size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Table" onClick={() => {
+              const rows = window.prompt('Number of rows:', '2');
+              const cols = window.prompt('Number of columns:', '2');
+              if(rows && cols) {
+                let tableHtml = '<table border="1" style="width:100%; border-collapse: collapse; margin-bottom: 1rem;">';
+                for(let i=0; i<parseInt(rows); i++) {
+                  tableHtml += '<tr>';
+                  for(let j=0; j<parseInt(cols); j++) {
+                    tableHtml += '<td style="padding: 8px; border: 1px solid #ddd;">Cell</td>';
+                  }
+                  tableHtml += '</tr>';
+                }
+                tableHtml += '</table><p><br></p>';
+                runCommand('insertHTML', tableHtml);
+              }
+            }}>
+              <TableIcon size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Quote" onClick={() => runCommand('formatBlock', 'BLOCKQUOTE')}>
+              <Quote size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Media" onClick={() => {
+              const embed = window.prompt('Enter Video Embed Code (iframe) or URL:');
+              if(embed) {
+                if(embed.includes('<iframe')) {
+                  runCommand('insertHTML', embed + '<p><br></p>');
+                } else {
+                  runCommand('insertHTML', `<video src="${embed}" controls style="max-width:100%;"></video><p><br></p>`);
+                }
+              }
+            }}>
+              <Video size={14} />
+            </ToolbarButton>
+
+            <div className="w-px h-4 bg-gray-200 mx-1" />
+
+            <ToolbarButton title="Bullet List" active={activeStates.insertUnorderedList} onClick={() => runCommand('insertUnorderedList')}>
+              <ListIcon size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Numbered List" active={activeStates.insertOrderedList} onClick={() => runCommand('insertOrderedList')}>
+              <ListOrdered size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Align Left" onClick={() => runCommand('justifyLeft')}>
+              <AlignLeft size={14} />
+            </ToolbarButton>
+            <ToolbarButton title="Align Center" onClick={() => runCommand('justifyCenter')}>
+              <AlignCenter size={14} />
             </ToolbarButton>
           </div>
+          
           <div
             ref={editorRef}
             contentEditable
             suppressContentEditableWarning
             onInput={syncEditor}
-            className="min-h-[170px] px-4 py-3 text-sm text-gray-800 outline-none prose prose-sm max-w-none"
+            onFocus={() => {
+              setIsFocused(true);
+              if (!editorRef.current.innerHTML.trim()) {
+                editorRef.current.innerHTML = '<p><br></p>';
+              }
+              updateActiveStates();
+            }}
+            onBlur={() => {
+              setIsFocused(false);
+              syncEditor();
+            }}
+            onKeyUp={updateActiveStates}
+            onClick={updateActiveStates}
+            className="min-h-[180px] px-8 py-3 text-xs text-gray-700 outline-none prose prose-xs max-w-none leading-relaxed overflow-y-auto bg-white custom-html-editor font-medium"
           />
+          <div className="px-3 py-1 border-t border-gray-50 flex justify-end">
+            <span className="text-[9px] text-gray-300 font-bold uppercase tracking-tighter">Powered by appzeto</span>
+          </div>
         </div>
       )}
     </div>
@@ -130,69 +285,75 @@ const HtmlEditor = ({ label, value, onChange, plainText = false }) => {
 };
 
 const PreviewCard = ({ title, code, bannerText, blocks }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-6">
+  <div className="bg-white rounded-xl border border-gray-200 p-6 shadow-sm">
     <div className="flex items-center gap-3 mb-5 pb-4 border-b border-gray-100">
       <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
         <Smartphone size={18} />
       </div>
       <div>
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <p className="text-xs text-gray-400">Live mobile preview for the selected language.</p>
+        <h3 className="text-sm font-bold text-gray-900 uppercase tracking-tight">{title}</h3>
+        <p className="text-[11px] text-gray-400 font-medium">Live mobile preview for the selected language.</p>
       </div>
     </div>
 
-    <div className="mx-auto w-[255px] rounded-[28px] border border-gray-200 bg-white shadow-sm overflow-hidden">
-      <div className="px-5 py-4 flex items-center justify-between border-b border-gray-100">
-        <span className="text-[15px] font-semibold text-gray-900">Referrals</span>
-        <span className="text-[10px] font-semibold text-gray-400 uppercase tracking-[0.18em]">Preview</span>
+    <div className="mx-auto w-[255px] rounded-[32px] border-[6px] border-gray-900 bg-white shadow-2xl overflow-hidden relative">
+      {/* Notch */}
+      <div className="absolute top-0 left-1/2 -translate-x-1/2 w-24 h-5 bg-gray-900 rounded-b-xl z-20" />
+      
+      <div className="px-5 pt-8 pb-4 flex items-center justify-between border-b border-gray-100">
+        <span className="text-[14px] font-bold text-gray-900">Referrals</span>
+        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Live</span>
       </div>
 
-      <div className="bg-indigo-700 text-white px-5 py-4 flex items-center justify-between">
-        <div>
-          <p className="text-[20px] font-bold leading-tight">{bannerText || 'Refer and Earn'}</p>
-          <p className="text-[11px] text-indigo-100 mt-1">Updated from translation config</p>
+      <div className="bg-indigo-600 text-white px-5 py-6 flex items-center justify-between">
+        <div className="space-y-1">
+          <p className="text-[18px] font-black leading-tight uppercase tracking-tight">{bannerText || 'Refer and Earn'}</p>
+          <p className="text-[10px] text-indigo-100 font-medium">Share your code & get rewards</p>
         </div>
-        <div className="w-10 h-10 rounded-xl bg-white/15 flex items-center justify-center">
+        <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center backdrop-blur-sm">
           <Type size={18} />
         </div>
       </div>
 
-      <div className="px-4 py-4 border-b border-gray-100">
+      <div className="px-4 py-5 border-b border-gray-100 bg-gray-50/30">
         <div className="grid grid-cols-[1fr_auto] gap-2">
-          <div className="rounded-xl border border-dashed border-gray-300 px-3 py-3 text-center">
-            <p className="text-[15px] font-semibold text-gray-900">{code}</p>
-            <p className="text-[10px] text-gray-400 mt-1">Your referral code</p>
+          <div className="rounded-xl border border-dashed border-indigo-200 bg-white px-3 py-3 text-center">
+            <p className="text-[14px] font-black text-gray-900 tracking-wider">{code}</p>
+            <p className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter mt-0.5">Your code</p>
           </div>
           <button
             type="button"
-            className="rounded-xl bg-indigo-700 text-white px-4 text-sm font-medium flex items-center gap-2"
+            className="rounded-xl bg-indigo-600 text-white px-4 text-xs font-bold uppercase tracking-wider flex items-center gap-2 shadow-sm shadow-indigo-200"
           >
-            <Copy size={14} /> Copy
+            <Copy size={12} />
           </button>
         </div>
 
-        <div className="grid grid-cols-2 gap-2 mt-3">
-          <button type="button" className="rounded-lg bg-gray-900 text-white py-2 text-xs font-medium">
-            Refer and earn
+        <div className="grid grid-cols-2 gap-2 mt-4">
+          <button type="button" className="rounded-xl bg-gray-900 text-white py-2.5 text-[10px] font-bold uppercase tracking-widest">
+            Refer
           </button>
-          <button type="button" className="rounded-lg bg-gray-100 text-gray-500 py-2 text-xs font-medium">
-            Referral history
+          <button type="button" className="rounded-xl bg-white border border-gray-200 text-gray-500 py-2.5 text-[10px] font-bold uppercase tracking-widest">
+            History
           </button>
         </div>
       </div>
 
-      <div className="px-4 py-4 space-y-3 min-h-[270px]">
-        <h4 className="text-[13px] font-semibold text-gray-900">How it works?</h4>
+      <div className="px-5 py-5 space-y-4 min-h-[280px] max-h-[350px] overflow-y-auto no-scrollbar">
+        <h4 className="text-[12px] font-black text-gray-900 uppercase tracking-widest border-b border-gray-50 pb-2">How it works?</h4>
         {blocks.length === 0 ? (
-          <p className="text-xs text-gray-400">No content saved for this language yet.</p>
+          <div className="flex flex-col items-center justify-center py-10 opacity-20">
+            <Languages size={32} />
+            <p className="text-[10px] font-bold uppercase tracking-widest mt-2">No content</p>
+          </div>
         ) : (
-          blocks.slice(0, 3).map((block) => (
-            <div key={block.key}>
-              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-gray-400 mb-1">
+          blocks.map((block) => (
+            <div key={block.key} className="space-y-1">
+              <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400">
                 {block.label}
               </p>
               <div
-                className="text-[12px] text-gray-700 leading-5 prose prose-sm max-w-none"
+                className="text-[11px] text-gray-600 font-medium leading-relaxed prose prose-sm max-w-none custom-html-editor"
                 dangerouslySetInnerHTML={{ __html: block.html }}
               />
             </div>
@@ -200,10 +361,10 @@ const PreviewCard = ({ title, code, bannerText, blocks }) => (
         )}
       </div>
 
-      <div className="px-4 pb-4">
+      <div className="px-4 pb-6 pt-2 bg-white">
         <button
           type="button"
-          className="w-full rounded-xl bg-rose-500 text-white py-3 text-sm font-semibold"
+          className="w-full rounded-2xl bg-rose-500 text-white py-3.5 text-xs font-black uppercase tracking-[0.2em] shadow-lg shadow-rose-200"
         >
           Refer now
         </button>
@@ -212,25 +373,13 @@ const PreviewCard = ({ title, code, bannerText, blocks }) => (
   </div>
 );
 
-const TranslationSectionCard = ({ title, description, icon, children }) => (
-  <div className="bg-white rounded-xl border border-gray-200 p-6">
-    <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-100">
-      <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">{icon}</div>
-      <div>
-        <h3 className="text-sm font-semibold text-gray-900">{title}</h3>
-        <p className="text-xs text-gray-400">{description}</p>
-      </div>
-    </div>
-    <div className="grid grid-cols-1 xl:grid-cols-2 gap-5">{children}</div>
-  </div>
-);
-
 const ReferralTranslation = () => {
+  const navigate = useNavigate();
   const [records, setRecords] = useState([]);
   const [selectedLanguageCode, setSelectedLanguageCode] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState('');
+  const [showSuccess, setShowSuccess] = useState(false);
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -240,12 +389,14 @@ const ReferralTranslation = () => {
 
       try {
         const response = await adminService.getReferralTranslations();
-        const items = response?.data?.results || [];
+        const items = response?.data?.results || response?.data || [];
         const safeItems = items.length > 0 ? items : [createEmptyReferralTranslationRecord()];
         setRecords(safeItems);
         setSelectedLanguageCode((current) => current || safeItems[0]?.language_code || 'en');
       } catch (fetchError) {
+        console.error('Fetch error:', fetchError);
         setError(fetchError?.response?.data?.message || 'Unable to load referral translation data.');
+        toast.error('Failed to load translations');
       } finally {
         setLoading(false);
       }
@@ -275,7 +426,7 @@ const ReferralTranslation = () => {
           : item,
       ),
     );
-    setMessage('');
+    setShowSuccess(false);
   };
 
   const handleSave = async () => {
@@ -294,12 +445,18 @@ const ReferralTranslation = () => {
       });
 
       const savedRecord = response?.data;
-      setRecords((current) =>
-        current.map((item) => (item.language_code === savedRecord.language_code ? savedRecord : item)),
-      );
-      setMessage(`Saved ${savedRecord.language_name || savedRecord.language_code} referral translation.`);
+      if (savedRecord) {
+        setRecords((current) =>
+          current.map((item) => (item.language_code === savedRecord.language_code ? savedRecord : item)),
+        );
+        setShowSuccess(true);
+        toast.success(`Saved ${savedRecord.language_name || savedRecord.language_code} referral translation.`);
+        setTimeout(() => setShowSuccess(false), 3000);
+      }
     } catch (saveError) {
-      setError(saveError?.response?.data?.message || 'Unable to save referral translation.');
+      console.error('Save error:', saveError);
+      setError(saveError?.message || 'Unable to save referral translation.');
+      toast.error('Failed to save changes');
     } finally {
       setSaving(false);
     }
@@ -316,159 +473,151 @@ const ReferralTranslation = () => {
 
   if (loading) {
     return (
-      <div className="min-h-[420px] flex items-center justify-center">
-        <Loader2 className="animate-spin text-indigo-600" size={32} />
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+        <div className="flex flex-col items-center gap-3">
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
+          <span className="text-sm text-gray-500 font-medium">Loading translations...</span>
+        </div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 p-6 lg:p-8 space-y-6">
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      {/* HEADER BLOCK */}
       <div className="mb-6">
         <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
           <span>Referral Management</span>
           <ChevronRight size={12} />
-          <span className="text-gray-700">Translation</span>
+          <span className="text-gray-700">Referral Translation</span>
         </div>
-        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
-          <div>
-            <h1 className="text-xl font-semibold text-gray-900">Referral Translation</h1>
-            <p className="text-sm text-gray-500 mt-1">
-              Manage user and driver referral copy by language and push the same content to live referral screens.
-            </p>
-          </div>
+        <div className="flex items-center justify-between gap-4">
+          <h1 className="text-xl font-semibold text-gray-900 uppercase tracking-tight">Referral Translation</h1>
           <div className="flex items-center gap-3">
-            <div className="rounded-lg border border-gray-200 bg-white px-4 py-2 text-sm text-gray-600 flex items-center gap-2">
-              <Languages size={16} className="text-indigo-600" />
-              {selectedRecord.language_name || selectedRecord.language_code}
-            </div>
+            <button 
+              onClick={() => navigate(-1)}
+              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-600 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+            >
+              <ArrowLeft size={16} /> Back
+            </button>
             <button
-              type="button"
               onClick={handleSave}
               disabled={saving}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-60"
+              className="flex items-center gap-2 px-6 py-2 bg-indigo-900 text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-indigo-800 transition-colors shadow-sm disabled:opacity-50"
             >
               {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-              {selectedRecord.updatedAt ? 'Update Translation' : 'Save Translation'}
+              Save Changes
             </button>
           </div>
         </div>
       </div>
 
-      {error ? (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600">{error}</div>
-      ) : null}
-      {message ? (
-        <div className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-600">
-          {message}
-        </div>
-      ) : null}
-
-      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
+      <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 mb-8">
         <PreviewCard
-          title="Mobile View - User Referral"
-          code="USERCODE"
+          title="User App Preview"
+          code="RYDONUSER"
           bannerText={selectedRecord.user_referral?.banner_text}
           blocks={userPreviewBlocks}
         />
         <PreviewCard
-          title="Mobile View - Driver Referral"
-          code="DRVCODE"
+          title="Driver App Preview"
+          code="RYDONDRV"
           bannerText={selectedRecord.driver_referral?.banner_text}
           blocks={driverPreviewBlocks}
         />
       </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 p-6">
-        <div className="flex flex-wrap gap-2">
-          {visibleLanguageRecords.map((language) => (
+      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden shadow-sm">
+        {/* LANGUAGE TABS */}
+        <div className="flex items-center border-b border-gray-100 bg-white px-4 overflow-x-auto no-scrollbar">
+          {visibleLanguageRecords.map((lang) => (
             <button
-              key={language.language_code}
-              type="button"
+              key={lang.language_code}
               onClick={() => {
-                setSelectedLanguageCode(language.language_code);
-                setMessage('');
+                setSelectedLanguageCode(lang.language_code);
+                setShowSuccess(false);
               }}
-              className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                selectedLanguageCode === language.language_code
-                  ? 'bg-indigo-600 text-white'
-                  : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+              className={`px-6 py-4 text-xs font-bold uppercase tracking-widest transition-all relative whitespace-nowrap ${
+                selectedLanguageCode === lang.language_code
+                  ? 'text-indigo-600'
+                  : 'text-gray-400 hover:text-gray-600'
               }`}
             >
-              {language.language_name || language.language_code.toUpperCase()}
+              {lang.language_name || lang.language_code.toUpperCase()}
+              {selectedLanguageCode === lang.language_code && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-full" />
+              )}
             </button>
           ))}
         </div>
-      </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_320px] gap-6 items-start">
-        <div className="space-y-6">
-          <TranslationSectionCard
-            title="User Referral"
-            description="Text blocks shown on rider referral screens for the selected language."
-            icon={<Eye size={18} />}
-          >
-            {USER_REFERRAL_TRANSLATION_FIELDS.map((field) => (
-              <HtmlEditor
-                key={field.key}
-                label={field.label}
-                plainText={field.plainText}
-                value={selectedRecord.user_referral?.[field.key] || ''}
-                onChange={(nextValue) => updateSelectedRecord('user_referral', field.key, nextValue)}
-              />
-            ))}
-          </TranslationSectionCard>
-
-          <TranslationSectionCard
-            title="Driver Referral"
-            description="Text blocks shown on driver referral screens for the selected language."
-            icon={<Languages size={18} />}
-          >
-            {DRIVER_REFERRAL_TRANSLATION_FIELDS.map((field) => (
-              <HtmlEditor
-                key={field.key}
-                label={field.label}
-                plainText={field.plainText}
-                value={selectedRecord.driver_referral?.[field.key] || ''}
-                onChange={(nextValue) => updateSelectedRecord('driver_referral', field.key, nextValue)}
-              />
-            ))}
-          </TranslationSectionCard>
-        </div>
-
-        <div className="space-y-5 xl:sticky xl:top-6">
-          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-3">
-            <button
-              type="button"
-              onClick={handleSave}
-              disabled={saving}
-              className="w-full py-3 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors disabled:opacity-60"
-            >
-              {saving ? 'Saving...' : 'Save Translation'}
-            </button>
-            <div className="rounded-lg border border-gray-100 bg-gray-50 px-4 py-3 text-sm text-gray-500">
-              Selected language:
-              <span className="ml-1 font-medium text-gray-900">
-                {selectedRecord.language_name || selectedRecord.language_code}
-              </span>
-            </div>
-          </div>
-
-          <div className="bg-white rounded-xl border border-gray-200 p-6">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
-                <Languages size={18} />
+        <div className="p-8">
+          <div className="space-y-12">
+            {error && (
+              <div className="flex items-center gap-3 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-600 animate-in fade-in">
+                <AlertCircle size={18} />
+                <span className="font-medium">{error}</span>
               </div>
-              <div>
-                <h3 className="text-sm font-semibold text-gray-900">How this flows</h3>
-                <p className="text-xs text-gray-400">Single-source referral copy pipeline.</p>
+            )}
+            
+            {showSuccess && (
+              <div className="flex items-center gap-2 text-emerald-600 bg-emerald-50 px-4 py-3 rounded-lg border border-emerald-100 animate-in fade-in slide-in-from-bottom-2">
+                <div className="w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center">
+                  <CheckCircle2 size={12} />
+                </div>
+                <span className="text-xs font-bold uppercase tracking-tight">Translations updated successfully</span>
+              </div>
+            )}
+
+            {/* USER REFERRAL SECTION */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 pb-2 border-b border-gray-50">
+                <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center text-indigo-600">
+                  <Smartphone size={20} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-tight">User Referral Content <span className="text-rose-500">*</span></h2>
+                  <p className="text-[11px] text-gray-400 font-medium">Translate referral instructions for your customers.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {USER_REFERRAL_TRANSLATION_FIELDS.map((field) => (
+                  <HtmlEditor
+                    key={field.key}
+                    label={field.label}
+                    plainText={field.plainText}
+                    value={selectedRecord.user_referral?.[field.key] || ''}
+                    onChange={(nextValue) => updateSelectedRecord('user_referral', field.key, nextValue)}
+                  />
+                ))}
               </div>
             </div>
-            <ul className="space-y-3 text-sm text-gray-600">
-              <li>Admin saves one language at a time from this page.</li>
-              <li>Content is stored in backend per language code.</li>
-              <li>User and driver referral pages fetch the same saved content through a public common endpoint.</li>
-            </ul>
+
+            {/* DRIVER REFERRAL SECTION */}
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 pb-2 border-b border-gray-50">
+                <div className="w-9 h-9 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-600">
+                  <Type size={20} />
+                </div>
+                <div>
+                  <h2 className="text-sm font-bold text-gray-900 uppercase tracking-tight">Driver Referral Content <span className="text-rose-500">*</span></h2>
+                  <p className="text-[11px] text-gray-400 font-medium">Translate referral instructions for your service providers.</p>
+                </div>
+              </div>
+              
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {DRIVER_REFERRAL_TRANSLATION_FIELDS.map((field) => (
+                  <HtmlEditor
+                    key={field.key}
+                    label={field.label}
+                    plainText={field.plainText}
+                    value={selectedRecord.driver_referral?.[field.key] || ''}
+                    onChange={(nextValue) => updateSelectedRecord('driver_referral', field.key, nextValue)}
+                  />
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </div>

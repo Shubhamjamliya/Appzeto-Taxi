@@ -209,6 +209,12 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
 };
 
 const unwrap = (response) => response?.data?.data || response?.data || response;
+const DEFAULT_AVAILABILITY = {
+  drivers: [],
+  totalDrivers: 0,
+  closestDriverDistanceMeters: null,
+  closestDriverEtaMinutes: null,
+};
 
 const getVehicleTypes = (response) => {
   const data = unwrap(response);
@@ -274,14 +280,54 @@ const getFareEstimate = (type) => {
   return 106;
 };
 
-const getDropTime = (index) => {
-  const date = new Date(Date.now() + (12 + index) * 60 * 1000);
+const getDropTime = (minutesAway = 0) => {
+  const safeMinutes = Math.max(6, Number(minutesAway) || 0);
+  const date = new Date(Date.now() + safeMinutes * 60 * 1000);
   return date.toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: false });
+};
+
+const formatDistanceLabel = (distanceMeters) => {
+  if (!Number.isFinite(Number(distanceMeters))) {
+    return 'No distance yet';
+  }
+
+  const meters = Number(distanceMeters);
+
+  if (meters < 1000) {
+    return `${Math.max(50, Math.round(meters / 10) * 10)} m`;
+  }
+
+  return `${(meters / 1000).toFixed(meters >= 10000 ? 0 : 1)} km`;
+};
+
+const formatAvailabilityLine = (availability) => {
+  if (!availability?.totalDrivers) {
+    return 'Not available right now';
+  }
+
+  const etaMinutes = availability.closestDriverEtaMinutes || 1;
+  const dropTime = getDropTime(etaMinutes + 10);
+  return `Closest driver ${formatDistanceLabel(availability.closestDriverDistanceMeters)} away - ${etaMinutes} mins away - Drop ${dropTime}`;
+};
+
+const getAvailabilityBadge = (availability) => {
+  if (!availability?.totalDrivers) {
+    return 'NOT AVAILABLE';
+  }
+
+  if ((availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY) <= 2) {
+    return 'FASTEST';
+  }
+
+  if (availability.totalDrivers >= 5) {
+    return 'POPULAR';
+  }
+
+  return null;
 };
 
 const normalizeVehicleType = (type, index) => {
   const id = String(type?._id || type?.id || type?.name || index);
-  const iconValue = getIconValue(type);
 
   return {
     id,
@@ -290,11 +336,9 @@ const normalizeVehicleType = (type, index) => {
     icon: getVehicleIcon(type),
     name: getTypeLabel(type),
     capacity: getCapacity(type),
-    badge: iconValue.includes('bike') ? 'FASTEST' : null,
+    badge: null,
     badgeColor: 'bg-orange-50 text-orange-500 border-orange-100',
     sublabel: type?.short_description || type?.description || 'Available ride',
-    eta: 2 + Math.min(index, 3),
-    dropTime: getDropTime(index),
     price: getFareEstimate(type),
     raw: type,
   };
@@ -302,7 +346,7 @@ const normalizeVehicleType = (type, index) => {
 
 const SelectVehicle = () => {
   const [vehicles, setVehicles] = useState([]);
-  const [onlineDrivers, setOnlineDrivers] = useState([]);
+  const [availabilityByVehicleId, setAvailabilityByVehicleId] = useState({});
   const [selected, setSelected] = useState('');
   const [paymentMethod, setPaymentMethod] = useState('Cash');
   const [showPaymentModal, setShowPaymentModal] = useState(false);
@@ -367,13 +411,15 @@ const SelectVehicle = () => {
 
   const selectedVehicle = useMemo(() => vehicles.find((v) => v.id === selected), [selected, vehicles]);
   const selectedVehicleName = selectedVehicle?.name || 'vehicle';
+  const selectedAvailability = selectedVehicle ? (availabilityByVehicleId[selectedVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
+  const onlineDrivers = selectedAvailability.drivers || [];
 
   useEffect(() => {
     let active = true;
 
     const loadOnlineDrivers = async () => {
-      if (!selectedVehicle?.vehicleTypeId) {
-        setOnlineDrivers([]);
+      if (!vehicles.length) {
+        setAvailabilityByVehicleId({});
         return;
       }
 
@@ -381,22 +427,29 @@ const SelectVehicle = () => {
       setDriverLoadError('');
 
       try {
-        const response = await api.get('/rides/available-drivers', {
-          params: {
-            vehicleTypeId: selectedVehicle.vehicleTypeId,
-            vehicleIconType: selectedVehicle.iconType,
-            lng: pickupCoords[0],
-            lat: pickupCoords[1],
-          },
-        });
-        const data = unwrap(response);
+        const responses = await Promise.all(
+          vehicles
+            .filter((vehicle) => vehicle.vehicleTypeId)
+            .map(async (vehicle) => {
+              const response = await api.get('/rides/available-drivers', {
+                params: {
+                  vehicleTypeId: vehicle.vehicleTypeId,
+                  vehicleIconType: vehicle.iconType,
+                  lng: pickupCoords[0],
+                  lat: pickupCoords[1],
+                },
+              });
+
+              return [vehicle.id, { ...DEFAULT_AVAILABILITY, ...unwrap(response) }];
+            }),
+        );
 
         if (active) {
-          setOnlineDrivers(data?.drivers || []);
+          setAvailabilityByVehicleId(Object.fromEntries(responses));
         }
       } catch (error) {
         if (active) {
-          setOnlineDrivers([]);
+          setAvailabilityByVehicleId({});
           setDriverLoadError(error.message || 'Could not load online drivers.');
         }
       } finally {
@@ -411,7 +464,7 @@ const SelectVehicle = () => {
     return () => {
       active = false;
     };
-  }, [pickupCoords, selectedVehicle]);
+  }, [pickupCoords, vehicles]);
 
   const handleBook = () => {
     if (!selectedVehicle) {
@@ -435,7 +488,7 @@ const SelectVehicle = () => {
   };
 
   return (
-    <div className="h-[100dvh] bg-gray-100 max-w-lg mx-auto relative font-sans overflow-hidden">
+    <div className="h-[100dvh] bg-slate-50 max-w-lg mx-auto relative font-['Plus_Jakarta_Sans'] overflow-hidden">
       <div className="absolute inset-0 w-full bg-gray-200">
         <VehicleMapPreview
           center={pickupPosition}
@@ -481,10 +534,10 @@ const SelectVehicle = () => {
         </AnimatePresence>
 
         <div className="absolute left-4 right-4 bottom-4 z-20 flex items-center justify-between gap-3">
-          <div className="bg-white/95 rounded-[14px] px-3 py-2 shadow-[0_8px_24px_rgba(15,23,42,0.10)] border border-white/80">
-            <p className="text-[10px] font-bold uppercase tracking-widest text-slate-400">Online {selectedVehicleName}</p>
-            <p className="text-[15px] font-bold text-slate-900 leading-none mt-1">
-              {isLoadingDrivers ? 'Checking...' : `${onlineDrivers.length} online`}
+          <div className="bg-white/95 backdrop-blur-sm rounded-2xl px-4 py-2.5 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border border-white/80">
+            <p className="text-[10px] font-bold uppercase tracking-[0.1em] text-slate-400">Drivers Nearby</p>
+            <p className="text-[16px] font-extrabold text-slate-900 leading-none mt-1">
+              {isLoadingDrivers ? '...' : `${selectedAvailability.totalDrivers || 0} online`}
             </p>
           </div>
           {driverLoadError && (
@@ -522,52 +575,92 @@ const SelectVehicle = () => {
 
           {!isLoadingVehicles && !vehicleLoadError && vehicles.map((v, i) => {
             const isSelected = selected === v.id;
+            const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
+            const badge = getAvailabilityBadge(availability) || v.badge;
+            const isUnavailable = !availability.totalDrivers;
+
             return (
               <motion.button
                 key={v.id}
                 type="button"
-                initial={{ opacity: 0, y: 8 }}
+                initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.28, delay: i * 0.05 }}
+                transition={{ duration: 0.4, delay: i * 0.04, ease: [0.23, 1, 0.32, 1] }}
                 whileTap={{ scale: 0.98 }}
-                onClick={() => setSelected(v.id)}
-                className={`w-full flex items-center gap-3 px-3.5 py-3 rounded-[18px] border transition-all text-left ${
+                onClick={() => {
+                  if (!isUnavailable) {
+                    setSelected(v.id);
+                  }
+                }}
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[20px] border transition-all text-left relative overflow-hidden ${
                   isSelected
-                    ? 'bg-white border-orange-200 shadow-[0_4px_16px_rgba(249,115,22,0.12)]'
-                    : 'bg-white/80 border-white/80 shadow-[0_2px_8px_rgba(15,23,42,0.04)]'
+                    ? 'bg-white border-orange-200 shadow-[0_10px_20px_-8px_rgba(249,115,22,0.12)] ring-1 ring-orange-100'
+                    : isUnavailable
+                      ? 'bg-slate-100/60 border-slate-200 opacity-60 grayscale-[0.5]'
+                      : 'bg-white border-slate-100 shadow-[0_2px_10px_rgba(15,23,42,0.02)] hover:border-slate-200'
                 }`}
               >
-                <div className={`w-14 h-14 rounded-[14px] flex items-center justify-center shrink-0 transition-all ${
-                  isSelected ? 'bg-orange-50' : 'bg-slate-50'
+                {isSelected && (
+                  <motion.div
+                    layoutId="selection-glow"
+                    className="absolute inset-0 bg-gradient-to-r from-orange-50/0 via-orange-50/20 to-orange-50/0 pointer-events-none"
+                  />
+                )}
+
+                <div className={`w-14 h-14 rounded-[18px] flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  isSelected ? 'bg-orange-50 scale-105' : isUnavailable ? 'bg-slate-200' : 'bg-slate-50'
                 }`}>
-                  <img src={v.icon} alt={v.name} className="w-11 h-11 object-contain drop-shadow-sm" />
+                  <img src={v.icon} alt={v.name} className="w-10 h-10 object-contain drop-shadow-md" />
                 </div>
 
-                <div className="flex-1 min-w-0">
+                <div className="flex-1 min-w-0 z-10">
                   <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className="text-[14px] font-bold text-slate-900 leading-tight">{v.name}</span>
-                    <div className="flex items-center gap-0.5 text-slate-400">
-                      <Users size={11} strokeWidth={2.5} />
-                      <span className="text-[10px] font-black">{v.capacity}</span>
+                    <span className={`text-[14px] font-bold leading-tight ${isUnavailable ? 'text-slate-500' : 'text-slate-900'}`}>
+                      {v.name}
+                    </span>
+                    <div className="flex items-center gap-1 text-slate-400 bg-slate-50 px-1.5 py-0.5 rounded-md">
+                      <Users size={11} strokeWidth={3} />
+                      <span className="text-[10px] font-bold">{v.capacity}</span>
                     </div>
-                    {v.badge && (
-                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded-full border uppercase tracking-wide ${v.badgeColor}`}>
-                        {v.badge}
+                    {badge && (
+                      <span className={`text-[8px] font-bold px-1.5 py-0.5 rounded-full border uppercase tracking-wider ${
+                        isUnavailable 
+                          ? 'bg-white text-slate-400 border-slate-200' 
+                          : badge === 'FASTEST' 
+                            ? 'bg-orange-500 text-white border-orange-400' 
+                            : 'bg-orange-50 text-orange-600 border-orange-100'
+                      }`}>
+                        {badge}
                       </span>
                     )}
                   </div>
-                  <p className="text-[11px] font-bold text-slate-500 mt-0.5 leading-tight">{v.sublabel}</p>
-                  <p className="text-[10px] font-bold text-slate-400 mt-0.5">Available nearby - {v.eta} mins away - Drop {v.dropTime}</p>
+                  <p className="text-[11px] font-medium text-slate-500 mt-0.5 leading-tight">{v.sublabel}</p>
+                  <div className="flex items-center gap-1 mt-1">
+                    <div className={`w-1 h-1 rounded-full ${isUnavailable ? 'bg-slate-300' : 'bg-emerald-500 animate-pulse'}`} />
+                    <p className={`text-[10px] font-semibold ${isUnavailable ? 'text-slate-400' : 'text-slate-500'}`}>
+                      {formatAvailabilityLine(availability)}
+                    </p>
+                  </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-1.5 shrink-0">
-                  <span className="text-[17px] font-bold text-slate-900 tracking-tighter leading-none">Rs {v.price}</span>
+                <div className="flex flex-col items-end gap-1.5 shrink-0 z-10">
+                  <div className="text-right">
+                    <span className={`text-[16px] font-extrabold tracking-tight block ${isUnavailable ? 'text-slate-300' : 'text-slate-900'}`}>
+                      {isUnavailable ? 'N/A' : `₹${v.price}`}
+                    </span>
+                    {!isUnavailable && <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tighter">est.</span>}
+                  </div>
                   {isSelected && (
                     <motion.div
+                      layoutId="check-icon"
                       initial={{ scale: 0 }}
                       animate={{ scale: 1 }}
-                      className="w-2 h-2 rounded-full bg-orange-500"
-                    />
+                      className="w-5 h-5 rounded-full bg-orange-500 flex items-center justify-center"
+                    >
+                      <svg width="10" height="8" viewBox="0 0 10 8" fill="none">
+                        <path d="M1 4L3.5 6.5L9 1" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </motion.div>
                   )}
                 </div>
               </motion.button>
@@ -575,29 +668,49 @@ const SelectVehicle = () => {
           })}
         </div>
 
-        <div className="shrink-0 border-t border-slate-100 bg-white/95 px-4 pb-6 pt-3 space-y-3 shadow-[0_-4px_20px_rgba(15,23,42,0.06)] backdrop-blur-md">
+        <div className="shrink-0 border-t border-slate-100 bg-white/80 backdrop-blur-xl px-5 pb-6 pt-3.5 space-y-3.5 shadow-[0_-12px_40px_rgba(15,23,42,0.08)]">
           <motion.button
             whileTap={{ scale: 0.98 }}
             onClick={() => setShowPaymentModal(true)}
-            className="w-full flex items-center justify-between px-4 py-2.5 rounded-[14px] border border-white/80 bg-slate-50 shadow-[0_2px_8px_rgba(15,23,42,0.04)]"
+            className="w-full flex items-center justify-between px-4 py-2.5 rounded-2xl border border-slate-100 bg-slate-50/50 hover:bg-slate-50 transition-colors"
           >
-            <div className="flex items-center gap-2.5">
-              <div className="w-7 h-7 rounded-[9px] bg-white flex items-center justify-center shadow-sm">
-                {paymentMethod === 'Cash' ? <Banknote size={14} className="text-slate-600" strokeWidth={2} /> : <CreditCard size={14} className="text-slate-600" strokeWidth={2} />}
+            <div className="flex items-center gap-3">
+              <div className="w-7 h-7 rounded-xl bg-white flex items-center justify-center shadow-sm border border-slate-50">
+                {paymentMethod === 'Cash' ? <Banknote size={15} className="text-emerald-600" /> : <CreditCard size={15} className="text-blue-600" />}
               </div>
-              <span className="text-[13px] font-bold text-slate-800">{paymentMethod}</span>
-              <ChevronDown size={14} className="text-slate-400" />
+              <div>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider leading-none mb-0.5">Method</p>
+                <span className="text-[13px] font-bold text-slate-800">{paymentMethod}</span>
+              </div>
             </div>
-            <ChevronRight size={15} className="text-slate-300" />
+            <div className="flex items-center gap-1 text-slate-400">
+              <span className="text-[10px] font-bold uppercase">Change</span>
+              <ChevronRight size={12} strokeWidth={3} />
+            </div>
           </motion.button>
 
           <motion.button
-            whileTap={selectedVehicle ? { scale: 0.98 } : undefined}
-            disabled={!selectedVehicle}
+            whileHover={selectedVehicle && selectedAvailability.totalDrivers ? { scale: 1.01, translateY: -2 } : {}}
+            whileTap={selectedVehicle && selectedAvailability.totalDrivers ? { scale: 0.98 } : undefined}
+            disabled={!selectedVehicle || !selectedAvailability.totalDrivers}
             onClick={handleBook}
-            className="w-full bg-[#f8e001] py-4 rounded-[18px] text-[15px] font-bold text-slate-900 shadow-[0_6px_20px_rgba(248,224,1,0.35)] uppercase tracking-tight disabled:opacity-50 disabled:shadow-none"
+            className={`w-full py-4 rounded-[20px] text-[15px] font-extrabold shadow-xl transition-all duration-300 uppercase tracking-tight flex items-center justify-center gap-3 ${
+              selectedVehicle && selectedAvailability.totalDrivers
+                ? 'bg-[#f8e001] text-slate-900 shadow-[0_12px_28px_-4px_rgba(248,224,1,0.4)] active:shadow-none'
+                : 'bg-slate-200 text-slate-400 shadow-none cursor-not-allowed'
+            }`}
           >
-            {selectedVehicle ? `Book ${selectedVehicle.name}` : 'Select Vehicle'}
+            {selectedVehicle
+              ? selectedAvailability.totalDrivers
+                ? (
+                  <>
+                    <span>Book {selectedVehicle.name}</span>
+                    <div className="w-1.5 h-1.5 rounded-full bg-slate-900/20" />
+                    <span>₹{selectedVehicle.price}</span>
+                  </>
+                )
+                : `${selectedVehicle.name} Unavailable`
+              : 'Select Vehicle'}
           </motion.button>
         </div>
       </div>

@@ -11,13 +11,18 @@ import {
   FileText,
   CheckCircle,
   XCircle,
-  Clock
+  Clock,
+  FileSearch,
+  Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 
 const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
+const MotionDiv = motion.div;
 
 const ManageFleet = () => {
+  const navigate = useNavigate();
   const [view, setView] = useState('list'); // 'list' | 'create' | 'edit'
   const [editingId, setEditingId] = useState(null);
   const [fleet, setFleet] = useState([]);
@@ -27,8 +32,8 @@ const ManageFleet = () => {
   const [transportTypes, setTransportTypes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
 
   const [formData, setFormData] = useState({
     owner_id: '', // Added owner_id
@@ -122,6 +127,10 @@ const ManageFleet = () => {
     }
   }, [formData.service_location_id, formData.transport_type]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [itemsPerPage]);
+
   const resetForm = () => {
     setFormData({
       owner_id: owners[0]?._id || '',
@@ -173,7 +182,7 @@ const ManageFleet = () => {
       } else {
         alert(json.message || 'Operation failed');
       }
-    } catch (err) {
+    } catch {
       alert('Network error');
     } finally {
       setSubmitting(false);
@@ -190,16 +199,17 @@ const ManageFleet = () => {
       const json = await res.json();
       if (json.success) fetchData();
       else alert(json.message || 'Delete failed');
-    } catch (err) {
+    } catch {
       alert('Delete failed');
     }
   };
 
-  const filteredFleet = fleet.filter(item =>
-    (item.car_brand || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.car_model || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
-    (item.license_plate_number || '').toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const totalEntries = fleet.length;
+  const totalPages = Math.max(1, Math.ceil(totalEntries / itemsPerPage));
+  const safePage = Math.min(page, totalPages);
+  const pagedFleet = fleet.slice((safePage - 1) * itemsPerPage, safePage * itemsPerPage);
+  const showingFrom = totalEntries === 0 ? 0 : (safePage - 1) * itemsPerPage + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(showingFrom + pagedFleet.length - 1, totalEntries);
 
   /* ── Status badge ── */
   const StatusBadge = ({ status }) => {
@@ -440,153 +450,157 @@ const ManageFleet = () => {
        LIST VIEW
   ════════════════════════════════════ */
   return (
-    <div className="min-h-screen p-1 font-sans">
+    <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
       <AnimatePresence mode="wait">
-        <motion.div
+        <MotionDiv
           key="list"
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          {/* Breadcrumb Header */}
-          <div className="flex items-center justify-between mb-8 px-1">
-            <h1 className="text-[15px] font-black tracking-tight text-gray-800 uppercase">Manage Fleet</h1>
-            <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
+          <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
+            <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Manage Fleet</h1>
+            <div className="flex items-center gap-2 text-sm text-slate-400">
+              <span className="text-gray-950">Manage Fleet</span>
+              <ChevronRight size={14} />
               <span>Manage Fleet</span>
-              <ChevronRight size={12} className="opacity-50" />
-              <span className="text-gray-900 font-black">Manage Fleet</span>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
+          <div className="px-5">
+            <div className="relative rounded border border-gray-200 bg-white shadow-sm">
             {/* Toolbar */}
-            <div className="p-6 border-b border-gray-50 flex flex-col md:flex-row items-center justify-between gap-4 bg-gray-50/30">
-              <div className="flex items-center gap-2 text-[12px] font-black text-gray-400 uppercase tracking-[0.2em]">
-                show
-                <select
-                  value={itemsPerPage}
-                  onChange={(e) => setItemsPerPage(Number(e.target.value))}
-                  className="bg-white border border-gray-100 rounded-lg px-3 py-1.5 outline-none font-black text-gray-900 shadow-sm mx-1 appearance-none"
-                >
-                  <option value={10}>10</option>
-                  <option value={25}>25</option>
-                  <option value={50}>50</option>
-                </select>
-                entries
+            <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-center md:justify-between">
+              <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
+                <span>show</span>
+                <div className="relative">
+                  <select
+                    value={itemsPerPage}
+                    onChange={(e) => setItemsPerPage(Number(e.target.value) || 10)}
+                    className="h-9 w-24 appearance-none rounded border border-gray-300 bg-white px-3 text-sm text-gray-950 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                  >
+                    {[10, 25, 50, 100].map((value) => (
+                      <option key={value} value={value}>
+                        {value}
+                      </option>
+                    ))}
+                  </select>
+                  <ChevronDown
+                    size={16}
+                    className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-700"
+                  />
+                </div>
+                <span>entries</span>
               </div>
 
               <div className="flex items-center gap-3">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-300" size={16} />
-                  <input
-                    type="text"
-                    placeholder="Search fleet..."
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    className="pl-9 pr-4 py-2.5 bg-white border border-gray-100 rounded-xl text-[12px] font-bold outline-none focus:border-indigo-200 focus:ring-2 focus:ring-indigo-50 transition-all w-56"
-                  />
-                </div>
                 <button
-                  onClick={() => { resetForm(); setView('create'); }}
-                  className="bg-[#2D3A6E] hover:bg-gray-900 text-white px-6 py-2.5 rounded-xl text-[12px] font-black flex items-center gap-2 transition-all shadow-lg active:scale-95 uppercase tracking-wider whitespace-nowrap"
+                  type="button"
+                  className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-slate-500 transition-colors hover:border-indigo-500 hover:text-indigo-600"
                 >
-                  <Plus size={18} strokeWidth={2.5} /> Add Fleet
+                  <Search size={17} />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/admin/fleet/manage/create')}
+                  className="flex h-12 items-center gap-3 rounded bg-indigo-950 px-6 text-sm font-semibold text-white transition-colors hover:bg-indigo-900"
+                >
+                  <Plus size={16} /> Add Fleet
                 </button>
               </div>
             </div>
 
             {/* Table */}
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead>
-                  <tr className="bg-white border-b border-gray-50">
-                    {['Vehicle Type', 'Fleet Owner', 'Car Brand', 'Car Model', 'Document View', 'License Plate Number', 'Status', 'Reason', 'Action'].map(col => (
-                      <th key={col} className="px-6 py-5 text-[11px] font-black text-gray-400 uppercase tracking-[0.12em] whitespace-nowrap">
-                        {col}
-                      </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50">
+            <div className="px-5">
+              <div className="overflow-x-auto">
+                <table className="w-full text-left">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Vehicle Type</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Car Brand</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Car Model</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Document View</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">License Plate Number</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Status</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Reason</th>
+                      <th className="px-3 py-4 text-sm font-bold text-gray-950">Action</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-200">
                   {isLoading ? (
                     <tr>
-                      <td colSpan="9" className="py-24 text-center">
-                        <div className="flex flex-col items-center gap-3 text-gray-300">
-                          <Loader2 className="animate-spin" size={32} />
-                          <span className="text-[12px] font-black uppercase tracking-widest">Loading Fleet...</span>
+                      <td colSpan="8" className="px-3 py-24 text-center">
+                        <div className="flex flex-col items-center gap-4 text-slate-400">
+                          <Loader2 size={34} className="animate-spin text-teal-500" />
+                          <p className="text-sm font-semibold">Loading fleet...</p>
                         </div>
                       </td>
                     </tr>
-                  ) : filteredFleet.length === 0 ? (
+                  ) : pagedFleet.length === 0 ? (
                     <tr>
-                      <td colSpan="9" className="py-28 text-center">
-                        <div className="flex flex-col items-center gap-4">
-                          <div className="w-20 h-20 rounded-3xl bg-gray-50 flex items-center justify-center">
-                            <FileText size={36} className="text-gray-200" />
-                          </div>
-                          <div>
-                            <p className="text-[14px] font-black text-gray-300 uppercase tracking-widest">No Data Found</p>
-                            <p className="text-[12px] text-gray-200 mt-1">Add fleet vehicles to get started</p>
-                          </div>
+                      <td colSpan="8" className="border-b border-gray-200 px-3 py-10 text-center">
+                        <div className="flex min-h-[130px] flex-col items-center justify-center text-slate-700">
+                          <FileSearch size={92} strokeWidth={1.7} className="mb-2 text-indigo-950" />
+                          <p className="text-xl font-medium">No Data Found</p>
                         </div>
                       </td>
                     </tr>
                   ) : (
-                    filteredFleet.map((item) => (
+                    pagedFleet.map((item) => (
                       <tr
                         key={item._id}
-                        className="hover:bg-indigo-50/20 transition-all border-l-4 border-l-transparent hover:border-l-indigo-500"
+                        className="bg-white transition-colors hover:bg-gray-50"
                       >
                         {/* Vehicle Type */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5 text-sm text-gray-950">
                           <span className="text-[13px] font-black text-gray-800 uppercase">
                             {item.vehicle_type_id?.name || item.vehicle_type_id?.type_name || item.vehicle_type || '—'}
                           </span>
                         </td>
 
                         {/* Fleet Owner */}
-                        <td className="px-6 py-5">
+                        <td className="hidden">
                           <span className="text-[12px] font-black text-indigo-600 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100 uppercase tracking-wider shadow-sm shadow-indigo-50">
                             {item.owner_id?.company_name || item.owner_id?.name || '—'}
                           </span>
                         </td>
 
                         {/* Car Brand */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5 text-sm text-gray-950">
                           <span className="text-[13px] font-bold text-gray-600">{item.car_brand || '—'}</span>
                         </td>
 
                         {/* Car Model */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <span className="text-[13px] font-bold text-gray-600">{item.car_model || '—'}</span>
                         </td>
 
                         {/* Document View */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <button className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 text-indigo-600 rounded-lg text-[11px] font-black uppercase tracking-wider hover:bg-indigo-100 transition-all">
                             <Eye size={12} /> View
                           </button>
                         </td>
 
                         {/* License Plate */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <span className="inline-block px-3 py-1 bg-gray-50 border border-gray-100 rounded-lg text-[12px] font-black text-gray-700 tracking-widest uppercase">
                             {item.license_plate_number || '—'}
                           </span>
                         </td>
 
                         {/* Status */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <StatusBadge status={item.status} />
                         </td>
 
                         {/* Reason */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <span className="text-[12px] text-gray-400 italic">{item.reason || '—'}</span>
                         </td>
 
                         {/* Actions */}
-                        <td className="px-6 py-5">
+                        <td className="px-3 py-5">
                           <div className="flex items-center gap-2">
                             <button
                               onClick={() => handleEditClick(item)}
@@ -610,24 +624,45 @@ const ManageFleet = () => {
                 </tbody>
               </table>
             </div>
+          </div>
+
+            <button
+              type="button"
+              className="absolute -right-1 top-[66%] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-teal-500 text-white shadow-xl transition-colors hover:bg-teal-600"
+            >
+              <Menu size={24} />
+            </button>
 
             {/* Pagination */}
             <div className="p-6 bg-gray-50/30 border-t border-gray-50 flex items-center justify-between">
               <span className="text-[11px] font-black text-gray-400 uppercase tracking-widest italic">
-                Showing {filteredFleet.length > 0 ? 1 : 0} to {filteredFleet.length} of {filteredFleet.length} entries
+                Showing {showingFrom} to {showingTo} of {totalEntries} entries
               </span>
-              <div className="flex items-center gap-1.5">
-                <button className="px-4 py-2 text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors">
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.max(1, current - 1))}
+                  disabled={safePage <= 1}
+                  className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   Prev
                 </button>
-                <button className="w-9 h-9 rounded-xl bg-[#2D3A6E] text-white text-[13px] font-black shadow-lg">1</button>
-                <button className="px-4 py-2 text-[11px] font-black text-gray-400 uppercase tracking-widest hover:text-gray-900 transition-colors">
+                <button type="button" className="rounded bg-indigo-950 px-4 py-2 text-sm font-semibold text-white">
+                  {safePage}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                  disabled={safePage >= totalPages}
+                  className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-60"
+                >
                   Next
                 </button>
               </div>
             </div>
           </div>
-        </motion.div>
+        </div>
+        </MotionDiv>
       </AnimatePresence>
     </div>
   );

@@ -62,26 +62,22 @@ const ReferralSettings = () => {
   
   const [userSettings, setUserSettings] = useState({});
   const [driverSettings, setDriverSettings] = useState({});
-  const [joiningBonus, setJoiningBonus] = useState({});
 
   const token = localStorage.getItem('adminToken') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzdiZTZhYmJlOTJlYjYwMGYwMmQxNiIsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwibW9iaWxlIjoiOTk5OTk5OTk5OSIsInJvbGUiOiJzdXBlci1hZG1pbiIsImlhdCI6MTc3NTA0OTExNywiZXhwIjoxODA2NTg1MTE3fQ.5KJmXJwaVefWhnc97EqtArkA1z7ZOhsJwA9fbyRVPdQ';
 
   useEffect(() => {
     const fetchAllSettings = async () => {
       try {
-        const [uRes, dRes, jRes] = await Promise.all([
+        const [uRes, dRes] = await Promise.all([
           fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/user', { headers: { 'Authorization': `Bearer ${token}` } }),
           fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/driver', { headers: { 'Authorization': `Bearer ${token}` } }),
-          fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/settings/joining-bonus', { headers: { 'Authorization': `Bearer ${token}` } })
         ]);
 
         const uData = await uRes.json();
         const dData = await dRes.json();
-        const jData = await jRes.json();
 
         if (uData.success) setUserSettings(uData.data || {});
         if (dData.success) setDriverSettings(dData.data || {});
-        if (jData.success) setJoiningBonus(jData.data || {});
       } catch (err) {
         console.error("Settings fetch error:", err);
       } finally {
@@ -98,7 +94,6 @@ const ReferralSettings = () => {
     
     if (type === 'user') { url = 'user'; body = userSettings; }
     if (type === 'driver') { url = 'driver'; body = driverSettings; }
-    if (type === 'joining') { url = 'joining-bonus'; body = joiningBonus; }
 
     try {
       const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/referral/settings/${url}`, {
@@ -144,8 +139,7 @@ const ReferralSettings = () => {
         <div className="flex bg-gray-100 p-1.5 rounded-[20px] transition-all">
           {[
             { id: 'user', icon: User, label: 'Riders' },
-            { id: 'driver', icon: Truck, label: 'Drivers' },
-            { id: 'joining', icon: Gift, label: 'Bonus' }
+            { id: 'driver', icon: Truck, label: 'Drivers' }
           ].map(tab => (
             <button
               key={tab.id}
@@ -249,46 +243,6 @@ const ReferralSettings = () => {
             >
               {saving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
               Update Fleet Incentives
-            </button>
-          </FormSection>
-        )}
-
-        {/* JOINING BONUS SETTINGS */}
-        {activeTab === 'joining' && (
-          <FormSection title="Joining Bonus" subTitle="New user onboarding incentives" icon={Gift}>
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-                <InputWrapper label="System Status">
-                   <ToggleSwitch 
-                    enabled={joiningBonus.joining_bonus_enabled == "1"} 
-                    onChange={(val) => setJoiningBonus({...joiningBonus, joining_bonus_enabled: val ? "1" : "0"})} 
-                  />
-                </InputWrapper>
-                <div className="col-span-1 md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-8 p-10 bg-indigo-50/30 rounded-[40px] border border-indigo-50/50">
-                    <InputWrapper label="User Reward (₹)">
-                      <input 
-                        type="number" 
-                        value={joiningBonus.joining_bonus_amount_for_user}
-                        onChange={(e) => setJoiningBonus({...joiningBonus, joining_bonus_amount_for_user: e.target.value})}
-                        className="w-full px-6 py-5 bg-white border-none rounded-3xl text-[24px] font-black text-gray-950 focus:ring-4 focus:ring-indigo-200 outline-none transition-all shadow-xl"
-                      />
-                    </InputWrapper>
-                    <InputWrapper label="Driver Reward (₹)">
-                      <input 
-                        type="number" 
-                        value={joiningBonus.joining_bonus_amount_for_driver}
-                        onChange={(e) => setJoiningBonus({...joiningBonus, joining_bonus_amount_for_driver: e.target.value})}
-                        className="w-full px-6 py-5 bg-white border-none rounded-3xl text-[24px] font-black text-gray-950 focus:ring-4 focus:ring-indigo-200 outline-none transition-all shadow-xl"
-                      />
-                    </InputWrapper>
-                </div>
-             </div>
-             <button 
-              onClick={() => handleUpdate('joining')}
-              disabled={saving}
-              className="w-full py-6 bg-rose-500 text-white rounded-[32px] text-[13px] font-black uppercase tracking-[0.3em] hover:bg-rose-600 transition-all shadow-2xl flex items-center justify-center gap-3 shadow-rose-100"
-            >
-              {saving ? <Loader2 className="animate-spin" /> : <Save size={20} />}
-              Initialize Bonus Engine
             </button>
           </FormSection>
         )}

@@ -9,8 +9,11 @@ import {
   UserCheck,
   Zap,
   IndianRupee,
-  MoreVertical
+  MoreVertical,
+  Loader2
 } from 'lucide-react';
+import { adminService } from '../../services/adminService';
+import toast from 'react-hot-toast';
 
 const StatCard = ({ title, value, change, icon: Icon, color }) => (
   <div className="bg-white rounded-lg p-6 border border-gray-100 shadow-sm flex flex-col justify-between h-full group hover:shadow-md transition-shadow">
@@ -123,20 +126,13 @@ const ReferralDashboard = () => {
   useEffect(() => {
     const fetchDashboard = async () => {
       try {
-        const token = localStorage.getItem('adminToken') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5YzdiZTZhYmJlOTJlYjYwMGYwMmQxNiIsImVtYWlsIjoiYWRtaW5AYWRtaW4uY29tIiwibW9iaWxlIjoiOTk5OTk5OTk5OSIsInJvbGUiOiJzdXBlci1hZG1pbiIsImlhdCI6MTc3NTA0OTExNywiZXhwIjoxODA2NTg1MTE3fQ.5KJmXJwaVefWhnc97EqtArkA1z7ZOhsJwA9fbyRVPdQ';
-        const res = await fetch(globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin/referral/dashboard', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        });
-        const json = await res.json();
-        console.log("Referral Dashboard raw response:", json);
-        if (json.success || json.component) {
-          // support standard data wrap or Inertia-style props wrap
-          const dashboardData = json.data?.props || json.props || json.data || json;
-          console.log("Mapped Dashboard Data:", dashboardData);
-          setData(dashboardData);
+        const res = await adminService.getReferralDashboard();
+        if (res.data) {
+          setData(res.data);
         }
       } catch (err) {
         console.error("Dashboard fetch error:", err);
+        toast.error('Failed to load dashboard data');
       } finally {
         setIsLoading(false);
       }
@@ -146,9 +142,10 @@ const ReferralDashboard = () => {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-8 bg-gray-50/10">
+      <div className="min-h-screen flex items-center justify-center bg-gray-50/10">
         <div className="flex flex-col items-center gap-4">
-          <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+          <Loader2 className="animate-spin text-indigo-600" size={32} />
+          <span className="text-sm text-gray-500 font-medium">Loading dashboard...</span>
         </div>
       </div>
     );

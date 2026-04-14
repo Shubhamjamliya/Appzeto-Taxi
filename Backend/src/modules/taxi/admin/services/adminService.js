@@ -3,6 +3,8 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { createDefaultAdminState } from '../data/defaultAdminState.js';
 import { Admin } from '../models/Admin.js';
 import { User } from '../../user/models/User.js';
+import { UserWallet } from '../../user/models/UserWallet.js';
+import { WalletTransaction } from '../../driver/models/WalletTransaction.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
 // AppModule import removed
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
@@ -467,6 +469,31 @@ const resolveReferralTranslationLanguage = async (languageCode = '') => {
   };
 };
 
+const cleanupLegacySeededDriverNeededDocumentsFinal = async () => {
+  const items = await DriverNeededDocument.find().lean();
+
+  if (items.length !== LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.length) {
+    return;
+  }
+
+  const isLegacySeedSet = items.every((item) =>
+    LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.some(
+      (seed) =>
+        seed.slug === item.slug &&
+        String(seed.key || '') === String(item.key || '') &&
+        String(seed.front_key || '') === String(item.front_key || '') &&
+        String(seed.back_key || '') === String(item.back_key || ''),
+    ),
+  );
+
+  if (!isLegacySeedSet) {
+    return;
+  }
+
+  await DriverNeededDocument.deleteMany({
+    slug: { $in: LEGACY_DRIVER_DOCUMENT_SEED_SIGNATURES.map((item) => item.slug) },
+  });
+};
 
 const serializeAirport = (item) => ({
   _id: item._id,
@@ -1175,18 +1202,24 @@ export const loginAdmin = async ({ email, password }) => {
   };
 };
 
-export const listUsers = async ({ page = 1, limit = 50 }) => {
+export const listUsers = async ({ page = 1, limit = 50, search = '' }) => {
   const safePage = Number(page) || 1;
   const safeLimit = Number(limit) || 50;
   const start = (safePage - 1) * safeLimit;
+  const query = { deletedAt: null };
+
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { phone: regex }, { email: regex }];
+  }
 
   const [users, total] = await Promise.all([
-    User.find({ deletedAt: null })
+    User.find(query)
       .sort({ createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
       .lean(),
-    User.countDocuments({ deletedAt: null }),
+    User.countDocuments(query),
   ]);
 
   return {
@@ -1716,9 +1749,53 @@ export const listUserWalletHistory = async (id) => {
     throw new ApiError(404, 'User not found');
   }
 
+  const wallet = await UserWallet.findOne({ userId: id }).lean();
+
   return {
-    results: [],
+    balance: wallet?.balance || 0,
+    results: (wallet?.transactions || []).sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt)).map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
   };
+};
+
+export const adjustUserWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const user = await User.findById(id);
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  let wallet = await UserWallet.findOne({ userId: id });
+  if (!wallet) {
+    wallet = new UserWallet({ userId: id, balance: 0, transactions: [] });
+  }
+
+  const currentBalance = wallet.balance || 0;
+  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
+
+  wallet.balance = nextBalance;
+  wallet.transactions.push({
+    kind: operation,
+    amount,
+    title: payload.description || `Admin adjustment (${operation})`,
+  });
+
+  await wallet.save();
+  return { balance: Number(nextBalance.toFixed(2)) };
 };
 
 export const listDrivers = async ({ page = 1, limit = 50 }) => {
@@ -2010,9 +2087,97 @@ export const adjustDriverWallet = async (id, payload = {}) => {
   driver.markModified('wallet');
   await driver.save();
 
+  await WalletTransaction.create({
+    driverId: id,
+    amount,
+    kind: operation,
+    title: payload.description || `Admin adjustment (${operation})`,
+    balance: nextBalance
+  });
+
   return { balance: Number(nextBalance.toFixed(2)) };
 };
 
+export const listDriverWalletHistory = async (id) => {
+  const driver = await Driver.findById(id).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const transactions = await WalletTransaction.find({ driverId: id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    balance: Number(driver.wallet?.balance || 0),
+    results: transactions.map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
+  };
+};
+
+export const adjustOwnerWallet = async (id, payload = {}) => {
+  const amount = Number(payload.amount || 0);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, 'Amount must be greater than 0');
+  }
+
+  const operation = String(payload.operation || 'credit').toLowerCase();
+  if (!['credit', 'debit'].includes(operation)) {
+    throw new ApiError(400, 'Operation must be credit or debit');
+  }
+
+  const owner = await Owner.findById(id);
+  if (!owner) {
+    throw new ApiError(404, 'Owner not found');
+  }
+
+  const currentBalance = Number(owner.wallet?.balance || 0);
+  const nextBalance = operation === 'credit' ? currentBalance + amount : currentBalance - amount;
+
+  owner.wallet = owner.wallet || {};
+  owner.wallet.balance = nextBalance;
+  owner.markModified('wallet');
+  await owner.save();
+
+  await OwnerWalletTransaction.create({
+    ownerId: id,
+    amount,
+    kind: operation,
+    title: payload.description || `Admin adjustment (${operation})`,
+    balance: nextBalance
+  });
+
+  return { balance: Number(nextBalance.toFixed(2)) };
+};
+
+export const listOwnerWalletHistory = async (id) => {
+  const owner = await Owner.findById(id).lean();
+
+  if (!owner) {
+    throw new ApiError(404, 'Owner not found');
+  }
+
+  const transactions = await OwnerWalletTransaction.find({ ownerId: id })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return {
+    balance: Number(owner.wallet?.balance || 0),
+    results: transactions.map(t => ({
+      _id: String(t._id),
+      amount: t.amount,
+      type: t.kind,
+      description: t.title,
+      createdAt: t.createdAt,
+    })),
+  };
+};
 
 export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
   const safePage = Number(page) || 1;
@@ -2272,8 +2437,58 @@ export const updateSubscriptionSettings = async (payload) => {
   return setting.subscription;
 };
 
-export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
+export const getReferralSettings = async (type) => {
+export const getSubscriptionSettings = async () => {
+  const setting = await AdminBusinessSetting.findOne({ scope: 'default' }).lean();
+  const referral = setting?.referral || { driver: { enabled: false, type: 'instant_referrer', amount: 0 }, user: { enabled: false, type: 'instant_referrer', amount: 0 } };
+  return type ? referral[type] : referral;
+};
 
+export const updateReferralSettings = async (type, payload) => {
+  const updateKey = `referral.${type}`;
+  
+  // Sanitize data
+  const updateData = {
+    ...payload,
+    enabled: Boolean(payload.enabled),
+    amount: Number(payload.amount || 0),
+  };
+
+  const setting = await AdminBusinessSetting.findOneAndUpdate(
+    { scope: 'default' },
+    { $set: { [updateKey]: updateData } },
+    { new: true, upsert: true },
+  );
+
+  return setting.referral[type];
+};
+
+export const getReferralDashboard = async () => {
+  const [totalDrivers, totalUsers] = await Promise.all([
+    Driver.countDocuments(),
+    User.countDocuments(),
+  ]);
+
+  // Mocking some parts for the dashboard view
+  return {
+    total_drivers: totalDrivers,
+    total_users: totalUsers,
+    active_referrals: 0,
+    referral_earning: 0,
+    user_referrals: {
+      normal_user: totalUsers,
+      referral_user: 0,
+      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    },
+    driver_referrals: {
+      normal_driver: totalDrivers,
+      referral_driver: 0,
+      monthly: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]
+    }
+  };
+};
+
+export const listSubscriptionPlans = async () => SubscriptionPlan.find().sort({ createdAt: -1 }).populate('vehicle_type_id').lean();
 export const createSubscriptionPlan = async (payload) => {
   const plan = await SubscriptionPlan.create({
     ...payload,
@@ -2480,99 +2695,6 @@ const toAdminRideRow = (ride) => {
   };
 };
 
-const toAdminDeliveryRow = (ride) => {
-  const requestCode = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
-  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
-  const rideStatus = String(ride.status || '').toLowerCase();
-  const tripStatus = rideStatus === RIDE_STATUS.COMPLETED || liveStatus === RIDE_LIVE_STATUS.COMPLETED
-    ? 'COMPLETED'
-    : rideStatus === RIDE_STATUS.CANCELLED || liveStatus === RIDE_LIVE_STATUS.CANCELLED
-      ? 'CANCELLED'
-      : liveStatus === RIDE_LIVE_STATUS.STARTED || rideStatus === RIDE_STATUS.ONGOING
-        ? 'ON_TRIP'
-        : 'UPCOMING';
-
-  return {
-    id: String(ride._id),
-    requestId: requestCode,
-    date: ride.createdAt,
-    userName: ride.userId?.name || 'Unknown User',
-    driverName: ride.driverId?.name || 'Unassigned',
-    transportType: ride.driverId?.vehicleType || ride.vehicleIconType || 'Delivery',
-    tripStatus,
-    rideStatus: ride.status,
-    liveStatus: ride.liveStatus,
-    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
-    fare: Number(ride.fare || 0),
-    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
-    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
-    pickupLocation: ride.pickupLocation,
-    dropLocation: ride.dropLocation,
-    parcel: ride.deliveryId?.parcel || ride.parcel || null,
-    user: ride.userId ? {
-      id: String(ride.userId._id),
-      name: ride.userId.name || '',
-      phone: ride.userId.phone || '',
-    } : null,
-    driver: ride.driverId ? {
-      id: String(ride.driverId._id),
-      name: ride.driverId.name || '',
-      phone: ride.driverId.phone || '',
-      vehicleType: ride.driverId.vehicleType || '',
-      vehicleNumber: ride.driverId.vehicleNumber || '',
-    } : null,
-  };
-};
-
-const toAdminIntercityTripRow = (ride) => {
-  const requestCode = ride.intercity?.bookingId || `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
-  const liveStatus = String(ride.liveStatus || ride.status || '').toLowerCase();
-  const rideStatus = String(ride.status || '').toLowerCase();
-  const tripStatus = rideStatus === RIDE_STATUS.COMPLETED || liveStatus === RIDE_LIVE_STATUS.COMPLETED
-    ? 'COMPLETED'
-    : rideStatus === RIDE_STATUS.CANCELLED || liveStatus === RIDE_LIVE_STATUS.CANCELLED
-      ? 'CANCELLED'
-      : liveStatus === RIDE_LIVE_STATUS.STARTED || rideStatus === RIDE_STATUS.ONGOING
-        ? 'ON_TRIP'
-        : 'UPCOMING';
-
-  return {
-    id: String(ride._id),
-    requestId: requestCode,
-    date: ride.createdAt,
-    userName: ride.userId?.name || 'Unknown User',
-    driverName: ride.driverId?.name || 'Unassigned',
-    transportType: ride.intercity?.vehicleName || ride.driverId?.vehicleType || ride.vehicleIconType || 'Intercity',
-    tripStatus,
-    rideStatus: ride.status,
-    liveStatus: ride.liveStatus,
-    paymentOption: String(ride.paymentMethod || 'cash').toUpperCase(),
-    fare: Number(ride.fare || 0),
-    pickupLabel: ride.pickupAddress || formatRidePointLabel(ride.pickupLocation, 'Pickup'),
-    dropLabel: ride.dropAddress || formatRidePointLabel(ride.dropLocation, 'Drop'),
-    routeLabel: [ride.intercity?.fromCity, ride.intercity?.toCity].filter(Boolean).join(' to '),
-    tripType: ride.intercity?.tripType || '',
-    travelDate: ride.intercity?.travelDate || '',
-    passengers: ride.intercity?.passengers || 1,
-    distance: ride.intercity?.distance || 0,
-    pickupLocation: ride.pickupLocation,
-    dropLocation: ride.dropLocation,
-    intercity: ride.intercity || null,
-    user: ride.userId ? {
-      id: String(ride.userId._id),
-      name: ride.userId.name || '',
-      phone: ride.userId.phone || '',
-    } : null,
-    driver: ride.driverId ? {
-      id: String(ride.driverId._id),
-      name: ride.driverId.name || '',
-      phone: ride.driverId.phone || '',
-      vehicleType: ride.driverId.vehicleType || '',
-      vehicleNumber: ride.driverId.vehicleNumber || '',
-    } : null,
-  };
-};
-
 
 
 
@@ -2622,6 +2744,11 @@ export const listDeliveries = async (query = {}) => {
   const limit = Number(query.limit || 10);
   const tab = String(query.tab || 'all').toLowerCase();
   const search = String(query.search || '').trim().toLowerCase();
+export const listDeliveries = async (query = {}) => {
+  const page = Number(query.page || 1);
+  const limit = Number(query.limit || 10);
+  const tab = String(query.tab || 'all').toLowerCase();
+  const search = String(query.search || '').trim().toLowerCase();
 
   const rides = await Ride.find({ serviceType: 'parcel' })
     .sort({ createdAt: -1 })
@@ -2629,7 +2756,14 @@ export const listDeliveries = async (query = {}) => {
     .populate('userId', 'name phone')
     .populate('driverId', 'name phone vehicleType vehicleNumber')
     .lean();
+  const rides = await Ride.find({ serviceType: 'parcel' })
+    .sort({ createdAt: -1 })
+    .populate('deliveryId')
+    .populate('userId', 'name phone')
+    .populate('driverId', 'name phone vehicleType vehicleNumber')
+    .lean();
 
+  let rows = rides.map(toAdminDeliveryRow);
   let rows = rides.map(toAdminDeliveryRow);
 
   if (tab === 'completed') {
@@ -2641,7 +2775,17 @@ export const listDeliveries = async (query = {}) => {
   } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
     rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
   }
+  if (tab === 'completed') {
+    rows = rows.filter((row) => row.tripStatus === 'COMPLETED');
+  } else if (tab === 'cancelled') {
+    rows = rows.filter((row) => row.tripStatus === 'CANCELLED');
+  } else if (tab === 'upcoming') {
+    rows = rows.filter((row) => row.tripStatus === 'UPCOMING');
+  } else if (tab === 'on trip' || tab === 'on_trip' || tab === 'ongoing') {
+    rows = rows.filter((row) => row.tripStatus === 'ON_TRIP');
+  }
 
+  if (search) {
   if (search) {
     rows = rows.filter((row) =>
       [
@@ -2740,7 +2884,26 @@ export const listVehicleTypes = async (queryParams = {}) => {
     }
   };
 };
+export const listVehicleTypes = async (queryParams = {}) => {
+  const query = {};
+  if (queryParams.transport_type) query.transport_type = queryParams.transport_type;
+  const items = await Vehicle.find(query).sort({ createdAt: -1 }).lean();
+  return {
+    results: items,
+    paginator: {
+      data: items,
+      total: items.length,
+      current_page: 1,
+      last_page: 1,
+      per_page: items.length,
+      from: 1,
+      to: items.length
+    }
+  };
+};
 
+export const listVehicleCatalog = async () => {
+    const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
 export const listVehicleCatalog = async () => {
   const items = await Vehicle.find().sort({ createdAt: -1 }).lean();
 
@@ -3063,19 +3226,26 @@ export const deleteVehicleType = async (id) => {
     return true;
   };
 
-  export const listOwners = async () => {
-    await ensureFleetOwnersSeeded();
+  export const listOwners = async (queryArgs = {}) => {
+  await ensureFleetOwnersSeeded();
+  const search = String(queryArgs.search || '').trim();
 
-    const owners = await Owner.find()
-      .populate(
-        'service_location_id',
-        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
-      )
-      .sort({ createdAt: -1 })
-      .lean();
+  const query = {};
+  if (search) {
+    const regex = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [{ name: regex }, { mobile: regex }, { email: regex }, { company_name: regex }];
+  }
 
-    return owners.map(serializeOwner);
-  };
+  const owners = await Owner.find(query)
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return owners.map(serializeOwner);
+};
 
   export const getOwnerById = async (id) => {
     await ensureFleetOwnersSeeded();
@@ -3962,6 +4132,103 @@ export const deleteVehicleType = async (id) => {
     return true;
   };
 
+  export const createDriverNeededDocument = async (payload) => {
+    if (!payload.name?.trim()) {
+      throw new ApiError(400, 'Document name is required');
+    }
+
+    await cleanupLegacySeededDriverNeededDocuments();
+
+    const name = String(payload.name).trim();
+    const slug = slugify(payload.slug || name);
+    const existing = await DriverNeededDocument.findOne({ slug });
+    if (existing) {
+      throw new ApiError(409, 'A driver document with this name already exists');
+    }
+
+    const keys = buildDriverNeededDocumentKeys(payload);
+    const item = await DriverNeededDocument.create({
+      name,
+      slug,
+      account_type: normalizeDriverAccountType(payload.account_type),
+      image_type: String(payload.image_type || 'front_back').trim(),
+      has_expiry_date: normalizeBoolean(payload.has_expiry_date),
+      has_identify_number: normalizeBoolean(payload.has_identify_number),
+      identify_number_key: normalizeBoolean(payload.has_identify_number)
+        ? String(payload.identify_number_key || '').trim()
+        : '',
+      is_editable: normalizeBoolean(payload.is_editable),
+      is_required: normalizeBoolean(payload.is_required),
+      active: payload.active !== undefined ? normalizeBoolean(payload.active) : true,
+      ...keys,
+    });
+
+    return serializeDriverNeededDocument(item.toObject());
+  };
+
+  export const updateDriverNeededDocument = async (id, payload) => {
+    const item = await DriverNeededDocument.findById(id);
+    if (!item) {
+      throw new ApiError(404, 'Driver needed document not found');
+    }
+
+    if (payload.name !== undefined) {
+      item.name = String(payload.name || '').trim();
+    }
+    if (payload.account_type !== undefined) {
+      item.account_type = normalizeDriverAccountType(payload.account_type);
+    }
+    if (payload.image_type !== undefined) {
+      item.image_type = String(payload.image_type || 'front_back').trim();
+    }
+    if (payload.has_expiry_date !== undefined) {
+      item.has_expiry_date = normalizeBoolean(payload.has_expiry_date);
+    }
+    if (payload.has_identify_number !== undefined) {
+      item.has_identify_number = normalizeBoolean(payload.has_identify_number);
+    }
+    if (payload.identify_number_key !== undefined || payload.has_identify_number !== undefined) {
+      item.identify_number_key = item.has_identify_number
+        ? String(payload.identify_number_key ?? item.identify_number_key ?? '').trim()
+        : '';
+    }
+    if (payload.is_editable !== undefined) {
+      item.is_editable = normalizeBoolean(payload.is_editable);
+    }
+    if (payload.is_required !== undefined) {
+      item.is_required = normalizeBoolean(payload.is_required);
+    }
+    if (payload.active !== undefined) {
+      item.active = normalizeBoolean(payload.active);
+    }
+
+    const keys = buildDriverNeededDocumentKeys(
+      {
+        ...item.toObject(),
+        ...payload,
+        name: item.name,
+        image_type: item.image_type,
+      },
+      item.toObject(),
+    );
+
+    item.key = keys.key;
+    item.front_key = keys.front_key;
+    item.back_key = keys.back_key;
+
+    await item.save();
+    return serializeDriverNeededDocument(item.toObject());
+  };
+
+  export const deleteDriverNeededDocument = async (id) => {
+    const deleted = await DriverNeededDocument.findByIdAndDelete(id);
+    if (!deleted) {
+      throw new ApiError(404, 'Driver needed document not found');
+    }
+
+    return true;
+  };
+
 
   export const listOwnerNeededDocuments = async () => {
     const items = await OwnerNeededDocument.find().sort({ createdAt: -1 }).lean();
@@ -4141,6 +4408,94 @@ export const deleteVehicleType = async (id) => {
     };
   };
 
+  export const updateReferralTranslation = async (languageCode, payload = {}) => {
+    const normalizedLanguageCode = String(languageCode || '').trim().toLowerCase();
+
+    if (!normalizedLanguageCode) {
+      throw new ApiError(400, 'languageCode is required');
+    }
+
+    const language = await AppLanguage.findOne({ code: normalizedLanguageCode }).lean();
+
+    const item = await ReferralTranslation.findOneAndUpdate(
+      { language_code: normalizedLanguageCode },
+      {
+        $set: {
+          language_code: normalizedLanguageCode,
+          language_name: language?.name || String(payload.language_name || ''),
+          user_referral: normalizeReferralTranslationSection(payload.user_referral),
+          driver_referral: normalizeReferralTranslationSection(payload.driver_referral),
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true,
+      },
+    ).lean();
+
+    return serializeReferralTranslation({
+      language,
+      translation: item,
+    });
+  };
+
+  export const getReferralTranslationContent = async (languageCode = '') => {
+    const { languages, preferredLanguage, normalizedLanguageCode } =
+      await resolveReferralTranslationLanguage(languageCode);
+
+    const codesToTry = [
+      normalizedLanguageCode,
+      preferredLanguage?.code,
+      languages.find((item) => Number(item.default_status) === 1)?.code,
+      'en',
+    ]
+      .map((item) => String(item || '').trim().toLowerCase())
+      .filter(Boolean);
+
+    let translation = null;
+    let resolvedLanguage = preferredLanguage;
+
+    if (codesToTry.length > 0) {
+      translation = await ReferralTranslation.findOne({
+        language_code: { $in: codesToTry },
+      })
+        .sort({ updatedAt: -1 })
+        .lean();
+
+      if (translation) {
+        resolvedLanguage =
+          languages.find(
+            (item) =>
+              String(item.code || '').toLowerCase() === String(translation.language_code || '').toLowerCase(),
+          ) || resolvedLanguage;
+      }
+    }
+
+    return {
+      language_code: String(
+        resolvedLanguage?.code || translation?.language_code || normalizedLanguageCode || 'en',
+      )
+        .trim()
+        .toLowerCase(),
+      language_name: resolvedLanguage?.name || translation?.language_name || '',
+      user_referral: {
+        ...REFERRAL_TRANSLATION_DEFAULTS,
+        ...normalizeReferralTranslationSection(translation?.user_referral),
+      },
+      driver_referral: {
+        ...REFERRAL_TRANSLATION_DEFAULTS,
+        ...normalizeReferralTranslationSection(translation?.driver_referral),
+      },
+      available_languages: languages.map((item) => ({
+        code: String(item.code || '').toLowerCase(),
+        name: item.name || '',
+        active: Number(item.active ?? 1) === 1,
+        default_status: Number(item.default_status ?? 0) === 1,
+      })),
+    };
+  };
+
 
   export const listLanguages = async () => AppLanguage.find().sort({ code: 1 }).lean();
 
@@ -4214,82 +4569,6 @@ export const deleteVehicleType = async (id) => {
   };
 
   export const listPaymentGateways = async () => PaymentGateway.find().sort({ name: 1 }).lean();
-
-  export const listPaymentMethods = async () =>
-    PaymentMethod.find().sort({ createdAt: -1 }).lean();
-
-  export const createPaymentMethod = async (payload = {}) => {
-    const name = String(payload.method_name ?? payload.name ?? '').trim();
-    if (!name) {
-      throw new ApiError(400, 'Method name is required');
-    }
-
-    const fields = Array.isArray(payload.fields)
-      ? payload.fields
-        .map((field) => ({
-          type: String(field?.type || 'text'),
-          name: String(field?.name || '').trim(),
-          placeholder: String(field?.placeholder || '').trim(),
-          is_required: Boolean(field?.is_required),
-        }))
-        .filter((field) => field.name)
-      : [];
-
-    const method = await PaymentMethod.create({
-      name,
-      fields,
-      active: payload.active !== undefined ? Boolean(payload.active) : true,
-    });
-
-    return method.toObject();
-  };
-
-  export const updatePaymentMethod = async (id, payload = {}) => {
-    const update = {};
-
-    if (payload.method_name !== undefined || payload.name !== undefined) {
-      const name = String(payload.method_name ?? payload.name ?? '').trim();
-      if (!name) {
-        throw new ApiError(400, 'Method name is required');
-      }
-      update.name = name;
-    }
-
-    if (payload.fields !== undefined) {
-      const fields = Array.isArray(payload.fields)
-        ? payload.fields
-          .map((field) => ({
-            type: String(field?.type || 'text'),
-            name: String(field?.name || '').trim(),
-            placeholder: String(field?.placeholder || '').trim(),
-            is_required: Boolean(field?.is_required),
-          }))
-          .filter((field) => field.name)
-        : [];
-      update.fields = fields;
-    }
-
-    if (payload.active !== undefined) {
-      update.active = Boolean(payload.active);
-    }
-
-    const method = await PaymentMethod.findByIdAndUpdate(id, update, {
-      new: true,
-      runValidators: true,
-    });
-    if (!method) {
-      throw new ApiError(404, 'Payment method not found');
-    }
-    return method.toObject();
-  };
-
-  export const deletePaymentMethod = async (id) => {
-    const deleted = await PaymentMethod.findByIdAndDelete(id);
-    if (!deleted) {
-      throw new ApiError(404, 'Payment method not found');
-    }
-    return true;
-  };
 
   export const listPaymentMethods = async () =>
     PaymentMethod.find().sort({ createdAt: -1 }).lean();

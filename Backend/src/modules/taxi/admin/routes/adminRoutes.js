@@ -89,6 +89,9 @@ import {
   getPreferences,
   getRideModules,
   getRoles,
+  getReferralSettings,
+  updateReferralSettings,
+  getReferralDashboard,
   getSetPrices,
   getServiceLocations,
   getSmsSettings,
@@ -118,7 +121,11 @@ import {
   toggleChannelMail,
   toggleChannelPush,
   toggleZoneStatus,
+  adjustUserWallet,
+  listDriverWalletHistory,
   adjustDriverWallet,
+  listOwnerWalletHistory,
+  adjustOwnerWallet,
   updateAppModule,
   updateAirport,
   updateDriver,
@@ -182,7 +189,15 @@ adminRouter.get('/admin/drivers/:id', getDriver);
 adminRouter.patch('/admin/drivers/:id', updateDriver);
 adminRouter.patch('/admin/drivers/update-password/:id', updateDriverPassword);
 adminRouter.delete('/admin/drivers/:id', deleteDriver);
+adminRouter.post('/admin/wallet/users/:id/adjust', adjustUserWallet);
+adminRouter.get('/admin/wallet/users/:id/history', getUserWalletHistory);
+
 adminRouter.post('/admin/wallet/drivers/:id/adjust', adjustDriverWallet);
+adminRouter.get('/admin/wallet/drivers/:id/history', listDriverWalletHistory);
+
+adminRouter.post('/admin/wallet/owners/:id/adjust', adjustOwnerWallet);
+adminRouter.get('/admin/wallet/owners/:id/history', listOwnerWalletHistory);
+
 adminRouter.get('/admin/wallet/drivers/negative-balance', authenticate(['admin']), getNegativeBalanceDrivers);
 adminRouter.get('/admin/wallet/drivers/withdrawals', authenticate(['admin']), getDriverWithdrawalSummaries);
 adminRouter.get('/admin/wallet/drivers/:id/withdrawals', authenticate(['admin']), getDriverWithdrawals);
@@ -240,6 +255,16 @@ adminRouter.get('/admin/owner-management/owner-needed-document', getOwnerNeededD
 adminRouter.post('/admin/owner-management/owner-needed-document', createOwnerNeededDocument);
 adminRouter.patch('/admin/owner-management/owner-needed-document/:id', updateOwnerNeededDocument);
 adminRouter.delete('/admin/owner-management/owner-needed-document/:id', deleteOwnerNeededDocument);
+adminRouter.get('/admin/owner-management/driver-needed-document', getDriverNeededDocuments);
+adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverNeededDocument);
+adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);
+adminRouter.patch('/admin/owner-management/driver-needed-document/:id', updateDriverNeededDocument);
+adminRouter.delete('/admin/owner-management/driver-needed-document/:id', deleteDriverNeededDocument);
+adminRouter.get('/admin/referrals/translation', getReferralTranslations);
+adminRouter.patch('/admin/referrals/translation/:languageCode', updateReferralTranslation);
+adminRouter.get('/admin/referrals/settings/:type', getReferralSettings);
+adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
+adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 adminRouter.get('/admin/owner-management/driver-needed-document', getDriverNeededDocuments);
 adminRouter.get('/admin/owner-management/driver-needed-document/:id', getDriverNeededDocument);
 adminRouter.post('/admin/owner-management/driver-needed-document', createDriverNeededDocument);

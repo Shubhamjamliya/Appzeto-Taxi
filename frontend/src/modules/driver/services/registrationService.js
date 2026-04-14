@@ -111,6 +111,11 @@ export const getCurrentDriver = () => api.get('/drivers/me', withDriverAuth());
 export const updateDriverProfile = (payload) => api.patch('/drivers/me', payload, withDriverAuth());
 export const requestDriverAccountDeletion = (reason) =>
   api.post('/drivers/me/delete-request', { reason }, withDriverAuth());
+export const getDriverEmergencyContacts = () => api.get('/drivers/emergency-contacts', withDriverAuth());
+export const addDriverEmergencyContact = (payload) =>
+  api.post('/drivers/emergency-contacts', payload, withDriverAuth());
+export const deleteDriverEmergencyContact = (contactId) =>
+  api.delete(`/drivers/emergency-contacts/${contactId}`, withDriverAuth());
 
 export const updateDriverVehicle = (payload) =>
   api.patch('/drivers/vehicle', payload, withDriverAuth());

@@ -81,7 +81,7 @@ const EditProfile = () => {
     return (
         <div className="min-h-screen bg-slate-50 font-sans p-6 pt-10 overflow-hidden">
             <header className="flex items-center gap-4 mb-8">
-                <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center active:scale-95 transition-transform">
+                <button onClick={() => navigate('/taxi/driver/profile')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center active:scale-95 transition-transform">
                     <ArrowLeft size={18} />
                 </button>
                 <h1 className="text-lg font-bold text-slate-900 tracking-tight">Edit Profile</h1>

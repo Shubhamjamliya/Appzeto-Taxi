@@ -245,6 +245,28 @@ const driverSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    emergencyContacts: {
+      type: [
+        {
+          name: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          phone: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          source: {
+            type: String,
+            enum: ['manual', 'device'],
+            default: 'manual',
+          },
+        },
+      ],
+      default: [],
+    },
     onboarding: {
       type: mongoose.Schema.Types.Mixed,
       default: {},

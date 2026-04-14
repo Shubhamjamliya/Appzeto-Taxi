@@ -32,6 +32,17 @@ const generateDriverReferralCode = (driver) => {
   return `DRV${phonePart}${idPart}`.replace(/\W/g, '');
 };
 
+const MAX_EMERGENCY_CONTACTS = 5;
+
+const sanitizeEmergencyPhone = (value) => String(value || '').replace(/\D/g, '').slice(-10);
+
+const serializeEmergencyContact = (contact = {}) => ({
+  id: String(contact._id || contact.id || ''),
+  name: String(contact.name || '').trim(),
+  phone: sanitizeEmergencyPhone(contact.phone),
+  source: String(contact.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual',
+});
+
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;
 
@@ -192,7 +203,102 @@ export const getCurrentDriver = async (req, res) => {
       location: driver.location,
       zoneId: driver.zoneId,
       documents: driver.documents || {},
+      emergencyContacts: Array.isArray(driver.emergencyContacts)
+        ? driver.emergencyContacts.map(serializeEmergencyContact)
+        : [],
       onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+export const getDriverEmergencyContacts = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      results: Array.isArray(driver.emergencyContacts)
+        ? driver.emergencyContacts.map(serializeEmergencyContact)
+        : [],
+      limit: MAX_EMERGENCY_CONTACTS,
+    },
+  });
+};
+
+export const addDriverEmergencyContact = async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const phone = sanitizeEmergencyPhone(req.body?.phone);
+  const source = String(req.body?.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual';
+
+  if (!name) {
+    throw new ApiError(400, 'Contact name is required');
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    throw new ApiError(400, 'A valid 10-digit contact number is required');
+  }
+
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const existingContacts = Array.isArray(driver.emergencyContacts) ? driver.emergencyContacts : [];
+
+  if (existingContacts.length >= MAX_EMERGENCY_CONTACTS) {
+    throw new ApiError(400, `You can add up to ${MAX_EMERGENCY_CONTACTS} emergency contacts`);
+  }
+
+  if (existingContacts.some((contact) => sanitizeEmergencyPhone(contact.phone) === phone)) {
+    throw new ApiError(409, 'This contact number is already added');
+  }
+
+  driver.emergencyContacts = [
+    ...existingContacts,
+    {
+      name: name.slice(0, 80),
+      phone,
+      source,
+    },
+  ];
+
+  await driver.save();
+
+  const addedContact = driver.emergencyContacts[driver.emergencyContacts.length - 1];
+
+  res.status(201).json({
+    success: true,
+    data: serializeEmergencyContact(addedContact),
+  });
+};
+
+export const deleteDriverEmergencyContact = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const existingContacts = Array.isArray(driver.emergencyContacts) ? driver.emergencyContacts : [];
+  const nextContacts = existingContacts.filter((contact) => String(contact._id) !== String(req.params.contactId));
+
+  if (nextContacts.length === existingContacts.length) {
+    throw new ApiError(404, 'Emergency contact not found');
+  }
+
+  driver.emergencyContacts = nextContacts;
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      deleted: true,
+      results: driver.emergencyContacts.map(serializeEmergencyContact),
     },
   });
 };

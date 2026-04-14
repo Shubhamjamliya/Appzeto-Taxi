@@ -87,6 +87,8 @@ export const adminService = {
   updateOwner: (id, ownerData) => api.patch(`/admin/owner-management/manage-owners/${id}`, ownerData),
   deleteOwner: (id) => api.delete(`/admin/owner-management/manage-owners/${id}`),
   approveOwner: (id, data) => api.patch(`/admin/owner-management/manage-owners/${id}/approve`, data),
+  approveOwnerSignupFromDriver: (driverId) =>
+    api.patch(`/admin/owner-management/pending-owners/${driverId}/approve`),
   getOwnerBookings: () => api.get('/admin/owner-management/bookings'),
   createOwnerBooking: (data) => api.post('/admin/owner-management/bookings', data),
   updateOwnerBooking: (id, data) => api.patch(`/admin/owner-management/bookings/${id}`, data),

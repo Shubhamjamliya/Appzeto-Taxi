@@ -131,16 +131,27 @@ const ManageOwners = () => {
     }
   };
 
-  const handleToggleStatus = async (id, currentStatus) => {
+  const isOwnerApproved = (owner) =>
+    owner?.approve === true || owner?.approve === 1 || String(owner?.status || '').toLowerCase() === 'approved';
+
+  const handleToggleApproval = async (owner) => {
+    const ownerId = owner?._id || owner?.id;
+    if (!ownerId) return;
+
+    const currentApproved = isOwnerApproved(owner);
+
     try {
-      const response = await adminService.updateOwner(id, { active: !currentStatus });
+      const response = await adminService.approveOwner(ownerId, { approve: !currentApproved });
       if (response.success) {
+        const updatedOwner = response.data;
         setOwners((currentOwners) =>
-          currentOwners.map((owner) => (owner._id === id ? { ...owner, active: !currentStatus } : owner))
+          currentOwners.map((item) => (item._id === ownerId || item.id === ownerId ? updatedOwner : item))
         );
+      } else {
+        alert(response.message || 'Failed to update approval status');
       }
     } catch (error) {
-      console.error(error);
+      alert(error.message || 'Failed to update approval status');
     }
   };
 
@@ -276,18 +287,29 @@ const ManageOwners = () => {
                             </button>
                           </td>
                           <td className="px-8 py-6">
-                            <button
-                              onClick={() => handleToggleStatus(owner._id, owner.active)}
-                              className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none ${
-                                owner.active ? 'bg-teal-500' : 'bg-gray-300'
-                              }`}
-                            >
-                              <span
-                                className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                                  owner.active ? 'translate-x-9' : 'translate-x-1'
+                            <div className="flex items-center gap-3">
+                              <button
+                                onClick={() => handleToggleApproval(owner)}
+                                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none ${
+                                  isOwnerApproved(owner) ? 'bg-teal-500' : 'bg-gray-300'
                                 }`}
-                              />
-                            </button>
+                              >
+                                <span
+                                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
+                                    isOwnerApproved(owner) ? 'translate-x-9' : 'translate-x-1'
+                                  }`}
+                                />
+                              </button>
+                              <span
+                                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
+                                  isOwnerApproved(owner)
+                                    ? 'bg-emerald-50 text-emerald-700'
+                                    : 'bg-amber-50 text-amber-700'
+                                }`}
+                              >
+                                {isOwnerApproved(owner) ? 'Approved' : 'Pending'}
+                              </span>
+                            </div>
                           </td>
                           <td className="px-8 py-6">
                             <div className="flex items-center gap-5">

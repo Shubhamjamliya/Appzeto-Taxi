@@ -114,13 +114,28 @@ const PendingDrivers = () => {
     }
   };
 
+  const isDriverApproved = (driver) => {
+    if (!driver) return false;
+
+    const approveRaw = driver.approve ?? '';
+    const approveNormalized = String(approveRaw).toLowerCase();
+    const status = String(driver.status || '').toLowerCase();
+
+    return (
+      approveRaw === true ||
+      approveRaw === 1 ||
+      ['true', '1', 'yes', 'approved'].includes(approveNormalized) ||
+      ['approved', 'active', 'verified'].includes(status)
+    );
+  };
+
   const fetchPendingDrivers = async () => {
     setIsLoading(true);
     try {
       const responseData = await adminService.getDrivers(1, 50);
       const driversList = responseData.data?.results || [];
       const pending = driversList
-        .filter((d) => d.approve === false || String(d.status || '').toLowerCase() === 'pending')
+        .filter((d) => !isDriverApproved(d) && String(d?.onboarding?.role || '').toLowerCase() !== 'owner')
         .map((d) => ({
           id: d._id,
           name: d.name || 'Unknown',

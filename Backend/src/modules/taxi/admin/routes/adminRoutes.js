@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
   approveOwner,
+  approveOwnerSignupFromDriver,
   createAirport,
   createAppModule,
   createGoodsType,
@@ -245,6 +246,7 @@ adminRouter.post('/admin/owner-management/manage-owners', createOwner);
 adminRouter.get('/admin/owner-management/manage-owners/:id', getOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
+adminRouter.patch('/admin/owner-management/pending-owners/:driverId/approve', approveOwnerSignupFromDriver);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
 adminRouter.get('/admin/owner-management/dashboard', getOwnerDashboardData);
 adminRouter.get('/admin/owner-management/bookings', getOwnerBookings);

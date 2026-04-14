@@ -456,6 +456,7 @@ const AdminLayout = () => {
             label: 'Owner Management',
             subItems: [
               { label: 'Owner Dashboard', path: '/admin/owners/dashboard' },
+              { label: 'Pending Owners', path: '/admin/owners/pending' },
               { label: 'Manage Owners', path: '/admin/owners' },
               {
                 label: 'Owner Wallet',

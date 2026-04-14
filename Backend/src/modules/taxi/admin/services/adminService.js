@@ -3270,7 +3270,7 @@ export const listVehicleCatalog = async () => {
     return true;
   };
 
-  export const listOwners = async (queryArgs = {}) => {
+export const listOwners = async (queryArgs = {}) => {
   await ensureFleetOwnersSeeded();
   const search = String(queryArgs.search || '').trim();
 
@@ -3291,7 +3291,121 @@ export const listVehicleCatalog = async () => {
   return owners.map(serializeOwner);
 };
 
-  export const getOwnerById = async (id) => {
+export const approveOwnerSignupFromDriver = async (driverId) => {
+  await ensureFleetOwnersSeeded();
+
+  const id = String(driverId || '').trim();
+  if (!id) {
+    throw new ApiError(400, 'Driver id is required');
+  }
+
+  const driver = await Driver.findById(id).select('+password').lean();
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const onboardingRole = String(driver?.onboarding?.role || '').toLowerCase();
+  if (onboardingRole !== 'owner') {
+    throw new ApiError(400, 'Driver is not an owner signup');
+  }
+
+  const company = driver?.onboarding?.company || {};
+  const companyName = String(company.name || '').trim();
+
+  if (!companyName) {
+    throw new ApiError(400, 'Owner company name is missing');
+  }
+
+  const email = String(driver.email || '').trim().toLowerCase();
+  const mobile = String(driver.phone || driver.mobile || '').trim();
+
+  if (!email) {
+    throw new ApiError(400, 'Owner email is missing');
+  }
+
+  if (!mobile) {
+    throw new ApiError(400, 'Owner mobile is missing');
+  }
+
+  const existingOwner =
+    (await Owner.findOne({ legacy_id: String(driver._id) }).lean()) ||
+    (await Owner.findOne({ $or: [{ email }, { mobile }] }).lean());
+
+  if (existingOwner) {
+    await Owner.updateOne(
+      { _id: existingOwner._id },
+      { $set: { approve: true, status: 'approved', active: true } },
+    );
+
+    await Driver.updateOne(
+      { _id: driver._id },
+      {
+        $set: {
+          approve: true,
+          status: 'approved',
+          'onboarding.convertedOwnerId': existingOwner._id,
+        },
+      },
+    );
+
+    const populatedOwner = await Owner.findById(existingOwner._id)
+      .populate(
+        'service_location_id',
+        'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+      )
+      .lean();
+
+    return serializeOwner(populatedOwner);
+  }
+
+  const serviceLocationId =
+    company.serviceLocationId && mongoose.isValidObjectId(company.serviceLocationId)
+      ? toObjectId(company.serviceLocationId)
+      : null;
+
+  if (!driver.password) {
+    throw new ApiError(400, 'Owner password is missing');
+  }
+
+  const owner = await Owner.create({
+    company_name: companyName,
+    name: String(driver.name || companyName).trim(),
+    mobile,
+    email,
+    password: driver.password,
+    service_location_id: serviceLocationId,
+    legacy_service_location_id: serviceLocationId ? '' : String(company.serviceLocationId || '').trim(),
+    transport_type: String(company.registerFor || driver.registerFor || 'taxi').trim().toLowerCase(),
+    address: String(company.address || '').trim() || null,
+    postal_code: String(company.postalCode || '').trim() || null,
+    city: String(company.city || driver.city || company.serviceLocationName || '').trim() || null,
+    tax_number: String(company.taxNumber || '').trim() || null,
+    active: true,
+    approve: true,
+    status: 'approved',
+    legacy_id: String(driver._id),
+    user_snapshot: {
+      driver_id: String(driver._id),
+      source: 'driver_onboarding_owner',
+    },
+  });
+
+  await Driver.updateOne(
+    { _id: driver._id },
+    { $set: { approve: true, status: 'approved', 'onboarding.convertedOwnerId': owner._id } },
+  );
+
+  const populatedOwner = await Owner.findById(owner._id)
+    .populate(
+      'service_location_id',
+      'legacy_id company_key name service_location_name translation_dataset currency_name currency_code currency_symbol currency_pointer timezone country active createdAt updatedAt',
+    )
+    .lean();
+
+  return serializeOwner(populatedOwner);
+};
+
+export const getOwnerById = async (id) => {
     await ensureFleetOwnersSeeded();
 
     const ownerId = String(id || '').trim();

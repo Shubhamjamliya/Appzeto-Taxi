@@ -193,6 +193,7 @@ const AdminPricingPlaceholder = ({ title }) => (
 
 const AdminOwnerDashboard = lazy(() => import('./modules/admin/pages/owners/OwnerDashboard'));
 const AdminManageOwners = lazy(() => import('./modules/admin/pages/owners/ManageOwners'));
+const AdminPendingOwners = lazy(() => import('./modules/admin/pages/owners/PendingOwners'));
 const AdminOwnerDetails = lazy(() => import('./modules/admin/pages/owners/OwnerDetails'));
 const AdminOwnerCreate = lazy(() => import('./modules/admin/pages/owners/OwnerCreate'));
 const AdminOwnerPasswordUpdate = lazy(() => import('./modules/admin/pages/owners/OwnerPasswordUpdate'));
@@ -619,6 +620,7 @@ function App() {
 
               {/* Owner Management */}
               <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />
+              <Route path="owners/pending" element={<AdminPendingOwners />} />
               <Route path="owners" element={<AdminManageOwners />} />
               <Route path="owners/:id/password" element={<AdminOwnerPasswordUpdate />} />
               <Route path="owners/:id" element={<AdminOwnerDetails />} />

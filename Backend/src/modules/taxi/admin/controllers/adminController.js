@@ -271,6 +271,9 @@ export const updateOwner = asyncHandler(async (req, res) =>
 export const approveOwner = asyncHandler(async (req, res) =>
   ok(res, await adminService.approveOwner(req.params.id, req.body)),
 );
+export const approveOwnerSignupFromDriver = asyncHandler(async (req, res) =>
+  ok(res, await adminService.approveOwnerSignupFromDriver(req.params.driverId)),
+);
 export const deleteOwner = asyncHandler(async (req, res) => {
   await adminService.deleteOwner(req.params.id);
   ok(res, { deleted: true });

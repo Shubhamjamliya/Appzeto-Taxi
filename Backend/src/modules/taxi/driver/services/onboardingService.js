@@ -493,6 +493,20 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
       role: session.role,
       verifiedAt: session.otpVerifiedAt,
       submittedAt: new Date(),
+      ...(session.role === 'owner'
+        ? {
+            company: {
+              name: session.vehicle.companyName || '',
+              address: session.vehicle.companyAddress || '',
+              city: session.vehicle.city || session.vehicle.locationName || '',
+              postalCode: session.vehicle.postalCode || '',
+              taxNumber: session.vehicle.taxNumber || '',
+              serviceLocationId: session.vehicle.locationId || '',
+              serviceLocationName: session.vehicle.locationName || '',
+              registerFor: session.vehicle.registerFor || '',
+            },
+          }
+        : {}),
     },
   });
 

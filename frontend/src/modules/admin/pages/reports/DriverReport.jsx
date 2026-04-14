@@ -1,16 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { 
-  FileText, 
   Download, 
   ChevronRight, 
-  Calendar,
-  Filter,
-  Users,
-  CheckCircle2,
-  Clock,
-  Car,
-  Briefcase,
-  ShieldCheck
+  ArrowLeft
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/adminService';
@@ -25,26 +17,25 @@ const DriverReport = () => {
     file_format: ''
   });
   const [isDownloading, setIsDownloading] = useState(false);
-  const [stats, setStats] = useState({ totalDrivers: 0, approvedDrivers: 0, onlineDrivers: 0 });
-  const [loading, setLoading] = useState(true);
 
-  React.useEffect(() => {
-    const fetchStats = async () => {
+  const [vehicleTypes, setVehicleTypes] = useState([]);
+
+  useEffect(() => {
+    const fetchVehicleTypes = async () => {
       try {
-        const data = await adminService.getDashboardData();
-        setStats({
-          totalDrivers: data.total_drivers || 0,
-          approvedDrivers: data.approved_drivers || 0,
-          onlineDrivers: data.online_drivers || 0
-        });
+        const response = await adminService.getVehicleTypes(filters.transport_type);
+        if (response.success) {
+          const results = Array.isArray(response.data) 
+            ? response.data 
+            : response.data?.results || response.data?.data || [];
+          setVehicleTypes(results);
+        }
       } catch (err) {
-        console.error('Stats fetch error:', err);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching vehicle types:', err);
       }
     };
-    fetchStats();
-  }, []);
+    fetchVehicleTypes();
+  }, [filters.transport_type]);
 
   const handleDownload = async () => {
     setIsDownloading(true);
@@ -52,9 +43,7 @@ const DriverReport = () => {
       const response = await adminService.downloadDriverReport(filters);
 
       const success = triggerFileDownload(response, `driver_report_${Date.now()}`, filters.file_format);
-      if (success) {
-        alert('Driver report downloaded successfully!');
-      } else {
+      if (!success) {
         throw new Error('Trigger failed');
       }
     } catch (err) {
@@ -69,168 +58,173 @@ const DriverReport = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const isFormValid = filters.approval_status && filters.date_option && filters.file_format;
+  const isFormValid = filters.approval_status && filters.date_option && filters.file_format && (filters.date_option !== 'range' || (filters.from_date && filters.to_date));
+
+  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors appearance-none shadow-sm";
+  const labelClass = "block text-[13px] font-bold text-gray-600 mb-2";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-4 md:p-8 font-sans">
+    <div className="min-h-screen bg-[#F9FAFB] p-6 lg:p-8">
       {/* Breadcrumbs & Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase mb-2">Driver Report</h1>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-            <span className="hover:text-primary cursor-pointer transition-colors">Driver Report</span>
-            <ChevronRight size={12} strokeWidth={3} />
-            <span className="text-primary italic">Driver Report</span>
-          </div>
+      <div className="mb-8">
+        <div className="flex items-center gap-2 text-xs text-gray-400 mb-3 font-medium">
+          <span>Driver Report</span>
+          <ChevronRight size={14} className="opacity-50" />
+          <span className="text-gray-600 font-semibold italic">Driver Report</span>
+        </div>
+        <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+          <h1 className="text-2xl font-bold text-[#334155] tracking-tight uppercase">Driver Report</h1>
+          <button 
+            onClick={() => window.history.back()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} /> Back
+          </button>
         </div>
       </div>
 
-      {/* Filter Card */}
-      <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-[32px] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] overflow-hidden"
-      >
-        <div className="p-8 md:p-12">
+      <div className="max-w-6xl mx-auto">
+        {/* Filter Card */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-gray-100 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
             {/* Select Transport Type */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
+            <div className="space-y-1">
+              <label className={labelClass}>
                 Select Transport Type
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <Car size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.transport_type}
                   onChange={(e) => updateFilter('transport_type', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
-                  <option value="taxi">Taxi / Cabs</option>
-                  <option value="delivery">Delivery</option>
-                  <option value="bike">Bike / Moto</option>
+                  <option value="taxi">Taxi</option>
+                  <option value="bike">Bike</option>
+                  <option value="both">Both (Taxi & Bike)</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
             {/* Select Vehicle Type */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
+            <div className="space-y-1">
+              <label className={labelClass}>
                 Select Vehicle Type
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <Briefcase size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.vehicle_type}
                   onChange={(e) => updateFilter('vehicle_type', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select Vehicle Type</option>
-                  <option value="sedan">Sedan</option>
-                  <option value="suv">SUV</option>
-                  <option value="luxury">Luxury</option>
-                  <option value="mini">Mini / Hatchback</option>
+                  {vehicleTypes.map(type => (
+                    <option key={type._id || type.id} value={type.name}>{type.name}</option>
+                  ))}
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
             {/* Select Approval Status */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                Select Approval Status <span className="text-red-500">*</span>
+            <div className="space-y-1">
+              <label className={labelClass}>
+                Select Approval Status <span className="text-rose-500">*</span>
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <ShieldCheck size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.approval_status}
                   onChange={(e) => updateFilter('approval_status', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
                   <option value="approved">Approved</option>
                   <option value="pending">Pending</option>
                   <option value="disapproved">Disapproved</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
             {/* Date Option */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                Date Option <span className="text-red-500">*</span>
+            <div className="space-y-1">
+              <label className={labelClass}>
+                Date Option <span className="text-rose-500">*</span>
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <Calendar size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.date_option}
                   onChange={(e) => updateFilter('date_option', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
                   <option value="today">Today</option>
                   <option value="yesterday">Yesterday</option>
-                  <option value="last_7_days">Last 7 Days</option>
+                  <option value="this_week">This Week</option>
                   <option value="this_month">This Month</option>
-                  <option value="last_month">Last Month</option>
-                  <option value="custom">Custom Range</option>
+                  <option value="this_year">This Year</option>
+                  <option value="range">Date Range</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
-            {/* File Format */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                File Format <span className="text-red-500">*</span>
-              </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <FileText size={18} />
+            {filters.date_option === 'range' && (
+              <>
+                <div className="space-y-1">
+                  <label className={labelClass}>From Date <span className="text-rose-500">*</span></label>
+                  <input type="date" value={filters.from_date || ''} onChange={(e) => updateFilter('from_date', e.target.value)} className={inputClass} />
                 </div>
+                <div className="space-y-1">
+                  <label className={labelClass}>To Date <span className="text-rose-500">*</span></label>
+                  <input type="date" value={filters.to_date || ''} onChange={(e) => updateFilter('to_date', e.target.value)} className={inputClass} />
+                </div>
+              </>
+            )}
+
+            {/* File Format */}
+            <div className="space-y-1">
+              <label className={labelClass}>
+                File Format <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
                 <select 
                   value={filters.file_format}
                   onChange={(e) => updateFilter('file_format', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select File Format</option>
-                  <option value="csv">CSV Spreadsheet</option>
-                  <option value="xlsx">Excel Workbook</option>
-                  <option value="pdf">PDF Document</option>
+                  <option value="csv">CSV</option>
+                  <option value="excel">Excel</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-gray-50 mt-10">
+          <div className="mt-12 flex justify-end">
             <button 
               onClick={handleDownload}
               disabled={!isFormValid || isDownloading}
-              className={`flex items-center gap-3 px-10 py-4 rounded-2xl font-black text-[14px] uppercase tracking-widest transition-all ${
+              className={`flex items-center gap-3 px-8 py-3.5 rounded-xl text-[15px] font-bold tracking-wide transition-all active:scale-95 shadow-lg ${
                 (!isFormValid || isDownloading)
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-primary text-white shadow-xl shadow-primary/20 hover:translate-y-[-2px] hover:shadow-primary/30 active:translate-y-[1px]'
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                : 'bg-[#4338CA] text-white hover:bg-[#3730A3] shadow-indigo-200'
               }`}
             >
               {isDownloading ? (
@@ -241,38 +235,7 @@ const DriverReport = () => {
               {isDownloading ? 'Downloading...' : 'Download'}
             </button>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Driver Context Info */}
-      <div className="mt-12 grid grid-cols-1 md:grid-cols-3 gap-6">
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-5 translate-y-0 hover:translate-y-[-4px] transition-all shadow-sm">
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center">
-            <Users size={24} />
-          </div>
-          <div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Global Fleet</p>
-             <p className="text-lg font-black text-gray-900">{loading ? '...' : stats.totalDrivers.toLocaleString()} Drivers</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-5 translate-y-0 hover:translate-y-[-4px] transition-all shadow-sm">
-          <div className="w-12 h-12 bg-emerald-50 text-emerald-500 rounded-2xl flex items-center justify-center">
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">KYC Approved</p>
-             <p className="text-lg font-black text-gray-900">{loading ? '...' : stats.approvedDrivers.toLocaleString()}</p>
-          </div>
-        </div>
-        <div className="bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-5 translate-y-0 hover:translate-y-[-4px] transition-all shadow-sm">
-          <div className="w-12 h-12 bg-amber-50 text-amber-500 rounded-2xl flex items-center justify-center">
-            <Clock size={24} />
-          </div>
-          <div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Live Signals</p>
-             <p className="text-lg font-black text-gray-900">{loading ? '...' : stats.onlineDrivers.toLocaleString()} Online</p>
-          </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

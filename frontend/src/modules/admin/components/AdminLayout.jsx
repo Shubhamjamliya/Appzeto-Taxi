@@ -269,8 +269,8 @@ const AdminLayout = () => {
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const userMenuRef = useRef(null);
 
-  const appName = settings.general.app_name || 'RYDON24';
-  const appLogo = settings.general.logo || settings.customization.logo || Rydon24Logo;
+  const appName = settings.general?.app_name || 'App';
+  const appLogo = settings.general?.logo || settings.customization?.logo;
 
   const adminSections = useMemo(
     () => [

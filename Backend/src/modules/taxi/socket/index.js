@@ -15,6 +15,7 @@ import {
 import {
   addSocketSubscriptions,
   joinRideRoom,
+  markDriverRejectedFromDispatch,
   notifyRideAccepted,
   setSocketServer,
   startDispatchFlow,
@@ -221,6 +222,7 @@ export const configureTaxiSocketServer = (httpServer) => {
         return;
       }
 
+      markDriverRejectedFromDispatch(rideId, identity.sub);
       socket.to(getRideRoom(rideId)).emit('driverRejectedRide', {
         rideId,
         driverId: identity.sub,

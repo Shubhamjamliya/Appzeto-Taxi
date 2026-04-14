@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 } from 'lucide-react';
@@ -33,6 +33,12 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
   Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
 
+const createTrackingMarkerIcon = (iconUrl) => ({
+  url: iconUrl,
+  scaledSize: new window.google.maps.Size(44, 44),
+  anchor: new window.google.maps.Point(22, 22),
+});
+
 const getTrackingVehicleIcon = (ride, driver) => {
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
   const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
@@ -63,7 +69,6 @@ const RideTracking = () => {
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
-  const fittedRouteKeyRef = useRef('');
   const navigate = useNavigate();
   const location = useLocation();
   const storedRide = useMemo(() => getCurrentRide(), []);
@@ -240,7 +245,10 @@ const RideTracking = () => {
             address: payload?.dropAddress || state.drop || 'Drop',
           },
           driverLocation: payload?.lastDriverLocation
-            ? { coordinates: payload.lastDriverLocation.coordinates }
+            ? {
+                coordinates: payload.lastDriverLocation.coordinates,
+                heading: payload.lastDriverLocation.heading,
+              }
             : null,
           status: payload?.liveStatus || payload?.status || 'accepted',
           completedAt: payload?.completedAt || null,
@@ -314,7 +322,10 @@ const RideTracking = () => {
           address: payload.dropAddress || state.drop || 'Drop',
         },
         driverLocation: payload.lastDriverLocation
-          ? { coordinates: payload.lastDriverLocation.coordinates }
+          ? {
+              coordinates: payload.lastDriverLocation.coordinates,
+              heading: payload.lastDriverLocation.heading,
+            }
           : null,
         status: payload.liveStatus || payload.status || 'accepted',
         completedAt: payload.completedAt || null,
@@ -439,24 +450,16 @@ const RideTracking = () => {
     }
 
     if (routePath.length > 1) {
-      const fitKey = `${tripStatus}:${activeDestination.lat.toFixed(5)},${activeDestination.lng.toFixed(5)}`;
-      if (fittedRouteKeyRef.current === fitKey) {
-        map.panTo(driverPosition);
-        return;
-      }
-
       const bounds = new window.google.maps.LatLngBounds();
       routePath.forEach((point) => bounds.extend(point));
+      bounds.extend(driverPosition);
+      bounds.extend(activeDestination);
       map.fitBounds(bounds, { top: 120, right: 48, bottom: 300, left: 48 });
-      fittedRouteKeyRef.current = fitKey;
       return;
     }
 
     map.panTo(driverPosition);
-    if (!fittedRouteKeyRef.current) {
-      map.setZoom(15);
-      fittedRouteKeyRef.current = `${tripStatus}:single-point`;
-    }
+    map.setZoom(15);
   }, [activeDestination, driverPosition, map, routePath, tripStatus]);
 
   const handleShare = () => {
@@ -542,11 +545,7 @@ const RideTracking = () => {
             <MarkerF
               position={driverPosition}
               title="Driver"
-              icon={{
-                url: vehicleIcon,
-                scaledSize: new window.google.maps.Size(42, 42),
-                anchor: new window.google.maps.Point(21, 21),
-              }}
+              icon={createTrackingMarkerIcon(vehicleIcon)}
             />
             <MarkerF
               position={activeDestination}

@@ -1,15 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { 
-  FileText, 
   Download, 
   ChevronRight, 
-  Calendar,
-  MapPin,
-  User,
-  Clock,
-  ArrowUpRight,
-  ShieldCheck,
-  CheckCircle2
+  ArrowLeft
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 import { adminService } from '../../services/adminService';
@@ -26,7 +19,6 @@ const DriverDutyReport = () => {
   const [drivers, setDrivers] = useState([]);
   const [locations, setLocations] = useState([]);
   const [isDownloading, setIsDownloading] = useState(false);
-  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -36,26 +28,20 @@ const DriverDutyReport = () => {
           adminService.getServiceLocations()
         ]);
 
-        // Mapping Drivers properly based on typical backend response
         if (driversRes.success) {
           const rawDrivers = driversRes.data?.results || driversRes.data || [];
-          const mappedDrivers = rawDrivers.map(d => ({
+          setDrivers(rawDrivers.map(d => ({
             _id: d._id,
-            name: d.name || d.user_id?.name || 'Unknown Driver',
-            mobile: d.mobile || d.user_id?.mobile || ''
-          }));
-          setDrivers(mappedDrivers);
+            name: d.name || 'Unknown Driver',
+            mobile: d.phone || ''
+          })));
         }
 
-        // Mapping Locations properly
         if (locationsRes.success) {
-          const rawLocations = locationsRes.data?.results || locationsRes.data || [];
-          setLocations(rawLocations);
+          setLocations(locationsRes.data?.results || locationsRes.data || []);
         }
       } catch (err) {
-        console.error('Error fetching duty report meta-data:', err);
-      } finally {
-        setLoading(false);
+        console.error('Error fetching data:', err);
       }
     };
     fetchData();
@@ -65,16 +51,10 @@ const DriverDutyReport = () => {
     setIsDownloading(true);
     try {
       const response = await adminService.downloadDriverDutyReport(filters);
-
-      const success = triggerFileDownload(response, `driver_duty_${Date.now()}`, filters.file_format);
-      if (success) {
-        alert('Driver duty report downloaded successfully!');
-      } else {
-        throw new Error('Trigger failure');
-      }
+      triggerFileDownload(response, `driver_duty_${Date.now()}`, filters.file_format);
     } catch (err) {
       console.error('Download error:', err);
-      alert('Failed to generate duty report. Please ensure a driver and date are selected.');
+      alert('Failed to generate report.');
     } finally {
       setIsDownloading(false);
     }
@@ -84,143 +64,151 @@ const DriverDutyReport = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  const isFormValid = filters.driver && filters.date_option && filters.file_format;
+  const isFormValid = filters.service_location_id && filters.driver && filters.date_option && filters.file_format && (filters.date_option !== 'range' || (filters.from_date && filters.to_date));
+
+  const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors appearance-none shadow-sm";
+  const labelClass = "block text-[13px] font-bold text-gray-600 mb-2";
 
   return (
-    <div className="min-h-screen bg-[#F8F9FA] p-4 md:p-8 font-sans">
-      {/* Breadcrumbs & Header */}
-      <div className="flex flex-col md:flex-row md:items-center justify-between mb-8 gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-gray-900 tracking-tight uppercase mb-2">Driver Duty Report</h1>
-          <div className="flex items-center gap-2 text-[11px] font-bold text-gray-400 uppercase tracking-widest">
-            <span className="hover:text-primary cursor-pointer transition-colors">Driver Duty Report</span>
-            <ChevronRight size={12} strokeWidth={3} />
-            <span className="text-primary italic">Driver Duty Report</span>
-          </div>
+    <div className="min-h-screen bg-[#F9FAFB] p-6 lg:p-8">
+      {/* Header Block */}
+      <div className="mb-8">
+        <div className="flex items-center gap-2 text-xs text-gray-400 mb-3 font-medium">
+          <span>Driver Duty Report</span>
+          <ChevronRight size={14} className="opacity-50" />
+          <span className="text-gray-600 font-semibold italic">Driver Duty Report</span>
+        </div>
+        <div className="flex items-center justify-between border-b border-gray-100 pb-5">
+          <h1 className="text-2xl font-bold text-[#334155] tracking-tight uppercase">Driver Duty Report</h1>
+          <button 
+            onClick={() => window.history.back()}
+            className="flex items-center gap-2 px-4 py-2 text-sm font-bold text-gray-600 bg-white border border-gray-200 rounded-xl hover:bg-gray-50 transition-all shadow-sm active:scale-95"
+          >
+            <ArrowLeft size={16} strokeWidth={2.5} /> Back
+          </button>
         </div>
       </div>
 
-      {/* Filter Card */}
-      <motion.div 
-        initial={{ opacity: 0, scale: 0.98 }}
-        animate={{ opacity: 1, scale: 1 }}
-        className="bg-white rounded-[32px] border border-gray-100 shadow-[0_20px_50px_rgba(0,0,0,0.04)] overflow-hidden"
-      >
-        <div className="p-8 md:p-12">
+      <div className="max-w-6xl mx-auto">
+        {/* Filter Card */}
+        <motion.div 
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="bg-white rounded-2xl border border-gray-100 p-8 shadow-[0_8px_30px_rgb(0,0,0,0.04)] overflow-hidden"
+        >
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
             {/* Service Location */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                Service Location <span className="text-red-500">*</span>
+            <div className="space-y-1">
+              <label className={labelClass}>
+                Service Location <span className="text-rose-500">*</span>
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <MapPin size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.service_location_id}
                   onChange={(e) => updateFilter('service_location_id', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
                   {locations.map(loc => (
                     <option key={loc._id} value={loc._id}>{loc.name}</option>
                   ))}
-                  <option value="test">India - New Delhi</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-primary transition-colors">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
             {/* Driver */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                Driver <span className="text-red-500">*</span>
+            <div className="space-y-1">
+              <label className={labelClass}>
+                Driver <span className="text-rose-500">*</span>
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <User size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.driver}
                   onChange={(e) => updateFilter('driver', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
                   {drivers.map(d => (
                     <option key={d._id} value={d._id}>{d.name} ({d.mobile})</option>
                   ))}
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-primary transition-colors">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
             {/* Date Option */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                Date Option <span className="text-red-500">*</span>
+            <div className="space-y-1">
+              <label className={labelClass}>
+                Date Option <span className="text-rose-500">*</span>
               </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <Calendar size={18} />
-                </div>
+              <div className="relative">
                 <select 
                   value={filters.date_option}
                   onChange={(e) => updateFilter('date_option', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select</option>
                   <option value="today">Today</option>
                   <option value="yesterday">Yesterday</option>
-                  <option value="last_7_days">Last 7 Days</option>
+                  <option value="this_week">This Week</option>
                   <option value="this_month">This Month</option>
-                  <option value="last_month">Last Month</option>
-                  <option value="custom">Custom Range</option>
+                  <option value="this_year">This Year</option>
+                  <option value="range">Date Range</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-primary transition-colors">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
 
-            {/* File Format */}
-            <div className="space-y-3">
-              <label className="flex items-center gap-2 text-[13px] font-black text-gray-700 uppercase tracking-wider">
-                File Format
-              </label>
-              <div className="relative group">
-                <div className="absolute left-5 top-1/2 -translate-y-1/2 text-gray-400 group-focus-within:text-primary transition-colors">
-                  <FileText size={18} />
+            {filters.date_option === 'range' && (
+              <>
+                <div className="space-y-1">
+                  <label className={labelClass}>From Date <span className="text-rose-500">*</span></label>
+                  <input type="date" value={filters.from_date || ''} onChange={(e) => updateFilter('from_date', e.target.value)} className={inputClass} />
                 </div>
+                <div className="space-y-1">
+                  <label className={labelClass}>To Date <span className="text-rose-500">*</span></label>
+                  <input type="date" value={filters.to_date || ''} onChange={(e) => updateFilter('to_date', e.target.value)} className={inputClass} />
+                </div>
+              </>
+            )}
+
+            {/* File Format */}
+            <div className="space-y-1">
+              <label className={labelClass}>
+                File Format <span className="text-rose-500">*</span>
+              </label>
+              <div className="relative">
                 <select 
                   value={filters.file_format}
                   onChange={(e) => updateFilter('file_format', e.target.value)}
-                  className="w-full pl-14 pr-6 py-4 bg-gray-50 border-2 border-transparent focus:border-primary/10 focus:bg-white rounded-2xl text-[14px] font-bold text-gray-900 outline-none transition-all appearance-none cursor-pointer"
+                  className={inputClass}
                 >
                   <option value="">Select File Format</option>
-                  <option value="csv">CSV Spreadsheet</option>
-                  <option value="xlsx">Excel Workbook</option>
-                  <option value="pdf">PDF Document</option>
+                  <option value="csv">CSV</option>
+                  <option value="excel">Excel</option>
                 </select>
-                <div className="absolute right-5 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400 group-hover:text-primary transition-colors">
-                  <ChevronRight size={18} className="rotate-90" />
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 pointer-events-none text-gray-400">
+                  <ChevronRight size={18} className="rotate-90 opacity-60" />
                 </div>
               </div>
             </div>
           </div>
 
-          <div className="flex justify-end pt-4 border-t border-gray-50 mt-10">
+          <div className="mt-12 flex justify-end">
             <button 
               onClick={handleDownload}
               disabled={!isFormValid || isDownloading}
-              className={`flex items-center gap-3 px-10 py-4 rounded-2xl font-black text-[14px] uppercase tracking-widest transition-all ${
+              className={`flex items-center gap-3 px-8 py-3.5 rounded-xl text-[15px] font-bold tracking-wide transition-all active:scale-95 shadow-lg ${
                 (!isFormValid || isDownloading)
-                ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                : 'bg-primary text-white shadow-xl shadow-primary/20 hover:translate-y-[-2px] hover:shadow-primary/30 active:translate-y-[1px]'
+                ? 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
+                : 'bg-[#4338CA] text-white hover:bg-[#3730A3] shadow-indigo-200'
               }`}
             >
               {isDownloading ? (
@@ -231,32 +219,7 @@ const DriverDutyReport = () => {
               {isDownloading ? 'Downloading...' : 'Download'}
             </button>
           </div>
-        </div>
-      </motion.div>
-
-      {/* Stats Board for context */}
-      <div className="mt-12 flex flex-col md:flex-row gap-6">
-        <div className="flex-1 bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-5 shadow-sm border-l-4 border-l-primary">
-          <div className="w-12 h-12 bg-primary/5 text-primary rounded-2xl flex items-center justify-center shadow-inner">
-            <Clock size={24} />
-          </div>
-          <div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Global Punctuality</p>
-             <p className="text-xl font-black text-gray-900">98.2%</p>
-          </div>
-          <div className="ml-auto text-emerald-500 flex items-center gap-1 font-bold text-[12px]">
-             <ArrowUpRight size={14} /> +0.4%
-          </div>
-        </div>
-        <div className="flex-1 bg-white p-6 rounded-3xl border border-gray-100 flex items-center gap-5 shadow-sm border-l-4 border-l-indigo-500">
-          <div className="w-12 h-12 bg-indigo-50 text-indigo-500 rounded-2xl flex items-center justify-center shadow-inner">
-            <CheckCircle2 size={24} />
-          </div>
-          <div>
-             <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Approved Records</p>
-             <p className="text-xl font-black text-gray-900">12,401</p>
-          </div>
-        </div>
+        </motion.div>
       </div>
     </div>
   );

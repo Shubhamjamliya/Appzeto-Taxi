@@ -1,7 +1,25 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Search, Wallet } from 'lucide-react';
+
+const STORAGE_KEY = 'appzeto:lastLocation';
+const LOCATION_UPDATED_EVENT = 'appzeto:location-updated';
+
+const DEFAULT_LOCATION_LABEL = 'Choose your location';
+
+const getSavedLocationLabel = () => {
+  if (typeof window === 'undefined') {
+    return DEFAULT_LOCATION_LABEL;
+  }
+
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
+    return String(saved?.address || '').trim() || DEFAULT_LOCATION_LABEL;
+  } catch {
+    return DEFAULT_LOCATION_LABEL;
+  }
+};
 
 const fallingCoins = [
   { id: 1, left: '24%', delay: 0 },
@@ -14,8 +32,24 @@ import { useSettings } from '../../../shared/context/SettingsContext';
 const HeaderGreeting = () => {
   const navigate = useNavigate();
   const { settings } = useSettings();
-  const appLogo = settings.general.logo || settings.customization.logo || '/Rydon24.png';
-  const appName = settings.general.app_name || 'Rydon24';
+  const appLogo = settings.general?.logo || settings.customization?.logo;
+  const appName = settings.general?.app_name || 'App';
+  const [locationLabel, setLocationLabel] = useState(getSavedLocationLabel);
+
+  useEffect(() => {
+    const syncLocationLabel = () => {
+      setLocationLabel(getSavedLocationLabel());
+    };
+
+    syncLocationLabel();
+    window.addEventListener('storage', syncLocationLabel);
+    window.addEventListener(LOCATION_UPDATED_EVENT, syncLocationLabel);
+
+    return () => {
+      window.removeEventListener('storage', syncLocationLabel);
+      window.removeEventListener(LOCATION_UPDATED_EVENT, syncLocationLabel);
+    };
+  }, []);
 
   return (
     <div className="px-5 pt-6">
@@ -55,7 +89,7 @@ const HeaderGreeting = () => {
 
             <div className="min-w-0 flex-1">
               <p className="text-[9px] font-black uppercase tracking-[0.22em] text-slate-400">Location</p>
-              <p className="truncate text-[11px] font-black tracking-tight text-slate-900">Tulsi Nagar, Telada House</p>
+              <p className="truncate text-[11px] font-black tracking-tight text-slate-900">{locationLabel}</p>
             </div>
           </motion.button>
         </div>

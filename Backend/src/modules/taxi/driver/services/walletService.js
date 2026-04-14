@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { env } from '../../../../config/env.js';
 import { ApiError } from '../../../../utils/ApiError.js';
+import { SetPrice } from '../../admin/models/SetPrice.js';
 import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
@@ -18,6 +19,82 @@ const normalizeAmount = (value, fieldName = 'amount') => {
 const normalizePaymentMethod = (value) => (
   String(value || '').trim().toLowerCase() === 'cash' ? 'cash' : 'online'
 );
+
+const normalizeCommissionType = (value) => {
+  const numericValue = Number(value);
+  return numericValue === 1 ? 'percentage' : 'fixed';
+};
+
+const computeCommissionAmount = ({ fare, type, value }) => {
+  const safeFare = normalizeAmount(fare, 'fare');
+  const safeValue = Math.max(normalizeAmount(value || 0, 'commission'), 0);
+
+  if (normalizeCommissionType(type) === 'percentage') {
+    return Math.min(Math.round((safeFare * safeValue)) / 100, safeFare);
+  }
+
+  return Math.min(safeValue, safeFare);
+};
+
+const resolveCommissionConfigForRide = async (ride, session) => {
+  if (ride?.pricingSnapshot?.admin_commission_from_driver !== undefined) {
+    return {
+      source: ride.pricingSnapshot?.setPriceId ? 'ride_snapshot' : 'ride_snapshot_fallback',
+      type: Number(ride.pricingSnapshot?.admin_commission_type_from_driver ?? 1),
+      value: Number(ride.pricingSnapshot?.admin_commission_from_driver ?? 0),
+    };
+  }
+
+  if (ride?.vehicleTypeId) {
+    const normalizedTransportType = String(ride.transport_type || 'taxi').trim().toLowerCase() || 'taxi';
+    const filters = [
+      {
+        vehicle_type: ride.vehicleTypeId,
+        active: 1,
+        status: 'active',
+        ...(ride.service_location_id ? { service_location_id: ride.service_location_id } : {}),
+        transport_type: normalizedTransportType,
+      },
+      {
+        vehicle_type: ride.vehicleTypeId,
+        active: 1,
+        status: 'active',
+        ...(ride.service_location_id ? { service_location_id: ride.service_location_id } : {}),
+        transport_type: 'both',
+      },
+      {
+        vehicle_type: ride.vehicleTypeId,
+        active: 1,
+        status: 'active',
+        transport_type: normalizedTransportType,
+      },
+      {
+        vehicle_type: ride.vehicleTypeId,
+        active: 1,
+        status: 'active',
+        transport_type: 'both',
+      },
+    ];
+
+    for (const filter of filters) {
+      const setPrice = await SetPrice.findOne(filter).sort({ updatedAt: -1, createdAt: -1 }).session(session).lean();
+      if (setPrice) {
+        return {
+          source: 'set_price_lookup',
+          type: Number(setPrice.admin_commission_type_from_driver ?? 1),
+          value: Number(setPrice.admin_commission_from_driver ?? 0),
+          setPriceId: setPrice._id,
+        };
+      }
+    }
+  }
+
+  return {
+    source: 'env_fallback',
+    type: 1,
+    value: Number(env.driverWallet.commissionPercent || 0),
+  };
+};
 
 const getWalletSnapshot = (driver) => ({
   balance: Number(driver?.wallet?.balance || 0),
@@ -161,7 +238,12 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     }
 
     const fare = normalizeAmount(ride.fare || 0, 'fare');
-    const commissionAmount = Math.round(fare * env.driverWallet.commissionPercent) / 100;
+    const commissionConfig = await resolveCommissionConfigForRide(ride, session);
+    const commissionAmount = computeCommissionAmount({
+      fare,
+      type: commissionConfig.type,
+      value: commissionConfig.value,
+    });
     const paymentMethod = normalizePaymentMethod(ride.paymentMethod);
     const driverEarnings = Math.max(Math.round((fare - commissionAmount) * 100) / 100, 0);
     const amount = paymentMethod === 'cash' ? -commissionAmount : driverEarnings;
@@ -170,6 +252,12 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
     ride.paymentMethod = paymentMethod;
     ride.commissionAmount = commissionAmount;
     ride.driverEarnings = driverEarnings;
+    ride.pricingSnapshot = {
+      setPriceId: ride.pricingSnapshot?.setPriceId || commissionConfig.setPriceId || null,
+      admin_commission_type_from_driver: Number(commissionConfig.type ?? ride.pricingSnapshot?.admin_commission_type_from_driver ?? 1),
+      admin_commission_from_driver: Number(commissionConfig.value ?? ride.pricingSnapshot?.admin_commission_from_driver ?? 0),
+      resolvedAt: ride.pricingSnapshot?.resolvedAt || new Date(),
+    };
     await ride.save({ session });
 
     if (!amount) {
@@ -190,7 +278,9 @@ export const settleCompletedRideWallet = async ({ rideId }) => {
         commissionAmount,
         driverEarnings,
         paymentMethod,
-        commissionPercent: env.driverWallet.commissionPercent,
+        commissionSource: commissionConfig.source,
+        commissionType: normalizeCommissionType(commissionConfig.type),
+        commissionValue: Number(commissionConfig.value || 0),
       },
       session,
     });

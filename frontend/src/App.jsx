@@ -89,8 +89,6 @@ const CabSharing = lazy(() => import('./modules/user/pages/cabsharing/CabSharing
 const ProfileSettings = lazy(() => import('./modules/user/pages/profile/ProfileSettings'));
 const PaymentSettings = lazy(() => import('./modules/user/pages/profile/PaymentSettings'));
 const AddressSettings = lazy(() => import('./modules/user/pages/profile/AddressSettings'));
-const NotificationSettings = lazy(() => import('./modules/user/pages/profile/NotificationSettings'));
-
 // Driver Module - Common
 import DriverLayout from './modules/driver/components/DriverLayout';
 
@@ -112,7 +110,6 @@ const ActiveTrip = lazy(() => import('./modules/driver/pages/ActiveTrip'));
 const DriverWallet = lazy(() => import('./modules/driver/pages/DriverWallet'));
 const DriverProfile = lazy(() => import('./modules/driver/pages/DriverProfile'));
 const RideRequests = lazy(() => import('./modules/driver/pages/RideRequests'));
-const Leaderboard = lazy(() => import('./modules/driver/pages/Leaderboard'));
 
 // Driver Module - Settings
 const EditProfile = lazy(() => import('./modules/driver/pages/settings/EditProfile'));
@@ -120,6 +117,7 @@ const DriverDocuments = lazy(() => import('./modules/driver/pages/settings/Drive
 const Notifications = lazy(() => import('./modules/driver/pages/settings/Notifications'));
 const PayoutMethods = lazy(() => import('./modules/driver/pages/settings/PayoutMethods'));
 const Referral = lazy(() => import('./modules/driver/pages/settings/Referral'));
+const DriverDeleteAccount = lazy(() => import('./modules/driver/pages/settings/DeleteAccount'));
 const SecuritySOS = lazy(() => import('./modules/driver/pages/settings/SecuritySOS'));
 const DriverSupport = lazy(() => import('./modules/driver/pages/settings/Support'));
 const DriverHelpSupportOptions = lazy(() => import('./modules/driver/pages/settings/HelpSupportOptions'));
@@ -451,7 +449,7 @@ function App() {
             <Route path="/profile/settings" element={<ProfileSettings />} />
             <Route path="/profile/payments" element={<PaymentSettings />} />
             <Route path="/profile/addresses" element={<AddressSettings />} />
-            <Route path="/profile/notifications" element={<NotificationSettings />} />
+            <Route path="/profile/notifications" element={<UserNotifications />} />
             <Route path="/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/safety/sos" element={<SOSContacts />} />
             <Route path="/support/tickets" element={<SupportTickets />} />
@@ -517,7 +515,7 @@ function App() {
             <Route path="/taxi/user/profile/settings" element={<ProfileSettings />} />
             <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
             <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
-            <Route path="/taxi/user/profile/notifications" element={<NotificationSettings />} />
+            <Route path="/taxi/user/profile/notifications" element={<UserNotifications />} />
             <Route path="/taxi/user/profile/delete-account" element={<DeleteAccount />} />
             <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
             <Route path="/taxi/user/support/tickets" element={<SupportTickets />} />
@@ -543,13 +541,13 @@ function App() {
               <Route path="wallet" element={<DriverWallet />} />
               <Route path="profile" element={<DriverProfile />} />
               <Route path="history" element={<RideRequests />} />
-              <Route path="leaderboard" element={<Leaderboard />} />
 
               <Route path="edit-profile" element={<EditProfile />} />
               <Route path="documents" element={<DriverDocuments />} />
               <Route path="notifications" element={<Notifications />} />
               <Route path="payout-methods" element={<PayoutMethods />} />
               <Route path="referral" element={<Referral />} />
+              <Route path="delete-account" element={<DriverDeleteAccount />} />
               <Route path="security" element={<SecuritySOS />} />
               <Route path="support" element={<DriverSupport />} />
               <Route path="help-support" element={<DriverHelpSupportOptions />} />

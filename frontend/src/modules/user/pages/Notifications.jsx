@@ -1,16 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Bell, Trash2, Tag, ShieldCheck, Star, AlertCircle, RefreshCw } from 'lucide-react';
+import { ArrowLeft, Bell, Trash2, Tag, ShieldCheck, Star, AlertCircle, RefreshCw, Megaphone, CheckCircle2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
+import { userAuthService } from '../services/authService';
+import toast from 'react-hot-toast';
 
-const MOCK_NOTIFICATIONS = [
-  { id: '1', title: 'Ride Completed', body: 'Your ride with Kishan Kumawat has been completed. Rate your experience!', time: '2 min ago', read: false, type: 'ride' },
-  { id: '2', title: 'Special Offer', body: 'Use code RYDON50 to get ₹50 off your next ride. Valid till midnight!', time: '1 hr ago', read: false, type: 'promo' },
-  { id: '3', title: 'Safety Alert', body: 'Your SOS contact Rahul has been notified of your trip details.', time: '3 hr ago', read: true, type: 'safety' },
-  { id: '4', title: 'Referral Reward', body: 'Congratulations! You earned ₹50 for referring Priya to Rydon24.', time: 'Yesterday', read: true, type: 'referral' },
-  { id: '5', title: 'Parcel Delivered', body: 'Your parcel to Bhawarkua has been successfully delivered.', time: '2 days ago', read: true, type: 'parcel' },
-];
+const formatNotificationTime = (value) => {
+  if (!value) return 'Recently';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Recently';
+  return date.toLocaleString('en-IN', {
+    day: '2-digit',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+};
 
 const TYPE_ICONS = {
   ride:     { icon: Star,        bg: 'bg-orange-50',  color: 'text-orange-500' },
@@ -36,16 +42,16 @@ const Notifications = () => {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [clearing, setClearing] = useState(false);
 
   const fetchNotifications = async () => {
     setLoading(true);
     setError(null);
     try {
-      // In production: const res = await fetch('/api/v1/notifications/get-notification', { headers: { Authorization: `Bearer ${token}` } });
-      await new Promise(r => setTimeout(r, 800));
-      setNotifications(MOCK_NOTIFICATIONS);
-    } catch {
-      setError('Failed to load notifications');
+      const response = await userAuthService.getNotifications();
+      setNotifications(response?.data?.results || []);
+    } catch (err) {
+      setError(err?.message || 'Failed to load notifications');
     } finally {
       setLoading(false);
     }
@@ -53,9 +59,38 @@ const Notifications = () => {
 
   useEffect(() => { fetchNotifications(); }, []);
 
-  const markRead = (id) => setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n));
-  const deleteNotification = (id) => setNotifications(prev => prev.filter(n => n.id !== id));
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const handleClearAll = async () => {
+    if (notifications.length === 0) return;
+    if (!window.confirm('Are you sure you want to clear all notifications?')) return;
+
+    setClearing(true);
+    try {
+      await userAuthService.clearAllNotifications();
+      setNotifications([]);
+      toast.success('All notifications cleared', {
+        icon: <CheckCircle2 size={18} className="text-emerald-500" />,
+        className: 'font-bold text-[13px] rounded-2xl shadow-xl border border-emerald-50 bg-white',
+      });
+    } catch (err) {
+      toast.error(err?.message || 'Failed to clear notifications');
+    } finally {
+      setClearing(false);
+    }
+  };
+
+  const handleRemoveSingle = async (id) => {
+    try {
+      await userAuthService.deleteNotification(id);
+      setNotifications(prev => prev.filter(n => n.id !== id));
+      toast.success('Notification removed', {
+        className: 'font-bold text-[13px] rounded-2xl shadow-xl border border-slate-50 bg-white',
+      });
+    } catch (err) {
+      toast.error('Failed to remove notification');
+    }
+  };
+
+  const totalCount = useMemo(() => notifications.length, [notifications.length]);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_38%,#EEF2F7_100%)] max-w-lg mx-auto font-sans pb-28 relative overflow-hidden">
@@ -65,22 +100,45 @@ const Notifications = () => {
       {/* Header */}
       <header className="bg-white/90 backdrop-blur-md px-5 pt-10 pb-4 sticky top-0 z-20 border-b border-white/80 shadow-[0_4px_20px_rgba(15,23,42,0.05)]">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate(-1)} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-sm active:scale-95 transition-all">
+          <button onClick={() => navigate('/taxi/user/profile')} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-sm active:scale-95 transition-all">
             <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0">
             <p className="text-[9px] font-black uppercase tracking-[0.26em] text-slate-400">Inbox</p>
             <h1 className="text-[19px] font-black tracking-tight text-slate-900 leading-tight">Notifications</h1>
           </div>
-          {unreadCount > 0 && (
-            <div className="bg-orange-500 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-sm">
-              {unreadCount} new
-            </div>
-          )}
+          <div className="bg-slate-900 text-white text-[10px] font-black px-2.5 py-1 rounded-full shadow-sm">
+            {totalCount}
+          </div>
         </div>
       </header>
 
       <div className="px-5 pt-4 space-y-2.5">
+        <div className="flex items-center justify-between px-1">
+          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-slate-400">Admin & System Alerts</p>
+          <div className="flex items-center gap-4">
+            {notifications.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAll}
+                disabled={clearing || loading}
+                className="flex items-center gap-1.5 text-[10px] font-black uppercase tracking-widest text-rose-500 active:scale-95 transition-all disabled:opacity-50"
+              >
+                <Trash2 size={12} strokeWidth={2.5} />
+                Clear All
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={fetchNotifications}
+              className="flex items-center gap-1 text-[10px] font-black uppercase tracking-widest text-slate-500 active:scale-95 transition-all"
+            >
+              <RefreshCw size={12} strokeWidth={2.5} className={loading ? 'animate-spin' : ''} />
+              Refresh
+            </button>
+          </div>
+        </div>
+
         {loading && Array.from({ length: 4 }).map((_, i) => <SkeletonCard key={i} />)}
 
         {error && !loading && (
@@ -109,33 +167,48 @@ const Notifications = () => {
         )}
 
         <AnimatePresence>
-          {!loading && notifications.map((n) => {
-            const typeConfig = TYPE_ICONS[n.type] || TYPE_ICONS.ride;
-            const Icon = typeConfig.icon;
+          {!loading && !error && notifications.map((n) => {
             return (
               <motion.div key={n.id}
                 initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}
-                exit={{ x: -80, opacity: 0 }} transition={{ duration: 0.22 }}
-                onClick={() => markRead(n.id)}
-                className={`relative rounded-[20px] border p-4 flex items-start gap-3 cursor-pointer transition-all active:scale-[0.99] ${
-                  !n.read
-                    ? 'bg-white border-white/80 shadow-[0_4px_14px_rgba(15,23,42,0.07)] border-l-4 border-l-orange-400'
-                    : 'bg-white/60 border-white/60 shadow-[0_2px_8px_rgba(15,23,42,0.04)]'
-                }`}>
-                <div className={`w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 ${typeConfig.bg}`}>
-                  <Icon size={16} className={typeConfig.color} strokeWidth={2} />
+                exit={{ opacity: 0, y: -8 }}
+                className="relative rounded-[20px] border border-white/80 bg-white p-4 flex items-start gap-3 transition-all shadow-[0_4px_14px_rgba(15,23,42,0.07)]">
+                <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-blue-50">
+                  <Megaphone size={16} className="text-blue-500" strokeWidth={2} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-start justify-between gap-2">
-                    <p className={`text-[13px] leading-tight ${!n.read ? 'font-black text-slate-900' : 'font-bold text-slate-700'}`}>{n.title}</p>
-                    <span className="text-[9px] font-bold text-slate-400 shrink-0 mt-0.5">{n.time}</span>
+                    <p className="text-[13px] leading-tight font-black text-slate-900">{n.title || 'Notification'}</p>
+                    <div className="flex items-center gap-3 shrink-0">
+                      <span className="text-[9px] font-bold text-slate-400 mt-0.5">
+                        {formatNotificationTime(n.sentAt)}
+                      </span>
+                      <button
+                        onClick={() => handleRemoveSingle(n.id)}
+                        className="p-1.5 text-slate-300 hover:text-rose-500 transition-colors"
+                      >
+                        <Trash2 size={13} strokeWidth={2.5} />
+                      </button>
+                    </div>
                   </div>
-                  <p className="text-[11px] font-bold text-slate-500 mt-1 leading-relaxed">{n.body}</p>
+                  <p className="text-[11px] font-bold text-slate-500 mt-1 leading-relaxed whitespace-pre-wrap">{n.body || 'No message'}</p>
+                  
+                  {n.image && (
+                    <div className="mt-3 rounded-2xl overflow-hidden border border-slate-100 shadow-sm bg-slate-50">
+                      <img 
+                        src={n.image} 
+                        alt="Notification content" 
+                        className="w-full h-auto max-h-[180px] object-cover"
+                      />
+                    </div>
+                  )}
+
+                  {n.serviceLocationName && (
+                    <p className="text-[9px] font-black text-slate-300 uppercase tracking-widest mt-2">
+                      {n.serviceLocationName}
+                    </p>
+                  )}
                 </div>
-                <button onClick={(e) => { e.stopPropagation(); deleteNotification(n.id); }}
-                  className="w-7 h-7 rounded-full bg-slate-50 border border-white/80 flex items-center justify-center shrink-0 active:scale-90 transition-all">
-                  <Trash2 size={12} className="text-slate-400" strokeWidth={2} />
-                </button>
               </motion.div>
             );
           })}

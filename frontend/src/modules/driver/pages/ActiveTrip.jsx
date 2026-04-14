@@ -430,6 +430,8 @@ const ActiveTrip = () => {
 
         if (routePath.length > 1) {
             routePath.forEach((point) => bounds.extend(point));
+            bounds.extend(driverPosition);
+            bounds.extend(activeDestination);
             map.fitBounds(bounds, 72);
             return;
         }

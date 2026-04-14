@@ -77,7 +77,7 @@ const DriverDocuments = () => {
   return (
     <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
       <header className="flex items-center gap-4 mb-10 text-slate-900 uppercase">
-        <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
+        <button onClick={() => navigate('/taxi/driver/profile')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-lg font-black tracking-tight tracking-tighter uppercase underline decoration-emerald-500/20">KYC Portfolio</h1>

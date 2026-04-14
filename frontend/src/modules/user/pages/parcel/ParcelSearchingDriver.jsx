@@ -302,6 +302,8 @@ const ParcelSearchingDriver = () => {
           category: routeState.parcel?.category || routeState.parcelType || 'Parcel',
           weight: routeState.parcel?.weight || routeState.weight || 'Under 5kg',
           description: routeState.parcel?.description || routeState.description || '',
+          deliveryScope: routeState.parcel?.deliveryScope || routeState.deliveryScope || 'city',
+          isOutstation: Boolean(routeState.parcel?.isOutstation || routeState.isOutstation || routeState.deliveryScope === 'outstation'),
           senderName: routeState.parcel?.senderName || routeState.senderName || '',
           senderMobile: routeState.parcel?.senderMobile || routeState.senderMobile || '',
           receiverName: routeState.parcel?.receiverName || routeState.receiverName || '',

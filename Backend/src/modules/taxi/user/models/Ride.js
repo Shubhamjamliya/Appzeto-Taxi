@@ -158,6 +158,16 @@ const rideSchema = new mongoose.Schema(
       required: true,
       min: 0,
     },
+    estimatedDistanceMeters: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
+    estimatedDurationMinutes: {
+      type: Number,
+      default: 0,
+      min: 0,
+    },
     paymentMethod: {
       type: String,
       enum: ['cash', 'online'],
@@ -180,6 +190,17 @@ const rideSchema = new mongoose.Schema(
         type: String,
         default: '',
         trim: true,
+      },
+      deliveryScope: {
+        type: String,
+        enum: ['city', 'outstation'],
+        default: 'city',
+        lowercase: true,
+        trim: true,
+      },
+      isOutstation: {
+        type: Boolean,
+        default: false,
       },
       senderName: {
         type: String,

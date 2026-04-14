@@ -99,11 +99,9 @@ const ManageFleet = () => {
 
   /* ── Fetch vehicle types based on Area ── */
   const fetchVehicleTypes = async () => {
-    if (!formData.service_location_id) return;
     try {
       const typeFilter = (formData.transport_type || 'taxi').toLowerCase();
-      // Most of the app uses /api/v1/types/{area_id}?transport_type=...
-      const res = await fetch(`${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/types/${formData.service_location_id}?transport_type=${typeFilter}`, { headers });
+      const res = await fetch(`${BASE}/types/vehicle-types/list?transport_type=${encodeURIComponent(typeFilter)}`, { headers });
       const data = await res.json();
       if (data.success) {
         const list = Array.isArray(data.data) ? data.data : (data.data?.results || []);
@@ -122,10 +120,8 @@ const ManageFleet = () => {
   }, []);
 
   useEffect(() => {
-    if (formData.service_location_id) {
-      fetchVehicleTypes();
-    }
-  }, [formData.service_location_id, formData.transport_type]);
+    fetchVehicleTypes();
+  }, [formData.transport_type]);
 
   useEffect(() => {
     setPage(1);

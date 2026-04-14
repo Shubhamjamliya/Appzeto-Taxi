@@ -42,6 +42,33 @@ const getStoredTokenByRole = (role) => {
   return entries.find((token) => getTokenPayload(token)?.role === role) || null;
 };
 
+const getRoleFromPathname = () => {
+  if (typeof window === 'undefined') {
+    return '';
+  }
+
+  const pathname = String(window.location.pathname || '').toLowerCase();
+
+  if (pathname.includes('/admin')) {
+    return 'admin';
+  }
+
+  // Owners currently authenticate with driver tokens (fleet-owner flow).
+  if (pathname.includes('/taxi/owner')) {
+    return 'driver';
+  }
+
+  if (pathname.includes('/taxi/driver') || pathname.includes('/driver')) {
+    return 'driver';
+  }
+
+  if (pathname.includes('/taxi/user') || pathname.includes('/user')) {
+    return 'user';
+  }
+
+  return '';
+};
+
 const clearStaleAuthState = (role = '') => {
   const normalizedRole = String(role || '').toLowerCase();
 
@@ -90,7 +117,9 @@ api.interceptors.request.use(
       /^\/(countries|common\/ride_modules|types\/|on-boarding(?:-|\/|$)|roles\/|permissions\/)/.test(requestPath);
     const isDriverRoute = /^\/drivers?(\/|$)/.test(requestPath);
     const isUserRoute = /^\/(users|rides|deliveries|promos)(\/|$)/.test(requestPath);
+    const isSupportRoute = /^\/support(\/|$)/.test(requestPath);
     const isChatRoute = /^\/chats?(\/|$)/.test(requestPath);
+    const pathRole = getRoleFromPathname();
 
     let token = null;
 
@@ -106,6 +135,14 @@ api.interceptors.request.use(
       }
     } else if (isAdminRoute) {
       token = adminToken;
+    } else if (isSupportRoute) {
+      if (pathRole === 'admin') {
+        token = adminToken;
+      } else if (pathRole === 'driver') {
+        token = driverToken;
+      } else {
+        token = userToken;
+      }
     } else if (isUserRoute) {
       token = userToken;
     } else if (isDriverRoute) {

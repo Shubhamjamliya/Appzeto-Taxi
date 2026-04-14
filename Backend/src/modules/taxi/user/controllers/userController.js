@@ -146,6 +146,12 @@ const createUserSession = (user) => ({
   user: toUserPayload(user),
 });
 
+const generateUserReferralCode = (user) => {
+  const idPart = String(user?._id || '').slice(-6).toUpperCase();
+  const phonePart = String(user?.phone || '').slice(-4);
+  return `USR${phonePart}${idPart}`.replace(/\W/g, '');
+};
+
 export const registerUser = async (req, res) => {
   const password = String(req.body.password || '');
   const name = toCleanString(req.body.name);
@@ -285,10 +291,15 @@ export const verifyUserPhoneForOtpLogin = async (req, res) => {
 };
 
 export const getCurrentUser = async (req, res) => {
-  const user = await User.findById(req.auth?.sub).lean();
+  const user = await User.findById(req.auth?.sub);
 
   if (!user) {
     throw new ApiError(404, 'User not found');
+  }
+
+  if (!String(user.referralCode || '').trim()) {
+    user.referralCode = generateUserReferralCode(user);
+    await user.save();
   }
 
   res.json({

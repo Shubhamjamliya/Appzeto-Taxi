@@ -279,6 +279,20 @@ export const deleteOwner = asyncHandler(async (req, res) => {
   ok(res, { deleted: true });
 });
 
+export const getFleetVehicles = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.listFleetVehicles()),
+);
+export const createFleetVehicle = asyncHandler(async (req, res) =>
+  ok(res, await adminService.createFleetVehicle(req.body)),
+);
+export const updateFleetVehicle = asyncHandler(async (req, res) =>
+  ok(res, await adminService.updateFleetVehicle(req.params.id, req.body)),
+);
+export const deleteFleetVehicle = asyncHandler(async (req, res) => {
+  await adminService.deleteFleetVehicle(req.params.id);
+  ok(res, { deleted: true });
+});
+
 export const getOwnerBookings = asyncHandler(async (_req, res) =>
   ok(res, { results: await adminService.listOwnerBookings() }),
 );

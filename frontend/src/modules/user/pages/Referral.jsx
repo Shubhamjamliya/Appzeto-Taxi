@@ -1,11 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, Copy, Gift, Loader2, Share2 } from 'lucide-react';
 import BottomNavbar from '../components/BottomNavbar';
 import { userAuthService } from '../services/authService';
-import { getReferralTranslationContent } from '../../shared/services/referralTranslationService';
 import {
+  getReferralSettingsContent,
+  getReferralTranslationContent,
+} from '../../shared/services/referralTranslationService';
+import {
+  applyReferralSettingPlaceholders,
   buildReferralPreviewBlocks,
   getStoredReferralLanguageCode,
   USER_REFERRAL_TRANSLATION_FIELDS,
@@ -61,13 +65,19 @@ const Referral = () => {
       };
 
       try {
-        const [userResponse, translationResponse] = await Promise.all([
+        const [userResponse, translationResponse, settingsResponse] = await Promise.all([
           userAuthService.getCurrentUser(),
           getReferralTranslationContent(languageCode),
+          getReferralSettingsContent('user'),
         ]);
 
         const user = userResponse?.data?.user || {};
         const translationData = translationResponse?.data || {};
+        const settingsData = settingsResponse?.data || {};
+        const hydratedUserReferral = applyReferralSettingPlaceholders(
+          translationData.user_referral || fallbackUserSection,
+          settingsData,
+        );
 
         setProfile({
           referralCode: user.referralCode || stored.referralCode || '',
@@ -75,7 +85,7 @@ const Referral = () => {
         });
         setTranslation({
           language_code: translationData.language_code || languageCode,
-          user_referral: translationData.user_referral || fallbackUserSection,
+          user_referral: hydratedUserReferral,
         });
 
         localStorage.setItem(
@@ -88,10 +98,16 @@ const Referral = () => {
         );
       } catch {
         try {
-          const translationResponse = await getReferralTranslationContent(languageCode);
+          const [translationResponse, settingsResponse] = await Promise.all([
+            getReferralTranslationContent(languageCode),
+            getReferralSettingsContent('user'),
+          ]);
           setTranslation({
             language_code: translationResponse?.data?.language_code || languageCode,
-            user_referral: translationResponse?.data?.user_referral || fallbackUserSection,
+            user_referral: applyReferralSettingPlaceholders(
+              translationResponse?.data?.user_referral || fallbackUserSection,
+              settingsResponse?.data || {},
+            ),
           });
         } catch {
           // Keep local fallback state.
@@ -115,16 +131,21 @@ const Referral = () => {
     if (!referralCode) {
       return;
     }
-    await navigator.clipboard.writeText(referralCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Ignore clipboard failures silently.
+    }
   };
 
   const handleShare = async () => {
     if (!referralCode) {
       return;
     }
-    const shareText = `${bannerText}\nUse my referral code ${referralCode} to sign up.`;
+    const shareText = `${bannerText}\nUse my referral code ${referralCode} to sign up.\n${window.location.origin}`;
 
     try {
       if (navigator.share) {
@@ -135,7 +156,15 @@ const Referral = () => {
         return;
       }
     } catch {
-      return;
+      // Fall through to desktop-friendly sharing options.
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Ignore clipboard failures and continue to WhatsApp fallback.
     }
 
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');

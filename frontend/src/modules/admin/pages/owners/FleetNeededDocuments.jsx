@@ -35,7 +35,7 @@ const FleetNeededDocuments = () => {
   const fetchDocuments = useCallback(async () => {
     setIsLoading(true);
     try {
-      const res = await fetch(`${BASE}/fleet-needed-document`, {
+      const res = await fetch(`${BASE}/driver-needed-document`, {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       const data = await res.json();
@@ -79,7 +79,7 @@ const FleetNeededDocuments = () => {
 
     setSubmitting(true);
     const isEditing = !!editingId;
-    const url = isEditing ? `${BASE}/fleet-needed-document/${editingId}` : `${BASE}/fleet-needed-document`;
+    const url = isEditing ? `${BASE}/driver-needed-document/${editingId}` : `${BASE}/driver-needed-document`;
     
     try {
       const res = await fetch(url, {
@@ -112,7 +112,7 @@ const FleetNeededDocuments = () => {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this document requirement?")) return;
     try {
-      const res = await fetch(`${BASE}/fleet-needed-document/${id}`, {
+      const res = await fetch(`${BASE}/driver-needed-document/${id}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` }
       });

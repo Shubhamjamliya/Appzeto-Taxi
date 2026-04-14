@@ -74,13 +74,11 @@ const ManageFleetCreate = () => {
 
   useEffect(() => {
     const fetchTypes = async () => {
-      if (!formData.service_location_id) return;
       try {
         const typeFilter = (formData.transport_type || 'taxi').toLowerCase();
-        const res = await fetch(
-          `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/types/${formData.service_location_id}?transport_type=${typeFilter}`,
-          { headers: authHeaders }
-        );
+        const res = await fetch(`${BASE}/types/vehicle-types/list?transport_type=${encodeURIComponent(typeFilter)}`, {
+          headers: authHeaders,
+        });
         const json = await res.json();
         if (json?.success) {
           const list = Array.isArray(json.data) ? json.data : json?.data?.results || [];
@@ -94,7 +92,7 @@ const ManageFleetCreate = () => {
     };
 
     fetchTypes();
-  }, [formData.service_location_id, formData.transport_type, authHeaders]);
+  }, [formData.transport_type, authHeaders]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();

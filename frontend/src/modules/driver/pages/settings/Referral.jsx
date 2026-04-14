@@ -1,10 +1,14 @@
 import React, { useEffect, useState } from 'react';
-import { AnimatePresence } from 'framer-motion';
+import { AnimatePresence, motion } from 'framer-motion';
 import { ArrowLeft, CheckCircle2, Copy, Gift, Loader2, Share2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getCurrentDriver } from '../../services/registrationService';
-import { getReferralTranslationContent } from '../../../shared/services/referralTranslationService';
 import {
+  getReferralSettingsContent,
+  getReferralTranslationContent,
+} from '../../../shared/services/referralTranslationService';
+import {
+  applyReferralSettingPlaceholders,
   buildReferralPreviewBlocks,
   DRIVER_REFERRAL_TRANSLATION_FIELDS,
   getStoredReferralLanguageCode,
@@ -58,20 +62,26 @@ const DriverReferral = () => {
       };
 
       try {
-        const [driverResponse, translationResponse] = await Promise.all([
+        const [driverResponse, translationResponse, settingsResponse] = await Promise.all([
           getCurrentDriver(),
           getReferralTranslationContent(languageCode),
+          getReferralSettingsContent('driver'),
         ]);
 
         const driver = driverResponse?.data || {};
         const translationData = translationResponse?.data || {};
+        const settingsData = settingsResponse?.data || {};
+        const hydratedDriverReferral = applyReferralSettingPlaceholders(
+          translationData.driver_referral || fallbackDriverSection,
+          settingsData,
+        );
 
         setDriverProfile({
           referralCode: driver.referralCode || stored.referralCode || '',
         });
         setTranslation({
           language_code: translationData.language_code || languageCode,
-          driver_referral: translationData.driver_referral || fallbackDriverSection,
+          driver_referral: hydratedDriverReferral,
         });
 
         localStorage.setItem(
@@ -83,10 +93,16 @@ const DriverReferral = () => {
         );
       } catch {
         try {
-          const translationResponse = await getReferralTranslationContent(languageCode);
+          const [translationResponse, settingsResponse] = await Promise.all([
+            getReferralTranslationContent(languageCode),
+            getReferralSettingsContent('driver'),
+          ]);
           setTranslation({
             language_code: translationResponse?.data?.language_code || languageCode,
-            driver_referral: translationResponse?.data?.driver_referral || fallbackDriverSection,
+            driver_referral: applyReferralSettingPlaceholders(
+              translationResponse?.data?.driver_referral || fallbackDriverSection,
+              settingsResponse?.data || {},
+            ),
           });
         } catch {
           // Keep local fallback state.
@@ -110,16 +126,21 @@ const DriverReferral = () => {
     if (!referralCode) {
       return;
     }
-    await navigator.clipboard.writeText(referralCode);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
+
+    try {
+      await navigator.clipboard.writeText(referralCode);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Ignore clipboard failures silently.
+    }
   };
 
   const handleShare = async () => {
     if (!referralCode) {
       return;
     }
-    const shareText = `${bannerText}\nUse my referral code ${referralCode} and join as a driver.`;
+    const shareText = `${bannerText}\nUse my referral code ${referralCode} and join as a driver.\n${window.location.origin}`;
 
     try {
       if (navigator.share) {
@@ -130,7 +151,15 @@ const DriverReferral = () => {
         return;
       }
     } catch {
-      return;
+      // Fall through to desktop-friendly sharing options.
+    }
+
+    try {
+      await navigator.clipboard.writeText(shareText);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Ignore clipboard failures and continue to WhatsApp fallback.
     }
 
     window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, '_blank');

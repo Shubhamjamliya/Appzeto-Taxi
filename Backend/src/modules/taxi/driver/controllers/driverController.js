@@ -26,6 +26,12 @@ import {
   verifyDriverOtp,
 } from '../services/onboardingService.js';
 
+const generateDriverReferralCode = (driver) => {
+  const idPart = String(driver?._id || '').slice(-6).toUpperCase();
+  const phonePart = String(driver?.phone || '').slice(-4);
+  return `DRV${phonePart}${idPart}`.replace(/\W/g, '');
+};
+
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;
 
@@ -147,6 +153,11 @@ export const getCurrentDriver = async (req, res) => {
 
   if (!driver) {
     throw new ApiError(404, 'Driver not found');
+  }
+
+  if (!String(driver.referralCode || '').trim()) {
+    driver.referralCode = generateDriverReferralCode(driver);
+    await driver.save();
   }
 
   await clearDriverActiveRideIfStale(driver);

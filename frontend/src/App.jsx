@@ -124,6 +124,8 @@ const PayoutMethods = lazy(() => import('./modules/driver/pages/settings/PayoutM
 const Referral = lazy(() => import('./modules/driver/pages/settings/Referral'));
 const SecuritySOS = lazy(() => import('./modules/driver/pages/settings/SecuritySOS'));
 const DriverSupport = lazy(() => import('./modules/driver/pages/settings/Support'));
+const DriverHelpSupportOptions = lazy(() => import('./modules/driver/pages/settings/HelpSupportOptions'));
+const DriverSupportChat = lazy(() => import('./modules/driver/pages/settings/SupportChat'));
 const VehicleFleet = lazy(() => import('./modules/driver/pages/settings/VehicleFleet'));
 const AddVehicle = lazy(() => import('./modules/driver/pages/settings/AddVehicle'));
 const ManageDrivers = lazy(() => import('./modules/driver/pages/settings/ManageDrivers'));
@@ -234,6 +236,8 @@ const AdminMailSettings = lazy(() => import('./modules/admin/pages/settings/Mail
 const AdminNotificationChannels = lazy(() => import('./modules/admin/pages/settings/NotificationChannels'));
 const AdminDispatcherAddons = lazy(() => import('./modules/admin/pages/settings/DispatcherAddons'));
 const AdminCountryManagement = lazy(() => import('./modules/admin/pages/masters/CountryManagement'));
+const AdminSupportTicketTitle = lazy(() => import('./modules/admin/pages/support/TicketTitle'));
+const AdminSupportTickets = lazy(() => import('./modules/admin/pages/support/SupportTickets'));
 
 
 // Reports Module
@@ -549,6 +553,10 @@ function App() {
               <Route path="referral" element={<Referral />} />
               <Route path="security" element={<SecuritySOS />} />
               <Route path="support" element={<DriverSupport />} />
+              <Route path="help-support" element={<DriverHelpSupportOptions />} />
+              <Route path="support/chat" element={<DriverSupportChat />} />
+              <Route path="support/tickets" element={<SupportTickets />} />
+              <Route path="support/ticket/:id" element={<SupportTicketDetail />} />
               <Route path="vehicle-fleet" element={<VehicleFleet />} />
               <Route path="add-vehicle" element={<AddVehicle />} />
               <Route path="manage-drivers" element={<ManageDrivers />} />
@@ -672,7 +680,8 @@ function App() {
               <Route path="safety" element={<AdminSafetyCenter />} />
               <Route path="cms" element={<AdminCMSBuilder />} />
               <Route path="settings/cms/header-footer" element={<AdminHeaderFooter />} />
-              <Route path="support" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Help & Ticket Management - Under Development</div>} />
+              <Route path="support/ticket-title" element={<AdminSupportTicketTitle />} />
+              <Route path="support/tickets" element={<AdminSupportTickets />} />
               <Route path="*" element={<AdminSectionPlaceholder />} />
               
               {/* Report Module Routes */}

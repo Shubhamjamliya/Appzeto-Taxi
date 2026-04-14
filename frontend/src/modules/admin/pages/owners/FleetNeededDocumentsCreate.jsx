@@ -34,7 +34,7 @@ const FleetNeededDocumentsCreate = () => {
 
     setSubmitting(true);
     try {
-      const res = await fetch(`${BASE}/fleet-needed-document`, {
+      const res = await fetch(`${BASE}/driver-needed-document`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${token}`,

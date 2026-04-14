@@ -80,6 +80,7 @@ import {
   getOverallEarnings,
   getOwner,
   getOwners,
+  getFleetVehicles,
   getOwnerOnboarding,
   getOwnerBookings,
   getOwnerDashboardData,
@@ -142,6 +143,7 @@ import {
   updateOwner,
   updateOwnerBooking,
   updateOwnerNeededDocument,
+  updateFleetVehicle,
   updatePaymentSettings,
   updatePaymentMethod,
   updatePreferenceStatus,
@@ -153,8 +155,10 @@ import {
   updateVehicleType,
   updateZone,
   createVehicleType,
+  createFleetVehicle,
   deleteAirport,
   deleteVehicleType,
+  deleteFleetVehicle,
 } from '../controllers/adminController.js';
 import { promotionsRouter } from '../promotions/routes/index.js';
 
@@ -248,6 +252,11 @@ adminRouter.patch('/admin/owner-management/manage-owners/:id', updateOwner);
 adminRouter.patch('/admin/owner-management/manage-owners/:id/approve', approveOwner);
 adminRouter.patch('/admin/owner-management/pending-owners/:driverId/approve', approveOwnerSignupFromDriver);
 adminRouter.delete('/admin/owner-management/manage-owners/:id', deleteOwner);
+
+adminRouter.get('/admin/owner-management/manage-fleet', getFleetVehicles);
+adminRouter.post('/admin/owner-management/manage-fleet', createFleetVehicle);
+adminRouter.patch('/admin/owner-management/manage-fleet/:id', updateFleetVehicle);
+adminRouter.delete('/admin/owner-management/manage-fleet/:id', deleteFleetVehicle);
 adminRouter.get('/admin/owner-management/dashboard', getOwnerDashboardData);
 adminRouter.get('/admin/owner-management/bookings', getOwnerBookings);
 adminRouter.post('/admin/owner-management/bookings', createOwnerBooking);
@@ -269,6 +278,7 @@ adminRouter.patch('/admin/referrals/settings/:type', updateReferralSettings);
 adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
+
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);

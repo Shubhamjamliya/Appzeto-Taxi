@@ -1,22 +1,30 @@
-import React, { useState, useEffect } from 'react';
-import { 
-  Wallet, 
-  Search, 
-  ChevronDown, 
-  ArrowUpRight, 
-  ArrowDownLeft, 
-  Clock, 
-  User, 
-  Truck, 
+import React, { useEffect, useState } from 'react';
+import {
+  ArrowDownLeft,
+  ArrowUpRight,
   Building2,
-  Loader2,
-  CheckCircle2,
-  AlertCircle,
+  ChevronRight,
+  Clock,
   History,
-  Send
+  Loader2,
+  Search,
+  Send,
+  Truck,
+  User,
+  Wallet,
 } from 'lucide-react';
 import { adminService } from '../../services/adminService';
 import { toast } from 'react-hot-toast';
+
+const roleOptions = [
+  { id: 'user', label: 'User', icon: User },
+  { id: 'driver', label: 'Driver', icon: Truck },
+  { id: 'owner', label: 'Owner', icon: Building2 },
+];
+
+const inputClass =
+  'w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors disabled:bg-gray-50 disabled:text-gray-400';
+const labelClass = 'block text-xs font-semibold text-gray-500 mb-1.5';
 
 const WalletPayment = () => {
   const [role, setRole] = useState('');
@@ -28,13 +36,11 @@ const WalletPayment = () => {
   const [history, setHistory] = useState([]);
   const [balance, setBalance] = useState(0);
   
-  // Adjustment Form
   const [amount, setAmount] = useState('');
   const [operation, setOperation] = useState('credit');
   const [description, setDescription] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Search Logic
   useEffect(() => {
     const delayDebounceFn = setTimeout(() => {
       if (searchQuery.length >= 3 && role) {
@@ -93,10 +99,9 @@ const WalletPayment = () => {
     setSubmitting(true);
     try {
       const data = { amount: Number(amount), operation, description };
-      let res;
-      if (role === 'user') res = await adminService.adjustUserWallet(selectedEntity._id, data);
-      else if (role === 'driver') res = await adminService.adjustDriverWallet(selectedEntity._id, data);
-      else if (role === 'owner') res = await adminService.adjustOwnerWallet(selectedEntity._id, data);
+      if (role === 'user') await adminService.adjustUserWallet(selectedEntity._id, data);
+      else if (role === 'driver') await adminService.adjustDriverWallet(selectedEntity._id, data);
+      else if (role === 'owner') await adminService.adjustOwnerWallet(selectedEntity._id, data);
 
       toast.success(`Successfully ${operation}ed ₹${amount}`);
       setAmount('');
@@ -109,160 +114,170 @@ const WalletPayment = () => {
     }
   };
 
-  const getRoleIcon = () => {
-    if (role === 'user') return <User className="text-blue-500" />;
-    if (role === 'driver') return <Truck className="text-emerald-500" />;
-    if (role === 'owner') return <Building2 className="text-amber-500" />;
-    return <ChevronDown className="text-gray-400" />;
-  };
-
   return (
-    <div className="min-h-screen bg-[#F8FAFC] p-4 md:p-8">
-      {/* Header */}
-      <div className="max-w-7xl mx-auto mb-10">
-        <div className="flex items-center justify-between">
+    <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
+      <div className="mb-6">
+        <div className="mb-2 flex items-center gap-1.5 text-xs text-gray-400">
+          <span>Wallet</span>
+          <ChevronRight size={12} />
+          <span className="text-gray-700">Wallet Payment</span>
+        </div>
+        <div className="flex items-start justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-              <div className="p-3 bg-white shadow-sm rounded-2xl">
-                <Wallet className="text-indigo-600" size={28} />
-              </div>
-              WALLET PAYMENT
-            </h1>
-            <p className="text-slate-500 mt-2 font-medium">Manage and adjust balances for Users, Drivers, and Fleet Owners</p>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-sm font-bold text-slate-400">
-            ADMIN PANEL <ChevronDown size={14} /> WALLET PAYMENT
+            <h1 className="text-xl font-semibold text-gray-900">Wallet Payment</h1>
+            <p className="mt-1 text-sm text-gray-500">
+              Manage and adjust balances for Users, Drivers, and Fleet Owners
+            </p>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-        {/* Left Column: Search & Action */}
-        <div className="lg:col-span-5 space-y-6">
-          <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100">
-            <h2 className="text-lg font-bold text-slate-900 mb-6 flex items-center gap-2">
-              <Search size={20} className="text-indigo-500" /> Select Account
-            </h2>
-
-            <div className="space-y-6">
-              {/* Role Selection */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+        <div className="space-y-6 lg:col-span-5">
+          <div className="rounded-xl border border-gray-200 bg-white p-6">
+            <div className="mb-6 flex items-center gap-3 border-b border-gray-100 pb-4">
+              <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                <Search size={18} />
+              </div>
               <div>
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-3">Select Role</label>
-                <div className="grid grid-cols-3 gap-3">
-                  {[
-                    { id: 'user', label: 'User', icon: User },
-                    { id: 'driver', label: 'Driver', icon: Truck },
-                    { id: 'owner', label: 'Owner', icon: Building2 }
-                  ].map((r) => (
+                <h2 className="text-sm font-semibold text-gray-900">Select Account</h2>
+                <p className="text-xs text-gray-400">
+                  Choose role and search account before wallet adjustment
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-5">
+              <div>
+                <label className={labelClass}>Select Role</label>
+                <div className="grid grid-cols-3 gap-2">
+                  {roleOptions.map((roleOption) => (
                     <button
-                      key={r.id}
-                      onClick={() => { setRole(r.id); setSelectedEntity(null); setSearchQuery(''); setSearchResults([]); }}
-                      className={`flex flex-col items-center justify-center p-4 rounded-2xl border-2 transition-all ${
-                        role === r.id 
-                        ? 'border-indigo-600 bg-indigo-50/50 text-indigo-600' 
-                        : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
+                      key={roleOption.id}
+                      type="button"
+                      onClick={() => {
+                        setRole(roleOption.id);
+                        setSelectedEntity(null);
+                        setSearchQuery('');
+                        setSearchResults([]);
+                        setHistory([]);
+                        setBalance(0);
+                      }}
+                      className={`flex items-center justify-center gap-2 rounded-lg border px-3 py-2 text-xs font-medium transition-colors ${
+                        role === roleOption.id
+                          ? 'border-indigo-600 bg-indigo-50 text-indigo-600'
+                          : 'border-gray-200 bg-white text-gray-500 hover:border-gray-300 hover:text-gray-700'
                       }`}
                     >
-                      <r.icon size={24} className="mb-2" />
-                      <span className="text-xs font-bold uppercase tracking-tight">{r.label}</span>
+                      <roleOption.icon size={15} />
+                      <span>{roleOption.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
 
-              {/* Search Box */}
               <div className="relative">
-                <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-3">Search {role || 'Account'}</label>
-                <div className="relative group">
-                  <div className="absolute left-5 top-1/2 -translate-y-1/2 text-slate-400 group-focus-within:text-indigo-500 transition-colors">
-                    {searching ? <Loader2 className="animate-spin" size={20} /> : <Search size={20} />}
+                <label className={labelClass}>Search Account</label>
+                <div className="relative">
+                  <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                    {searching ? <Loader2 className="animate-spin" size={16} /> : <Search size={16} />}
                   </div>
                   <input
                     type="text"
                     disabled={!role}
-                    placeholder="Search name, email or mobile..."
+                    placeholder={role ? 'Search name, email or mobile...' : 'Select role first'}
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-14 pr-6 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-indigo-500 transition-all outline-none font-medium text-slate-900 placeholder:text-slate-400 disabled:opacity-50"
+                    className={`${inputClass} pl-10 pr-20`}
                   />
                   {selectedEntity && (
-                    <button 
-                      onClick={() => { setSelectedEntity(null); setSearchQuery(''); }}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] font-bold text-rose-500 bg-rose-50 px-3 py-1.5 rounded-lg hover:bg-rose-100"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSelectedEntity(null);
+                        setSearchQuery('');
+                        setHistory([]);
+                        setBalance(0);
+                      }}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-500 hover:bg-gray-50"
                     >
-                      CLEAR
+                      Clear
                     </button>
                   )}
                 </div>
 
-                {/* Dropdown Results */}
                 {searchResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-white rounded-2xl shadow-2xl border border-slate-100 z-50 max-h-80 overflow-y-auto overflow-x-hidden p-2 space-y-1">
+                  <div className="absolute left-0 right-0 top-full z-20 mt-1 max-h-72 overflow-y-auto rounded-lg border border-gray-200 bg-white p-1 shadow-lg">
                     {searchResults.map((item) => (
                       <button
                         key={item._id}
+                        type="button"
                         onClick={() => handleSelectEntity(item)}
-                        className="w-full flex items-center gap-4 p-4 hover:bg-slate-50 rounded-xl transition-all text-left"
+                        className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-left hover:bg-gray-50"
                       >
-                        <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 font-bold">
+                        <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-100 text-xs font-semibold text-gray-700">
                           {(item.name || item.owner_name || '?')[0].toUpperCase()}
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <h4 className="font-bold text-slate-900 truncate">{item.name || item.owner_name}</h4>
-                          <p className="text-xs text-slate-500 truncate">{item.phone || item.mobile || item.email}</p>
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-sm font-medium text-gray-900">
+                            {item.name || item.owner_name}
+                          </p>
+                          <p className="truncate text-xs text-gray-500">
+                            {item.phone || item.mobile || item.email}
+                          </p>
                         </div>
-                        <ChevronDown size={16} className="-rotate-90 text-slate-300" />
+                        <ChevronRight size={14} className="text-gray-300" />
                       </button>
                     ))}
                   </div>
                 )}
               </div>
 
-              {/* Action Form */}
               {selectedEntity && (
-                <form onSubmit={handleSubmit} className="pt-6 border-t border-slate-100 space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                <form onSubmit={handleSubmit} className="space-y-4 border-t border-gray-100 pt-5">
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-3">Amount (₹)</label>
+                      <label className={labelClass}>Amount (INR)</label>
                       <input
                         type="number"
+                        min="0"
                         required
                         placeholder="0.00"
                         value={amount}
                         onChange={(e) => setAmount(e.target.value)}
-                        className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-indigo-500 transition-all outline-none font-black text-xl text-slate-900"
+                        className={inputClass}
                       />
                     </div>
                     <div>
-                      <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-3">Operation</label>
+                      <label className={labelClass}>Operation</label>
                       <select
                         value={operation}
                         onChange={(e) => setOperation(e.target.value)}
-                        className="w-full px-5 py-[18px] bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-indigo-500 transition-all outline-none font-bold text-slate-900 appearance-none cursor-pointer"
+                        className={inputClass}
                       >
-                        <option value="credit">Credit (+)</option>
-                        <option value="debit">Debit (-)</option>
+                        <option value="credit">Credit</option>
+                        <option value="debit">Debit</option>
                       </select>
                     </div>
                   </div>
 
                   <div>
-                    <label className="text-[11px] font-black text-slate-400 uppercase tracking-widest block mb-3">Description</label>
+                    <label className={labelClass}>Description</label>
                     <textarea
                       placeholder="Reason for adjustment..."
                       rows={2}
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
-                      className="w-full px-5 py-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:bg-white focus:border-indigo-500 transition-all outline-none font-medium text-slate-900"
+                      className={inputClass}
                     />
                   </div>
 
                   <button
                     type="submit"
                     disabled={submitting}
-                    className="w-full py-5 bg-indigo-600 text-white rounded-2xl font-black uppercase tracking-[0.2em] text-xs shadow-xl shadow-indigo-100 hover:bg-indigo-700 active:scale-[0.98] transition-all flex items-center justify-center gap-3"
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-indigo-700 disabled:cursor-not-allowed disabled:opacity-60"
                   >
-                    {submitting ? <Loader2 className="animate-spin" size={20} /> : <Send size={18} />}
+                    {submitting ? <Loader2 className="animate-spin" size={16} /> : <Send size={16} />}
                     Submit Adjustment
                   </button>
                 </form>
@@ -271,83 +286,104 @@ const WalletPayment = () => {
           </div>
         </div>
 
-        {/* Right Column: History & Stats */}
-        <div className="lg:col-span-7 space-y-6">
-          {/* Stats Card */}
+        <div className="space-y-6 lg:col-span-7">
           {selectedEntity && (
-            <div className="bg-indigo-600 rounded-[32px] p-8 text-white shadow-2xl shadow-indigo-200 flex items-center justify-between relative overflow-hidden animate-in fade-in zoom-in-95 duration-500">
-              <div className="relative z-10">
-                <p className="text-indigo-100 font-bold uppercase tracking-widest text-[10px] mb-1">Current Balance</p>
-                <h3 className="text-5xl font-black tracking-tighter">₹{balance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}</h3>
-                <div className="mt-4 flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center font-bold">
-                    {(selectedEntity.name || selectedEntity.owner_name || '?')[0].toUpperCase()}
-                  </div>
-                  <span className="text-sm font-bold opacity-90">{selectedEntity.name || selectedEntity.owner_name}</span>
+            <div className="rounded-xl border border-gray-200 bg-white p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+                    Current Balance
+                  </p>
+                  <h3 className="mt-2 text-3xl font-semibold text-gray-900">
+                    INR{' '}
+                    {Number(balance || 0).toLocaleString('en-IN', {
+                      minimumFractionDigits: 2,
+                    })}
+                  </h3>
+                </div>
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-indigo-50 text-indigo-600">
+                  <Wallet size={18} />
                 </div>
               </div>
-              <Wallet className="absolute -right-10 -bottom-10 text-white/10" size={240} />
-              <div className="relative z-10 p-4 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20">
-                 <History size={32} />
+              <div className="mt-4 flex items-center gap-3 rounded-lg bg-gray-50 p-3">
+                <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gray-200 text-xs font-semibold text-gray-700">
+                    {(selectedEntity.name || selectedEntity.owner_name || '?')[0].toUpperCase()}
+                  </div>
+                <div>
+                  <p className="text-sm font-medium text-gray-900">
+                    {selectedEntity.name || selectedEntity.owner_name}
+                  </p>
+                  <p className="text-xs text-gray-500">{selectedEntity.phone || selectedEntity.mobile}</p>
+                </div>
               </div>
             </div>
           )}
 
-          {/* History List */}
-          <div className="bg-white rounded-[32px] p-8 shadow-sm border border-slate-100 min-h-[400px]">
-            <div className="flex items-center justify-between mb-8">
-              <h2 className="text-lg font-bold text-slate-900 flex items-center gap-2">
-                <Clock size={20} className="text-slate-400" /> Transaction History
+          <div className="min-h-[420px] rounded-xl border border-gray-200 bg-white p-6">
+            <div className="mb-5 flex items-center justify-between border-b border-gray-100 pb-4">
+              <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-900">
+                <Clock size={16} className="text-gray-400" /> Transaction History
               </h2>
-              {loadingHistory && <Loader2 className="animate-spin text-indigo-500" size={20} />}
+              {loadingHistory && <Loader2 className="animate-spin text-indigo-500" size={16} />}
             </div>
 
             {!selectedEntity ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
-                  <Search size={40} />
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-50 text-gray-300">
+                  <Search size={26} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">No Account Selected</h3>
-                  <p className="text-sm text-slate-400 max-w-[240px] mt-1">Select a role and search for an account to view wallet history</p>
-                </div>
+                <h3 className="text-sm font-semibold text-gray-900">No Account Selected</h3>
+                <p className="mt-1 max-w-xs text-xs text-gray-500">
+                  Select a role and search an account to view wallet transactions.
+                </p>
               </div>
             ) : history.length === 0 && !loadingHistory ? (
-              <div className="flex flex-col items-center justify-center py-20 text-center space-y-4">
-                <div className="w-20 h-20 bg-slate-50 rounded-full flex items-center justify-center text-slate-200">
-                  <History size={40} />
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <div className="mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-gray-50 text-gray-300">
+                  <History size={26} />
                 </div>
-                <div>
-                  <h3 className="font-bold text-slate-900">No Transactions Found</h3>
-                  <p className="text-sm text-slate-400 mt-1">This account hasn't made any transactions yet</p>
-                </div>
+                <h3 className="text-sm font-semibold text-gray-900">No Transactions Found</h3>
+                <p className="mt-1 text-xs text-gray-500">This account has no wallet entries yet.</p>
               </div>
             ) : (
               <div className="space-y-4">
                 {history.map((tx) => (
-                  <div key={tx._id} className="flex items-center justify-between p-5 rounded-2xl border border-slate-50 hover:border-slate-100 hover:bg-slate-50/50 transition-all group">
+                  <div
+                    key={tx._id}
+                    className="flex items-center justify-between rounded-lg border border-gray-100 px-4 py-3 transition-colors hover:bg-gray-50"
+                  >
                     <div className="flex items-center gap-4">
-                      <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-transform group-hover:scale-110 ${
-                        tx.type === 'credit' ? 'bg-emerald-100 text-emerald-600' : 'bg-rose-100 text-rose-600'
-                      }`}>
-                        {tx.type === 'credit' ? <ArrowUpRight size={24} /> : <ArrowDownLeft size={24} />}
+                      <div
+                        className={`flex h-10 w-10 items-center justify-center rounded-lg ${
+                          tx.type === 'credit'
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-rose-50 text-rose-600'
+                        }`}
+                      >
+                        {tx.type === 'credit' ? <ArrowUpRight size={18} /> : <ArrowDownLeft size={18} />}
                       </div>
-                      <div>
-                        <h4 className="font-bold text-slate-900 text-sm">{tx.description}</h4>
-                        <div className="flex items-center gap-2 mt-1 text-[11px] text-slate-400 font-bold uppercase tracking-tight">
-                          <span>{new Date(tx.createdAt).toLocaleDateString()}</span>
-                          <span className="w-1 h-1 bg-slate-200 rounded-full" />
-                          <span>{new Date(tx.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                        </div>
+                      <div className="min-w-0">
+                        <h4 className="truncate text-sm font-medium text-gray-900">
+                          {tx.description || 'Wallet adjustment'}
+                        </h4>
+                        <p className="mt-1 text-xs text-gray-500">
+                          {new Date(tx.createdAt).toLocaleDateString()} {' • '}
+                          {new Date(tx.createdAt).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                          })}
+                        </p>
                       </div>
                     </div>
                     <div className="text-right">
-                      <span className={`text-lg font-black tracking-tight ${
-                        tx.type === 'credit' ? 'text-emerald-600' : 'text-rose-600'
-                      }`}>
-                        {tx.type === 'credit' ? '+' : '-'} ₹{Number(tx.amount).toLocaleString('en-IN')}
-                      </span>
-                      <p className="text-[10px] font-black text-slate-300 uppercase tracking-tighter mt-0.5">{tx.type}</p>
+                      <p
+                        className={`text-sm font-semibold ${
+                          tx.type === 'credit' ? 'text-emerald-600' : 'text-rose-600'
+                        }`}
+                      >
+                        {tx.type === 'credit' ? '+' : '-'} INR {Number(tx.amount || 0).toLocaleString('en-IN')}
+                      </p>
+                      <p className="mt-0.5 text-[11px] uppercase text-gray-400">{tx.type}</p>
                     </div>
                   </div>
                 ))}

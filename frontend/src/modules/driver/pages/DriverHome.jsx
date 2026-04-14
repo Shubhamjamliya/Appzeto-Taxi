@@ -120,6 +120,34 @@ const getJobTitle = (type) => {
     return 'Taxi Ride';
 };
 
+const formatTripDistance = (job = {}) => {
+    const estimatedMeters = Number(job.estimatedDistanceMeters || job.raw?.estimatedDistanceMeters || 0);
+
+    if (Number.isFinite(estimatedMeters) && estimatedMeters > 0) {
+        return estimatedMeters < 1000
+            ? `${Math.max(50, Math.round(estimatedMeters / 10) * 10)} m`
+            : `${(estimatedMeters / 1000).toFixed(estimatedMeters >= 10000 ? 0 : 1)} km`;
+    }
+
+    if (job.intercity?.distance) {
+        return `${job.intercity.distance} km`;
+    }
+
+    if (job.raw?.intercity?.distance) {
+        return `${job.raw.intercity.distance} km`;
+    }
+
+    if (job.radius) {
+        return `within ${(Number(job.radius) / 1000).toFixed(1)} km`;
+    }
+
+    if (job.raw?.radius) {
+        return `within ${(Number(job.raw.radius) / 1000).toFixed(1)} km`;
+    }
+
+    return 'nearby';
+};
+
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 const withDriverAuthorization = (token) => (
     token
@@ -287,7 +315,7 @@ const DriverHome = () => {
                                 payment: currentJob.paymentMethod || 'Cash',
                                 pickup: currentJob.pickupAddress || formatPoint(currentJob.pickupLocation, 'Pickup Location'),
                                 drop: currentJob.dropAddress || formatPoint(currentJob.dropLocation, 'Drop Location'),
-                                distance: 'active',
+                                distance: formatTripDistance(currentJob),
                                 requestId: currentJob.rideId,
                                 rideId: currentJob.rideId,
                                 raw: currentJob,
@@ -399,7 +427,7 @@ const DriverHome = () => {
                     payment: data.paymentMethod || 'Cash',
                     pickup: data.pickupAddress || formatPoint(data.pickupLocation, 'Pickup Location'),
                     drop: data.dropAddress || formatPoint(data.dropLocation, 'Drop Location'),
-                    distance: data.intercity?.distance ? `${data.intercity.distance} km` : data.radius ? `within ${(Number(data.radius) / 1000).toFixed(1)} km` : 'nearby',
+                    distance: formatTripDistance(data),
                     requestId: data.rideId,
                     rideId: data.rideId,
                     raw: data,
@@ -409,13 +437,21 @@ const DriverHome = () => {
                 setStatusMessage('New booking received.');
             };
 
-            const onRideRequestClosed = ({ rideId }) => {
-                console.info('[driver-home] rideRequestClosed received', { rideId });
+            const onRideRequestClosed = ({ rideId, reason, message }) => {
+                console.info('[driver-home] rideRequestClosed received', { rideId, reason, message });
                 if (acceptingRideIdRef.current && acceptingRideIdRef.current === rideId) {
                     return;
                 }
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
+                    setCurrentRequest(null);
+                    if (reason === 'user-cancelled') {
+                        setStatusMessage(message || 'User cancelled the ride.');
+                    } else if (reason === 'deleted-by-admin') {
+                        setStatusMessage('Ride was cancelled by admin.');
+                    } else if (reason === 'unmatched') {
+                        setStatusMessage('Ride request expired without a match.');
+                    }
                 }
             };
 

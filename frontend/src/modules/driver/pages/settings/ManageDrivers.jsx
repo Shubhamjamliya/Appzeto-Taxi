@@ -1,23 +1,75 @@
-import React, { useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, UserPlus, ShieldCheck, Mail, Phone, MapPin, Trash2, Edit3, Briefcase, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { getOwnerFleetDrivers } from '../../services/registrationService';
 
 const ManageDrivers = () => {
     const navigate = useNavigate();
-    const [drivers, setDrivers] = useState([
-        { id: 1, name: 'Sagar Jain', phone: '+91 98765 43210', email: 'sagar.j@redigo.com', address: 'Vijay Nagar, Indore', status: 'Active' },
-        { id: 2, name: 'Rahul Sharma', phone: '+91 99887 76655', email: 'rahul.s@redigo.com', address: 'Bhopal Central', status: 'Pending' }
-    ]);
+    const [drivers, setDrivers] = useState([]);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState('');
+
+    const unwrap = (response) => response?.data?.data || response?.data || response;
+
+    useEffect(() => {
+        let active = true;
+
+        const load = async () => {
+            setIsLoading(true);
+            setError('');
+
+            try {
+                const response = await getOwnerFleetDrivers();
+                const payload = unwrap(response);
+                const results = payload?.results || [];
+
+                if (!active) return;
+
+                setDrivers(
+                    results.map((item) => ({
+                        id: item.id || item._id,
+                        name: item.name || '-',
+                        phone: item.phone || '-',
+                        email: item.email || '-',
+                        address: item.city || '-',
+                        status:
+                            item.approve === true ||
+                            item.approve === 1 ||
+                            String(item.status || '').toLowerCase() === 'approved'
+                                ? 'Active'
+                                : 'Pending',
+                    }))
+                );
+            } catch (err) {
+                if (!active) return;
+                setError(err?.message || 'Unable to load fleet drivers');
+                setDrivers([]);
+            } finally {
+                if (active) setIsLoading(false);
+            }
+        };
+
+        load();
+
+        return () => {
+            active = false;
+        };
+    }, []);
 
     const deleteDriver = (id) => {
         setDrivers(d => d.filter(item => item.id !== id));
     };
 
+    const activeCount = useMemo(
+        () => drivers.filter(d => d.status === 'Active').length,
+        [drivers]
+    );
+
     return (
         <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
             <header className="flex items-center gap-4 mb-8 text-slate-900 uppercase">
-                <button onClick={() => navigate(-1)} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
+                <button onClick={() => navigate('/taxi/driver/profile')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
                     <ArrowLeft size={18} />
                 </button>
                 <h1 className="text-lg font-black tracking-tight tracking-tighter uppercase">Manage Drivers</h1>
@@ -30,7 +82,7 @@ const ManageDrivers = () => {
                         <div className="flex items-start justify-between">
                             <div className="space-y-1">
                                 <h3 className="text-[12px] font-black uppercase tracking-widest text-sky-500/60">Total Active</h3>
-                                <p className="text-[28px] font-black tracking-tight leading-none italic">{drivers.filter(d => d.status === 'Active').length} Drivers</p>
+                                <p className="text-[28px] font-black tracking-tight leading-none italic">{activeCount} Drivers</p>
                                 <p className="text-[11px] font-bold tracking-widest opacity-40 uppercase">Managing your fleet team</p>
                             </div>
                             <div className="w-14 h-14 bg-white/10 rounded-2xl flex items-center justify-center text-sky-500 border border-white/10 shadow-lg">
@@ -53,7 +105,19 @@ const ManageDrivers = () => {
                      </div>
 
                      <div className="space-y-3">
-                         {drivers.map((d) => (
+                         {isLoading ? (
+                             <div className="bg-white p-5 rounded-2xl border border-white shadow-sm text-[12px] font-bold text-slate-400">
+                                 Loading drivers...
+                             </div>
+                         ) : error ? (
+                             <div className="bg-white p-5 rounded-2xl border border-white shadow-sm text-[12px] font-bold text-rose-500">
+                                 {error}
+                             </div>
+                         ) : drivers.length === 0 ? (
+                             <div className="bg-white p-5 rounded-2xl border border-white shadow-sm text-[12px] font-bold text-slate-400">
+                                 No drivers found.
+                             </div>
+                         ) : drivers.map((d) => (
                              <div key={d.id} className="bg-white p-5 rounded-2xl border border-white shadow-sm flex flex-col gap-4 group active:scale-98 transition-all">
                                  <div className="flex items-center justify-between">
                                      <div className="flex items-center gap-4">

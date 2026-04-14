@@ -675,6 +675,7 @@ const serializeDriver = (driver) => ({
   status: driver.status || (driver.approve ? 'approved' : 'pending'),
   active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
   deletedAt: driver.deletedAt || null,
+  deletionRequest: driver.deletionRequest || { status: 'none' },
   documents: driver.documents || {},
   onboarding: driver.onboarding || {},
   createdAt: driver.createdAt,
@@ -2260,6 +2261,89 @@ export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
       last_page: Math.max(1, Math.ceil(total / safeLimit)),
     },
   };
+};
+
+export const listDriverDeletionRequests = async ({ page = 1, limit = 50, status = 'pending' } = {}) => {
+  const safePage = Number(page) || 1;
+  const safeLimit = Number(limit) || 50;
+  const requestedStatus = String(status || 'pending').toLowerCase();
+  const start = (safePage - 1) * safeLimit;
+  const statusQuery =
+    requestedStatus === 'all'
+      ? { $in: ['pending', 'approved', 'rejected'] }
+      : requestedStatus;
+
+  const query = {
+    'deletionRequest.status': statusQuery,
+    deletedAt: null,
+  };
+
+  const [drivers, total] = await Promise.all([
+    Driver.find(query)
+      .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
+      .skip(start)
+      .limit(safeLimit)
+      .lean(),
+    Driver.countDocuments(query),
+  ]);
+
+  return {
+    results: drivers.map(serializeDriver),
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  };
+};
+
+export const approveDriverDeletionRequest = async (id, adminId) => {
+  const now = new Date();
+  const driver = await Driver.findOneAndDelete(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+  );
+
+  if (!driver) throw new ApiError(404, 'Pending driver deletion request not found');
+
+  const removedDriver = driver.toObject ? driver.toObject() : driver;
+
+  return serializeDriver({
+    ...removedDriver,
+    deletedAt: now,
+    approve: false,
+    status: 'inactive',
+    deletion_reason: 'driver_delete_request',
+    deletionRequest: {
+      ...(removedDriver.deletionRequest || {}),
+      status: 'approved',
+      reviewedAt: now,
+      reviewedBy: adminId || null,
+      adminNote: '',
+    },
+  });
+};
+
+export const rejectDriverDeletionRequest = async (id, payload = {}, adminId) => {
+  const now = new Date();
+  const adminNote = String(payload.adminNote || payload.note || '').trim();
+  const driver = await Driver.findOneAndUpdate(
+    { _id: id, deletedAt: null, 'deletionRequest.status': 'pending' },
+    {
+      $set: {
+        approve: true,
+        status: 'approved',
+        'deletionRequest.status': 'rejected',
+        'deletionRequest.reviewedAt': now,
+        'deletionRequest.reviewedBy': adminId || null,
+        'deletionRequest.adminNote': adminNote,
+      },
+    },
+    { new: true, runValidators: true },
+  );
+
+  if (!driver) throw new ApiError(404, 'Pending driver deletion request not found');
+  return serializeDriver(driver.toObject());
 };
 
 export const restoreDeletedDriver = async (id) => {

@@ -2,12 +2,16 @@ import { Router } from 'express';
 import { asyncHandler } from '../../../../utils/asyncHandler.js';
 import { authenticate } from '../../middlewares/authMiddleware.js';
 import {
+  addDriverEmergencyContact,
   completeOnboarding,
+  deleteDriverEmergencyContact,
   goOffline,
   goOnline,
   getCurrentDriver,
   getDriverApprovalStatus,
   getDriverDocumentTemplates,
+  getDriverEmergencyContacts,
+  getOwnerFleetDrivers,
   getMyWallet,
   getOnboardingSession,
   getServiceLocations,
@@ -18,6 +22,7 @@ import {
   saveOnboardingReferral,
   saveOnboardingVehicle,
   registerDriver,
+  requestDriverAccountDeletion,
   startOnboarding,
   topUpMyWallet,
   updateCurrentDriver,
@@ -34,10 +39,15 @@ driverRouter.post('/auth/send-otp', asyncHandler(startDriverLoginOtpRequest));
 driverRouter.post('/auth/verify-otp', asyncHandler(verifyDriverLoginOtpRequest));
 driverRouter.get('/me', authenticate(['driver']), asyncHandler(getCurrentDriver));
 driverRouter.patch('/me', authenticate(['driver']), asyncHandler(updateCurrentDriver));
+driverRouter.post('/me/delete-request', authenticate(['driver']), asyncHandler(requestDriverAccountDeletion));
+driverRouter.get('/emergency-contacts', authenticate(['driver']), asyncHandler(getDriverEmergencyContacts));
+driverRouter.post('/emergency-contacts', authenticate(['driver']), asyncHandler(addDriverEmergencyContact));
+driverRouter.delete('/emergency-contacts/:contactId', authenticate(['driver']), asyncHandler(deleteDriverEmergencyContact));
 driverRouter.get('/wallet', authenticate(['driver']), asyncHandler(getMyWallet));
 driverRouter.post('/wallet/top-up', authenticate(['driver']), asyncHandler(topUpMyWallet));
 driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriverVehicle));
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
+driverRouter.get('/fleet/drivers', authenticate(['driver']), asyncHandler(getOwnerFleetDrivers));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.get('/document-templates', asyncHandler(getDriverDocumentTemplates));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));

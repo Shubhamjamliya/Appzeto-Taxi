@@ -1,17 +1,26 @@
 import React from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
-import { Home, Award, IndianRupee, User } from 'lucide-react';
+import { Briefcase, Car, Home, IndianRupee, User, History, Users } from 'lucide-react';
 
 const DriverBottomNav = () => {
     const location = useLocation();
+    const role = String(localStorage.getItem('role') || 'driver').toLowerCase();
+    const isOwner = role === 'owner';
 
-    // Matching user's latest screenshot labels: Home, LeaderBoard, Earnings, Accounts
-    const navItems = [
-        { icon: <Home size={22} />, label: 'Home', path: '/taxi/driver/home' },
-        { icon: <Award size={22} />, label: 'LeaderBoard', path: '/taxi/driver/leaderboard' },
-        { icon: <IndianRupee size={22} />, label: 'Earnings', path: '/taxi/driver/wallet' },
-        { icon: <User size={22} />, label: 'Accounts', path: '/taxi/driver/profile' },
-    ];
+    // Matching user's latest screenshot labels: Home, History, Earnings, Accounts
+    const navItems = isOwner
+        ? [
+              { icon: <Briefcase size={22} />, label: 'Dashboard', path: '/taxi/driver/profile' },
+              { icon: <Users size={22} />, label: 'Drivers', path: '/taxi/driver/manage-drivers' },
+              { icon: <Car size={22} />, label: 'Vehicle', path: '/taxi/driver/vehicle-fleet' },
+              { icon: <User size={22} />, label: 'Account', path: '/taxi/driver/profile' },
+          ]
+        : [
+              { icon: <Home size={22} />, label: 'Home', path: '/taxi/driver/home' },
+              { icon: <History size={22} />, label: 'History', path: '/taxi/driver/history' },
+              { icon: <IndianRupee size={22} />, label: 'Earnings', path: '/taxi/driver/wallet' },
+              { icon: <User size={22} />, label: 'Accounts', path: '/taxi/driver/profile' },
+          ];
 
     return (
         <nav className="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-slate-100 flex items-center justify-around z-50 h-[72px] px-6 pb-2 shadow-[0_-10px_30px_rgba(0,0,0,0.03)]">

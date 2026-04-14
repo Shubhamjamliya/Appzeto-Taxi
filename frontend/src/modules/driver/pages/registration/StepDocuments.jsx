@@ -205,7 +205,9 @@ const StepDocuments = () => {
       if (token) {
         localStorage.setItem('token', token);
         localStorage.setItem('driverToken', token);
-        localStorage.setItem('role', 'driver');
+        const normalizedRole =
+          String(session.role || 'driver').toLowerCase() === 'owner' ? 'owner' : 'driver';
+        localStorage.setItem('role', normalizedRole);
       }
 
       saveDriverRegistrationSession({

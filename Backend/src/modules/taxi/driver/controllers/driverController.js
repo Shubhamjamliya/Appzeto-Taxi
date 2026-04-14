@@ -32,6 +32,17 @@ const generateDriverReferralCode = (driver) => {
   return `DRV${phonePart}${idPart}`.replace(/\W/g, '');
 };
 
+const MAX_EMERGENCY_CONTACTS = 5;
+
+const sanitizeEmergencyPhone = (value) => String(value || '').replace(/\D/g, '').slice(-10);
+
+const serializeEmergencyContact = (contact = {}) => ({
+  id: String(contact._id || contact.id || ''),
+  name: String(contact.name || '').trim(),
+  phone: sanitizeEmergencyPhone(contact.phone),
+  source: String(contact.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual',
+});
+
 export const registerDriver = async (req, res) => {
   const { name, phone, password, vehicleType, location } = req.body;
 
@@ -186,12 +197,108 @@ export const getCurrentDriver = async (req, res) => {
       rating: driver.rating,
       wallet: serializeDriverWallet(driver),
       referralCode: driver.referralCode || '',
+      deletionRequest: driver.deletionRequest || { status: 'none' },
       isOnline: driver.isOnline,
       isOnRide: driver.isOnRide,
       location: driver.location,
       zoneId: driver.zoneId,
       documents: driver.documents || {},
+      emergencyContacts: Array.isArray(driver.emergencyContacts)
+        ? driver.emergencyContacts.map(serializeEmergencyContact)
+        : [],
       onboarding: driver.onboarding || {},
+    },
+  });
+};
+
+export const getDriverEmergencyContacts = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub).lean();
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  res.json({
+    success: true,
+    data: {
+      results: Array.isArray(driver.emergencyContacts)
+        ? driver.emergencyContacts.map(serializeEmergencyContact)
+        : [],
+      limit: MAX_EMERGENCY_CONTACTS,
+    },
+  });
+};
+
+export const addDriverEmergencyContact = async (req, res) => {
+  const name = String(req.body?.name || '').trim();
+  const phone = sanitizeEmergencyPhone(req.body?.phone);
+  const source = String(req.body?.source || 'manual').toLowerCase() === 'device' ? 'device' : 'manual';
+
+  if (!name) {
+    throw new ApiError(400, 'Contact name is required');
+  }
+
+  if (!/^\d{10}$/.test(phone)) {
+    throw new ApiError(400, 'A valid 10-digit contact number is required');
+  }
+
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const existingContacts = Array.isArray(driver.emergencyContacts) ? driver.emergencyContacts : [];
+
+  if (existingContacts.length >= MAX_EMERGENCY_CONTACTS) {
+    throw new ApiError(400, `You can add up to ${MAX_EMERGENCY_CONTACTS} emergency contacts`);
+  }
+
+  if (existingContacts.some((contact) => sanitizeEmergencyPhone(contact.phone) === phone)) {
+    throw new ApiError(409, 'This contact number is already added');
+  }
+
+  driver.emergencyContacts = [
+    ...existingContacts,
+    {
+      name: name.slice(0, 80),
+      phone,
+      source,
+    },
+  ];
+
+  await driver.save();
+
+  const addedContact = driver.emergencyContacts[driver.emergencyContacts.length - 1];
+
+  res.status(201).json({
+    success: true,
+    data: serializeEmergencyContact(addedContact),
+  });
+};
+
+export const deleteDriverEmergencyContact = async (req, res) => {
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const existingContacts = Array.isArray(driver.emergencyContacts) ? driver.emergencyContacts : [];
+  const nextContacts = existingContacts.filter((contact) => String(contact._id) !== String(req.params.contactId));
+
+  if (nextContacts.length === existingContacts.length) {
+    throw new ApiError(404, 'Emergency contact not found');
+  }
+
+  driver.emergencyContacts = nextContacts;
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      deleted: true,
+      results: driver.emergencyContacts.map(serializeEmergencyContact),
     },
   });
 };
@@ -225,6 +332,56 @@ export const updateCurrentDriver = async (req, res) => {
       phone: driver.phone,
       email: driver.email,
       profileImage: driver.profileImage || '',
+    },
+  });
+};
+
+export const requestDriverAccountDeletion = async (req, res) => {
+  const driverId = req.auth?.sub;
+  const reason = String(req.body?.reason || '').trim();
+
+  if (!reason) {
+    throw new ApiError(400, 'Deletion reason is required');
+  }
+
+  const driver = await Driver.findById(driverId);
+
+  if (!driver) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  if (driver.deletedAt || driver.approve === false || String(driver.status || '').toLowerCase() === 'inactive') {
+    throw new ApiError(400, 'Account is already inactive');
+  }
+
+  if (driver.deletionRequest?.status === 'pending') {
+    res.json({
+      success: true,
+      data: {
+        deletionRequestStatus: 'pending',
+        requestedAt: driver.deletionRequest.requestedAt || null,
+      },
+      message: 'Deletion request is already pending admin review',
+    });
+    return;
+  }
+
+  driver.deletionRequest = {
+    status: 'pending',
+    reason: reason.slice(0, 300),
+    requestedAt: new Date(),
+    reviewedAt: null,
+    reviewedBy: null,
+    adminNote: '',
+  };
+
+  await driver.save();
+
+  res.status(201).json({
+    success: true,
+    data: {
+      deletionRequestStatus: driver.deletionRequest.status,
+      requestedAt: driver.deletionRequest.requestedAt,
     },
   });
 };
@@ -412,6 +569,44 @@ export const getDriverDocumentTemplates = async (_req, res) => {
   res.json({
     success: true,
     data: { results },
+  });
+};
+
+export const getOwnerFleetDrivers = async (req, res) => {
+  const requester = await Driver.findById(req.auth.sub).select('onboarding').lean();
+
+  if (!requester) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const onboardingRole = String(requester?.onboarding?.role || '').toLowerCase();
+  const ownerId = requester?.onboarding?.convertedOwnerId || null;
+
+  if (onboardingRole !== 'owner' || !ownerId) {
+    throw new ApiError(403, 'Fleet driver access is only available for owner accounts');
+  }
+
+  const drivers = await Driver.find({ owner_id: ownerId, deletedAt: null })
+    .sort({ createdAt: -1 })
+    .select('name phone email city approve status isOnline isOnRide createdAt')
+    .lean();
+
+  res.json({
+    success: true,
+    data: {
+      results: drivers.map((driver) => ({
+        id: String(driver._id),
+        name: driver.name || '',
+        phone: driver.phone || '',
+        email: driver.email || '',
+        city: driver.city || '',
+        approve: driver.approve,
+        status: driver.status,
+        isOnline: Boolean(driver.isOnline),
+        isOnRide: Boolean(driver.isOnRide),
+        createdAt: driver.createdAt,
+      })),
+    },
   });
 };
 

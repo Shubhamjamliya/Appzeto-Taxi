@@ -2,6 +2,7 @@ import mongoose from 'mongoose';
 import { ApiError } from '../../../utils/ApiError.js';
 import { normalizePoint, toPoint } from '../../../utils/geo.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS } from '../constants/index.js';
+import { SetPrice } from '../admin/models/SetPrice.js';
 import { Vehicle } from '../admin/models/Vehicle.js';
 import { Driver } from '../driver/models/Driver.js';
 import { ensureDriverWalletCanAcceptRide, settleCompletedRideWallet } from '../driver/services/walletService.js';
@@ -127,6 +128,51 @@ const normalizeVehicleKeys = (vehicles = []) => {
   return [...new Set(keys.map(normalizeVehicleKey).filter(Boolean))];
 };
 
+const resolveSetPriceForRide = async ({ serviceLocationId = null, transportType = 'taxi', vehicleTypeId = null }) => {
+  if (!vehicleTypeId) {
+    return null;
+  }
+
+  const normalizedTransportType = String(transportType || 'taxi').trim().toLowerCase() || 'taxi';
+  const filters = [
+    {
+      vehicle_type: vehicleTypeId,
+      active: 1,
+      status: 'active',
+      ...(serviceLocationId ? { service_location_id: serviceLocationId } : {}),
+      transport_type: normalizedTransportType,
+    },
+    {
+      vehicle_type: vehicleTypeId,
+      active: 1,
+      status: 'active',
+      ...(serviceLocationId ? { service_location_id: serviceLocationId } : {}),
+      transport_type: 'both',
+    },
+    {
+      vehicle_type: vehicleTypeId,
+      active: 1,
+      status: 'active',
+      transport_type: normalizedTransportType,
+    },
+    {
+      vehicle_type: vehicleTypeId,
+      active: 1,
+      status: 'active',
+      transport_type: 'both',
+    },
+  ];
+
+  for (const filter of filters) {
+    const match = await SetPrice.findOne(filter).sort({ updatedAt: -1, createdAt: -1 }).lean();
+    if (match) {
+      return match;
+    }
+  }
+
+  return null;
+};
+
 const buildDriverVehicleAcceptFilter = async (ride) => {
   const vehicleTypeIds = normalizeVehicleTypeIds(ride.dispatchVehicleTypeIds || [], ride.vehicleTypeId);
 
@@ -227,6 +273,22 @@ export const createRideRecord = async ({
   }
 
   const primaryVehicleTypeId = dispatchVehicleTypeIds[0] || null;
+  const normalizedTransportType = String(transport_type || 'taxi').trim().toLowerCase() || 'taxi';
+  const resolvedServiceLocationId =
+    service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
+      ? new mongoose.Types.ObjectId(service_location_id)
+      : null;
+  const pricingRule = await resolveSetPriceForRide({
+    serviceLocationId: resolvedServiceLocationId,
+    transportType: normalizedTransportType,
+    vehicleTypeId: primaryVehicleTypeId,
+  });
+  const pricingSnapshot = {
+    setPriceId: pricingRule?._id || null,
+    admin_commission_type_from_driver: Number(pricingRule?.admin_commission_type_from_driver ?? 1),
+    admin_commission_from_driver: Number(pricingRule?.admin_commission_from_driver ?? 0),
+    resolvedAt: pricingRule ? new Date() : null,
+  };
 
   const promoCode = typeof promo_code === 'string' ? promo_code.trim() : '';
 
@@ -245,6 +307,9 @@ export const createRideRecord = async ({
       estimatedDistanceMeters: safeEstimatedDistanceMeters,
       estimatedDurationMinutes: safeEstimatedDurationMinutes,
       paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+      service_location_id: resolvedServiceLocationId,
+      transport_type: normalizedTransportType,
+      pricingSnapshot,
       parcel: normalizeParcelPayload(parcel),
       intercity: normalizeIntercityPayload(intercity),
       status: RIDE_STATUS.SEARCHING,
@@ -282,6 +347,9 @@ export const createRideRecord = async ({
             estimatedDistanceMeters: safeEstimatedDistanceMeters,
             estimatedDurationMinutes: safeEstimatedDurationMinutes,
             paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+            service_location_id: resolvedServiceLocationId,
+            transport_type: normalizedTransportType,
+            pricingSnapshot,
             parcel: normalizeParcelPayload(parcel),
             intercity: normalizeIntercityPayload(intercity),
             status: RIDE_STATUS.SEARCHING,

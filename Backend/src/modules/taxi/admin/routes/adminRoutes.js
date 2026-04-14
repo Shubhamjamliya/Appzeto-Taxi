@@ -23,6 +23,7 @@ import {
   createZone,
   bulkImportUsers,
   approveUserDeletionRequest,
+  approveDriverDeletionRequest,
   deleteAppModule,
   deleteDriver,
   deleteDriverNeededDocument,
@@ -65,6 +66,7 @@ import {
   getDriverWithdrawalSummaries,
   getDriverWithdrawals,
   getDeletedDrivers,
+  getDriverDeletionRequests,
   getFirebaseSettings,
   getGoodsTypes,
   getIntercityTrips,
@@ -112,6 +114,7 @@ import {
   permanentlyDeleteDeletedDriver,
   getRideRequests,
   rejectUserDeletionRequest,
+  rejectDriverDeletionRequest,
   getUserRequests,
   getUserWalletHistory,
   getVehiclePreferenceOptions,
@@ -186,6 +189,9 @@ adminRouter.get('/admin/users/:id/wallet-history', getUserWalletHistory);
 adminRouter.get('/admin/drivers', getDrivers);
 adminRouter.post('/admin/drivers/bulk-import', bulkImportDrivers);
 adminRouter.get('/admin/drivers/deleted', authenticate(['admin']), getDeletedDrivers);
+adminRouter.get('/admin/drivers/delete-requests', authenticate(['admin']), getDriverDeletionRequests);
+adminRouter.patch('/admin/drivers/delete-requests/:id/approve', authenticate(['admin']), approveDriverDeletionRequest);
+adminRouter.patch('/admin/drivers/delete-requests/:id/reject', authenticate(['admin']), rejectDriverDeletionRequest);
 adminRouter.patch('/admin/drivers/deleted/:id/restore', authenticate(['admin']), restoreDeletedDriver);
 adminRouter.delete('/admin/drivers/deleted/:id', authenticate(['admin']), permanentlyDeleteDeletedDriver);
 adminRouter.post('/admin/drivers', createDriver);

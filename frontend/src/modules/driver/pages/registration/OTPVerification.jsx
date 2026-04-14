@@ -82,11 +82,16 @@ const OTPVerification = () => {
                 if (token) {
                     localStorage.setItem('token', token);
                     localStorage.setItem('driverToken', token);
-                    localStorage.setItem('role', 'driver');
+                    const normalizedRole = String(role || 'driver').toLowerCase() === 'owner' ? 'owner' : 'driver';
+                    localStorage.setItem('role', normalizedRole);
                 }
 
                 clearDriverRegistrationSession();
-                navigate('/taxi/driver/home', { replace: true });
+                const nextPath =
+                    String(role || 'driver').toLowerCase() === 'owner'
+                        ? '/taxi/driver/profile'
+                        : '/taxi/driver/home';
+                navigate(nextPath, { replace: true });
                 return;
             }
 

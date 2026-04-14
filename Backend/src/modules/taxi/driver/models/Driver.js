@@ -173,6 +173,42 @@ const driverSchema = new mongoose.Schema(
       default: null,
       index: true,
     },
+    deletion_reason: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    deletionRequest: {
+      status: {
+        type: String,
+        enum: ['none', 'pending', 'approved', 'rejected'],
+        default: 'none',
+        index: true,
+      },
+      reason: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      requestedAt: {
+        type: Date,
+        default: null,
+      },
+      reviewedAt: {
+        type: Date,
+        default: null,
+      },
+      reviewedBy: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Admin',
+        default: null,
+      },
+      adminNote: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+    },
     wallet: {
       balance: {
         type: Number,
@@ -209,6 +245,28 @@ const driverSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.Mixed,
       default: {},
     },
+    emergencyContacts: {
+      type: [
+        {
+          name: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          phone: {
+            type: String,
+            required: true,
+            trim: true,
+          },
+          source: {
+            type: String,
+            enum: ['manual', 'device'],
+            default: 'manual',
+          },
+        },
+      ],
+      default: [],
+    },
     onboarding: {
       type: mongoose.Schema.Types.Mixed,
       default: {},
@@ -218,6 +276,8 @@ const driverSchema = new mongoose.Schema(
     timestamps: true,
   },
 );
+
+driverSchema.index({ 'deletionRequest.status': 1, deletedAt: 1 });
 
 driverSchema.index({ location: '2dsphere' });
 

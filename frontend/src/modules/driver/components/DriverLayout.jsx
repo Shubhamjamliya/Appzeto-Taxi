@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { getCurrentDriver } from '../services/registrationService';
+import { clearDriverAuthState, getCurrentDriver } from '../services/registrationService';
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response;
 
@@ -34,6 +34,11 @@ const onboardingRoutes = new Set([
     '/taxi/driver/status',
 ]);
 
+const redirectToDriverLogin = (navigate) => {
+    clearDriverAuthState();
+    navigate('/taxi/driver/login', { replace: true });
+};
+
 const DriverLayout = () => {
     const location = useLocation();
     const navigate = useNavigate();
@@ -53,7 +58,7 @@ const DriverLayout = () => {
 
         if (!token) {
             setIsAllowed(false);
-            navigate('/taxi/driver/login', { replace: true });
+            redirectToDriverLogin(navigate);
             return;
         }
 
@@ -86,7 +91,12 @@ const DriverLayout = () => {
                 setIsAllowed(false);
 
                 if (error?.status === 401) {
-                    navigate('/taxi/driver/login', { replace: true });
+                    redirectToDriverLogin(navigate);
+                    return;
+                }
+
+                if (error?.status === 404) {
+                    redirectToDriverLogin(navigate);
                     return;
                 }
 

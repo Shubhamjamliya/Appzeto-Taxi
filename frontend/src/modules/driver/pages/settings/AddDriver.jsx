@@ -23,7 +23,8 @@ const AddDriver = () => {
     const handleSubmit = () => {
         setStep(3);
         setTimeout(() => {
-            navigate('/taxi/driver/manage-drivers');
+            const role = String(localStorage.getItem('role') || 'driver').toLowerCase();
+            navigate(role === 'owner' ? '/admin/fleet/blocked' : '/taxi/driver/manage-drivers');
         }, 5000);
     };
 

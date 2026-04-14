@@ -16,10 +16,8 @@ const menuItems = [
   { icon: MapPin, title: 'Saved Addresses', sub: 'Home, office & others', path: '/taxi/user/profile/addresses', bg: 'bg-emerald-50', color: 'text-emerald-500' },
   { icon: Package, title: 'My Rides', sub: 'History & receipts', path: '/taxi/user/activity', bg: 'bg-indigo-50', color: 'text-indigo-500' },
   { icon: Bell, title: 'Notifications', sub: 'Offers & safety alerts', path: '/taxi/user/profile/notifications', bg: 'bg-purple-50', color: 'text-purple-500' },
-  { icon: Shield, title: 'Security', sub: 'Privacy & password', path: '/taxi/user/profile/security', bg: 'bg-rose-50', color: 'text-rose-500' },
   { icon: Gift, title: 'Refer & Earn', sub: 'Invite friends & get rewards', path: '/taxi/user/referral', bg: 'bg-amber-50', color: 'text-amber-500' },
   { icon: HelpCircle, title: 'Support', sub: 'Help center & ticketing', path: '/taxi/user/support/tickets', bg: 'bg-slate-50', color: 'text-slate-500' },
-  { icon: Wrench, title: 'Workshop & RSA', sub: 'Quick roadside assistance', path: '/taxi/user/services/workshop-rsa', bg: 'bg-sky-50', color: 'text-sky-500' },
   { icon: Trash2, title: 'Delete Account', sub: 'Request account deletion', path: '/taxi/user/profile/delete-account', bg: 'bg-red-50', color: 'text-red-500' },
 ];
 

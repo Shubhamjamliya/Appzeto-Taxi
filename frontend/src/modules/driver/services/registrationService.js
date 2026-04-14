@@ -27,6 +27,15 @@ export const clearDriverRegistrationSession = () => {
   localStorage.removeItem(STORAGE_KEY);
 };
 
+export const clearDriverAuthState = () => {
+  clearDriverRegistrationSession();
+  localStorage.removeItem('token');
+  localStorage.removeItem('driverToken');
+  localStorage.removeItem('driverInfo');
+  localStorage.removeItem('role');
+  localStorage.removeItem('chatRole');
+};
+
 export const sendDriverOtp = (payload) => api.post('/drivers/onboarding/send-otp', payload);
 
 export const verifyDriverOtp = (payload) => api.post('/drivers/onboarding/verify-otp', payload);
@@ -100,6 +109,13 @@ const withDriverAuth = (config = {}) => {
 export const getCurrentDriver = () => api.get('/drivers/me', withDriverAuth());
 
 export const updateDriverProfile = (payload) => api.patch('/drivers/me', payload, withDriverAuth());
+export const requestDriverAccountDeletion = (reason) =>
+  api.post('/drivers/me/delete-request', { reason }, withDriverAuth());
+export const getDriverEmergencyContacts = () => api.get('/drivers/emergency-contacts', withDriverAuth());
+export const addDriverEmergencyContact = (payload) =>
+  api.post('/drivers/emergency-contacts', payload, withDriverAuth());
+export const deleteDriverEmergencyContact = (contactId) =>
+  api.delete(`/drivers/emergency-contacts/${contactId}`, withDriverAuth());
 
 export const updateDriverVehicle = (payload) =>
   api.patch('/drivers/vehicle', payload, withDriverAuth());
@@ -113,6 +129,8 @@ export const getDriverApprovalStatus = () => {
     },
   }));
 };
+
+export const getOwnerFleetDrivers = () => api.get('/drivers/fleet/drivers', withDriverAuth());
 
 export const getDriverRegistrationSession = ({ registrationId, phone }) =>
   api.get(`/drivers/onboarding/session/${registrationId}`, {

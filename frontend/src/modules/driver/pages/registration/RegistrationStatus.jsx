@@ -9,7 +9,7 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import Rydon24Logo from '@/assets/rydon24_logo.png';
-import { clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
+import { clearDriverAuthState, clearDriverRegistrationSession, getDriverApprovalStatus } from '../../services/registrationService';
 
 const APPROVAL_POLL_MS = 2500;
 
@@ -31,6 +31,11 @@ const isDriverApproved = (driver) => {
     );
 };
 
+const redirectToDriverLogin = (navigate) => {
+    clearDriverAuthState();
+    navigate('/taxi/driver/login', { replace: true });
+};
+
 const RegistrationStatus = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -45,12 +50,17 @@ const RegistrationStatus = () => {
             return;
         }
 
-        navigate('/taxi/driver/home');
+        const normalizedRole =
+            String(localStorage.getItem('role') || location.state?.role || 'driver').toLowerCase() === 'owner'
+                ? 'owner'
+                : 'driver';
+        navigate(normalizedRole === 'owner' ? '/taxi/driver/profile' : '/taxi/driver/home');
     };
 
     useEffect(() => {
         if (location.state?.role) {
-            localStorage.setItem('role', location.state.role);
+            const normalizedRole = String(location.state.role).toLowerCase() === 'owner' ? 'owner' : 'driver';
+            localStorage.setItem('role', normalizedRole);
         }
 
         const onboardingToken =
@@ -61,7 +71,8 @@ const RegistrationStatus = () => {
         if (onboardingToken) {
             localStorage.setItem('token', onboardingToken);
             localStorage.setItem('driverToken', onboardingToken);
-            localStorage.setItem('role', 'driver');
+            const roleFromState = String(location.state?.role || '').toLowerCase();
+            localStorage.setItem('role', roleFromState === 'owner' ? 'owner' : 'driver');
         }
 
         mountedRef.current = true;
@@ -79,7 +90,7 @@ const RegistrationStatus = () => {
                         setChecking(false);
                         setStatusMessage('Registration session not found. Please start again.');
                     }
-                navigate('/taxi/driver/login', { replace: true });
+                    redirectToDriverLogin(navigate);
                     requestInFlightRef.current = false;
                     return;
                 }
@@ -95,7 +106,13 @@ const RegistrationStatus = () => {
 
                 if (isApproved) {
                     clearDriverRegistrationSession();
-                    navigate('/taxi/driver/home', { replace: true });
+                    const normalizedRole =
+                        String(localStorage.getItem('role') || location.state?.role || 'driver').toLowerCase() === 'owner'
+                            ? 'owner'
+                            : 'driver';
+                    navigate(normalizedRole === 'owner' ? '/taxi/driver/profile' : '/taxi/driver/home', {
+                        replace: true,
+                    });
                     requestInFlightRef.current = false;
                     return;
                 }
@@ -108,7 +125,14 @@ const RegistrationStatus = () => {
                 }
 
                 if (error?.status === 401) {
-                    navigate('/taxi/driver/login', { replace: true });
+                    redirectToDriverLogin(navigate);
+                    requestInFlightRef.current = false;
+                    return;
+                }
+
+                if (error?.status === 404) {
+                    setStatusMessage('Driver account deleted. Redirecting to login...');
+                    redirectToDriverLogin(navigate);
                     requestInFlightRef.current = false;
                     return;
                 }

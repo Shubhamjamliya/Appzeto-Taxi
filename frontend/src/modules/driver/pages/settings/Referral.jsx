@@ -169,7 +169,7 @@ const DriverReferral = () => {
     <div className="min-h-screen bg-[#f5f7fb] font-sans p-5 pt-8 pb-10">
       <header className="mb-5 flex items-center gap-3">
         <button
-          onClick={() => navigate(-1)}
+          onClick={() => navigate('/taxi/driver/profile')}
           className="w-9 h-9 rounded-xl border border-gray-200 bg-white flex items-center justify-center shadow-sm"
         >
           <ArrowLeft size={18} className="text-gray-900" strokeWidth={2.3} />

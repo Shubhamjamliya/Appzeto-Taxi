@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { ArrowLeft, Edit2, Loader2, Plus, Save, Search, Trash2 } from 'lucide-react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { adminService } from '../../services/adminService';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const MotionDiv = motion.div;
 
@@ -139,11 +140,15 @@ const OwnerBookings = () => {
   };
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <AnimatePresence mode="wait">
-        {view === 'list' ? (
-          <MotionDiv key="list" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -18 }} className="space-y-6">
-            <div className="flex flex-col gap-4 rounded-[28px] border border-slate-200 bg-white px-6 py-6 shadow-sm md:flex-row md:items-center md:justify-between">
+    <div className="min-h-screen bg-gray-50">
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader module="Owner Management" page="Bookings" title="Owner Bookings" />
+
+        <div className="mt-6">
+          <AnimatePresence mode="wait">
+            {view === 'list' ? (
+              <MotionDiv key="list" initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -18 }} className="space-y-6">
+            <div className="flex flex-col gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm md:flex-row md:items-center md:justify-between">
               <div>
                 <h1 className="text-2xl font-black tracking-tight text-slate-900">Owner Bookings</h1>
                 <p className="mt-1 text-sm font-medium text-slate-500">Manage bookings assigned to owners and fleets.</p>
@@ -325,6 +330,8 @@ const OwnerBookings = () => {
           </MotionDiv>
         )}
       </AnimatePresence>
+        </div>
+      </div>
     </div>
   );
 };

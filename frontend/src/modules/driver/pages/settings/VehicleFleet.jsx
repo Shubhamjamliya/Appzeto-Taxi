@@ -8,6 +8,7 @@ import {
     updateDriverVehicle,
 } from '../../services/registrationService';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
+import OwnerVehicleFleet from './OwnerVehicleFleet';
 
 const unwrap = (response) => response?.data?.data || response?.data || response;
 
@@ -92,6 +93,7 @@ const VehicleFleet = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [message, setMessage] = useState('');
+    const [isOwner, setIsOwner] = useState(false);
     const {
         uploading: imageUploading,
         preview: imagePreview,
@@ -132,6 +134,10 @@ const VehicleFleet = () => {
 
                 const nextDriver = unwrap(driverResponse);
                 const nextTypes = buildVisibleVehicleTypes(getVehicleTypes(typeResponse), nextDriver);
+
+                // Check if user is owner
+                const userRole = localStorage.getItem('role') || 'driver';
+                setIsOwner(userRole === 'owner');
 
                 setDriver(nextDriver);
                 setVehicleTypes(nextTypes);
@@ -184,7 +190,11 @@ const VehicleFleet = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
+        <>
+            {isOwner ? (
+                <OwnerVehicleFleet />
+            ) : (
+                <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32 overflow-x-hidden">
             <header className="flex items-center gap-4 mb-8">
                 <button onClick={() => navigate('/taxi/driver/profile')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
                     <ArrowLeft size={18} className="text-slate-900" />
@@ -388,7 +398,9 @@ const VehicleFleet = () => {
                     </>
                 )}
             </AnimatePresence>
-        </div>
+            </div>
+            )}
+        </>
     );
 };
 

@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const BASE = `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin/owner-management`;
 
@@ -109,26 +110,19 @@ const OwnerNeededDocumentsCreate = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Create</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/owners/documents')}
-            className="text-gray-950 transition-colors hover:text-indigo-600"
-          >
-            Owner Needed Documents
-          </button>
-          <ChevronRight size={14} />
-          <span>Create</span>
-        </div>
-      </div>
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader
+          module="Owner Management"
+          page="Owner Needed Documents"
+          title="Create Owner Needed Document"
+          backTo="/admin/owners/documents"
+        />
 
-      <div className="px-5 pb-10">
-        <div className="rounded border border-gray-200 bg-white shadow-sm">
-          <div className="border-b border-gray-100 px-8 py-6" />
+        <div className="mt-6">
+          <div className="rounded border border-gray-200 bg-white shadow-sm">
+            <div className="border-b border-gray-100 px-8 py-6" />
 
-          <form onSubmit={handleSubmit} className="p-8">
+            <form onSubmit={handleSubmit} className="p-8">
             <div className="grid grid-cols-1 gap-x-10 gap-y-7 md:grid-cols-2">
               <div>
                 <label className={labelClass}>
@@ -235,11 +229,10 @@ const OwnerNeededDocumentsCreate = () => {
               </button>
             </div>
           </form>
-        </div>
+          </div>
       </div>
     </div>
   );
 };
 
 export default OwnerNeededDocumentsCreate;
-

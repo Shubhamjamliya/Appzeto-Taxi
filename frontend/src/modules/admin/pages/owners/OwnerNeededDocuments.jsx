@@ -76,11 +76,10 @@ const OwnerNeededDocuments = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="px-5 pt-3">
+      <div className="p-6 lg:p-8">
         <AdminPageHeader module="Owner Management" page="Owner Needed Documents" title="Owner Needed Documents" />
-      </div>
 
-      <div className="px-5 pb-6">
+        <div className="mt-6">
         <div className="relative rounded border border-gray-200 bg-white shadow-sm">
           <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-center md:justify-between">
             <div className="flex items-center gap-3 text-sm font-semibold text-slate-400">
@@ -211,6 +210,7 @@ const OwnerNeededDocuments = () => {
               </button>
             </div>
           </div>
+        </div>
         </div>
       </div>
     </div>

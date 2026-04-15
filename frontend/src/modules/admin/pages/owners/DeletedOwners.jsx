@@ -94,9 +94,10 @@ const DeletedOwners = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="px-5 pt-3">
+      <div className="p-6 lg:p-8">
         <AdminPageHeader module="Owner Management" page="Deleted Owners" title="Deleted Owners" backTo="/admin/owners" />
-      </div>
+
+        <div className="mt-6">
 
       <div className="px-5 pb-6">
         <div className="relative rounded border border-gray-200 bg-white shadow-sm">
@@ -221,6 +222,7 @@ const DeletedOwners = () => {
               Next
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

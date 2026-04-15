@@ -123,6 +123,9 @@ export const deleteDriverEmergencyContact = (contactId) =>
 export const updateDriverVehicle = (payload) =>
   api.patch('/drivers/vehicle', payload, withDriverAuth());
 
+export const deleteDriverVehicle = (vehicleId) =>
+  api.delete(`/drivers/vehicle/${vehicleId}`, withDriverAuth());
+
 export const getDriverVehicleTypes = () => api.get('/admin/types/vehicle-types', withDriverAuth());
 
 export const getDriverApprovalStatus = () => {

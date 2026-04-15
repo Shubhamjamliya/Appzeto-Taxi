@@ -3,6 +3,7 @@ import { Check, ChevronRight, Loader2 } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { adminService } from '../../services/adminService';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const OwnerPasswordUpdate = () => {
   const { id } = useParams();
@@ -56,26 +57,14 @@ const OwnerPasswordUpdate = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-5 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-        <h1 className="text-lg font-bold uppercase tracking-wide text-slate-700">Create</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/owners')}
-            className="text-slate-900 transition-colors hover:text-indigo-600"
-          >
-            Owner
-          </button>
-          <ChevronRight size={14} />
-          <span>Create</span>
-        </div>
-      </div>
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader module="Owner Management" page="Owners" title="Update Owner Password" backTo="/admin/owners" />
 
-      <div className="px-5">
-        <form
-          onSubmit={handleSubmit}
-          className="rounded border border-gray-200 bg-white px-4 py-9 shadow-sm md:px-5"
-        >
+        <div className="mt-6">
+          <form
+            onSubmit={handleSubmit}
+            className="rounded border border-gray-200 bg-white px-4 py-9 shadow-sm md:px-5"
+          >
           <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
             <div>
               <label className="mb-2 block text-sm font-semibold text-gray-950">
@@ -126,6 +115,7 @@ const OwnerPasswordUpdate = () => {
             </button>
           </div>
         </form>
+        </div>
       </div>
     </div>
   );

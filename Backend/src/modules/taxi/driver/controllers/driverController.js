@@ -7,6 +7,7 @@ import { Owner } from '../../admin/models/Owner.js';
 import { ServiceLocation } from '../../admin/models/ServiceLocation.js';
 import { Vehicle } from '../../admin/models/Vehicle.js';
 import { Notification } from '../../admin/promotions/models/Notification.js';
+import { FleetVehicle } from '../../admin/models/FleetVehicle.js';
 import { comparePassword, hashPassword, signAccessToken } from '../services/authService.js';
 import { emitToDriver } from '../../services/dispatchService.js';
 import { findZoneByPickup } from '../services/locationService.js';
@@ -652,6 +653,102 @@ export const getDriverDocumentTemplates = async (_req, res) => {
   res.json({
     success: true,
     data: { results },
+  });
+};
+
+export const addOwnerVehicle = async (req, res) => {
+  const requester = await Driver.findById(req.auth.sub).select('onboarding phone email service_location_id').lean();
+
+  if (!requester) {
+    throw new ApiError(404, 'Driver not found');
+  }
+
+  const owner = await resolveOwnerForFleet(requester);
+
+  if (!owner?._id) {
+    throw new ApiError(403, 'Vehicle addition is only available for owner accounts');
+  }
+
+  const { vehicleTypeId, make, model, number, color, rcFile } = req.body;
+
+  if (!make?.trim()) {
+    throw new ApiError(400, 'Car brand/make is required');
+  }
+
+  if (!model?.trim()) {
+    throw new ApiError(400, 'Car model is required');
+  }
+
+  if (!number?.trim()) {
+    throw new ApiError(400, 'License plate number is required');
+  }
+
+  if (!color?.trim()) {
+    throw new ApiError(400, 'Car color is required');
+  }
+
+  const normalizedPlate = String(number).trim().toUpperCase();
+
+  // Check for duplicate license plate for this owner
+  const existing = await FleetVehicle.findOne({
+    owner_id: owner._id,
+    license_plate_number: normalizedPlate,
+  }).lean();
+
+  if (existing) {
+    throw new ApiError(409, 'Fleet vehicle with this license plate already exists for this owner');
+  }
+
+  // Get service location from owner or use first available
+  let serviceLocationId = owner.service_location_id;
+  if (!serviceLocationId) {
+    const defaultLocation = await ServiceLocation.findOne({ active: true }).select('_id').lean();
+    if (!defaultLocation) {
+      throw new ApiError(400, 'No service location available');
+    }
+    serviceLocationId = defaultLocation._id;
+  }
+
+  const vehicle = await FleetVehicle.create({
+    owner_id: owner._id,
+    service_location_id: serviceLocationId,
+    transport_type: 'taxi',
+    vehicle_type_id: vehicleTypeId && String(vehicleTypeId).trim() ? vehicleTypeId : null,
+    car_brand: String(make).trim(),
+    car_model: String(model).trim(),
+    license_plate_number: normalizedPlate,
+    car_color: String(color).trim(),
+    status: 'pending',
+    active: true,
+    documents: rcFile ? { rc: rcFile } : {},
+  });
+
+  const populated = await FleetVehicle.findById(vehicle._id)
+    .populate('owner_id', 'company_name owner_name name email mobile')
+    .populate('service_location_id', 'service_location_name name country')
+    .populate('vehicle_type_id', 'name type_name transport_type icon_types')
+    .lean();
+
+  res.status(201).json({
+    success: true,
+    message: 'Vehicle added successfully and is pending approval',
+    data: {
+      id: String(populated._id),
+      owner_id: String(populated.owner_id?._id || ''),
+      owner_name: populated.owner_id?.company_name || populated.owner_id?.owner_name || populated.owner_id?.name || '',
+      service_location_id: String(populated.service_location_id?._id || ''),
+      service_location_name: populated.service_location_id?.service_location_name || populated.service_location_id?.name || '',
+      transport_type: populated.transport_type,
+      vehicle_type_id: String(populated.vehicle_type_id?._id || ''),
+      vehicle_type_name: populated.vehicle_type_id?.name || populated.vehicle_type_id?.type_name || '',
+      car_brand: populated.car_brand,
+      car_model: populated.car_model,
+      license_plate_number: populated.license_plate_number,
+      car_color: populated.car_color,
+      status: populated.status,
+      active: populated.active,
+      createdAt: populated.createdAt,
+    },
   });
 };
 

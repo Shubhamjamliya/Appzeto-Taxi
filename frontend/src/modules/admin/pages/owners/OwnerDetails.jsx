@@ -17,6 +17,7 @@ import {
 import { useNavigate, useParams } from 'react-router-dom';
 
 import { adminService } from '../../services/adminService';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const tabs = [
   'Owner Profile',
@@ -155,22 +156,11 @@ const OwnerDetails = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Owner Detail</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/owners')}
-            className="text-slate-900 transition-colors hover:text-teal-600"
-          >
-            Manage Owners
-          </button>
-          <ChevronRight size={14} />
-          <span>Owner Detail</span>
-        </div>
-      </div>
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader module="Owner Management" page="Owner Details" title="Owner Details" backTo="/admin/owners" />
 
-      <div className="rounded border border-gray-200 bg-white shadow-sm">
+        <div className="mt-6">
+          <div className="rounded border border-gray-200 bg-white shadow-sm">
         <div className="grid gap-6 px-4 py-6 md:grid-cols-[1fr_1px_1fr] md:px-5">
           <div className="flex items-center gap-4">
             <div className="flex h-[102px] w-[102px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-pink-200 via-violet-100 to-fuchsia-300 text-3xl font-bold text-indigo-950">
@@ -254,6 +244,8 @@ const OwnerDetails = () => {
           <Menu size={24} />
         </button>
       </div>
+        </div>
+      </div>
 
       <button
         type="button"
@@ -262,6 +254,7 @@ const OwnerDetails = () => {
       >
         <ArrowLeft size={16} /> Back
       </button>
+      </div>
     </div>
   );
 };

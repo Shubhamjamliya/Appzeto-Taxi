@@ -112,86 +112,90 @@ const OwnerDashboard = () => {
   ];
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500">
-      <AdminPageHeader module="Owner Management" page="Owner Dashboard" title="Owner Dashboard" />
+    <div className="min-h-screen bg-gray-50">
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader module="Owner Management" page="Owner Dashboard" title="Owner Dashboard" />
 
-      {/* Stats Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {stats.map((stat, i) => (
-          <StatCard 
-            key={i} 
-            {...stat} 
-            onViewAll={() => navigate(stat.path)}
-          />
-        ))}
-      </div>
+        {/* Stats Grid */}
+        <div className="space-y-6 animate-in fade-in duration-500">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {stats.map((stat, i) => (
+              <StatCard 
+                key={i} 
+                {...stat} 
+                onViewAll={() => navigate(stat.path)}
+              />
+            ))}
+          </div>
 
-      {/* Charts & Finance Section */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Today Trips Chart Placeholder */}
-        <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col">
-           <p className="text-[12px] font-bold text-gray-900 uppercase tracking-widest mb-10">Today Trips</p>
-           <div className="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
-              <div className="w-48 h-48 border-[12px] border-gray-50 rounded-full flex flex-col items-center justify-center">
-                 <p className="text-3xl font-black text-gray-200">0</p>
-                 <p className="text-[10px] font-bold text-gray-400 uppercase">Total Rides</p>
-              </div>
-              <div className="mt-8 w-full space-y-3">
-                 <div className="flex items-center justify-between px-4">
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-600"></div><span className="text-[11px] font-bold text-gray-500">Completed Rides</span></div>
-                    <span className="text-[11px] font-black text-gray-900">0</span>
-                 </div>
-                 <div className="flex items-center justify-between px-4">
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"></div><span className="text-[11px] font-bold text-gray-500">Cancelled Rides</span></div>
-                    <span className="text-[11px] font-black text-gray-900">0</span>
-                 </div>
-                 <div className="flex items-center justify-between px-4">
-                    <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-sky-500"></div><span className="text-[11px] font-bold text-gray-500">Scheduled Rides</span></div>
-                    <span className="text-[11px] font-black text-gray-900">0</span>
-                 </div>
-              </div>
-           </div>
-        </div>
-
-        {/* Finance Stats */}
-        <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-           {finances.map((fin, i) => (
-             <FinanceCard key={i} {...fin} />
-           ))}
-        </div>
-      </div>
-
-      {/* Bottom row: Earnings Overview & Overall Summary */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-         {/* More Finance Grid */}
-         <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
-            <FinanceCard icon={TrendingUp} label="Overall Earnings" value={data?.overall_earnings || 0} color={{ bg: 'bg-red-50', text: 'text-red-500' }} />
-            <FinanceCard icon={Monitor} label="By Cash" value={data?.overall_cash || 0} color={{ bg: 'bg-amber-50', text: 'text-amber-500' }} />
-            <FinanceCard icon={Wallet} label="By Wallet" value={data?.overall_wallet || 0} color={{ bg: 'bg-emerald-50', text: 'text-emerald-500' }} />
-            <FinanceCard icon={CreditCard} label="By Card/Online" value={data?.overall_online || 0} color={{ bg: 'bg-sky-50', text: 'text-sky-500' }} />
-            <FinanceCard icon={FileText} label="Admin Commission" value={data?.overall_admin_comm || 0} color={{ bg: 'bg-gray-50', text: 'text-gray-500' }} />
-            <FinanceCard icon={FileText} label="Owner Earnings" value={data?.overall_owner_earnings || 0} color={{ bg: 'bg-slate-50', text: 'text-slate-500' }} />
-         </div>
-
-         {/* Chart Placeholder */}
-         <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
-            <p className="text-[12px] font-bold text-gray-900 uppercase tracking-widest mb-6">Overall Earnings</p>
-            <div className="h-48 flex items-end justify-between gap-2 px-2 relative border-b-2 border-gray-100">
-               <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
-               <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
-               <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
-               
-               {/* Values axis */}
-               <div className="absolute left-[-20px] top-0 bottom-0 flex flex-col justify-between text-[8px] font-bold text-gray-300">
-                  <span>2</span><span>1.6</span><span>1.2</span><span>0.8</span><span>0.4</span><span>0</span>
+          {/* Charts & Finance Section */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Today Trips Chart Placeholder */}
+            <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm flex flex-col">
+               <p className="text-[12px] font-bold text-gray-900 uppercase tracking-widest mb-10">Today Trips</p>
+               <div className="flex-1 flex flex-col items-center justify-center relative min-h-[250px]">
+                  <div className="w-48 h-48 border-[12px] border-gray-50 rounded-full flex flex-col items-center justify-center">
+                     <p className="text-3xl font-black text-gray-200">0</p>
+                     <p className="text-[10px] font-bold text-gray-400 uppercase">Total Rides</p>
+                  </div>
+                  <div className="mt-8 w-full space-y-3">
+                     <div className="flex items-center justify-between px-4">
+                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-indigo-600"></div><span className="text-[11px] font-bold text-gray-500">Completed Rides</span></div>
+                        <span className="text-[11px] font-black text-gray-900">0</span>
+                     </div>
+                     <div className="flex items-center justify-between px-4">
+                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-amber-500"></div><span className="text-[11px] font-bold text-gray-500">Cancelled Rides</span></div>
+                        <span className="text-[11px] font-black text-gray-900">0</span>
+                     </div>
+                     <div className="flex items-center justify-between px-4">
+                        <div className="flex items-center gap-2"><div className="w-2 h-2 rounded-full bg-sky-500"></div><span className="text-[11px] font-bold text-gray-500">Scheduled Rides</span></div>
+                        <span className="text-[11px] font-black text-gray-900">0</span>
+                     </div>
+                  </div>
                </div>
             </div>
-            <div className="flex justify-between mt-4 px-2">
-               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">January</span>
-               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">February</span>
-               <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">March</span>
+
+            {/* Finance Stats */}
+            <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+               {finances.map((fin, i) => (
+                 <FinanceCard key={i} {...fin} />
+               ))}
             </div>
-         </div>
+          </div>
+
+          {/* Bottom row: Earnings Overview & Overall Summary */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+             {/* More Finance Grid */}
+             <div className="lg:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4">
+                <FinanceCard icon={TrendingUp} label="Overall Earnings" value={data?.overall_earnings || 0} color={{ bg: 'bg-red-50', text: 'text-red-500' }} />
+                <FinanceCard icon={Monitor} label="By Cash" value={data?.overall_cash || 0} color={{ bg: 'bg-amber-50', text: 'text-amber-500' }} />
+                <FinanceCard icon={Wallet} label="By Wallet" value={data?.overall_wallet || 0} color={{ bg: 'bg-emerald-50', text: 'text-emerald-500' }} />
+                <FinanceCard icon={CreditCard} label="By Card/Online" value={data?.overall_online || 0} color={{ bg: 'bg-sky-50', text: 'text-sky-500' }} />
+                <FinanceCard icon={FileText} label="Admin Commission" value={data?.overall_admin_comm || 0} color={{ bg: 'bg-gray-50', text: 'text-gray-500' }} />
+                <FinanceCard icon={FileText} label="Owner Earnings" value={data?.overall_owner_earnings || 0} color={{ bg: 'bg-slate-50', text: 'text-slate-500' }} />
+             </div>
+
+             {/* Chart Placeholder */}
+             <div className="lg:col-span-1 bg-white p-6 rounded-xl border border-gray-100 shadow-sm">
+                <p className="text-[12px] font-bold text-gray-900 uppercase tracking-widest mb-6">Overall Earnings</p>
+                <div className="h-48 flex items-end justify-between gap-2 px-2 relative border-b-2 border-gray-100">
+                   <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
+                   <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
+                   <div className="flex-1 bg-emerald-500/10 h-0.5 rounded-t-sx transition-all"></div>
+                   
+                   {/* Values axis */}
+                   <div className="absolute left-[-20px] top-0 bottom-0 flex flex-col justify-between text-[8px] font-bold text-gray-300">
+                      <span>2</span><span>1.6</span><span>1.2</span><span>0.8</span><span>0.4</span><span>0</span>
+                   </div>
+                </div>
+                <div className="flex justify-between mt-4 px-2">
+                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">January</span>
+                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">February</span>
+                   <span className="text-[9px] font-bold text-gray-400 uppercase tracking-tighter">March</span>
+                </div>
+             </div>
+          </div>
+        </div>
       </div>
     </div>
   );

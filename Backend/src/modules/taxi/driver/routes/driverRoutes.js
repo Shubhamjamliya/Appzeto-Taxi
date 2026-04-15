@@ -31,6 +31,7 @@ import {
   updateDriverVehicle,
   verifyOnboardingOtp,
   verifyDriverLoginOtpRequest,
+  addOwnerVehicle,
 } from '../controllers/driverController.js';
 
 export const driverRouter = Router();
@@ -52,6 +53,7 @@ driverRouter.patch('/vehicle', authenticate(['driver']), asyncHandler(updateDriv
 driverRouter.get('/approval-status', asyncHandler(getDriverApprovalStatus));
 driverRouter.get('/fleet/drivers', authenticate(['driver']), asyncHandler(getOwnerFleetDrivers));
 driverRouter.post('/fleet/drivers', authenticate(['driver']), asyncHandler(createOwnerFleetDriver));
+driverRouter.post('/fleet/vehicles', authenticate(['driver']), asyncHandler(addOwnerVehicle));
 driverRouter.get('/service-locations', asyncHandler(getServiceLocations));
 driverRouter.get('/document-templates', asyncHandler(getDriverDocumentTemplates));
 driverRouter.post('/onboarding/send-otp', asyncHandler(startOnboarding));

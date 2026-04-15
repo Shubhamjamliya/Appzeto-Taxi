@@ -3,6 +3,7 @@ import { ChevronDown, ChevronRight, Eye, FileSearch, Loader2, Menu } from 'lucid
 import { useNavigate } from 'react-router-dom';
 
 import { adminService } from '../../services/adminService';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const formatDate = (value) => {
   if (!value) return '-';
@@ -86,16 +87,10 @@ const WithdrawalRequestOwners = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Withdrawal Request Owners</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <span className="text-gray-950">Withdrawal Request Owners</span>
-          <ChevronRight size={14} />
-          <span>Withdrawal Request Owners</span>
-        </div>
-      </div>
+      <div className="p-6 lg:p-8">
+        <AdminPageHeader module="Owner Wallet" page="Withdrawal Requests" title="Withdrawal Requests" />
 
-      <div className="px-5">
+        <div className="mt-6">
         <div className="relative rounded border border-gray-200 bg-white shadow-sm">
           <div className="flex items-center gap-3 px-5 py-10 text-sm font-semibold text-slate-400">
             <span>show</span>
@@ -224,6 +219,7 @@ const WithdrawalRequestOwners = () => {
               Next
             </button>
           </div>
+        </div>
         </div>
       </div>
     </div>

@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate } from 'react-router-dom';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const BASE = globalThis.__LEGACY_BACKEND_ORIGIN__ + '/api/v1/admin';
 const MotionDiv = motion.div;
@@ -454,16 +455,11 @@ const ManageFleet = () => {
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
         >
-          <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-            <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Manage Fleet</h1>
-            <div className="flex items-center gap-2 text-sm text-slate-400">
-              <span className="text-gray-950">Manage Fleet</span>
-              <ChevronRight size={14} />
-              <span>Manage Fleet</span>
-            </div>
+          <div className="px-5 pt-3">
+            <AdminPageHeader module="Fleet Management" page="Manage Fleet" title="Manage Fleet" />
           </div>
 
-          <div className="px-5">
+          <div className="px-5 pb-6">
             <div className="relative rounded border border-gray-200 bg-white shadow-sm">
             {/* Toolbar */}
             <div className="flex flex-col gap-5 px-5 py-5 md:flex-row md:items-center md:justify-between">

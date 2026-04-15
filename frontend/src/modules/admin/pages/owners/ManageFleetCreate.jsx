@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { ChevronDown, ChevronRight, Loader2, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const BASE = `${globalThis.__LEGACY_BACKEND_ORIGIN__}/api/v1/admin`;
 
@@ -142,19 +143,8 @@ const ManageFleetCreate = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans text-gray-950">
-      <div className="mb-6 flex items-center justify-between border-b border-gray-200 bg-white px-5 py-3">
-        <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Create</h1>
-        <div className="flex items-center gap-2 text-sm text-slate-400">
-          <button
-            type="button"
-            onClick={() => navigate('/admin/fleet/manage')}
-            className="text-gray-950 transition-colors hover:text-indigo-600"
-          >
-            Manage Fleet
-          </button>
-          <ChevronRight size={14} />
-          <span>Create</span>
-        </div>
+      <div className="px-5 pt-3">
+        <AdminPageHeader module="Fleet Management" page="Manage Fleet" title="Create Fleet" backTo="/admin/fleet/manage" />
       </div>
 
       <div className="px-5 pb-10">

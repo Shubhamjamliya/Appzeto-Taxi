@@ -1,13 +1,45 @@
 import { asyncHandler } from "../../../../utils/asyncHandler.js";
 import * as adminService from "../services/adminService.js";
+import ExcelJS from 'exceljs';
 
 const ok = (res, data, extra = {}) =>
   res.json({ success: true, data, ...extra });
 
-const sendCsv = (res, filename, csv) => {
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename="${filename}"`);
-  res.send(csv);
+const sendFile = async (res, filename, reportData, format) => {
+  const { headers, rows } = reportData;
+
+  if (format === 'csv') {
+    const content = adminService.csvFromRows(headers, rows);
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}.csv"`);
+    res.send(content);
+  } else {
+    // Generate real Excel file
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet('Report');
+
+    // Add headers
+    worksheet.addRow(headers.map(h => String(h).toUpperCase()));
+    
+    // Add rows
+    rows.forEach(row => {
+      worksheet.addRow(headers.map(h => row[h]));
+    });
+
+    // Style the header row
+    worksheet.getRow(1).font = { bold: true };
+    worksheet.getRow(1).fill = {
+      type: 'pattern',
+      pattern: 'solid',
+      fgColor: { argb: 'FFE0E0E0' }
+    };
+
+    res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+    res.setHeader("Content-Disposition", `attachment; filename="${filename}.xlsx"`);
+    
+    await workbook.xlsx.write(res);
+    res.end();
+  }
 };
 
 export const getAdminStatus = asyncHandler(async (_req, res) =>
@@ -607,32 +639,41 @@ export const getOwnerOnboarding = asyncHandler(async (_req, res) =>
   }),
 );
 
-export const downloadUserReport = asyncHandler(async (_req, res) =>
-  sendCsv(res, "user-report.csv", await adminService.buildUserReport()),
-);
-export const downloadDriverReport = asyncHandler(async (_req, res) =>
-  sendCsv(res, "driver-report.csv", await adminService.buildDriverReport()),
-);
-export const downloadDriverDutyReport = asyncHandler(async (_req, res) =>
-  sendCsv(
-    res,
-    "driver-duty-report.csv",
-    await adminService.buildDriverDutyReport(),
-  ),
-);
-export const downloadOwnerReport = asyncHandler(async (_req, res) =>
-  sendCsv(res, "owner-report.csv", await adminService.buildOwnerReport()),
-);
-export const downloadFinanceReport = asyncHandler(async (_req, res) =>
-  sendCsv(res, "finance-report.csv", await adminService.buildFinanceReport()),
-);
-export const downloadFleetFinanceReport = asyncHandler(async (_req, res) =>
-  sendCsv(
-    res,
-    "fleet-finance-report.csv",
-    await adminService.buildFleetFinanceReport(),
-  ),
-);
+export const downloadUserReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildUserReport(req.query);
+  await sendFile(res, "user-report", data, format);
+});
+
+export const downloadDriverReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildDriverReport(req.query);
+  await sendFile(res, "driver-report", data, format);
+});
+
+export const downloadDriverDutyReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildDriverDutyReport(req.query);
+  await sendFile(res, "driver-duty-report", data, format);
+});
+
+export const downloadOwnerReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildOwnerReport(req.query);
+  await sendFile(res, "owner-report", data, format);
+});
+
+export const downloadFinanceReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildFinanceReport(req.query);
+  await sendFile(res, "finance-report", data, format);
+});
+
+export const downloadFleetFinanceReport = asyncHandler(async (req, res) => {
+  const format = req.query.file_format || 'csv';
+  const data = await adminService.buildFleetFinanceReport(req.query);
+  await sendFile(res, "fleet-finance-report", data, format);
+});
 export const getGeneralSettingsCategory = asyncHandler(async (req, res) =>
   ok(res, await adminService.getGeneralSettings(req.params.category)),
 );

@@ -21,6 +21,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { adminService } from '../../services/adminService';
 import OwnerFormPanel from './OwnerFormPanel';
+import AdminPageHeader from '../../components/ui/AdminPageHeader';
 
 const initialFormData = {
   company_name: '',
@@ -52,6 +53,7 @@ const ManageOwners = () => {
   const [areas, setAreas] = useState([]);
   const [transportTypes, setTransportTypes] = useState(defaultTransportTypes);
   const [searchTerm, setSearchTerm] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [formData, setFormData] = useState(initialFormData);
 
   const fetchInitialData = async () => {
@@ -185,157 +187,130 @@ const ManageOwners = () => {
 
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
-      <AnimatePresence mode="wait">
-        {view === 'list' ? (
-          <MotionDiv
-            key="list"
-            initial={{ opacity: 0, scale: 0.99 }}
-            animate={{ opacity: 1, scale: 1 }}
-            exit={{ opacity: 0, scale: 0.99 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="mb-6 flex items-center justify-between">
-              <h1 className="text-xl font-bold uppercase tracking-wide text-slate-700">Manage Owners</h1>
-              <div className="flex items-center gap-2 text-sm text-slate-400">
-                <span className="text-slate-900">Manage Owners</span>
-                <ChevronRight size={14} />
-                <span>Manage Owners</span>
-              </div>
-            </div>
+      <div className="p-6 lg:p-8">
+        <AnimatePresence mode="wait">
+          {view === 'list' ? (
+            <MotionDiv
+              key="list"
+              initial={{ opacity: 0, scale: 0.99 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.99 }}
+              transition={{ duration: 0.2 }}
+            >
+              <AdminPageHeader module="Owner Management" page="Manage Owners" title="Manage Owners" />
 
-            <div className="relative rounded-xl border border-gray-200 bg-white shadow-sm">
-              <div className="flex flex-col gap-5 border-b border-gray-200 p-5 md:flex-row md:items-center md:justify-between">
+              <div className="mb-6">
+                <button
+                  onClick={() => navigate('/admin/owners/create')}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                >
+                  <Plus size={15} /> Add Owner
+                </button>
+              </div>
+
+            <div className="bg-white rounded-xl border border-gray-200 overflow-visible">
+              <div className="p-4 border-b border-gray-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div className="flex items-center gap-3">
-                  <button className="flex h-11 w-14 items-center justify-center rounded-lg bg-teal-500 text-white transition-colors hover:bg-teal-600">
-                    <List size={17} />
+                  <button className="w-10 h-10 bg-teal-500 text-white rounded-lg flex items-center justify-center shadow-sm">
+                    <List size={18} />
                   </button>
-                  <button className="flex h-11 w-14 items-center justify-center rounded-lg bg-gray-200 text-indigo-950 transition-colors hover:bg-gray-300">
-                    <LayoutGrid size={16} />
+                  <button className="w-10 h-10 bg-gray-100 text-gray-400 rounded-lg flex items-center justify-center hover:bg-indigo-50 transition-all">
+                    <LayoutGrid size={18} />
                   </button>
-                  <div className="ml-5 flex items-center gap-3 text-sm font-semibold text-slate-400">
-                    show
-                    <div className="relative">
-                      <select className="h-9 w-24 appearance-none rounded border border-gray-200 bg-white px-3 text-sm text-slate-900 outline-none transition-colors focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-                        <option>10</option>
-                      </select>
-                      <ChevronDown size={16} className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-slate-700" />
-                    </div>
-                    entries
+                  <div className="flex items-center gap-2 text-xs text-gray-500 ml-4">
+                    <span>Show</span>
+                    <select
+                      value={itemsPerPage}
+                      onChange={(e) => setItemsPerPage(Number(e.target.value))}
+                      className="border border-gray-200 rounded px-2 py-1 text-xs bg-white"
+                    >
+                      <option value={10}>10</option>
+                      <option value={25}>25</option>
+                      <option value={50}>50</option>
+                    </select>
+                    <span>entries</span>
                   </div>
                 </div>
-
                 <div className="flex items-center gap-3">
                   <button
                     type="button"
-                    onClick={() => setSearchTerm('')}
-                    className="flex h-12 w-12 items-center justify-center rounded-full border border-gray-300 bg-white text-slate-500 transition-colors hover:border-indigo-500 hover:text-indigo-600"
+                    className="w-10 h-10 rounded-full border border-gray-200 bg-white text-gray-400 flex items-center justify-center shadow-sm"
                   >
-                    <Search size={17} />
+                    <Search size={16} />
                   </button>
-                  <button className="flex h-12 items-center gap-2 rounded bg-red-500 px-5 text-sm font-semibold text-white transition-colors hover:bg-red-600">
-                    <Filter size={15} /> Filters
+                  <button className="bg-orange-500 text-white px-4 py-2 rounded-lg text-xs font-semibold flex items-center gap-2 shadow-sm uppercase tracking-wide">
+                    <Filter size={14} /> Filters
                   </button>
-                  <button
-                    onClick={() => navigate('/owner/create')}
-                    className="flex h-12 items-center gap-3 rounded bg-indigo-950 px-6 text-sm font-semibold text-white transition-colors hover:bg-indigo-900"
-                  >
-                    <Plus size={16} /> Add Manage Owner
-                  </button>
+                  <div className="relative">
+                    <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                    <input
+                      type="text"
+                      placeholder="Search owners..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-9 pr-4 py-2 text-sm border border-gray-200 rounded-lg w-56 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 
+              {/* Table */}
               <div className="overflow-x-auto">
-                <table className="w-full text-left border-collapse">
+                <table className="w-full">
                   <thead>
-                    <tr className="border-b border-gray-200 bg-white">
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Company Name</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Email</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Mobile Number</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Document View</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Approval Status</th>
-                      <th className="px-8 py-5 text-sm font-bold text-gray-950">Action</th>
+                    <tr className="bg-gray-50 border-b border-gray-100">
+                      <th className="px-6 py-3 text-left text-xs font-medium text-gray-500">Company Name</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Email</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Mobile Number</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Document View</th>
+                      <th className="px-4 py-3 text-left text-xs font-medium text-gray-500">Approval Status</th>
+                      <th className="px-4 py-3 text-center text-xs font-medium text-gray-500">Action</th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-gray-200">
+                  <tbody className="divide-y divide-gray-50">
                     {isLoading ? (
                       <tr>
-                        <td colSpan="6" className="px-8 py-20 text-center">
-                          <div className="flex flex-col items-center gap-4 py-10 text-slate-400">
-                            <Loader2 size={32} className="animate-spin text-teal-500" />
-                            <p className="text-sm font-semibold">Loading owners...</p>
+                        <td colSpan="6" className="py-16 text-center">
+                          <div className="flex flex-col items-center gap-3">
+                            <Loader2 className="w-7 h-7 text-indigo-600 animate-spin" />
+                            <p className="text-sm text-gray-400">Loading owners...</p>
                           </div>
                         </td>
                       </tr>
                     ) : filteredOwners.length === 0 ? (
                       <tr>
-                        <td colSpan="6" className="px-8 py-20 text-center">
-                          <div className="flex flex-col items-center gap-4 py-10 text-slate-300">
-                            <XCircle size={48} strokeWidth={1.5} />
-                            <p className="text-sm font-semibold">No owners found</p>
-                          </div>
-                        </td>
+                        <td colSpan="6" className="px-6 py-16 text-center text-sm text-gray-400">No owners found</td>
                       </tr>
                     ) : (
                       filteredOwners.map((owner) => (
-                        <tr key={owner._id} className="bg-white transition-colors hover:bg-gray-50">
-                          <td className="px-8 py-6 text-sm font-medium text-gray-950">{owner.company_name || owner.name || '-'}</td>
-                          <td className="px-8 py-6 text-sm text-gray-950">{owner.email || '-'}</td>
-                          <td className="px-8 py-6 text-sm text-gray-950">{formatMobile(owner.mobile)}</td>
-                          <td className="px-8 py-6">
-                            <button className="text-indigo-950 transition-colors hover:text-indigo-700">
-                              <FileText size={31} fill="currentColor" strokeWidth={1.5} />
+                        <tr key={owner._id} className="hover:bg-gray-50/50 transition-colors">
+                          <td className="px-6 py-4 text-sm font-medium text-gray-900">{owner.company_name || owner.name || '-'}</td>
+                          <td className="px-4 py-4 text-sm text-gray-500">{owner.email || '-'}</td>
+                          <td className="px-4 py-4 text-sm text-gray-500">{formatMobile(owner.mobile)}</td>
+                          <td className="px-4 py-4">
+                            <button
+                              onClick={() => navigate(`/admin/owners/${owner._id}/documents`)}
+                              className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                            >
+                              <FileText size={16} />
                             </button>
                           </td>
-                          <td className="px-8 py-6">
-                            <div className="flex items-center gap-3">
-                              <button
-                                onClick={() => handleToggleApproval(owner)}
-                                className={`relative inline-flex h-8 w-16 items-center rounded-full transition-colors focus:outline-none ${
-                                  isOwnerApproved(owner) ? 'bg-teal-500' : 'bg-gray-300'
-                                }`}
-                              >
-                                <span
-                                  className={`inline-block h-6 w-6 transform rounded-full bg-white transition-transform ${
-                                    isOwnerApproved(owner) ? 'translate-x-9' : 'translate-x-1'
-                                  }`}
-                                />
-                              </button>
-                              <span
-                                className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-semibold ${
-                                  isOwnerApproved(owner)
-                                    ? 'bg-emerald-50 text-emerald-700'
-                                    : 'bg-amber-50 text-amber-700'
-                                }`}
-                              >
-                                {isOwnerApproved(owner) ? 'Approved' : 'Pending'}
-                              </span>
-                            </div>
+                          <td className="px-4 py-4">
+                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded text-xs font-medium ${
+                              isOwnerApproved(owner)
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`}>
+                              {isOwnerApproved(owner) ? 'Approved' : 'Pending'}
+                            </span>
                           </td>
-                          <td className="px-8 py-6">
-                            <div className="flex items-center gap-5">
+                          <td className="px-4 py-4 text-center">
+                            <div className="relative inline-block">
                               <button
                                 onClick={() => handleEditClick(owner)}
-                                className="flex h-9 w-10 items-center justify-center rounded bg-amber-50 text-amber-500 transition-colors hover:bg-amber-100"
+                                className="p-1.5 text-gray-400 hover:text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
                               >
-                                <Edit size={17} />
-                              </button>
-                              <button
-                                onClick={() => navigate(`/admin/owners/${owner._id || owner.id}/password`)}
-                                className="flex h-9 w-10 items-center justify-center rounded bg-blue-50 text-blue-500 transition-colors hover:bg-blue-100"
-                              >
-                                <Lock size={17} />
-                              </button>
-                              <button
-                                onClick={() => handleDelete(owner._id)}
-                                className="flex h-9 w-10 items-center justify-center rounded bg-red-50 text-red-500 transition-colors hover:bg-red-100"
-                              >
-                                <Trash2 size={17} />
-                              </button>
-                              <button
-                                onClick={() => navigate(`/admin/owners/${owner._id || owner.id}`)}
-                                className="flex h-9 w-10 items-center justify-center rounded bg-teal-50 text-teal-500 transition-colors hover:bg-teal-100"
-                              >
-                                <Eye size={17} />
+                                <Edit size={16} />
                               </button>
                             </div>
                           </td>
@@ -346,52 +321,42 @@ const ManageOwners = () => {
                 </table>
               </div>
 
-              <button
-                type="button"
-                className="absolute -right-1 top-[58%] flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-teal-500 text-white shadow-xl transition-colors hover:bg-teal-600"
-              >
-                <Menu size={24} />
-              </button>
+              {/* Footer */}
+              {!isLoading && filteredOwners.length > 0 && (
+                <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
+                  <span>Showing 1 to {filteredOwners.length} of {filteredOwners.length} entries</span>
+                  <div className="flex items-center gap-1">
+                    <button className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400" disabled>Prev</button>
+                    <button className="w-7 h-7 rounded bg-indigo-600 text-white text-xs font-medium">1</button>
+                    <button className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400" disabled>Next</button>
+                  </div>
+                </div>
+              )}
             </div>
 
-            <div className="mt-8 flex items-center justify-between">
-              <p className="text-sm font-medium text-slate-400">
-                Showing {visibleStart} to {filteredOwners.length} of {filteredOwners.length} entries
-              </p>
-              <div className="flex items-center gap-2">
-                <button className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50">
-                  Prev
-                </button>
-                <button className="rounded bg-indigo-950 px-4 py-2 text-sm font-semibold text-white">
-                  1
-                </button>
-                <button className="rounded border border-gray-200 bg-white px-4 py-2 text-sm text-slate-500 transition-colors hover:bg-gray-50">
-                  Next
-                </button>
-              </div>
-            </div>
-          </MotionDiv>
-        ) : (
-          <MotionDiv
-            key="form"
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: 20 }}
-            transition={{ duration: 0.2 }}
-          >
-            <OwnerFormPanel
-              mode="edit"
-              formData={formData}
-              setFormData={setFormData}
-              areas={areas}
-              transportTypes={transportTypes}
-              submitting={submitting}
-              onSubmit={handleSave}
-              onCancel={() => setView('list')}
-            />
-          </MotionDiv>
-        )}
-      </AnimatePresence>
+            </MotionDiv>
+          ) : (
+            <MotionDiv
+              key="form"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 20 }}
+              transition={{ duration: 0.2 }}
+            >
+              <OwnerFormPanel
+                mode="edit"
+                formData={formData}
+                setFormData={setFormData}
+                areas={areas}
+                transportTypes={transportTypes}
+                submitting={submitting}
+                onSubmit={handleSave}
+                onCancel={() => setView('list')}
+              />
+            </MotionDiv>
+          )}
+        </AnimatePresence>
+      </div>
     </div>
   );
 };

@@ -781,7 +781,7 @@ const normalizeImportVehicleType = (value = '', vehicleRecord = null) => {
   return 'car';
 };
 
-const csvFromRows = (headers, rows) => {
+export const csvFromRows = (headers, rows) => {
   const escape = (value) => `"${String(value ?? '').replaceAll('"', '""')}"`;
   return [headers.join(','), ...rows.map((row) => headers.map((header) => escape(row[header])).join(','))].join('\n');
 };
@@ -4877,74 +4877,168 @@ export const deleteOwner = async (id) => {
 
 
 
-  export const buildUserReport = async () => {
-    const users = await User.find({ deletedAt: null }).sort({ createdAt: -1 }).lean();
-    return csvFromRows(
-      ['name', 'email', 'mobile', 'active'],
-      users.map((item) => ({
+  const buildDateFilter = (date_option, from_date, to_date) => {
+    const filter = {};
+    const now = new Date();
+    
+    if (date_option === 'today') {
+      filter.$gte = new Date(now.setHours(0,0,0,0));
+    } else if (date_option === 'yesterday') {
+      const yesterday = new Date(now.setDate(now.getDate() - 1));
+      filter.$gte = new Date(yesterday.setHours(0,0,0,0));
+      filter.$lt = new Date(new Date().setHours(0,0,0,0));
+    } else if (date_option === 'this_week') {
+      const first = now.getDate() - now.getDay();
+      filter.$gte = new Date(now.setDate(first));
+    } else if (date_option === 'this_month') {
+      filter.$gte = new Date(now.getFullYear(), now.getMonth(), 1);
+    } else if (date_option === 'this_year') {
+      filter.$gte = new Date(now.getFullYear(), 0, 1);
+    } else if (date_option === 'range' && from_date && to_date) {
+      filter.$gte = new Date(new Date(from_date).setHours(0,0,0,0));
+      filter.$lte = new Date(new Date(to_date).setHours(23,59,59,999));
+    }
+    
+    return Object.keys(filter).length > 0 ? filter : null;
+  };
+
+  export const buildUserReport = async (query = {}) => {
+    const { status, date_option, from_date, to_date } = query;
+    const filter = { deletedAt: null };
+    
+    if (status === 'active') filter.active = true;
+    else if (status === 'inactive') filter.active = false;
+
+    const dateFilter = buildDateFilter(date_option, from_date, to_date);
+    if (dateFilter) filter.createdAt = dateFilter;
+
+    const users = await User.find(filter).sort({ createdAt: -1 }).lean();
+    return {
+      headers: ['name', 'email', 'mobile', 'active', 'createdAt'],
+      rows: users.map((item) => ({
         name: item.name || '',
         email: item.email || '',
         mobile: item.phone || item.mobile || '',
         active: item.active !== false && !item.deletedAt,
-      })),
-    );
+        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+      }))
+    };
   };
 
-  export const buildDriverReport = async () => {
-    const items = await Driver.find().lean();
-    return csvFromRows(
-      ['name', 'mobile', 'city', 'status'],
-      items.map((item) => ({ name: item.name, mobile: item.phone, city: item.city, status: item.status })),
-    );
+  export const buildDriverReport = async (query = {}) => {
+    const { transport_type, vehicle_type, status, date_option, from_date, to_date } = query;
+    const filter = {};
+    
+    if (transport_type === 'both') {
+      filter.registerFor = { $in: ['taxi', 'bike', 'both'] };
+    } else if (transport_type) {
+      filter.registerFor = transport_type;
+    }
+
+    if (vehicle_type) filter.vehicleType = vehicle_type;
+    if (status) filter.status = status;
+
+    const dateFilter = buildDateFilter(date_option, from_date, to_date);
+    if (dateFilter) filter.createdAt = dateFilter;
+
+    const items = await Driver.find(filter).lean();
+    return {
+      headers: ['name', 'mobile', 'city', 'transport_type', 'vehicle_type', 'status', 'createdAt'],
+      rows: items.map((item) => ({ 
+        name: item.name, 
+        mobile: item.phone, 
+        city: item.city, 
+        transport_type: item.registerFor,
+        vehicle_type: item.vehicleType,
+        status: item.status,
+        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+      }))
+    };
   };
 
-  export const buildDriverDutyReport = async () => {
-    const items = await Driver.find().lean();
-    return csvFromRows(
-      ['driver', 'city', 'status', 'rating'],
-      items.map((item) => ({ driver: item.name, city: item.city, status: item.status, rating: item.rating })),
-    );
+  export const buildDriverDutyReport = async (query = {}) => {
+    const { service_location_id, driver_id, date_option, from_date, to_date } = query;
+    const filter = {};
+    
+    if (service_location_id) filter.service_location_id = service_location_id;
+    if (driver_id) filter._id = driver_id;
+
+    const dateFilter = buildDateFilter(date_option, from_date, to_date);
+    if (dateFilter) filter.updatedAt = dateFilter; // Assuming updatedAt tracks duty activity
+
+    const items = await Driver.find(filter).lean();
+    return {
+      headers: ['driver', 'city', 'status', 'rating', 'last_duty_at'],
+      rows: items.map((item) => ({ 
+        driver: item.name, 
+        city: item.city, 
+        status: item.status, 
+        rating: item.rating,
+        last_duty_at: item.updatedAt ? new Date(item.updatedAt).toLocaleString() : ''
+      }))
+    };
   };
 
-  export const buildOwnerReport = async () => {
-    const owners = await listOwners();
-    return csvFromRows(
-      ['company_name', 'name', 'email', 'transport_type', 'active'],
-      owners.map((item) => ({
+  export const buildOwnerReport = async (query = {}) => {
+    const { service_location_id, status, date_option, from_date, to_date } = query;
+    const filter = {};
+    
+    if (service_location_id) filter.service_location_id = service_location_id;
+    if (status === 'active') filter.active = true;
+    else if (status === 'inactive') filter.active = false;
+
+    const dateFilter = buildDateFilter(date_option, from_date, to_date);
+    if (dateFilter) filter.createdAt = dateFilter;
+
+    const owners = await listOwners(filter);
+    return {
+      headers: ['company_name', 'name', 'email', 'transport_type', 'active', 'createdAt'],
+      rows: owners.map((item) => ({
         company_name: item.company_name,
         name: item.name,
         email: item.email,
         transport_type: item.transport_type,
         active: item.active,
-      })),
-    );
+        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+      }))
+    };
   };
 
-  export const buildFinanceReport = async () => {
-    const items = await WithdrawalRequest.find().populate('driver_id').lean();
-    return csvFromRows(
-      ['transactionId', 'driver', 'amount', 'payment_method', 'status'],
-      items.map((item) => ({
+  export const buildFinanceReport = async (query = {}) => {
+    const { transport_type, vehicle_type, status, payment_type, date_option, from_date, to_date } = query;
+    const filter = {};
+    
+    if (status) filter.status = status;
+    if (payment_type) filter.payment_method = payment_type;
+
+    const dateFilter = buildDateFilter(date_option, from_date, to_date);
+    if (dateFilter) filter.createdAt = dateFilter;
+
+    const items = await WithdrawalRequest.find(filter).populate('driver_id').lean();
+    return {
+      headers: ['transactionId', 'driver', 'amount', 'payment_method', 'status', 'createdAt'],
+      rows: items.map((item) => ({
         transactionId: item.transactionId,
         driver: item.driver_id?.name,
         amount: item.amount,
         payment_method: item.payment_method,
         status: item.status,
-      })),
-    );
+        createdAt: item.createdAt ? new Date(item.createdAt).toLocaleString() : ''
+      }))
+    };
   };
 
   export const buildFleetFinanceReport = async () => {
     const owners = await listOwners();
-    return csvFromRows(
-      ['company_name', 'owner', 'transport_type', 'active'],
-      owners.map((item) => ({
+    return {
+      headers: ['company_name', 'owner', 'transport_type', 'active'],
+      rows: owners.map((item) => ({
         company_name: item.company_name,
         owner: item.name,
         transport_type: item.transport_type,
         active: item.active,
-      })),
-    );
+      }))
+    };
   };
 
   export const ensureBusinessSettings = async () => {

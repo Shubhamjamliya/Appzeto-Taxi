@@ -121,6 +121,8 @@ export const getCurrentDriver = () => api.get("/drivers/me", withDriverAuth());
 
 export const updateDriverProfile = (payload) =>
   api.patch("/drivers/me", payload, withDriverAuth());
+export const deleteCurrentDriverAccount = () =>
+  api.delete("/drivers/me", withDriverAuth());
 export const requestDriverAccountDeletion = (reason) =>
   api.post("/drivers/me/delete-request", { reason }, withDriverAuth());
 export const getDriverNotifications = () =>

@@ -4,14 +4,12 @@ import { Driver } from '../driver/models/Driver.js';
 import { matchDrivers } from './matchingService.js';
 import {
   RIDE_LIVE_STATUS,
-  DISPATCH_RADII,
-  DISPATCH_INTERCITY_RADII,
-  DISPATCH_RETRY_DELAY_MS,
   RIDE_STATUS,
 } from '../constants/index.js';
 import { Delivery } from '../user/models/Delivery.js';
 import { getRideRoom } from './rideService.js';
 import { SOCKET_EVENTS } from '../socket/events.js';
+import { resolveTransportDispatchConfig } from './transportSettingsService.js';
 
 const activeDispatches = new Map();
 let ioInstance = null;
@@ -46,12 +44,6 @@ const getDispatchVehicleTypeIds = (ride) => {
 
   return [...new Set(ids.map((id) => String(id || '').trim()).filter(Boolean))];
 };
-
-const getDispatchRadii = (ride) => (
-  String(ride?.serviceType || '').toLowerCase() === 'intercity'
-    ? DISPATCH_INTERCITY_RADII
-    : DISPATCH_RADII
-);
 
 const emitToSocket = (socketId, event, payload) => {
   if (ioInstance && socketId) {
@@ -114,6 +106,17 @@ const saveDispatchState = (rideId, nextState = {}) => {
   });
 
   return activeDispatches.get(rideKey);
+};
+
+const closeDriverRequestWindow = (rideId, driverIds = []) => {
+  const safeDriverIds = [...new Set((Array.isArray(driverIds) ? driverIds : []).map((id) => String(id || '')).filter(Boolean))];
+
+  for (const driverId of safeDriverIds) {
+    emitToDriver(driverId, 'rideRequestClosed', {
+      rideId: String(rideId),
+      reason: 'search-window-expired',
+    });
+  }
 };
 
 export const markDriverRejectedFromDispatch = (rideId, driverId) => {
@@ -304,17 +307,17 @@ export const cancelRideByUser = async ({ rideId, userId }) => {
   return ride;
 };
 
-const scheduleNextAttempt = (rideId, nextRadiusIndex) => {
+const scheduleNextAttempt = (rideId, nextAttemptIndex, retryDelayMs) => {
   const timer = setTimeout(() => {
-    dispatchAttempt(rideId, nextRadiusIndex).catch((error) => {
+    dispatchAttempt(rideId, nextAttemptIndex).catch((error) => {
       console.error('Dispatch retry failed', error);
     });
-  }, DISPATCH_RETRY_DELAY_MS);
+  }, retryDelayMs);
 
   saveDispatchState(rideId, { timer });
 };
 
-const dispatchAttempt = async (rideId, radiusIndex = 0) => {
+const dispatchAttempt = async (rideId, attemptIndex = 0) => {
   const ride = await Ride.findById(rideId);
 
   if (!ride || ride.status !== RIDE_STATUS.SEARCHING) {
@@ -323,29 +326,37 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
   }
 
   try {
-    const dispatchRadii = getDispatchRadii(ride);
-    const radius = dispatchRadii[radiusIndex] || dispatchRadii[dispatchRadii.length - 1];
+    const dispatchConfig = await resolveTransportDispatchConfig();
+    const radius = dispatchConfig.maxDistanceMeters;
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
+    const dispatchState = getDispatchState(rideId);
+
+    if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
+      closeDriverRequestWindow(rideId, dispatchState.driverIds);
+    }
+
     const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
       vehicleTypeIds: dispatchVehicleTypeIds,
     });
 
-    const dispatchState = getDispatchState(rideId);
     const rejectedDriverIds = new Set(dispatchState.rejectedDriverIds);
     const notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
-    const targetDrivers = drivers.filter((driver) => {
+    const availableDrivers = drivers.filter((driver) => {
       const driverId = String(driver._id);
       return !rejectedDriverIds.has(driverId) && !notifiedDriverIds.has(driverId);
     });
+    const targetDrivers = dispatchConfig.dispatchType === 'broadcast'
+      ? availableDrivers
+      : availableDrivers.slice(0, 1);
     const nextNotifiedDriverIds = [
       ...dispatchState.notifiedDriverIds,
       ...targetDrivers.map((driver) => String(driver._id)),
     ];
 
     saveDispatchState(rideId, {
-      radiusIndex,
+      radiusIndex: attemptIndex,
       driverIds: targetDrivers.map((driver) => String(driver._id)),
       notifiedDriverIds: nextNotifiedDriverIds,
       timer: null,
@@ -379,20 +390,23 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       rideId: String(ride._id),
       status: ride.status,
       radius,
+      dispatchType: dispatchConfig.dispatchType,
+      attempt: attemptIndex + 1,
+      maxAttempts: dispatchConfig.maxAttempts,
       matchedDrivers: targetDrivers.length,
       totalNotifiedDrivers: nextNotifiedDriverIds.length,
     });
 
-    if (radiusIndex === dispatchRadii.length - 1) {
+    if (attemptIndex >= dispatchConfig.maxAttempts - 1) {
       // Final attempt waits one more cycle before the ride is closed as unmatched.
       const timer = setTimeout(() => {
         closeRideAsUnmatched(rideId)
           .catch((error) => console.error('Failed to mark ride unmatched', error))
           .finally(() => stopDispatchFlow(rideId));
-      }, DISPATCH_RETRY_DELAY_MS);
+      }, dispatchConfig.retryDelayMs);
 
         saveDispatchState(rideId, {
-          radiusIndex,
+          radiusIndex: attemptIndex,
           driverIds: targetDrivers.map((driver) => String(driver._id)),
           notifiedDriverIds: nextNotifiedDriverIds,
           timer,
@@ -401,7 +415,7 @@ const dispatchAttempt = async (rideId, radiusIndex = 0) => {
       return;
     }
 
-    scheduleNextAttempt(rideId, radiusIndex + 1);
+    scheduleNextAttempt(rideId, attemptIndex + 1, dispatchConfig.retryDelayMs);
   } catch (error) {
     await closeRideAsUnmatched(rideId);
     stopDispatchFlow(rideId);

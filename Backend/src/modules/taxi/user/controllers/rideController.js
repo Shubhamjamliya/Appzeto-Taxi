@@ -15,6 +15,7 @@ import {
   updateRideLifecycle,
 } from '../../services/rideService.js';
 import { cancelRideByUser, startDispatchFlow } from '../../services/dispatchService.js';
+import { getTipSettings } from '../../services/appSettingsService.js';
 
 const EARTH_RADIUS_METERS = 6371000;
 const AVERAGE_CITY_SPEED_KMPH = 24;
@@ -173,6 +174,17 @@ export const submitRideReview = async (req, res) => {
   res.json({
     success: true,
     data: serializeRideRealtime(ride),
+  });
+};
+
+export const getRideAppTipSettings = async (_req, res) => {
+  const tipSettings = await getTipSettings();
+
+  res.json({
+    success: true,
+    data: {
+      settings: tipSettings,
+    },
   });
 };
 

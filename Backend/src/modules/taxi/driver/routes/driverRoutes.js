@@ -5,6 +5,7 @@ import {
   addDriverEmergencyContact,
   completeOnboarding,
   createOwnerFleetDriver,
+  deleteCurrentDriverAccount,
   deleteDriverEmergencyContact,
   goOffline,
   goOnline,
@@ -54,6 +55,11 @@ driverRouter.patch(
   "/me",
   authenticate(["driver"]),
   asyncHandler(updateCurrentDriver),
+);
+driverRouter.delete(
+  "/me",
+  authenticate(["driver"]),
+  asyncHandler(deleteCurrentDriverAccount),
 );
 driverRouter.post(
   "/me/delete-request",

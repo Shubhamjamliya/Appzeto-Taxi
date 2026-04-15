@@ -10,6 +10,7 @@ import { Delivery } from '../user/models/Delivery.js';
 import { Ride } from '../user/models/Ride.js';
 import { User } from '../user/models/User.js';
 import { applyPromoToRideInTransaction } from './promoService.js';
+import { getTipSettings } from './appSettingsService.js';
 
 const clearUserActiveRideIfPresent = async (user) => {
   if (!user?.currentRideId) {
@@ -748,6 +749,24 @@ export const submitRideFeedback = async ({ rideId, userId, rating, comment = '',
 
   if (!Number.isFinite(numericTip) || numericTip < 0) {
     throw new ApiError(400, 'tipAmount must be zero or greater');
+  }
+
+  const tipSettings = await getTipSettings();
+  const tipsEnabled = String(tipSettings.enable_tips || '1') === '1';
+  const minimumTipAmount = Number(tipSettings.min_tip_amount || 0);
+
+  if (!tipsEnabled && numericTip > 0) {
+    throw new ApiError(400, 'Tips are currently disabled');
+  }
+
+  if (
+    tipsEnabled &&
+    numericTip > 0 &&
+    Number.isFinite(minimumTipAmount) &&
+    minimumTipAmount > 0 &&
+    numericTip < minimumTipAmount
+  ) {
+    throw new ApiError(400, `tipAmount must be at least ${minimumTipAmount}`);
   }
 
   const ride = await Ride.findOne({

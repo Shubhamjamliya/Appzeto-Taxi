@@ -45,6 +45,10 @@ const RideComplete = () => {
   const [shareToast, setShareToast] = useState(false);
   const [error, setError] = useState('');
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
+  const [tipSettings, setTipSettings] = useState({
+    enable_tips: '1',
+    min_tip_amount: '10',
+  });
 
   const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
   const rideId = state.rideId || '';
@@ -67,6 +71,18 @@ const RideComplete = () => {
   const hasVehiclePhoto = isLikelyVehiclePhoto(driver.vehicleImage) && !vehicleImageBroken;
   const vehicleVisual = hasVehiclePhoto ? driver.vehicleImage : getVehicleIcon(serviceType, driver);
   const totalBill = fare + Number(selectedTip || 0);
+  const tipsEnabled = String(tipSettings.enable_tips || '1') === '1';
+  const minimumTipAmount = Number(tipSettings.min_tip_amount || 0);
+  const availableTipOptions = useMemo(() => {
+    if (!tipsEnabled) {
+      return [0];
+    }
+
+    const nextOptions = [...new Set([0, minimumTipAmount, ...TIP_OPTIONS].filter((amount) => Number.isFinite(amount) && amount >= 0))]
+      .sort((left, right) => left - right);
+
+    return nextOptions;
+  }, [minimumTipAmount, tipsEnabled]);
   const rideDate = new Date(state.completedAt || Date.now()).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' });
   const rideTime = new Date(state.completedAt || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
@@ -75,8 +91,42 @@ const RideComplete = () => {
   }, []);
 
   useEffect(() => {
+    const fetchTipSettings = async () => {
+      try {
+        const response = await api.get('/rides/app-settings/tip');
+        const nextSettings = response?.data?.settings || response?.settings || {};
+        setTipSettings((current) => ({
+          ...current,
+          ...nextSettings,
+        }));
+      } catch (tipError) {
+        console.error('Failed to load tip settings:', tipError);
+      }
+    };
+
+    fetchTipSettings();
+  }, []);
+
+  useEffect(() => {
     setVehicleImageBroken(false);
   }, [driver.vehicleImage]);
+
+  useEffect(() => {
+    if (!tipsEnabled && selectedTip !== 0) {
+      setSelectedTip(0);
+      return;
+    }
+
+    if (
+      tipsEnabled &&
+      Number.isFinite(minimumTipAmount) &&
+      minimumTipAmount > 0 &&
+      selectedTip > 0 &&
+      selectedTip < minimumTipAmount
+    ) {
+      setSelectedTip(minimumTipAmount);
+    }
+  }, [minimumTipAmount, selectedTip, tipsEnabled]);
 
   useEffect(() => {
     if (!rideId && !isSubmitted) {
@@ -106,6 +156,16 @@ const RideComplete = () => {
 
     if (rating < 1) {
       setError('Please rate your driver before finishing.');
+      return;
+    }
+
+    if (!tipsEnabled && Number(selectedTip || 0) > 0) {
+      setError('Tips are currently disabled.');
+      return;
+    }
+
+    if (tipsEnabled && Number(selectedTip || 0) > 0 && minimumTipAmount > 0 && Number(selectedTip || 0) < minimumTipAmount) {
+      setError(`Minimum tip amount is Rs ${minimumTipAmount}.`);
       return;
     }
 
@@ -275,18 +335,27 @@ const RideComplete = () => {
         </div>
 
         <div className="rounded-[20px] border border-white/80 bg-white/95 px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
-          <p className="text-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">Tip your driver</p>
+          <p className="text-center text-[10px] font-black uppercase tracking-[0.22em] text-slate-400">
+            {tipsEnabled ? 'Tip your driver' : 'Driver tips disabled'}
+          </p>
+          {tipsEnabled && minimumTipAmount > 0 ? (
+            <p className="mt-2 text-center text-[11px] font-bold text-slate-500">Minimum tip amount: Rs {minimumTipAmount}</p>
+          ) : null}
           <div className="mt-3 flex flex-wrap justify-center gap-2">
-            {TIP_OPTIONS.map((amount) => (
+            {availableTipOptions.map((amount) => (
               <button
                 key={amount}
                 type="button"
-                onClick={() => setSelectedTip(amount)}
+                onClick={() => {
+                  setSelectedTip(amount);
+                  setError('');
+                }}
+                disabled={!tipsEnabled && amount > 0}
                 className={`rounded-full border px-4 py-2 text-[11px] font-black transition-all ${
                   selectedTip === amount
                     ? 'border-orange-500 bg-orange-500 text-white shadow-[0_8px_18px_rgba(249,115,22,0.24)]'
                     : 'border-slate-100 bg-slate-50 text-slate-600'
-                }`}
+                } ${!tipsEnabled && amount > 0 ? 'cursor-not-allowed opacity-50' : ''}`}
               >
                 {amount === 0 ? 'No tip' : `Rs ${amount}`}
               </button>

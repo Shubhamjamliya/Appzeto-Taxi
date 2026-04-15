@@ -5,6 +5,7 @@ import { SetPrice } from '../../admin/models/SetPrice.js';
 import { Driver } from '../models/Driver.js';
 import { WalletTransaction } from '../models/WalletTransaction.js';
 import { Ride } from '../../user/models/Ride.js';
+import { getWalletSettings } from '../../services/appSettingsService.js';
 
 const normalizeAmount = (value, fieldName = 'amount') => {
   const amount = Number(value);
@@ -96,19 +97,63 @@ const resolveCommissionConfigForRide = async (ride, session) => {
   };
 };
 
-const getWalletSnapshot = (driver) => ({
-  balance: Number(driver?.wallet?.balance || 0),
-  cashLimit: Number(driver?.wallet?.cashLimit ?? env.driverWallet.defaultCashLimit),
-  isBlocked: Boolean(driver?.wallet?.isBlocked),
-});
+const toNonNegativeNumber = (value, fallback = 0) => {
+  const numericValue = Number(value);
+  return Number.isFinite(numericValue) && numericValue >= 0 ? numericValue : fallback;
+};
 
-export const serializeDriverWallet = (driver) => {
-  const wallet = getWalletSnapshot(driver);
+const isEnabledSetting = (value, fallback = true) => {
+  if (value === undefined || value === null || value === '') {
+    return fallback;
+  }
+
+  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase());
+};
+
+const resolveWalletRules = async () => {
+  const walletSettings = await getWalletSettings();
+  const configuredMinimumBalance = Number(walletSettings.driver_wallet_minimum_amount_to_get_an_order);
+  const minimumBalanceForOrders = Number.isFinite(configuredMinimumBalance)
+    ? Math.round(configuredMinimumBalance * 100) / 100
+    : -toNonNegativeNumber(env.driverWallet.defaultCashLimit, 500);
+
+  return {
+    minimumBalanceForOrders,
+    cashLimit: Math.abs(Math.min(minimumBalanceForOrders, 0)),
+    minimumTopUpAmount: toNonNegativeNumber(walletSettings.minimum_amount_added_to_wallet, 0),
+    minimumTransferAmount: toNonNegativeNumber(walletSettings.minimum_wallet_amount_for_transfer, 0),
+    isWalletEnabled: isEnabledSetting(walletSettings.show_wallet_feature_for_driver, true),
+    isTransferEnabled: isEnabledSetting(walletSettings.enable_wallet_transfer_driver, true),
+  };
+};
+
+const getWalletSnapshot = async (driver) => {
+  const rules = await resolveWalletRules();
+  const balance = Number(driver?.wallet?.balance || 0);
+
+  return {
+    balance,
+    cashLimit: rules.cashLimit,
+    minimumBalanceForOrders: rules.minimumBalanceForOrders,
+    availableForOrders: Math.round((balance - rules.minimumBalanceForOrders) * 100) / 100,
+    isBlocked: Boolean(driver?.wallet?.isBlocked),
+    rules,
+  };
+};
+
+export const serializeDriverWallet = async (driver) => {
+  const wallet = await getWalletSnapshot(driver);
 
   return {
     balance: wallet.balance,
     cashLimit: wallet.cashLimit,
-    isBlocked: wallet.isBlocked || wallet.balance < -wallet.cashLimit,
+    minimumBalanceForOrders: wallet.minimumBalanceForOrders,
+    availableForOrders: wallet.availableForOrders,
+    isWalletEnabled: wallet.rules.isWalletEnabled,
+    isTransferEnabled: wallet.rules.isTransferEnabled,
+    minimumTopUpAmount: wallet.rules.minimumTopUpAmount,
+    minimumTransferAmount: wallet.rules.minimumTransferAmount,
+    isBlocked: wallet.isBlocked || !wallet.rules.isWalletEnabled || wallet.balance < wallet.minimumBalanceForOrders,
   };
 };
 
@@ -122,12 +167,24 @@ export const ensureDriverWalletCanAcceptRide = async (driverOrId, { session } = 
     throw new ApiError(404, 'Driver not found');
   }
 
-  const wallet = getWalletSnapshot(driver);
-  const isBlocked = wallet.isBlocked || wallet.balance < -wallet.cashLimit;
+  const wallet = await getWalletSnapshot(driver);
+  const isBlocked = wallet.isBlocked || !wallet.rules.isWalletEnabled || wallet.balance < wallet.minimumBalanceForOrders;
 
   if (isBlocked) {
-    await Driver.findByIdAndUpdate(driver._id, { 'wallet.isBlocked': true });
-    throw new ApiError(403, 'Driver wallet limit exceeded. Please top up to accept rides.');
+    await Driver.findByIdAndUpdate(driver._id, {
+      'wallet.cashLimit': wallet.cashLimit,
+      'wallet.isBlocked': true,
+    });
+    throw new ApiError(403, wallet.rules.isWalletEnabled
+      ? 'Driver wallet minimum balance is not met. Please top up to accept rides.'
+      : 'Driver wallet is disabled by admin.');
+  }
+
+  if (Number(driver?.wallet?.cashLimit) !== wallet.cashLimit || driver?.wallet?.isBlocked) {
+    await Driver.findByIdAndUpdate(driver._id, {
+      'wallet.cashLimit': wallet.cashLimit,
+      'wallet.isBlocked': false,
+    });
   }
 
   return wallet;
@@ -154,9 +211,9 @@ export const applyDriverWalletAdjustment = async ({
     throw new ApiError(404, 'Driver not found');
   }
 
-  const before = getWalletSnapshot(driver);
+  const before = await getWalletSnapshot(driver);
   const balanceAfter = Math.round((before.balance + normalizedAmount) * 100) / 100;
-  const isBlockedAfter = balanceAfter < -before.cashLimit;
+  const isBlockedAfter = !before.rules.isWalletEnabled || balanceAfter < before.minimumBalanceForOrders;
 
   const updatedDriver = await Driver.findByIdAndUpdate(
     driverId,
@@ -190,7 +247,7 @@ export const applyDriverWalletAdjustment = async ({
 
   return {
     driver: updatedDriver,
-    wallet: serializeDriverWallet(updatedDriver),
+    wallet: await serializeDriverWallet(updatedDriver),
     transaction,
   };
 };
@@ -201,12 +258,27 @@ export const topUpDriverWallet = async ({ driverId, amount, metadata = {} }) => 
   try {
     session.startTransaction();
 
+    const walletSettings = await getWalletSettings();
+    if (!isEnabledSetting(walletSettings.show_wallet_feature_for_driver, true)) {
+      throw new ApiError(403, 'Driver wallet is disabled by admin');
+    }
+
+    const minimumTopUpAmount = toNonNegativeNumber(walletSettings.minimum_amount_added_to_wallet, 0);
+    const normalizedTopUpAmount = Math.abs(normalizeAmount(amount));
+
+    if (minimumTopUpAmount > 0 && normalizedTopUpAmount < minimumTopUpAmount) {
+      throw new ApiError(400, `amount must be at least ${minimumTopUpAmount}`);
+    }
+
     const result = await applyDriverWalletAdjustment({
       driverId,
-      amount: Math.abs(normalizeAmount(amount)),
+      amount: normalizedTopUpAmount,
       type: 'top_up',
       description: 'Driver wallet top-up',
-      metadata,
+      metadata: {
+        ...metadata,
+        minimumTopUpAmount,
+      },
       session,
     });
 

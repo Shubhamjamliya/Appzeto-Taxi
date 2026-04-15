@@ -4,6 +4,7 @@ import { authenticate, authenticateOrResolveUser } from '../../middlewares/authM
 import {
   cancelRide,
   createRide,
+  getRideAppTipSettings,
   getMyActiveRide,
   getRideById,
   listMyRides,
@@ -16,6 +17,7 @@ export const rideRouter = Router();
 
 rideRouter.post('/', authenticateOrResolveUser(['user']), asyncHandler(createRide));
 rideRouter.get('/', authenticateOrResolveUser(['user']), asyncHandler(listMyRides));
+rideRouter.get('/app-settings/tip', asyncHandler(getRideAppTipSettings));
 rideRouter.get('/available-drivers', asyncHandler(listAvailableDrivers));
 rideRouter.get('/active/me', authenticateOrResolveUser(['user', 'driver']), asyncHandler(getMyActiveRide));
 rideRouter.patch('/:rideId/cancel', authenticate(['user']), asyncHandler(cancelRide));

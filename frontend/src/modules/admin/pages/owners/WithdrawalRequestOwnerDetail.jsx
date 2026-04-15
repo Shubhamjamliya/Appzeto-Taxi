@@ -231,6 +231,7 @@ const WithdrawalRequestOwnerDetail = () => {
           </div>
         </div>
         </div>
+        </div>
       </div>
     </div>
   );

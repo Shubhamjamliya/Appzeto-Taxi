@@ -4,17 +4,10 @@ import {
   Save, 
   Loader2,
   ChevronUp,
-  Info,
-  Car
+  Info
 } from 'lucide-react';
 import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
-
-const SectionHeader = ({ title }) => (
-  <div className="bg-slate-50 border-l-4 border-indigo-600 p-4 mb-8 rounded-r-lg shadow-sm">
-    <h3 className="text-[14px] font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
-  </div>
-);
 
 const InputField = ({ label, name, value, onChange, placeholder, type = "text", helpLink }) => (
   <div className="space-y-1.5 w-full">
@@ -48,7 +41,7 @@ const TransportRideSettings = () => {
     try {
       setLoading(true);
       const res = await api.get('/admin/general-settings/transport-ride');
-      setSettings(res.data?.settings || {});
+      setSettings(res.data?.settings || res.settings || {});
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load transport parameters');
@@ -104,6 +97,12 @@ const TransportRideSettings = () => {
         </div>
 
         <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-8 pb-12">
+           <div className="mb-8 rounded-2xl border border-indigo-100 bg-indigo-50/70 px-5 py-4">
+             <p className="text-sm font-semibold text-slate-700">Regular ride search behavior is controlled from this page.</p>
+             <p className="mt-1 text-xs text-slate-500">
+               Search radius, driver response window, total regular ride search time, and dispatch mode all feed the live dispatch flow.
+             </p>
+           </div>
            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
               {/* Left Column */}
               <div className="space-y-8">

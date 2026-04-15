@@ -491,7 +491,6 @@ const Airport = ({ mode: initialMode = "list" }) => {
                          />
                        </GoogleMap>
                     </div>
-                    </div>
                   ) : (
                     <div className="flex items-center justify-center h-full bg-gray-50 rounded-lg">
                        <Loader2 className="animate-spin text-gray-300" size={32} />

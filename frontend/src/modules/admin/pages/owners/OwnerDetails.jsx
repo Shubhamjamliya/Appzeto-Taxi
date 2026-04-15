@@ -254,7 +254,6 @@ const OwnerDetails = () => {
       >
         <ArrowLeft size={16} /> Back
       </button>
-      </div>
     </div>
   );
 };

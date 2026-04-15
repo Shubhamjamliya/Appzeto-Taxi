@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, AlertTriangle, X } from 'lucide-react';
-import { getCurrentDriver, requestDriverAccountDeletion } from '../../services/registrationService';
+import { clearDriverAuthState, deleteCurrentDriverAccount } from '../../services/registrationService';
 
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
@@ -17,10 +17,10 @@ const REASONS = [
 ];
 
 const CONSEQUENCES = [
-  'An admin will review your deletion request',
-  'Your driver account stays active until the request is approved',
-  'After approval, your account may be deactivated from rides and payouts',
-  'Rejected requests keep your account unchanged',
+  'Your driver account will be removed from the database',
+  'You will be logged out on this device',
+  'You cannot accept rides with this account after deletion',
+  'Completed ride history may still keep trip records for receipts and reports',
 ];
 
 const DriverDeleteAccount = () => {
@@ -34,39 +34,8 @@ const DriverDeleteAccount = () => {
   const [pendingRequest, setPendingRequest] = useState(null);
 
   useEffect(() => {
-    let active = true;
-
-    const loadDeletionStatus = async () => {
-      setIsFetching(true);
-
-      try {
-        const response = await getCurrentDriver();
-        if (!active) return;
-
-        const deletionRequest = response?.data?.deletionRequest;
-
-        if (deletionRequest?.status === 'pending') {
-          setPendingRequest(deletionRequest);
-          setSuccess('Your driver account deletion request is already pending admin review.');
-          setReason(deletionRequest.reason || '');
-        } else {
-          setPendingRequest(null);
-        }
-      } catch (requestError) {
-        if (!active) return;
-        setError(requestError?.message || 'Unable to check deletion request status.');
-      } finally {
-        if (active) {
-          setIsFetching(false);
-        }
-      }
-    };
-
-    loadDeletionStatus();
-
-    return () => {
-      active = false;
-    };
+    setPendingRequest(null);
+    setIsFetching(false);
   }, []);
 
   const hasPendingRequest = pendingRequest?.status === 'pending';
@@ -77,17 +46,13 @@ const DriverDeleteAccount = () => {
     setSuccess(null);
 
     try {
-      const response = await requestDriverAccountDeletion(reason);
-      const deletionRequestStatus = response?.data?.deletionRequestStatus || 'pending';
-      const requestedAt = response?.data?.requestedAt || new Date().toISOString();
-
-      setPendingRequest({
-        status: deletionRequestStatus,
-        reason,
-        requestedAt,
-      });
-      setSuccess('Your driver account deletion request has been sent to admin for review.');
+      await deleteCurrentDriverAccount();
+      clearDriverAuthState();
+      setSuccess('Your driver account has been deleted.');
       setShowConfirm(false);
+      window.setTimeout(() => {
+        navigate('/taxi/driver/login', { replace: true });
+      }, 900);
     } catch (requestError) {
       setError(requestError?.message || 'Something went wrong. Please try again.');
       setShowConfirm(false);
@@ -138,8 +103,8 @@ const DriverDeleteAccount = () => {
               <AlertTriangle size={18} className="text-red-500" strokeWidth={2} />
             </div>
             <div>
-              <p className="text-[14px] font-black text-red-700 leading-tight">Request driver account deletion</p>
-              <p className="text-[11px] font-bold text-red-400">Admin approval is required</p>
+              <p className="text-[14px] font-black text-red-700 leading-tight">Delete driver account</p>
+              <p className="text-[11px] font-bold text-red-400">This removes your driver record</p>
             </div>
           </div>
           <ul className="space-y-2">
@@ -194,13 +159,13 @@ const DriverDeleteAccount = () => {
               <div className="w-16 h-16 bg-red-50 rounded-[20px] flex items-center justify-center mx-auto mb-4">
                 <AlertTriangle size={30} className="text-red-500" strokeWidth={2} />
               </div>
-              <h3 className="text-[18px] font-black text-slate-900 mb-2">Send deletion request?</h3>
-              <p className="text-[13px] font-bold text-slate-500 mb-1 leading-relaxed">Admin will review this driver deletion request before your account is removed.</p>
-              <p className="text-[12px] font-bold text-red-400 mb-6">Your account remains active until approval.</p>
+              <h3 className="text-[18px] font-black text-slate-900 mb-2">Delete this account?</h3>
+              <p className="text-[13px] font-bold text-slate-500 mb-1 leading-relaxed">Your driver account will be removed from the database.</p>
+              <p className="text-[12px] font-bold text-red-400 mb-6">This action cannot be undone from the app.</p>
               <div className="space-y-2.5">
                 <MotionButton whileTap={{ scale: 0.97 }} onClick={handleDelete} disabled={loading}
                   className="w-full bg-red-500 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                  {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Yes, Send Request'}
+                  {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Yes, Delete Account'}
                 </MotionButton>
                 <button onClick={() => setShowConfirm(false)}
                   className="w-full py-3.5 text-[13px] font-black text-slate-400 uppercase tracking-widest">

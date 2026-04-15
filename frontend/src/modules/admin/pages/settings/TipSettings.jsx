@@ -33,7 +33,7 @@ const TipSettings = () => {
     try {
       setLoading(true);
       const res = await api.get('/admin/general-settings/tip');
-      setSettings(res.data?.settings || {});
+      setSettings(res.data?.settings || res.settings || {});
     } catch (err) {
       console.error('Fetch error:', err);
       toast.error('Failed to load tip configurations');

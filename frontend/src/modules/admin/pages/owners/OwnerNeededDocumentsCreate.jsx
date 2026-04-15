@@ -232,6 +232,7 @@ const OwnerNeededDocumentsCreate = () => {
           </div>
       </div>
     </div>
+    </div>
   );
 };
 

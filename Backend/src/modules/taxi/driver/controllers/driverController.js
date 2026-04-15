@@ -2,7 +2,9 @@ import crypto from "node:crypto";
 import { ApiError } from "../../../../utils/ApiError.js";
 import { normalizePoint, toPoint } from "../../../../utils/geo.js";
 import { Driver } from "../models/Driver.js";
+import { DriverLoginSession } from "../models/DriverLoginSession.js";
 import { WalletTransaction } from "../models/WalletTransaction.js";
+import { Ride } from "../../user/models/Ride.js";
 import { Owner } from "../../admin/models/Owner.js";
 import { ServiceLocation } from "../../admin/models/ServiceLocation.js";
 import { Vehicle } from "../../admin/models/Vehicle.js";
@@ -26,6 +28,8 @@ import {
 } from "../services/loginOtpService.js";
 import { verifyAccessToken } from "../../services/tokenService.js";
 import { clearDriverActiveRideIfStale } from "../../services/rideService.js";
+import { getWalletSettings } from "../../services/appSettingsService.js";
+import { RIDE_STATUS } from "../../constants/index.js";
 import { listDriverNeededDocuments } from "../../admin/services/adminService.js";
 import {
   completeDriverOnboarding,
@@ -274,7 +278,7 @@ export const getCurrentDriver = async (req, res) => {
       approve: driver.approve,
       status: driver.status,
       rating: driver.rating,
-      wallet: serializeDriverWallet(driver),
+      wallet: await serializeDriverWallet(driver),
       referralCode: driver.referralCode || "",
       deletionRequest: driver.deletionRequest || { status: "none" },
       isOnline: driver.isOnline,
@@ -522,6 +526,41 @@ export const requestDriverAccountDeletion = async (req, res) => {
   });
 };
 
+export const deleteCurrentDriverAccount = async (req, res) => {
+  const driverId = req.auth?.sub;
+
+  const activeRide = await Ride.findOne({
+    driverId,
+    status: { $in: [RIDE_STATUS.ACCEPTED, RIDE_STATUS.ONGOING] },
+  }).select("_id status");
+
+  if (activeRide) {
+    throw new ApiError(409, "Complete or cancel your active ride before deleting your account");
+  }
+
+  const deletedDriver = await Driver.findByIdAndDelete(driverId);
+
+  if (!deletedDriver) {
+    throw new ApiError(404, "Driver not found");
+  }
+
+  await DriverLoginSession.deleteMany({
+    $or: [
+      { driverId: deletedDriver._id },
+      { phone: deletedDriver.phone },
+    ],
+  });
+
+  res.json({
+    success: true,
+    data: {
+      deleted: true,
+      driverId: String(deletedDriver._id),
+    },
+    message: "Driver account deleted successfully",
+  });
+};
+
 export const getMyWallet = async (req, res) => {
   const driver = await Driver.findById(req.auth.sub);
 
@@ -533,12 +572,14 @@ export const getMyWallet = async (req, res) => {
     .sort({ createdAt: -1 })
     .limit(50)
     .lean();
+  const walletSettings = await getWalletSettings();
 
   res.json({
     success: true,
     data: {
-      wallet: serializeDriverWallet(driver),
+      wallet: await serializeDriverWallet(driver),
       transactions,
+      settings: walletSettings,
     },
   });
 };

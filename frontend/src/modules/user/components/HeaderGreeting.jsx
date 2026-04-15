@@ -3,8 +3,8 @@ import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Search, Wallet } from 'lucide-react';
 
-const STORAGE_KEY = 'rydon24:lastLocation';
-const LOCATION_UPDATED_EVENT = 'rydon24:location-updated';
+const STORAGE_KEY = 'appzeto:lastLocation';
+const LOCATION_UPDATED_EVENT = 'appzeto:location-updated';
 
 const DEFAULT_LOCATION_LABEL = 'Choose your location';
 
@@ -27,8 +27,13 @@ const fallingCoins = [
   { id: 3, left: '72%', delay: 1.2 },
 ];
 
+import { useSettings } from '../../../shared/context/SettingsContext';
+
 const HeaderGreeting = () => {
   const navigate = useNavigate();
+  const { settings } = useSettings();
+  const appLogo = settings.general?.logo || settings.customization?.logo;
+  const appName = settings.general?.app_name || 'App';
   const [locationLabel, setLocationLabel] = useState(getSavedLocationLabel);
 
   useEffect(() => {
@@ -63,8 +68,8 @@ const HeaderGreeting = () => {
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}
             />
             <motion.img
-              src="/Rydon24.png"
-              alt="Rydon24"
+              src={appLogo}
+              alt={appName}
               className="relative z-10 h-10 object-contain drop-shadow-sm"
               animate={{ y: [0, -2, 0], scale: [1, 1.02, 1] }}
               transition={{ duration: 3.2, repeat: Infinity, ease: 'easeInOut' }}

@@ -19,6 +19,7 @@ import { adminService } from '../../services/adminService';
 import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import toast from 'react-hot-toast';
 import { motion, AnimatePresence } from "framer-motion";
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
 const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
@@ -48,6 +49,7 @@ const AppModules = ({ mode: propMode }) => {
   const [entriesPerPage, setEntriesPerPage] = useState(10);
   const [submitting, setSubmitting] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const { transportTypes } = useTaxiTransportTypes();
   
   const [formData, setFormData] = useState({
     name: '',
@@ -320,9 +322,9 @@ const AppModules = ({ mode: propMode }) => {
               <label className={labelClass}>Transport Type *</label>
               <select name="transport_type" value={formData.transport_type} onChange={handleInputChange} className={selectClass}>
                 <option value="">Choose Transport Type</option>
-                <option value="taxi">Taxi</option>
-                <option value="delivery">Delivery</option>
-                <option value="both">Both</option>
+                {transportTypes.map(t => (
+                  <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+                ))}
               </select>
             </div>
 

@@ -18,6 +18,7 @@ import {
   deleteDriverEmergencyContact,
   getDriverEmergencyContacts,
 } from '../../services/registrationService';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const MAX_CONTACTS = 5;
 const PHONE_REGEX = /^\d{10}$/;
@@ -26,6 +27,9 @@ const normalizePhone = (value) => String(value || '').replace(/\D/g, '').slice(-
 
 const SecuritySOS = () => {
   const navigate = useNavigate();
+  const { settings } = useSettings();
+  const appName = settings.general?.app_name || 'App';
+  
   const [contacts, setContacts] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
@@ -212,7 +216,7 @@ const SecuritySOS = () => {
   return (
     <div className="min-h-screen bg-[#f8f9fb] font-sans p-6 pt-10 pb-32">
       <header className="flex items-center gap-4 mb-8 text-slate-900 uppercase">
-        <button onClick={() => navigate('/taxi/driver/profile')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
+        <button onClick={() => navigate('/taxi/driver/home')} className="w-10 h-10 bg-white rounded-xl shadow-sm border border-slate-100 flex items-center justify-center">
           <ArrowLeft size={18} />
         </button>
         <h1 className="text-lg font-black tracking-tight">Security & SOS</h1>

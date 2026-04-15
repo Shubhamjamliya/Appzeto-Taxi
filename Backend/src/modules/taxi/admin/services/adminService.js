@@ -36,6 +36,7 @@ import { PaymentGateway } from '../models/PaymentGateway.js';
 import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
+import TaxiTransportType from '../models/TaxiTransportType.js';
 import { hashPassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
@@ -253,6 +254,10 @@ const serializeSetPrice = (item) => ({
   price_per_distance: item.price_per_distance,
   time_price: item.time_price,
   waiting_charge: item.waiting_charge,
+  outstation_base_price: item.outstation_base_price ?? 0,
+  outstation_base_distance: item.outstation_base_distance ?? 0,
+  outstation_price_per_distance: item.outstation_price_per_distance ?? 0,
+  outstation_time_price: item.outstation_time_price ?? 0,
   free_waiting_before: item.free_waiting_before,
   free_waiting_after: item.free_waiting_after,
 
@@ -3258,6 +3263,10 @@ export const deleteVehicleType = async (id) => {
       price_per_distance: Number(payload.price_per_distance ?? 0),
       time_price: Number(payload.time_price ?? 0),
       waiting_charge: Number(payload.waiting_charge ?? 0),
+      outstation_base_price: Number(payload.outstation_base_price ?? 0),
+      outstation_base_distance: Number(payload.outstation_base_distance ?? 0),
+      outstation_price_per_distance: Number(payload.outstation_price_per_distance ?? 0),
+      outstation_time_price: Number(payload.outstation_time_price ?? 0),
       free_waiting_before: Number(payload.free_waiting_before ?? 0),
       free_waiting_after: Number(payload.free_waiting_after ?? 0),
 
@@ -3296,7 +3305,9 @@ export const deleteVehicleType = async (id) => {
       'service_tax', 'airport_surge', 'support_airport_fee', 'support_outstation',
       'enable_airport_ride', 'enable_outstation_ride',
       'base_price', 'base_distance', 'price_per_distance', 'time_price',
-      'waiting_charge', 'free_waiting_before', 'free_waiting_after',
+      'waiting_charge', 'outstation_base_price', 'outstation_base_distance',
+      'outstation_price_per_distance', 'outstation_time_price',
+      'free_waiting_before', 'free_waiting_after',
       'enable_shared_ride', 'enable_ride_sharing', 'price_per_seat',
       'shared_price_per_distance', 'shared_cancel_fee',
       'user_cancellation_fee', 'driver_cancellation_fee', 'cancellation_fee_goes_to',
@@ -5230,4 +5241,31 @@ export const deleteOwner = async (id) => {
       query.$or = [{ audience: audience }, { screen: audience }];
     }
     return OnboardingScreen.find(query).sort({ order: 1 }).lean();
+  };
+
+  export const listTransportTypes = async () => {
+    const types = await TaxiTransportType.find({ active: true }).lean();
+    if (types.length === 0) {
+      return await seedTransportTypes();
+    }
+    return types;
+  };
+
+  export const seedTransportTypes = async () => {
+    const defaults = [
+      { name: 'taxi', display_name: 'Taxi' },
+      { name: 'delivery', display_name: 'Delivery' },
+      { name: 'both', display_name: 'Both' }
+    ];
+    
+    const results = [];
+    for (const item of defaults) {
+      const existing = await TaxiTransportType.findOne({ name: item.name });
+      if (!existing) {
+        results.push(await TaxiTransportType.create(item));
+      } else {
+        results.push(existing);
+      }
+    }
+    return results;
   };

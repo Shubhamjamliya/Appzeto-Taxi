@@ -34,6 +34,7 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { API_BASE_URL } from '../../../../shared/api/runtimeConfig';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 const inputClass = "w-full border border-gray-200 rounded-md px-4 py-3 text-sm text-gray-800 bg-white focus:border-indigo-500 transition-all outline-none";
 const labelClass = "block text-[13px] font-semibold text-gray-700 mb-2.5";
@@ -49,7 +50,7 @@ const StatusToggle = ({ active, onToggle }) => (
 
 const initialFormState = {
   zone_id: '',
-  transport_type: 'taxi',
+  transport_type: '',
   vehicle_type: '',
   payment_type: ['cash'],
   admin_commision_type: '1',
@@ -68,8 +69,18 @@ const initialFormState = {
   free_waiting_before: '',
   free_waiting_after: '',
   enable_airport_ride: false,
+  support_airport_fee: '',
+  airport_surge: '',
   enable_outstation_ride: false,
+  outstation_base_price: '',
+  outstation_base_distance: '',
+  outstation_price_per_distance: '',
+  outstation_time_price: '',
   enable_ride_sharing: false,
+  enable_shared_ride: 0,
+  price_per_seat: '',
+  shared_price_per_distance: '',
+  shared_cancel_fee: '',
   user_cancellation_fee: '',
   user_cancellation_fee_type: 'percentage',
   driver_cancellation_fee: '',
@@ -94,6 +105,7 @@ const SetPrices = ({ mode }) => {
   
   const [zones, setZones] = useState([]);
   const [vehicleTypes, setVehicleTypes] = useState([]);
+  const { transportTypes } = useTaxiTransportTypes();
 
   const [formData, setFormData] = useState(initialFormState);
 
@@ -273,11 +285,27 @@ const SetPrices = ({ mode }) => {
                           <td className="px-8 py-6 text-right pr-12">
                              <div className="flex items-center justify-end gap-2">
                                 <button onClick={() => navigate(`/admin/pricing/set-price/edit/${prize.id || prize._id}`)} className="w-8 h-8 flex items-center justify-center bg-[#FFF7ED] text-[#F97316] rounded transition-colors hover:bg-orange-100"><Edit2 size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors"><Gift size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#F8FAFC] text-[#64748B] rounded transition-colors"><Eye size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#EFF6FF] text-[#3B82F6] rounded transition-colors"><Layers size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors"><Zap size={14} /></button>
-                                <button className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors"><Cone size={14} /></button>
+                                 <button 
+                                   title="set package prices"
+                                   onClick={() => navigate(`/admin/pricing/set-price/packages/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#F0FDFA] text-[#14B8A6] rounded transition-colors hover:bg-emerald-100"
+                                 >
+                                    <Gift size={14} />
+                                 </button>
+                                 <button 
+                                   title="Surge"
+                                   onClick={() => navigate(`/admin/pricing/set-price/surge/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#FEF2F2] text-[#EF4444] rounded transition-colors hover:bg-red-100"
+                                 >
+                                    <Zap size={14} />
+                                 </button>
+                                 <button 
+                                   title="driver incentive"
+                                   onClick={() => navigate(`/admin/pricing/set-price/incentive/${prize.id || prize._id}`)}
+                                   className="w-8 h-8 flex items-center justify-center bg-[#EEF2FF] text-[#6366F1] rounded transition-colors hover:bg-indigo-100"
+                                 >
+                                    <Cone size={14} />
+                                 </button>
                              </div>
                           </td>
                         </tr>
@@ -331,12 +359,12 @@ const SetPrices = ({ mode }) => {
                      <div>
                         <label className={labelClass}>Transport Type <span className="text-rose-500">*</span></label>
                         <div className="relative">
-                           <select required className={inputClass + " appearance-none cursor-pointer"} value={formData.transport_type} onChange={e => setFormData(p=>({...p, transport_type: e.target.value}))}>
-                              <option value="">Select Transport Type</option>
-                              <option value="taxi">Ride Hailing</option>
-                              <option value="delivery">Logistics</option>
-                              <option value="both">Both</option>
-                           </select>
+                            <select required className={inputClass + " appearance-none cursor-pointer"} value={formData.transport_type} onChange={e => setFormData(p=>({...p, transport_type: e.target.value}))}>
+                               <option value="">Select Transport Type</option>
+                               {transportTypes.map(t => (
+                                 <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+                               ))}
+                            </select>
                            <ChevronDown size={14} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                         </div>
                      </div>
@@ -445,11 +473,30 @@ const SetPrices = ({ mode }) => {
                            <label className={labelClass}>Free Waiting Time In Minutes After Start A Ride <span className="text-rose-500">*</span></label>
                            <input type="number" required className={inputClass} placeholder="Free Waiting Time In Minutes After Start A Ride" value={formData.free_waiting_after} onChange={e => setFormData(p=>({...p, free_waiting_after: e.target.value}))} />
                         </div>
-                        <div className="flex items-center gap-2 pt-8 ml-1">
+                     </div>
+
+                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12 pt-4">
+                        <div className="flex items-center gap-2 pt-2 ml-1">
                            <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_airport_ride} onChange={e => setFormData(p=>({...p, enable_airport_ride: e.target.checked}))} />
                            <span className="text-[13px] font-semibold text-gray-700">Enable Airport Ride</span>
                         </div>
                      </div>
+
+                     {formData.enable_airport_ride && (
+                        <div className="md:col-span-2 space-y-6 pt-6 border-t border-gray-100 mt-4">
+                           <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Airport Ride</h2>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                              <div>
+                                 <label className={labelClass}>Airport Surge Fee <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_airport_ride} className={inputClass} placeholder="Enter Airport Surge Fee" value={formData.airport_surge} onChange={e => setFormData(p=>({...p, airport_surge: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Support Airport Fee <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_airport_ride} className={inputClass} placeholder="Enter Support Airport Fee" value={formData.support_airport_fee} onChange={e => setFormData(p=>({...p, support_airport_fee: e.target.value}))} />
+                              </div>
+                           </div>
+                        </div>
+                     )}
 
                      <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-x-12">
                         <div className="flex items-center gap-2 pt-2 ml-1">
@@ -457,6 +504,30 @@ const SetPrices = ({ mode }) => {
                            <span className="text-[13px] font-semibold text-gray-700">Enable Outstation Ride</span>
                         </div>
                      </div>
+
+                     {formData.enable_outstation_ride && (
+                        <div className="md:col-span-2 space-y-6 pt-6 border-t border-gray-100 mt-4">
+                           <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Outstation</h2>
+                           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                              <div>
+                                 <label className={labelClass}>Base Price <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Base Price" value={formData.outstation_base_price} onChange={e => setFormData(p=>({...p, outstation_base_price: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Base Distance <span className="text-rose-500">*(Kilometers)</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Base Distance" value={formData.outstation_base_distance} onChange={e => setFormData(p=>({...p, outstation_base_distance: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Price Per Distance <span className="text-rose-500">*(Kilometers)</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Price Per Distance" value={formData.outstation_price_per_distance} onChange={e => setFormData(p=>({...p, outstation_price_per_distance: e.target.value}))} />
+                              </div>
+                              <div>
+                                 <label className={labelClass}>Time Price in Mintue <span className="text-rose-500">*</span></label>
+                                 <input type="number" required={formData.enable_outstation_ride} className={inputClass} placeholder="Enter Time Price" value={formData.outstation_time_price} onChange={e => setFormData(p=>({...p, outstation_time_price: e.target.value}))} />
+                              </div>
+                           </div>
+                        </div>
+                     )}
                   </div>
 
                   {/* Section: Cancellation Fee */}
@@ -500,9 +571,29 @@ const SetPrices = ({ mode }) => {
                   {/* Section: Shared Ride */}
                   <div className="space-y-6 pt-6 border-t border-gray-100">
                      <h2 className="text-base font-bold text-[#1E293B] uppercase tracking-wider">Shared Ride</h2>
-                     <div className="flex items-center gap-2 pt-2 ml-1">
-                        <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked, enable_shared_ride: e.target.checked ? 1 : 0}))} />
-                        <span className="text-[13px] font-semibold text-gray-700">Enable Ride Sharing</span>
+                     <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8">
+                        <div className="flex items-center gap-2 pt-2 ml-1">
+                           <input type="checkbox" className="w-4 h-4 rounded border-gray-300 pointer-events-auto" checked={formData.enable_ride_sharing} onChange={e => setFormData(p=>({...p, enable_ride_sharing: e.target.checked, enable_shared_ride: e.target.checked ? 1 : 0}))} />
+                           <span className="text-[13px] font-semibold text-gray-700">Enable Ride Sharing</span>
+                        </div>
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Base Price per Seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="Enter Base Price per Seat" value={formData.price_per_seat} onChange={e => setFormData(p=>({...p, price_per_seat: e.target.value}))} />
+                           </div>
+                        )}
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Price per Distance Per Shared Seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="0" value={formData.shared_price_per_distance} onChange={e => setFormData(p=>({...p, shared_price_per_distance: e.target.value}))} />
+                           </div>
+                        )}
+                        {formData.enable_ride_sharing && (
+                           <div>
+                              <label className={labelClass}>Cancellation Fee per shared seat <span className="text-rose-500">*</span></label>
+                              <input type="number" required={formData.enable_ride_sharing} className={inputClass} placeholder="0" value={formData.shared_cancel_fee} onChange={e => setFormData(p=>({...p, shared_cancel_fee: e.target.value}))} />
+                           </div>
+                        )}
                      </div>
                   </div>
 

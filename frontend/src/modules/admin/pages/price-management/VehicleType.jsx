@@ -17,6 +17,7 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 import { useNavigate, useParams } from 'react-router-dom';
 import api from '../../../../shared/api/axiosInstance';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 import CarIcon from '../../../../assets/icons/car.png';
 import BikeIcon from '../../../../assets/icons/bike.png';
@@ -179,7 +180,8 @@ const VehicleType = ({ mode: propMode }) => {
   const [vehiclePreferences, setVehiclePreferences] = useState([]);
   const [pagination, setPagination] = useState({ total: 0, current_page: 1 });
   const [errorMessage, setErrorMessage] = useState('');
-  const [formData, setFormData] = useState(defaultFormData);
+  const [formData, setFormData] = useState({ ...defaultFormData, transport_type: '' });
+  const { transportTypes } = useTaxiTransportTypes();
 
   useEffect(() => {
     let mounted = true;
@@ -516,9 +518,10 @@ const VehicleType = ({ mode: propMode }) => {
           <div>
             <label className={labelClass}>Transport Type *</label>
             <select value={formData.transport_type} onChange={(e) => updateForm('transport_type', e.target.value)} className={inputClass}>
-              <option value="all">All</option>
-              <option value="taxi">Taxi</option>
-              <option value="delivery">Delivery</option>
+               <option value="">Select Transport Type</option>
+               {transportTypes.map(t => (
+                 <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+               ))}
             </select>
           </div>
 
@@ -628,9 +631,10 @@ const VehicleType = ({ mode: propMode }) => {
           <div>
             <label className={labelClass}>Operational Scope *</label>
             <select value={formData.is_taxi} onChange={(e) => updateForm('is_taxi', e.target.value)} className={inputClass}>
-              <option value="taxi">Taxi</option>
-              <option value="delivery">Delivery</option>
-              <option value="both">Both</option>
+              <option value="">Select Scope</option>
+              {transportTypes.map(t => (
+                <option key={t.id || t._id} value={t.name}>{t.display_name}</option>
+              ))}
             </select>
           </div>
 

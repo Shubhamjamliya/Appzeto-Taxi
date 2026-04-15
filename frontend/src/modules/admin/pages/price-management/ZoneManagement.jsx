@@ -606,26 +606,30 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                 <div className="bg-white rounded-xl border border-gray-200 p-2 shadow-sm relative overflow-hidden h-[650px]">
                    {isLoaded ? (
                      <div className="w-full h-full rounded-lg overflow-hidden relative">
-                       <div className="absolute top-4 left-4 right-4 z-10 flex items-center gap-3">
-                            <div className="flex-1 bg-white border border-gray-200 rounded-lg shadow-lg p-1 flex items-center">
-                               <Search className="ml-3 text-gray-400" size={16} />
+                       <div className="absolute left-6 top-6 z-10 w-full max-w-md pr-12">
+                            <div className="flex h-12 w-full items-center gap-3 rounded-2xl border border-gray-100 bg-white/95 px-4 shadow-2xl backdrop-blur-sm">
+                               <Search className="text-gray-400" size={18} />
                                <Autocomplete 
                                   onLoad={a => setAutocomplete(a)} 
                                   onPlaceChanged={onPlaceChanged}
-                                  className="w-full"
+                                  className="flex-1"
                                 >
                                   <input 
                                     type="text" placeholder="Search for a city" 
-                                    className="px-3 py-2 text-sm text-gray-800 outline-none w-full bg-transparent"
+                                    className="w-full bg-transparent text-sm font-semibold text-gray-800 outline-none placeholder:text-gray-400"
                                   />
                                </Autocomplete>
                             </div>
-                            <button 
-                              onClick={() => setPolygonCoords([])}
-                              className="bg-white border border-gray-200 text-rose-600 px-4 py-2.5 rounded-lg text-sm font-semibold shadow-lg hover:bg-rose-50 transition-colors whitespace-nowrap"
-                            >
-                               Clear Map
-                            </button>
+                       </div>
+
+                       {/* Clear Map button - Stacked Vertically on the Right */}
+                       <div className="absolute right-3 top-[100px] z-50 flex flex-col gap-2">
+                             <button 
+                               onClick={() => setPolygonCoords([])}
+                               className="flex items-center justify-center gap-2 rounded-xl bg-white px-5 py-3 text-[11px] font-black uppercase tracking-widest text-rose-600 shadow-2xl transition-all border border-gray-100 hover:bg-rose-50 active:scale-95"
+                             >
+                                Clear Map
+                             </button>
                        </div>
                        
                        <GoogleMap
@@ -649,7 +653,7 @@ const ZoneManagement = ({ mode: initialMode = "list" }) => {
                            options={{
                              drawingControl: true,
                              drawingControlOptions: {
-                               position: window.google.maps.ControlPosition.TOP_CENTER,
+                               position: window.google.maps.ControlPosition.RIGHT_TOP,
                                drawingModes: [window.google.maps.drawing.OverlayType.POLYGON],
                              },
                              polygonOptions: {

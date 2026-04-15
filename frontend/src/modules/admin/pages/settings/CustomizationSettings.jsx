@@ -17,16 +17,16 @@ import api from '../../../../shared/api/axiosInstance';
 import toast from 'react-hot-toast';
 
 const SectionHeader = ({ title }) => (
-  <div className="bg-slate-50 border-l-4 border-indigo-600 p-4 mb-8 rounded-r-lg shadow-sm">
-    <h3 className="text-[14px] font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
+  <div className="bg-slate-50 border-l-4 border-indigo-600 p-2.5 mb-4 rounded-r-lg shadow-sm">
+    <h3 className="text-[12px] font-bold text-slate-700 uppercase tracking-wide">{title}</h3>
   </div>
 );
 
 const ToggleField = ({ label, name, value, onChange }) => {
   const isChecked = value === "1" || value === 1 || value === true;
   return (
-    <div className="flex items-center justify-between p-4 bg-white border border-slate-100 rounded-xl hover:shadow-sm transition-all group">
-      <span className="text-[13px] font-semibold text-slate-700 capitalize leading-snug pr-4">
+    <div className="flex items-center justify-between p-2.5 bg-white border border-slate-100 rounded-lg hover:shadow-sm transition-all group">
+      <span className="text-[12px] font-semibold text-slate-600 capitalize leading-snug pr-2">
         {label.replace(/_/g, ' ')}
       </span>
       <button
@@ -43,7 +43,7 @@ const ToggleField = ({ label, name, value, onChange }) => {
 
 const InputField = ({ label, name, value, onChange, placeholder, type = "text", helpText }) => (
   <div className="space-y-1.5 w-full">
-    <label className="text-[13px] font-bold text-slate-700 block ml-0.5">
+    <label className="text-[12px] font-bold text-slate-600 block ml-0.5">
       {label} {helpText && <span className="text-red-500">*</span>}
     </label>
     <input
@@ -52,9 +52,9 @@ const InputField = ({ label, name, value, onChange, placeholder, type = "text", 
       value={value || ''}
       onChange={(e) => onChange(name, e.target.value)}
       placeholder={placeholder}
-      className="w-full bg-white border border-slate-200 rounded-lg py-3 px-4 text-[14px] text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none"
+      className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-[13px] text-slate-700 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 transition-all outline-none"
     />
-    {helpText && <p className="text-[11px] text-slate-400 mt-1">{helpText}</p>}
+    {helpText && <p className="text-[10px] text-slate-400 mt-1">{helpText}</p>}
   </div>
 );
 
@@ -117,8 +117,8 @@ const CustomizationSettings = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[#F1F5F9]">
-      <div className="max-w-[1600px] mx-auto p-4 md:p-8 space-y-8 animate-in fade-in duration-700 pb-40">
+    <div className="min-h-screen bg-[#F1F5F9] pb-12">
+      <div className="max-w-[1400px] mx-auto p-4 md:p-6 space-y-4 animate-in fade-in duration-700">
         
         {/* Breadcrumb Area */}
         <div className="flex items-center justify-between mb-2">
@@ -130,15 +130,15 @@ const CustomizationSettings = () => {
            </div>
         </div>
 
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden p-8">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden p-5">
            <SectionHeader title="General Settings" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-16">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-8">
               <div className="md:col-span-1">
-                 <label className="text-[13px] font-bold text-slate-700 block mb-2">Default Country Code For Mobile App</label>
+                 <label className="text-[12px] font-bold text-slate-600 block mb-1.5 ml-0.5">Default Country Code</label>
                  <select 
                   value={settings.default_country_code || 'IN'} 
                   onChange={(e) => handleChange('default_country_code', e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg py-3 px-4 text-[14px] text-slate-700 focus:border-indigo-500 transition-all outline-none appearance-none"
+                  className="w-full bg-white border border-slate-200 rounded-lg py-2 px-3 text-[13px] text-slate-700 focus:border-indigo-500 transition-all outline-none appearance-none"
                  >
                     {countries.length > 0 ? (
                       countries.map(c => (
@@ -180,7 +180,7 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="Transport Ride Settings" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-16">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-8">
               <ToggleField label="Enable Shipment Load Feature" name="enable_shipment_load_feature" value={settings.enable_shipment_load_feature} onChange={handleChange} />
               <ToggleField label="Enable Shipment Unload Feature" name="enable_shipment_unload_feature" value={settings.enable_shipment_unload_feature} onChange={handleChange} />
               <ToggleField label="Enable Digital Signature" name="enable_digital_signature" value={settings.enable_digital_signature} onChange={handleChange} />
@@ -188,10 +188,10 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="Chain Ride settings" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-16 items-start">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-8 items-start">
               <ToggleField label="Enable Secondary Ride For Driver While On Trip" name="enable_secondary_ride" value={settings.enable_secondary_ride} onChange={handleChange} />
               <InputField 
-                label="The Maximum distance to get Secondary Ride For Driver (current location to destination while on trip)" 
+                label="Maximum distance for Secondary Ride (KM)" 
                 name="max_dist_secondary_ride" 
                 value={settings.max_dist_secondary_ride || '2'} 
                 onChange={handleChange} 
@@ -201,10 +201,10 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="My Route Booking Settings" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6 mb-16 items-start">
-              <ToggleField label="Enable My Route Booking Feature (Only for Normal Rides)" name="enable_my_route_booking_feature" value={settings.enable_my_route_booking_feature} onChange={handleChange} />
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-3 mb-8 items-start">
+              <ToggleField label="Enable My Route Booking Feature" name="enable_my_route_booking_feature" value={settings.enable_my_route_booking_feature} onChange={handleChange} />
               <InputField 
-                label="How Many Times a Driver Can Enable the My Route Booking Per Day" 
+                label="Daily Route Booking Limit" 
                 name="how_many_times_a_driver_can_enable_the_my_route_booking_per_day" 
                 value={settings.how_many_times_a_driver_can_enable_the_my_route_booking_per_day || '1'} 
                 onChange={handleChange} 
@@ -214,7 +214,7 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="User Sign-in" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 mb-16">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-8">
               <ToggleField label="Enable User Email Login" name="user_email_login" value={settings.user_email_login} onChange={handleChange} />
               <div className="hidden md:block"></div>
               <ToggleField label="Enable Email OTP" name="user_email_otp" value={settings.user_email_otp} onChange={handleChange} />
@@ -226,7 +226,7 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="Driver Sign-in" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 mb-16">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-8">
               <ToggleField label="Enable Driver Email Login" name="driver_email_login" value={settings.driver_email_login} onChange={handleChange} />
               <div className="hidden md:block"></div>
               <ToggleField label="Enable Email OTP" name="driver_email_otp" value={settings.driver_email_otp} onChange={handleChange} />
@@ -238,7 +238,7 @@ const CustomizationSettings = () => {
            </div>
 
            <SectionHeader title="Owner Sign-in" />
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-4 mb-12">
+           <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2 mb-4">
               <ToggleField label="Enable Owner Email Login" name="owner_email_login" value={settings.owner_email_login} onChange={handleChange} />
               <div className="hidden md:block"></div>
               <ToggleField label="Enable Email OTP" name="owner_email_otp" value={settings.owner_email_otp} onChange={handleChange} />
@@ -248,29 +248,18 @@ const CustomizationSettings = () => {
               <ToggleField label="Enable Mobile OTP" name="owner_mobile_otp" value={settings.owner_mobile_otp} onChange={handleChange} />
               <ToggleField label="Enable Mobile Password" name="owner_mobile_password" value={settings.owner_mobile_password} onChange={handleChange} />
            </div>
-        </div>
-      </div>
 
-      <div className="fixed bottom-0 right-0 left-0 lg:left-72 bg-white/90 backdrop-blur-md border-t border-slate-200 px-8 py-5 flex items-center justify-between z-50">
-         <div className="text-[11px] font-bold text-slate-400 uppercase tracking-widest hidden md:block">
-            Customization Control Center v1.2
-         </div>
-         <div className="flex items-center gap-4 w-full md:w-auto">
-            <button 
-              onClick={handleUpdate}
-              disabled={saving}
-              className="flex-1 md:flex-none bg-[#405189] text-white px-12 py-4 rounded-xl text-[13px] font-black shadow-xl flex items-center justify-center gap-3 hover:bg-[#344475] active:scale-95 transition-all disabled:opacity-50"
-            >
-              {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
-              {saving ? "SAVING..." : "Update Settings"}
-            </button>
-            <button
-               onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-               className="bg-orange-500 text-white w-12 h-12 rounded-xl flex items-center justify-center shadow-lg hover:bg-orange-600 transition-all hover:-translate-y-1"
-            >
-               <ChevronUp size={20} />
-            </button>
-         </div>
+           <div className="mt-8 flex justify-end pt-6 border-t border-slate-100">
+              <button 
+                onClick={handleUpdate}
+                disabled={saving}
+                className="bg-indigo-600 text-white px-10 py-3 rounded-lg text-[14px] font-black shadow-lg flex items-center justify-center gap-2 hover:bg-indigo-700 active:scale-95 transition-all disabled:opacity-50"
+              >
+                {saving ? <Loader2 size={18} className="animate-spin" /> : <Save size={18} />}
+                {saving ? "Saving Changes..." : "Save Customization Settings"}
+              </button>
+           </div>
+        </div>
       </div>
     </div>
   );

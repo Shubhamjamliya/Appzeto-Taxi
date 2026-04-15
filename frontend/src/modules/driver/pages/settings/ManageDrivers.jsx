@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, UserPlus, ShieldCheck, Mail, Phone, MapPin, Trash2, Edit3, Briefcase, Plus } from 'lucide-react';
+import { ArrowLeft, UserPlus, Mail, Phone, MapPin, Trash2, Edit3, Briefcase, Plus } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { getOwnerFleetDrivers } from '../../services/registrationService';
+import DriverBottomNav from '../../../shared/components/DriverBottomNav';
 
 const ManageDrivers = () => {
     const navigate = useNavigate();
@@ -158,7 +159,7 @@ const ManageDrivers = () => {
                 </div>
             </main>
 
-            <div className="fixed bottom-6 right-6">
+            <div className="fixed bottom-24 right-6">
                  <button 
                     onClick={() => navigate('/taxi/driver/add-driver')}
                     className="w-14 h-14 bg-slate-900 text-white rounded-2xl shadow-2xl flex items-center justify-center active:scale-95 transition-transform"
@@ -166,6 +167,8 @@ const ManageDrivers = () => {
                     <Plus size={24} strokeWidth={3} />
                 </button>
             </div>
+
+            <DriverBottomNav />
         </div>
     );
 };

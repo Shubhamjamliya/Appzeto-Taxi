@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { 
     User, 
     Car, 
@@ -17,10 +17,13 @@ import {
     ShieldCheck
 } from 'lucide-react';
 import RegistrationProgress from '../../../shared/components/RegistrationProgress';
-import Rydon24Logo from '@/assets/rydon24_logo.png';
+import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const RegistrationDashboard = () => {
     const navigate = useNavigate();
+    const { settings } = useSettings();
+    const appName = settings.general?.app_name || 'App';
+    const appLogo = settings.general?.logo || settings.customization?.logo;
 
     const steps = [
         { id: 'personal', title: 'Personal Information', sub: 'ID & Profile', icon: <User size={18} /> },
@@ -38,7 +41,11 @@ const RegistrationDashboard = () => {
                     animate={{ scale: 1, opacity: 1 }}
                     className="w-16 h-16 bg-white rounded-2xl flex items-center justify-center text-taxi-text shadow-2xl overflow-hidden p-2"
                 >
-                    <img src={Rydon24Logo} alt="Rydon24" className="w-full h-full object-contain" />
+                    {appLogo ? (
+                        <img src={appLogo} alt={appName} className="w-full h-full object-contain" />
+                    ) : (
+                        <Zap size={24} className="text-slate-900" />
+                    )}
                 </motion.div>
                 
                 <motion.div 

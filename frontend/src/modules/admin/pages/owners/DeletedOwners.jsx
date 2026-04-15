@@ -226,6 +226,7 @@ const DeletedOwners = () => {
         </div>
       </div>
     </div>
+    </div>
   );
 };
 

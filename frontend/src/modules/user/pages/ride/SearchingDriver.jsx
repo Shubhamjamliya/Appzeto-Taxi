@@ -381,7 +381,7 @@ const SearchingDriver = () => {
         };
 
         clearInterval(activeRidePollRef.current);
-        activeRidePollRef.current = setInterval(pollActiveRide, 1500);
+        activeRidePollRef.current = setInterval(pollActiveRide, 5000);
         pollActiveRide();
 
         setSearchStatus('Booking created. Searching nearby drivers...');

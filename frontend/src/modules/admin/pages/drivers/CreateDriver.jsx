@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { ChevronRight, Loader2, Menu, Upload } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useTaxiTransportTypes } from '../../../../shared/hooks/useTaxiTransportTypes';
 
 import { adminService } from '../../services/adminService';
 
@@ -55,13 +56,9 @@ const initialFormData = {
 
 const CreateDriver = () => {
   const navigate = useNavigate();
-  const [formData, setFormData] = useState(initialFormData);
+  const [formData, setFormData] = useState({ ...initialFormData, transport_type: '' });
   const [areas, setAreas] = useState([]);
-  const [transportTypes] = useState([
-    { value: 'taxi', label: 'Taxi' },
-    { value: 'delivery', label: 'Delivery' },
-    { value: 'both', label: 'Both' },
-  ]);
+  const { transportTypes } = useTaxiTransportTypes();
   const [vehicleTypes, setVehicleTypes] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isLoadingVehicles, setIsLoadingVehicles] = useState(false);
@@ -423,8 +420,8 @@ const CreateDriver = () => {
               >
                 <option value="">Select</option>
                 {transportTypes.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
+                  <option key={type.id || type._id} value={type.name}>
+                    {type.display_name}
                   </option>
                 ))}
               </select>

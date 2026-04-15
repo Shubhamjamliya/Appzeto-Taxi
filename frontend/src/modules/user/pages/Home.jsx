@@ -14,6 +14,7 @@ import bikeIcon from '../../../assets/icons/bike.png';
 import autoIcon from '../../../assets/icons/auto.png';
 import deliveryIcon from '../../../assets/icons/Delivery.png';
 import api from '../../../shared/api/axiosInstance';
+import { useSettings } from '../../../shared/context/SettingsContext';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
   clearCurrentRide,
@@ -78,6 +79,9 @@ const getCurrentRideIcon = (ride) => {
 const Home = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const { settings } = useSettings();
+  const appName = settings.general?.app_name || 'App';
+
   const [currentRide, setCurrentRide] = useState(() => {
     const ride = getCurrentRide();
     return isActiveCurrentRide(ride) ? ride : null;
@@ -223,13 +227,13 @@ const Home = () => {
             <div className="relative z-10 flex h-full items-center justify-center px-6 pt-16 text-left">
               <div className="flex max-w-[340px] flex-col items-start px-2 py-2 -translate-x-6 translate-y-12">
                 <div className="text-[30px] font-serif font-extrabold tracking-[0.28em] text-slate-600 drop-shadow-[0_2px_10px_rgba(255,255,255,0.85)]">
-                  #RYDON24
+                  #{appName.toUpperCase()}
                 </div>
                 <div className="mt-1 text-[12px] font-sans italic font-semibold tracking-wide text-slate-600 drop-shadow-[0_1px_8px_rgba(255,255,255,0.8)]">
-                  Redefining Your Indore Journey
+                  Your Trusted Journey Partner
                 </div>
                 <div className="mt-2 text-[10px] font-sans font-semibold tracking-[0.22em] text-slate-500 drop-shadow-[0_1px_8px_rgba(255,255,255,0.8)]">
-                  Made For Malwa, Crafted For The Cleanest City.
+                  Made for Everyone, Crafted for You.
                   <img
                     src="/flag-in.svg"
                     alt="India"

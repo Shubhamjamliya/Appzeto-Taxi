@@ -277,7 +277,7 @@ const RideTracking = () => {
       active = false;
       window.clearInterval(validationInterval);
     };
-  }, [activeRideEndpoint, completeTracking, exitTracking, fallbackDriver, rideId, state]);
+  }, [activeRideEndpoint, rideId]); // Removed unstable dependencies (completeTracking, exitTracking, etc.) to stop infinite loop
 
   useEffect(() => {
     if (!TERMINAL_STATUSES.has(tripStatus)) {

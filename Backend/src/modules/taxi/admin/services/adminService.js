@@ -37,7 +37,7 @@ import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import TaxiTransportType from '../models/TaxiTransportType.js';
-import { hashPassword } from '../../driver/services/authService.js';
+import { hashPassword, comparePassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
@@ -1217,7 +1217,8 @@ export const getAdminModuleInfo = async () => {
 export const loginAdmin = async ({ email, password }) => {
   const admin = await Admin.findOne({ email: email?.trim().toLowerCase() }).select('+password');
 
-  if (!admin || admin.password !== password) {
+  const isMatch = admin && await comparePassword(password, admin.password);
+  if (!isMatch) {
     throw new ApiError(401, 'Invalid admin credentials');
   }
 

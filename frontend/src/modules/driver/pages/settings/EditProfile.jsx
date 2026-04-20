@@ -7,6 +7,9 @@ import { getCurrentDriver, updateDriverProfile } from '../../services/registrati
 import toast from 'react-hot-toast';
 
 const Motion = motion;
+const NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const normalizeName = (value) => String(value || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g, ' ');
 
 const EditProfile = () => {
     const navigate = useNavigate();
@@ -19,6 +22,7 @@ const EditProfile = () => {
         phone: '',
         email: ''
     });
+    const [errors, setErrors] = useState({});
 
     const { 
         uploading: imageUploading, 
@@ -51,10 +55,30 @@ const EditProfile = () => {
     }, []);
 
     const handleSave = async () => {
+        const nextErrors = {};
+        const trimmedName = String(formData.name || '').trim();
+        const email = String(formData.email || '').trim().toLowerCase();
+
+        if (!NAME_REGEX.test(trimmedName)) {
+            nextErrors.name = 'Full name can contain alphabets only';
+        }
+
+        if (email && !EMAIL_REGEX.test(email)) {
+            nextErrors.email = 'Enter email like aa@gmail.com';
+        }
+
+        setErrors(nextErrors);
+
+        if (Object.keys(nextErrors).length > 0) {
+            return;
+        }
+
         try {
             setSubmitting(true);
             const payload = {
                 ...formData,
+                name: trimmedName,
+                email,
                 profileImage: driver.profileImage
             };
             await updateDriverProfile(payload);
@@ -154,9 +178,16 @@ const EditProfile = () => {
                                 type={field.type}
                                 value={field.value}
                                 disabled={field.disabled}
-                                onChange={(e) => setFormData(prev => ({ ...prev, [field.key]: e.target.value }))}
+                                onChange={(e) => {
+                                    const value = field.key === 'name' ? normalizeName(e.target.value) : e.target.value;
+                                    setFormData(prev => ({ ...prev, [field.key]: value }));
+                                    setErrors((prev) => ({ ...prev, [field.key]: '' }));
+                                }}
                                 className="w-full text-[15px] font-semibold text-slate-900 bg-transparent border-none p-0 focus:ring-0 tracking-tight"
                             />
+                            {errors[field.key] ? (
+                                <p className="text-[11px] font-bold text-rose-500">{errors[field.key]}</p>
+                            ) : null}
                         </div>
                     ))}
                 </div>

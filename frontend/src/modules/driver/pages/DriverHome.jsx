@@ -42,6 +42,11 @@ import SuvIcon from '@/assets/icons/SUV.png';
 import { socketService } from '../../../shared/api/socket';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { getCurrentDriver, getLocalDriverToken } from '../services/registrationService';
+import {
+    playRideRequestAlertSound,
+    stopRideRequestAlertSound,
+    unlockRideRequestAlertSound,
+} from '../utils/rideRequestAlertSound';
 
 const Motion = motion;
 
@@ -206,6 +211,18 @@ const DriverHome = () => {
     );
 
     const { isLoaded } = useAppGoogleMapsLoader();
+
+    useEffect(() => {
+        const unlock = () => unlockRideRequestAlertSound();
+
+        window.addEventListener('pointerdown', unlock, { passive: true });
+        window.addEventListener('keydown', unlock);
+
+        return () => {
+            window.removeEventListener('pointerdown', unlock);
+            window.removeEventListener('keydown', unlock);
+        };
+    }, []);
 
     const fetchActiveJob = useCallback(async (type = 'ride') => {
         const normalizedType = String(type || 'ride').toLowerCase();
@@ -433,10 +450,12 @@ const DriverHome = () => {
                     distance: formatTripDistance(data),
                     requestId: data.rideId,
                     rideId: data.rideId,
+                    acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
                     raw: data,
                 };
                 setCurrentRequest(request);
                 setShowRequest(true);
+                playRideRequestAlertSound();
                 setStatusMessage('New booking received.');
             };
 
@@ -448,6 +467,7 @@ const DriverHome = () => {
                 if (!currentRequest?.rideId || currentRequest.rideId === rideId) {
                     setShowRequest(false);
                     setCurrentRequest(null);
+                    stopRideRequestAlertSound();
                     if (reason === 'user-cancelled') {
                         setStatusMessage(message || 'User cancelled the ride.');
                     } else if (reason === 'deleted-by-admin') {
@@ -464,6 +484,7 @@ const DriverHome = () => {
                 if (String(message || '').toLowerCase().includes('no longer available')) {
                     setShowRequest(false);
                     setCurrentRequest(null);
+                    stopRideRequestAlertSound();
                 }
                 acceptingRideIdRef.current = '';
                 setAcceptingRideId('');
@@ -484,6 +505,7 @@ const DriverHome = () => {
                 }
 
                 setShowRequest(false);
+                stopRideRequestAlertSound();
                 acceptingRideIdRef.current = '';
                 setAcceptingRideId('');
                 setCompletedRides(prev => prev + 1);
@@ -570,6 +592,7 @@ const DriverHome = () => {
         acceptingRideIdRef.current = currentRequest.rideId;
         setAcceptingRideId(currentRequest.rideId);
         setStatusMessage('Accepting ride...');
+        stopRideRequestAlertSound();
         socketService.emit('acceptRide', { rideId: currentRequest.rideId });
     };
 
@@ -577,6 +600,7 @@ const DriverHome = () => {
         if (currentRequest?.rideId) {
             socketService.emit('rejectRide', { rideId: currentRequest.rideId });
         }
+        stopRideRequestAlertSound();
         setShowRequest(false);
     };
 

@@ -114,7 +114,23 @@ const PhoneRegistration = () => {
                             className="w-4 h-4 rounded-md border-slate-200 text-slate-950 focus:ring-0 mt-0.5 cursor-pointer"
                         />
                         <p className="text-[11px] font-bold text-slate-400 leading-tight">
-                            I agree to <span className="text-slate-900 underline font-black">Terms</span> and <span className="text-slate-900 underline font-black">Privacy Policy</span>.
+                            I agree to{' '}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/terms')}
+                                className="text-slate-900 underline font-black"
+                            >
+                                Terms
+                            </button>
+                            {' '}and{' '}
+                            <button
+                                type="button"
+                                onClick={() => navigate('/privacy')}
+                                className="text-slate-900 underline font-black"
+                            >
+                                Privacy Policy
+                            </button>
+                            .
                         </p>
                     </div>
 

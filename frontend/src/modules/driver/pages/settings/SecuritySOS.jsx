@@ -22,8 +22,10 @@ import { useSettings } from '../../../../shared/context/SettingsContext';
 
 const MAX_CONTACTS = 5;
 const PHONE_REGEX = /^\d{10}$/;
+const NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
 
 const normalizePhone = (value) => String(value || '').replace(/\D/g, '').slice(-10);
+const normalizeName = (value) => String(value || '').replace(/[^A-Za-z .'-]/g, '').replace(/\s+/g, ' ');
 
 const SecuritySOS = () => {
   const navigate = useNavigate();
@@ -92,6 +94,8 @@ const SecuritySOS = () => {
 
     if (!trimmedName) {
       nextErrors.name = 'Name is required';
+    } else if (!NAME_REGEX.test(trimmedName)) {
+      nextErrors.name = 'Use alphabets only for the contact name';
     }
 
     if (!PHONE_REGEX.test(normalizedPhone)) {
@@ -191,7 +195,7 @@ const SecuritySOS = () => {
         ? pickedContact.tel[0]
         : pickedContact.tel || '';
 
-      setName(String(pickedName || '').trim());
+      setName(normalizeName(pickedName).trim());
       setPhone(normalizePhone(pickedPhone));
       setShowAddSheet(true);
 
@@ -383,7 +387,7 @@ const SecuritySOS = () => {
                       type="text"
                       value={name}
                       onChange={(event) => {
-                        setName(event.target.value);
+                        setName(normalizeName(event.target.value));
                         setErrors((prev) => ({ ...prev, name: '' }));
                       }}
                       placeholder="Contact name"

@@ -12,6 +12,9 @@ import { findZoneByPickup } from './locationService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
+const DRIVER_NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+const VEHICLE_NUMBER_REGEX = /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/;
 
 const VEHICLE_TYPE_MAP = {
   v1: 'bike',
@@ -258,20 +261,36 @@ export const verifyDriverOtp = async ({ registrationId, phone, otp }) => {
 
 export const saveDriverPersonalDetails = async ({ registrationId, phone, fullName, email, gender, password }) => {
   const session = await getSession(registrationId, phone);
+  const isOwner = String(session.role || '').toLowerCase() === 'owner';
 
   if (!session.otpVerifiedAt) {
     throw new ApiError(400, 'Verify OTP before continuing');
   }
 
-  if (!fullName || !email || !gender || !password) {
-    throw new ApiError(400, 'fullName, email, gender and password are required');
+  if (!fullName || !email || !gender || (!isOwner && !password)) {
+    throw new ApiError(400, isOwner ? 'fullName, email and gender are required' : 'fullName, email, gender and password are required');
+  }
+
+  const normalizedName = String(fullName).trim();
+  const normalizedEmail = String(email).trim().toLowerCase();
+
+  if (!DRIVER_NAME_REGEX.test(normalizedName)) {
+    throw new ApiError(400, `${isOwner ? 'Owner' : 'Driver'} name should contain alphabets only`);
+  }
+
+  if (!EMAIL_REGEX.test(normalizedEmail)) {
+    throw new ApiError(400, 'A valid email address is required');
+  }
+
+  if (!isOwner && String(password).length < 6) {
+    throw new ApiError(400, 'Password must be at least 6 characters');
   }
 
   session.personal = {
-    fullName: String(fullName).trim(),
-    email: String(email).trim().toLowerCase(),
+    fullName: normalizedName,
+    email: normalizedEmail,
     gender: String(gender).trim(),
-    passwordHash: await hashPassword(password),
+    passwordHash: await hashPassword(isOwner ? crypto.randomBytes(24).toString('hex') : password),
   };
   session.status = 'personal_saved';
   await session.save();
@@ -332,6 +351,36 @@ export const saveDriverVehicle = async ({
     throw new ApiError(400, 'A valid service location is required');
   }
 
+  const isOwner = String(session.role || '').toLowerCase() === 'owner';
+  const normalizedYear = String(year || '').trim();
+  const normalizedNumber = String(number || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+  const normalizedPostalCode = String(postalCode || '').replace(/\D/g, '');
+
+  if (isOwner) {
+    if (!companyName || !companyAddress || !city || !normalizedPostalCode || !taxNumber) {
+      throw new ApiError(400, 'Company details are incomplete');
+    }
+
+    if (!/^\d{6}$/.test(normalizedPostalCode)) {
+      throw new ApiError(400, 'Postal code must be a 6 digit number');
+    }
+  } else {
+    const vehicleYear = Number(normalizedYear);
+    const currentYear = new Date().getFullYear();
+
+    if (!vehicleTypeId || !make || !model || !normalizedYear || !normalizedNumber || !color) {
+      throw new ApiError(400, 'Vehicle details are incomplete');
+    }
+
+    if (!/^\d{4}$/.test(normalizedYear) || vehicleYear < 1980 || vehicleYear > currentYear) {
+      throw new ApiError(400, `Vehicle year must be between 1980 and ${currentYear}`);
+    }
+
+    if (!VEHICLE_NUMBER_REGEX.test(normalizedNumber)) {
+      throw new ApiError(400, 'Vehicle number must be in this format: PP09KK1234');
+    }
+  }
+
   session.vehicle = {
     registerFor: String(registerFor || session.role || 'taxi').trim().toLowerCase(),
     locationId: String(locationId || '').trim(),
@@ -358,13 +407,13 @@ export const saveDriverVehicle = async ({
     vehicleTypeId: String(vehicleTypeId || '').trim(),
     make: String(make || '').trim(),
     model: String(model || '').trim(),
-    year: String(year || '').trim(),
-    number: String(number || '').trim().toUpperCase(),
+    year: normalizedYear,
+    number: normalizedNumber,
     color: String(color || '').trim(),
     companyName: String(companyName || '').trim(),
     companyAddress: String(companyAddress || '').trim(),
     city: String(city || selectedLocation).trim(),
-    postalCode: String(postalCode || '').trim(),
+    postalCode: normalizedPostalCode,
     taxNumber: String(taxNumber || '').trim().toUpperCase(),
   };
   session.status = 'vehicle_saved';
@@ -440,9 +489,7 @@ export const completeDriverOnboarding = async ({ registrationId, phone, document
   }
 
   const configuredUploadFields = await listDriverDocumentUploadFields({ activeOnly: true });
-  const requiredDocuments = configuredUploadFields
-    .filter((field) => field.required)
-    .map((field) => field.key);
+  const requiredDocuments = configuredUploadFields.map((field) => field.key);
   const missingDocuments = requiredDocuments.filter((key) => !normalizedDocuments?.[key]);
 
   if (missingDocuments.length > 0) {

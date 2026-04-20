@@ -35,6 +35,7 @@ import {
   addOwnerVehicle,
   getOwnerFleetVehicles,
   deleteOwnerFleetVehicle,
+  updateCurrentDriverDocument,
 } from "../controllers/driverController.js";
 
 export const driverRouter = Router();
@@ -80,6 +81,11 @@ driverRouter.delete(
   "/emergency-contacts/:contactId",
   authenticate(["driver"]),
   asyncHandler(deleteDriverEmergencyContact),
+);
+driverRouter.patch(
+  "/documents/:documentKey",
+  authenticate(["driver"]),
+  asyncHandler(updateCurrentDriverDocument),
 );
 driverRouter.get(
   "/notifications",

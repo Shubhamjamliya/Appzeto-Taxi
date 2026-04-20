@@ -6,7 +6,7 @@ import { GoogleMap, Marker, OverlayView, Polyline } from '@react-google-maps/api
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
-import { saveCurrentRide } from '../../services/currentRideService';
+import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import { useAppGoogleMapsLoader, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
 
 const MAP_OPTIONS = {
@@ -52,17 +52,10 @@ const getVehicleIcon = (type = 'car') => {
   return CarIcon;
 };
 const DRIVER_PLACEHOLDER = { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', eta: 2 };
-const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted', COMPLETING: 'completing' };
-
-// Simulated nearby drivers for "Dynamic" Uber experience
-const generateNearbyDrivers = (center) => {
-  return Array.from({ length: 6 }).map((_, i) => ({
-    id: i,
-    lat: center.lat + (Math.random() - 0.5) * 0.012,
-    lng: center.lng + (Math.random() - 0.5) * 0.012,
-    rotation: Math.floor(Math.random() * 360)
-  }));
-};
+const STAGES = { SEARCHING: 'searching', ACCEPTED: 'accepted', COMPLETING: 'completing' };
+const CONSUMED_SEARCH_NONCE_PREFIX = 'rydon24_consumed_search_nonce:';
+const ACTIVE_SEARCH_NONCES = new Set();
+const ACTIVE_SEARCH_NONCE_CLEANUPS = new Map();
 
 const normalizeDriver = (driver = {}) => ({
   name: driver.name || 'Captain',
@@ -121,6 +114,8 @@ const SearchingDriver = () => {
   const timerRef = useRef(null);
   const activeRidePollRef = useRef(null);
   const requestStartedRef = useRef(false);
+  const cleanupSearchRef = useRef(null);
+  const cleanupDelayRef = useRef(null);
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
   const routePrefix = useMemo(
@@ -132,7 +127,7 @@ const SearchingDriver = () => {
     [routeState],
   );
   const activeRideIdRef = useRef('');
-  const [nearbyDrivers, setNearbyDrivers] = useState([]);
+  const searchNonce = String(routeState.searchNonce || '');
 
   const { isLoaded } = useAppGoogleMapsLoader();
 
@@ -144,29 +139,6 @@ const SearchingDriver = () => {
     ),
     [routeState.pickupCoords],
   );
-
-  // Initialize nearby drivers
-  useEffect(() => {
-    if (pickupPos) {
-      setNearbyDrivers(generateNearbyDrivers(pickupPos));
-    }
-  }, [pickupPos]);
-
-  // Jitter movement to make it feel "Alive"
-  useEffect(() => {
-    if (stage !== STAGES.SEARCHING) return;
-    
-    const interval = setInterval(() => {
-      setNearbyDrivers(prev => prev.map(d => ({
-        ...d,
-        lat: d.lat + (Math.random() - 0.5) * 0.0004,
-        lng: d.lng + (Math.random() - 0.5) * 0.0004,
-        rotation: d.rotation + (Math.random() - 0.5) * 10
-      })));
-    }, 2500);
-    
-    return () => clearInterval(interval);
-  }, [stage]);
 
   const dropPos = useMemo(
     () => (
@@ -182,30 +154,92 @@ const SearchingDriver = () => {
   }, [driver]);
 
   useEffect(() => {
-    if (requestStartedRef.current) {
-      return undefined;
+    if (!searchNonce) {
+      navigate(routePrefix || '/', { replace: true });
+      return;
     }
 
-    if (!selectedVehicleTypeId) {
+    const nonceKey = `${CONSUMED_SEARCH_NONCE_PREFIX}${searchNonce}`;
+    const pendingCleanup = ACTIVE_SEARCH_NONCE_CLEANUPS.get(searchNonce);
+    if (pendingCleanup) {
+      clearTimeout(pendingCleanup);
+      ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+    }
+
+    if (ACTIVE_SEARCH_NONCES.has(searchNonce)) {
+      return () => {
+        const cleanupId = setTimeout(() => {
+          ACTIVE_SEARCH_NONCES.delete(searchNonce);
+          ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+        }, 0);
+        ACTIVE_SEARCH_NONCE_CLEANUPS.set(searchNonce, cleanupId);
+      };
+    }
+
+    if (sessionStorage.getItem(nonceKey)) {
+      const activeRide = getCurrentRide();
+
+      if (isActiveCurrentRide(activeRide)) {
+        navigate(`${routePrefix}/ride/tracking`, {
+          replace: true,
+          state: activeRide,
+        });
+        return;
+      }
+
+      navigate(routePrefix || '/', { replace: true });
+      return;
+    }
+
+    sessionStorage.setItem(nonceKey, '1');
+    ACTIVE_SEARCH_NONCES.add(searchNonce);
+
+    return () => {
+      const cleanupId = setTimeout(() => {
+        ACTIVE_SEARCH_NONCES.delete(searchNonce);
+        ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+      }, 0);
+      ACTIVE_SEARCH_NONCE_CLEANUPS.set(searchNonce, cleanupId);
+    };
+  }, [navigate, routePrefix, searchNonce]);
+
+  useEffect(() => {
+    if (cleanupDelayRef.current) {
+      clearTimeout(cleanupDelayRef.current);
+      cleanupDelayRef.current = null;
+    }
+
+    if (requestStartedRef.current) {
+      return () => {
+        cleanupDelayRef.current = setTimeout(() => {
+          cleanupSearchRef.current?.();
+        }, 0);
+      };
+    }
+
+    if (!searchNonce || !selectedVehicleTypeId) {
       setSearchStatus('Vehicle type missing. Please select a vehicle again.');
+      navigate(routePrefix || '/', { replace: true });
       return undefined;
     }
 
     requestStartedRef.current = true;
+    let disposed = false;
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
       const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
-      if (matchedDrivers > 0) {
-        setStage(STAGES.ASSIGNED);
-      }
       setSearchStatus(
         matchedDrivers > 0
-          ? `${matchedDrivers} captain${matchedDrivers > 1 ? 's' : ''} found within ${radiusKm} km`
+          ? `${matchedDrivers} captain${matchedDrivers > 1 ? 's' : ''} notified within ${radiusKm} km - waiting for acceptance`
           : `Searching within ${radiusKm} km`,
       );
     };
 
     const moveToTracking = ({ acceptedDriver, rideId, rideSnapshot }) => {
+      if (disposed) {
+        return;
+      }
+
       if (trackingStartedRef.current) {
         return;
       }
@@ -214,7 +248,7 @@ const SearchingDriver = () => {
       driverRef.current = nextDriver;
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
-      setSearchStatus('Captain accepted your ride.');
+      setSearchStatus('Captain accepted your ride. No driver is assigned until they accept.');
       activeRideIdRef.current = String(rideId || activeRideIdRef.current || '');
       trackingStartedRef.current = true;
       saveCurrentRide({
@@ -235,6 +269,7 @@ const SearchingDriver = () => {
       clearInterval(activeRidePollRef.current);
       timerRef.current = setTimeout(() => {
         navigate(`${routePrefix}/ride/tracking`, {
+          replace: true,
           state: {
             ...routeState,
             pickup: rideSnapshot?.pickupAddress || routeState.pickup,
@@ -266,6 +301,10 @@ const SearchingDriver = () => {
     };
 
     const hydrateAcceptedRide = async () => {
+      if (disposed) {
+        return null;
+      }
+
       const activeResponse = await api.get('/rides/active/me');
       const activeRide = activeResponse?.data || activeResponse;
 
@@ -307,6 +346,24 @@ const SearchingDriver = () => {
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
+    cleanupSearchRef.current = () => {
+      if (disposed) {
+        return;
+      }
+
+      disposed = true;
+      requestStartedRef.current = false;
+      clearTimeout(timerRef.current);
+      clearInterval(activeRidePollRef.current);
+      activeRidePollRef.current = null;
+      socketService.off('rideSearchUpdate', onRideSearchUpdate);
+      socketService.off('rideAccepted', onRideAccepted);
+      socketService.off('ride:state', onRideState);
+      socketService.off('ride:status:updated', onRideStatusUpdated);
+      socketService.off('rideCancelled', onRideCancelled);
+      socketService.off('errorMessage', onError);
+    };
+
     (async () => {
       try {
         let userToken = getLocalUserToken();
@@ -322,6 +379,10 @@ const SearchingDriver = () => {
             localStorage.setItem('role', 'user');
             localStorage.setItem('userInfo', JSON.stringify(loginPayload.user || {}));
           }
+        }
+
+        if (disposed) {
+          return;
         }
 
         const rideRequestConfig = userToken
@@ -345,6 +406,10 @@ const SearchingDriver = () => {
           paymentMethod: routeState.paymentMethod || 'Cash',
         }, rideRequestConfig);
 
+        if (disposed) {
+          return;
+        }
+
         const payload = response?.data || response;
         const ride = payload?.ride || payload;
         const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
@@ -358,10 +423,14 @@ const SearchingDriver = () => {
         }
 
         const pollActiveRide = async () => {
+          if (disposed) {
+            return;
+          }
+
           try {
             const activeRide = await hydrateAcceptedRide();
 
-            if (!activeRide?.rideId) {
+            if (disposed || !activeRide?.rideId) {
               return;
             }
 
@@ -384,23 +453,22 @@ const SearchingDriver = () => {
         activeRidePollRef.current = setInterval(pollActiveRide, 5000);
         pollActiveRide();
 
-        setSearchStatus('Booking created. Searching nearby drivers...');
+        if (!disposed) {
+          setSearchStatus('Booking created. Notifying nearby drivers...');
+        }
       } catch (error) {
-        setSearchStatus(error?.message || 'Could not create ride request.');
+        if (!disposed) {
+          setSearchStatus(error?.message || 'Could not create ride request.');
+        }
       }
     })();
 
     return () => {
-      clearTimeout(timerRef.current);
-      clearInterval(activeRidePollRef.current);
-      socketService.off('rideSearchUpdate', onRideSearchUpdate);
-      socketService.off('rideAccepted', onRideAccepted);
-      socketService.off('ride:state', onRideState);
-      socketService.off('ride:status:updated', onRideStatusUpdated);
-      socketService.off('rideCancelled', onRideCancelled);
-      socketService.off('errorMessage', onError);
+      cleanupDelayRef.current = setTimeout(() => {
+        cleanupSearchRef.current?.();
+      }, 0);
     };
-  }, [navigate, otp, routePrefix, routeState, selectedVehicleTypeId]);
+  }, [navigate, otp, routePrefix, routeState, searchNonce, selectedVehicleTypeId]);
 
   const handleCancel = async () => {
     clearTimeout(timerRef.current);
@@ -418,7 +486,6 @@ const SearchingDriver = () => {
     navigate(routePrefix || '/');
   };
   const isSearching = stage === STAGES.SEARCHING;
-  const isAssigned  = stage === STAGES.ASSIGNED;
   const isAccepted  = stage === STAGES.ACCEPTED || stage === STAGES.COMPLETING;
 
   return (
@@ -605,7 +672,7 @@ const SearchingDriver = () => {
           )}
 
           {/* Assigned */}
-          {isAssigned && (
+          {false && (
             <motion.div key="assigned" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
               <DriverCard driver={driver}
                 bannerGradient="bg-gradient-to-r from-emerald-500/90 to-emerald-600/90"
@@ -698,7 +765,7 @@ const SearchingDriver = () => {
               </div>
               <h3 className="text-[18px] font-bold text-slate-900 mb-1.5">Cancel ride?</h3>
               <p className="text-[13px] font-bold text-slate-400 mb-6 leading-relaxed">
-                {isAssigned ? 'A captain has been assigned. Sure you want to cancel?' : "We're still searching. Stop looking?"}
+                {"We're still searching. Stop looking?"}
               </p>
               <div className="space-y-2.5">
                 <motion.button whileTap={{ scale: 0.97 }} onClick={handleCancel}

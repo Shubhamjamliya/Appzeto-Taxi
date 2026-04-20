@@ -51,6 +51,9 @@ const generateDriverReferralCode = (driver) => {
 };
 
 const MAX_EMERGENCY_CONTACTS = 5;
+const EMERGENCY_CONTACT_NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
+const DRIVER_NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const sanitizeEmergencyPhone = (value) =>
   String(value || "")
@@ -358,6 +361,10 @@ export const addDriverEmergencyContact = async (req, res) => {
     throw new ApiError(400, "Contact name is required");
   }
 
+  if (!EMERGENCY_CONTACT_NAME_REGEX.test(name)) {
+    throw new ApiError(400, "Contact name can contain alphabets only");
+  }
+
   if (!/^\d{10}$/.test(phone)) {
     throw new ApiError(400, "A valid 10-digit contact number is required");
   }
@@ -445,13 +452,21 @@ export const updateCurrentDriver = async (req, res) => {
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "name")) {
-    driver.name = String(req.body.name || "").trim();
+    const name = String(req.body.name || "").trim();
+    if (!DRIVER_NAME_REGEX.test(name)) {
+      throw new ApiError(400, "Full name can contain alphabets only");
+    }
+    driver.name = name;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "email")) {
-    driver.email = String(req.body.email || "")
+    const email = String(req.body.email || "")
       .trim()
       .toLowerCase();
+    if (email && !EMAIL_REGEX.test(email)) {
+      throw new ApiError(400, "Enter a valid email address");
+    }
+    driver.email = email;
   }
 
   if (Object.prototype.hasOwnProperty.call(req.body || {}, "profileImage")) {
@@ -522,6 +537,55 @@ export const requestDriverAccountDeletion = async (req, res) => {
     data: {
       deletionRequestStatus: driver.deletionRequest.status,
       requestedAt: driver.deletionRequest.requestedAt,
+    },
+  });
+};
+
+export const updateCurrentDriverDocument = async (req, res) => {
+  const documentKey = String(req.params.documentKey || "").trim();
+  const document = req.body?.document || {};
+
+  if (!documentKey) {
+    throw new ApiError(400, "Document key is required");
+  }
+
+  const previewUrl = String(
+    document.previewUrl || document.secureUrl || document.url || "",
+  ).trim();
+
+  if (!previewUrl) {
+    throw new ApiError(400, "Uploaded document image URL is required");
+  }
+
+  const driver = await Driver.findById(req.auth.sub);
+
+  if (!driver) {
+    throw new ApiError(404, "Driver not found");
+  }
+
+  const updatedDocument = {
+    ...(typeof document === "object" ? document : {}),
+    key: documentKey,
+    fileName: String(document.fileName || documentKey).trim(),
+    uploaded: true,
+    uploadedAt: new Date().toISOString(),
+    previewUrl,
+    secureUrl: String(document.secureUrl || previewUrl).trim(),
+  };
+
+  driver.documents = {
+    ...(driver.documents || {}),
+    [documentKey]: updatedDocument,
+  };
+
+  driver.markModified("documents");
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      document: updatedDocument,
+      documents: driver.documents || {},
     },
   });
 };

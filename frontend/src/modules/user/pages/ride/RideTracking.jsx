@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 } from 'lucide-react';
@@ -76,6 +76,7 @@ const RideTracking = () => {
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const routeHome = location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '/';
   const routeComplete = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/complete' : '/ride/complete';
+  const routeChat = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/chat' : '/ride/chat';
 
   const rideId = state.rideId || '';
   const otp = state.otp || '1234';
@@ -118,6 +119,29 @@ const RideTracking = () => {
       : 'Captain is on the way';
   const vehicleDetails = [driver.vehicleColor, driver.vehicleMake, driver.vehicleModel].filter(Boolean).join(' ');
   const activeRideEndpoint = serviceType === 'parcel' ? '/deliveries/active/me' : '/rides/active/me';
+  const latestStateRef = useRef(state);
+  const latestFallbackDriverRef = useRef(fallbackDriver);
+  const latestDriverRef = useRef(driver);
+  const latestCompleteTrackingRef = useRef(() => {});
+  const hasAutoFramedMapRef = useRef(false);
+  const lastMapPanPositionRef = useRef(null);
+
+  useEffect(() => {
+    latestStateRef.current = state;
+  }, [state]);
+
+  useEffect(() => {
+    latestFallbackDriverRef.current = fallbackDriver;
+  }, [fallbackDriver]);
+
+  useEffect(() => {
+    latestDriverRef.current = driver;
+  }, [driver]);
+
+  useEffect(() => {
+    hasAutoFramedMapRef.current = false;
+    lastMapPanPositionRef.current = null;
+  }, [rideId, tripStatus, activeDestination.lat, activeDestination.lng]);
 
   const handleCancelRide = async () => {
     try {
@@ -166,6 +190,10 @@ const RideTracking = () => {
     },
     [driver, dropLabel, fare, navigate, paymentMethod, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
   );
+
+  useEffect(() => {
+    latestCompleteTrackingRef.current = completeTracking;
+  }, [completeTracking]);
 
   useEffect(() => {
     let active = true;
@@ -312,14 +340,17 @@ const RideTracking = () => {
         return;
       }
 
+      const latestState = latestStateRef.current;
+      const latestFallbackDriver = latestFallbackDriverRef.current;
+
       setRideRealtime({
         pickup: {
           coordinates: payload.pickupLocation?.coordinates,
-          address: payload.pickupAddress || state.pickup || 'Pickup',
+          address: payload.pickupAddress || latestState.pickup || 'Pickup',
         },
         drop: {
           coordinates: payload.dropLocation?.coordinates,
-          address: payload.dropAddress || state.drop || 'Drop',
+          address: payload.dropAddress || latestState.drop || 'Drop',
         },
         driverLocation: payload.lastDriverLocation
           ? {
@@ -330,7 +361,7 @@ const RideTracking = () => {
         status: payload.liveStatus || payload.status || 'accepted',
         completedAt: payload.completedAt || null,
         feedback: payload.feedback || null,
-        driver: payload.driver || fallbackDriver,
+        driver: payload.driver || latestFallbackDriver,
       });
     };
 
@@ -361,17 +392,18 @@ const RideTracking = () => {
           status: normalizedStatus,
           completedAt: payload.completedAt || prev?.completedAt || null,
         }));
-        completeTracking(normalizedStatus);
+        latestCompleteTrackingRef.current(normalizedStatus);
         return;
       }
 
       if (normalizedStatus === 'cancelled') {
         clearCurrentRide();
       } else {
+        const latestState = latestStateRef.current;
         saveCurrentRide({
-          ...state,
+          ...latestState,
           rideId,
-          driver,
+          driver: latestDriverRef.current,
           status: nextStatus,
         });
       }
@@ -393,7 +425,7 @@ const RideTracking = () => {
       socketService.off('ride:driver-location:updated', onLocationUpdated);
       socketService.off('ride:status:updated', onStatusUpdated);
     };
-  }, [completeTracking, fallbackDriver, rideId, state, state.drop, state.pickup]);
+  }, [rideId]);
 
   useEffect(() => {
     if (!isLoaded || !window.google?.maps?.DirectionsService) {
@@ -450,28 +482,71 @@ const RideTracking = () => {
     }
 
     if (routePath.length > 1) {
-      const bounds = new window.google.maps.LatLngBounds();
-      routePath.forEach((point) => bounds.extend(point));
-      bounds.extend(driverPosition);
-      bounds.extend(activeDestination);
-      map.fitBounds(bounds, { top: 120, right: 48, bottom: 300, left: 48 });
+      if (!hasAutoFramedMapRef.current) {
+        const bounds = new window.google.maps.LatLngBounds();
+        routePath.forEach((point) => bounds.extend(point));
+        bounds.extend(driverPosition);
+        bounds.extend(activeDestination);
+        map.fitBounds(bounds, { top: 120, right: 48, bottom: 300, left: 48 });
+        hasAutoFramedMapRef.current = true;
+        lastMapPanPositionRef.current = driverPosition;
+        return;
+      }
+
+      lastMapPanPositionRef.current = driverPosition;
       return;
     }
 
-    map.panTo(driverPosition);
-    map.setZoom(15);
+    if (!hasAutoFramedMapRef.current) {
+      map.panTo(driverPosition);
+      map.setZoom(15);
+      hasAutoFramedMapRef.current = true;
+      lastMapPanPositionRef.current = driverPosition;
+      return;
+    }
+
+    lastMapPanPositionRef.current = driverPosition;
   }, [activeDestination, driverPosition, map, routePath, tripStatus]);
 
   const handleShare = () => {
     const text = `I'm riding with Rydon24!\nDriver: ${driver.name} (${driver.plate || driver.vehicleNumber || 'Assigned'})\nFrom: ${pickupLabel}\nTo: ${dropLabel}`;
-    if (navigator.share) {
-      navigator.share({ title: 'Track My Ride', text }).catch(() => {});
-    } else {
+    const copyToClipboard = () => {
       navigator.clipboard?.writeText(text).then(() => {
         setShareToast(true);
         setTimeout(() => setShareToast(false), 2500);
       });
+    };
+
+    if (navigator.share) {
+      navigator.share({ title: 'Track My Ride', text }).catch(copyToClipboard);
+    } else {
+      copyToClipboard();
     }
+  };
+
+  const handleCallDriver = () => {
+    const phone = String(driver.phone || driver.mobile || driver.phoneNumber || '').replace(/[^\d+]/g, '');
+
+    if (!phone) {
+      window.alert('Driver phone number is not available yet.');
+      return;
+    }
+
+    window.open(`tel:${phone}`, '_self');
+  };
+
+  const openRideChat = () => {
+    navigate(routeChat, {
+      state: {
+        rideId,
+        peer: {
+          name: driver.name || 'Driver',
+          phone: driver.phone || driver.mobile || driver.phoneNumber || '',
+          subtitle: 'Driver - Active now',
+          role: 'Driver',
+        },
+      },
+    });
   };
 
   const ActionBtn = ({ icon: Icon, label, onClick, colorClass }) => (
@@ -664,8 +739,8 @@ const RideTracking = () => {
           </div>
 
           <div className="flex gap-2">
-            <ActionBtn icon={Phone} label="Call" onClick={() => window.open(`tel:${driver.phone || ''}`)} />
-            <ActionBtn icon={MessageCircle} label="Chat" onClick={() => navigate('/ride/chat')} />
+            <ActionBtn icon={Phone} label="Call" onClick={handleCallDriver} />
+            <ActionBtn icon={MessageCircle} label="Chat" onClick={openRideChat} />
             <ActionBtn icon={Share2} label="Share" onClick={handleShare} />
             <ActionBtn icon={AlertTriangle} label="Help" onClick={() => navigate('/support')} />
           </div>
@@ -734,3 +809,4 @@ const RideTracking = () => {
 };
 
 export default RideTracking;
+

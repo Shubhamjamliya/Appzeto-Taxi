@@ -5,7 +5,7 @@ import { X, ShieldCheck, Phone, MessageCircle, Shield, CheckCircle2, Navigation,
 import api from '../../../../shared/api/axiosInstance';
 import { socketService } from '../../../../shared/api/socket';
 import { getLocalUserToken, userAuthService } from '../../services/authService';
-import { saveCurrentRide } from '../../services/currentRideService';
+import { getCurrentRide, isActiveCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 
 const Motion = motion;
 
@@ -16,9 +16,12 @@ const unwrapLoginPayload = (response) => {
   return payload?.token ? payload : payload?.data || {};
 };
 const DRIVER_PLACEHOLDER = { name: 'Delivery Captain', rating: '4.9', vehicle: 'Bike', plate: 'Assigned', phone: '', eta: 2 };
-const STAGES = { SEARCHING: 'searching', ASSIGNED: 'assigned', ACCEPTED: 'accepted' };
+const STAGES = { SEARCHING: 'searching', ACCEPTED: 'accepted' };
 const ACTIVE_DELIVERY_POLL_MS = 1500;
 const SEARCH_TIMEOUT_MS = 20000;
+const CONSUMED_SEARCH_NONCE_PREFIX = 'rydon24_consumed_parcel_search_nonce:';
+const ACTIVE_SEARCH_NONCES = new Set();
+const ACTIVE_SEARCH_NONCE_CLEANUPS = new Map();
 
 const withUserAuthorization = (token) => (
   token
@@ -149,9 +152,12 @@ const ParcelSearchingDriver = () => {
   const activeRidePollRef = useRef(null);
   const searchTimeoutRef = useRef(null);
   const requestStartedRef = useRef(false);
+  const cleanupSearchRef = useRef(null);
+  const cleanupDelayRef = useRef(null);
   const trackingStartedRef = useRef(false);
   const driverRef = useRef(driver);
   const activeRideIdRef = useRef('');
+  const searchNonce = String(routeState.searchNonce || '');
   const preferredVehicleType = String(
     routeState.goodsTypeFor ||
     routeState.selectedGoodsType?.goodsTypeFor ||
@@ -165,10 +171,80 @@ const ParcelSearchingDriver = () => {
   }, [driver]);
 
   useEffect(() => {
-    if (requestStartedRef.current) return undefined;
+    if (!searchNonce) {
+      navigate('/', { replace: true });
+      return;
+    }
+
+    const nonceKey = `${CONSUMED_SEARCH_NONCE_PREFIX}${searchNonce}`;
+    const pendingCleanup = ACTIVE_SEARCH_NONCE_CLEANUPS.get(searchNonce);
+    if (pendingCleanup) {
+      clearTimeout(pendingCleanup);
+      ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+    }
+
+    if (ACTIVE_SEARCH_NONCES.has(searchNonce)) {
+      return () => {
+        const cleanupId = setTimeout(() => {
+          ACTIVE_SEARCH_NONCES.delete(searchNonce);
+          ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+        }, 0);
+        ACTIVE_SEARCH_NONCE_CLEANUPS.set(searchNonce, cleanupId);
+      };
+    }
+
+    if (sessionStorage.getItem(nonceKey)) {
+      const activeRide = getCurrentRide();
+
+      if (isActiveCurrentRide(activeRide)) {
+        navigate('/parcel/tracking', {
+          replace: true,
+          state: activeRide,
+        });
+        return;
+      }
+
+      navigate('/', { replace: true });
+      return;
+    }
+
+    sessionStorage.setItem(nonceKey, '1');
+    ACTIVE_SEARCH_NONCES.add(searchNonce);
+
+    return () => {
+      const cleanupId = setTimeout(() => {
+        ACTIVE_SEARCH_NONCES.delete(searchNonce);
+        ACTIVE_SEARCH_NONCE_CLEANUPS.delete(searchNonce);
+      }, 0);
+      ACTIVE_SEARCH_NONCE_CLEANUPS.set(searchNonce, cleanupId);
+    };
+  }, [navigate, searchNonce]);
+
+  useEffect(() => {
+    if (cleanupDelayRef.current) {
+      clearTimeout(cleanupDelayRef.current);
+      cleanupDelayRef.current = null;
+    }
+
+    if (requestStartedRef.current) {
+      return () => {
+        cleanupDelayRef.current = setTimeout(() => {
+          cleanupSearchRef.current?.();
+        }, 0);
+      };
+    }
+
+    if (!searchNonce) {
+      navigate('/', { replace: true });
+      return undefined;
+    }
+
     requestStartedRef.current = true;
+    let disposed = false;
 
     const moveToTracking = ({ acceptedDriver, rideId, rideSnapshot }) => {
+      if (disposed) return;
+
       if (trackingStartedRef.current) return;
 
       const nextDriver = normalizeDriver(acceptedDriver);
@@ -199,11 +275,15 @@ const ParcelSearchingDriver = () => {
       clearInterval(activeRidePollRef.current);
       clearTimeout(searchTimeoutRef.current);
       setTimeout(() => {
-        navigate('/parcel/tracking', { state: nextRide });
+        navigate('/parcel/tracking', { replace: true, state: nextRide });
       }, 1400);
     };
 
     const hydrateAcceptedDelivery = async (token) => {
+      if (disposed) {
+        return null;
+      }
+
       const activeResponse = await api.get('/deliveries/active/me', {
         ...withUserAuthorization(token),
         params: { t: Date.now() },
@@ -215,10 +295,9 @@ const ParcelSearchingDriver = () => {
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
       const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
-      if (matchedDrivers > 0) setStage(STAGES.ASSIGNED);
       setSearchStatus(
         matchedDrivers > 0
-          ? `${matchedDrivers} delivery agent${matchedDrivers > 1 ? 's' : ''} found within ${radiusKm} km`
+          ? `${matchedDrivers} delivery agent${matchedDrivers > 1 ? 's' : ''} notified within ${radiusKm} km`
           : `Searching nearby agents within ${radiusKm} km`,
       );
     };
@@ -266,6 +345,24 @@ const ParcelSearchingDriver = () => {
     socketService.on('rideCancelled', onRideCancelled);
     socketService.on('errorMessage', onError);
 
+    cleanupSearchRef.current = () => {
+      if (disposed) {
+        return;
+      }
+
+      disposed = true;
+      requestStartedRef.current = false;
+      clearInterval(activeRidePollRef.current);
+      clearTimeout(searchTimeoutRef.current);
+      activeRidePollRef.current = null;
+      socketService.off('rideSearchUpdate', onRideSearchUpdate);
+      socketService.off('rideAccepted', onRideAccepted);
+      socketService.off('ride:state', onRideState);
+      socketService.off('ride:status:updated', onRideStatusUpdated);
+      socketService.off('rideCancelled', onRideCancelled);
+      socketService.off('errorMessage', onError);
+    };
+
     (async () => {
       try {
         let userToken = getLocalUserToken();
@@ -282,8 +379,17 @@ const ParcelSearchingDriver = () => {
           }
         }
 
+        if (disposed) {
+          return;
+        }
+
         setSearchStatus('Loading delivery vehicle type...');
         const vehicleCatalogResponse = await api.get('/users/vehicle-types');
+
+        if (disposed) {
+          return;
+        }
+
         const vehicleCatalog = unwrap(vehicleCatalogResponse);
         const vehicleTypes = vehicleCatalog?.vehicle_types || vehicleCatalog?.results || (Array.isArray(vehicleCatalog) ? vehicleCatalog : []);
         const selectedVehicleTypes = pickParcelVehicles(vehicleTypes, preferredVehicleType);
@@ -327,6 +433,10 @@ const ParcelSearchingDriver = () => {
           parcel: parcelPayload,
         }, rideRequestConfig);
 
+        if (disposed) {
+          return;
+        }
+
         const payload = unwrap(response);
         const rideId = payload?.rideId || payload?.realtime?.rideId || payload?.ride?._id || payload?._id || payload?.id;
         activeRideIdRef.current = String(rideId || '');
@@ -337,9 +447,13 @@ const ParcelSearchingDriver = () => {
         }
 
         const pollActiveRide = async () => {
+          if (disposed) {
+            return;
+          }
+
           try {
             const activeRide = await hydrateAcceptedDelivery(userToken);
-            if (!activeRide?.rideId) {
+            if (disposed || !activeRide?.rideId) {
               if (activeRideIdRef.current && !trackingStartedRef.current) {
                 clearInterval(activeRidePollRef.current);
                 setBookingError('No drivers accepted the parcel request.');
@@ -369,10 +483,12 @@ const ParcelSearchingDriver = () => {
         // Socket events are the primary realtime path. This backup poll only guards against missed events.
         activeRidePollRef.current = setInterval(pollActiveRide, ACTIVE_DELIVERY_POLL_MS);
         pollActiveRide();
-        setSearchStatus('Parcel booking created. Searching nearby drivers...');
+        if (!disposed) {
+          setSearchStatus('Parcel booking created. Searching nearby drivers...');
+        }
         clearTimeout(searchTimeoutRef.current);
         searchTimeoutRef.current = setTimeout(async () => {
-          if (trackingStartedRef.current) {
+          if (disposed || trackingStartedRef.current) {
             return;
           }
 
@@ -399,6 +515,10 @@ const ParcelSearchingDriver = () => {
           setSearchStatus('Still searching. Try again or keep waiting for a driver.');
         }, SEARCH_TIMEOUT_MS);
       } catch (error) {
+        if (disposed) {
+          return;
+        }
+
         const message = error?.message || 'Could not create parcel booking.';
         setBookingError(message);
         setSearchStatus(message);
@@ -407,16 +527,11 @@ const ParcelSearchingDriver = () => {
     })();
 
     return () => {
-      clearInterval(activeRidePollRef.current);
-      clearTimeout(searchTimeoutRef.current);
-      socketService.off('rideSearchUpdate', onRideSearchUpdate);
-      socketService.off('rideAccepted', onRideAccepted);
-      socketService.off('ride:state', onRideState);
-      socketService.off('ride:status:updated', onRideStatusUpdated);
-      socketService.off('rideCancelled', onRideCancelled);
-      socketService.off('errorMessage', onError);
+      cleanupDelayRef.current = setTimeout(() => {
+        cleanupSearchRef.current?.();
+      }, 0);
     };
-  }, [navigate, otp, preferredVehicleType, routeState]);
+  }, [navigate, otp, preferredVehicleType, routeState, searchNonce]);
 
   const handleCancel = () => {
     clearInterval(activeRidePollRef.current);
@@ -424,7 +539,6 @@ const ParcelSearchingDriver = () => {
   };
 
   const isSearching = stage === STAGES.SEARCHING;
-  const isAssigned = stage === STAGES.ASSIGNED;
   const isAccepted = stage === STAGES.ACCEPTED;
 
   return (
@@ -483,7 +597,7 @@ const ParcelSearchingDriver = () => {
             </Motion.div>
           )}
 
-          {isAssigned && (
+          {false && (
             <Motion.div key="assigned" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
               <DriverCard driver={driver} bannerGradient="bg-gradient-to-r from-blue-500 to-blue-600" banner={<><CheckCircle2 size={16} className="text-white shrink-0" strokeWidth={2.5} /><div className="flex-1"><p className="text-white font-black text-[13px] leading-tight">Delivery Agent Found!</p><p className="text-blue-100 text-[10px] font-bold">Waiting for agent to accept request...</p></div></>}>
                 <div className="flex gap-2">

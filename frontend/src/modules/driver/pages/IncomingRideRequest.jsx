@@ -14,11 +14,25 @@ import {
 } from 'lucide-react';
 
 const Motion = motion;
+const DEFAULT_ACCEPT_REJECT_SECONDS = 15;
 
 const normalizePayment = (value = '') => String(value || 'cash').toUpperCase();
+const getRequestDurationSeconds = (data) => {
+  const safeData = data || {};
+  const rawDuration = safeData.acceptRejectDurationSeconds ||
+    safeData.expiresInSeconds ||
+    safeData.raw?.acceptRejectDurationSeconds ||
+    safeData.raw?.expiresInSeconds;
+  const duration = Number(rawDuration);
+
+  return Number.isFinite(duration) && duration > 0
+    ? Math.ceil(duration)
+    : DEFAULT_ACCEPT_REJECT_SECONDS;
+};
 
 const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAccepting = false }) => {
-  const [timer, setTimer] = useState(15);
+  const requestDurationSeconds = getRequestDurationSeconds(requestData);
+  const [timer, setTimer] = useState(requestDurationSeconds);
   const slideX = useMotionValue(0);
   const slideFillWidth = useTransform(slideX, [0, 180], ['58px', '100%']);
   const data = requestData;
@@ -27,7 +41,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
     let interval;
     let resetTimer;
     if (visible) {
-      resetTimer = setTimeout(() => setTimer(15), 0);
+      resetTimer = setTimeout(() => setTimer(requestDurationSeconds), 0);
       interval = setInterval(() => {
         setTimer((current) => {
           if (current <= 1) {
@@ -43,7 +57,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
       clearTimeout(resetTimer);
       clearInterval(interval);
     };
-  }, [visible, onDecline]);
+  }, [visible, onDecline, requestDurationSeconds, data?.rideId]);
 
   useEffect(() => {
     slideX.set(0);
@@ -57,7 +71,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   const intercityRoute = [data.raw?.intercity?.fromCity, data.raw?.intercity?.toCity].filter(Boolean).join(' to ');
   const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
   const payment = normalizePayment(data.payment);
-  const timerProgress = Math.max(0, Math.min(100, (timer / 15) * 100));
+  const timerProgress = Math.max(0, Math.min(100, (timer / requestDurationSeconds) * 100));
 
   const handleSlideEnd = (_event, info) => {
     if (isAccepting) return;

@@ -37,7 +37,7 @@ import { PaymentMethod } from '../models/PaymentMethod.js';
 import { OnboardingScreen } from '../models/OnboardingScreen.js';
 import { WithdrawalRequest } from '../models/WithdrawalRequest.js';
 import TaxiTransportType from '../models/TaxiTransportType.js';
-import { hashPassword } from '../../driver/services/authService.js';
+import { comparePassword, hashPassword } from '../../driver/services/authService.js';
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
@@ -802,18 +802,27 @@ const syncSettingRows = (rows, payload) =>
     };
   });
 
+const DEFAULT_ADMIN_EMAIL = 'admin@gmail.com';
+const DEFAULT_ADMIN_PASSWORD = '12345';
+const BCRYPT_HASH_PATTERN = /^\$2[aby]\$\d{2}\$/;
+
 const syncDefaultAdminRecord = async () => {
   const now = new Date();
+  const existingAdmin = await Admin.findOne({ email: DEFAULT_ADMIN_EMAIL }).select('+password');
+  const nextPassword =
+    !existingAdmin || !BCRYPT_HASH_PATTERN.test(existingAdmin.password || '')
+      ? await hashPassword(DEFAULT_ADMIN_PASSWORD)
+      : undefined;
 
   await Admin.collection.updateOne(
-    { email: 'admin@gmail.com' },
+    { email: DEFAULT_ADMIN_EMAIL },
     {
       $set: {
         name: 'Super Admin',
-        email: 'admin@gmail.com',
+        email: DEFAULT_ADMIN_EMAIL,
         phone: '9999999999',
-        password: '12345',
         permissions: ['*'],
+        ...(nextPassword ? { password: nextPassword } : {}),
         updatedAt: now,
       },
       $setOnInsert: {
@@ -1217,7 +1226,15 @@ export const getAdminModuleInfo = async () => {
 export const loginAdmin = async ({ email, password }) => {
   const admin = await Admin.findOne({ email: email?.trim().toLowerCase() }).select('+password');
 
-  if (!admin || admin.password !== password) {
+  if (!admin) {
+    throw new ApiError(401, 'Invalid admin credentials');
+  }
+
+  const passwordMatches = BCRYPT_HASH_PATTERN.test(admin.password || '')
+    ? await comparePassword(password, admin.password)
+    : admin.password === password;
+
+  if (!passwordMatches) {
     throw new ApiError(401, 'Invalid admin credentials');
   }
 

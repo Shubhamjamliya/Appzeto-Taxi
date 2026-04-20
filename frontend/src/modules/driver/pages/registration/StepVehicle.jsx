@@ -16,6 +16,11 @@ import {
     saveDriverVehicle,
 } from '../../services/registrationService';
 
+const VEHICLE_NUMBER_REGEX = /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/;
+const getCurrentVehicleYear = () => new Date().getFullYear();
+const normalizeVehicleNumber = (value = '') => String(value).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10);
+const normalizePostalCode = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
+
 const StepVehicle = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -96,10 +101,32 @@ const StepVehicle = () => {
         }
 
         if (required.every(key => formData[key])) {
+            if (isOwner) {
+                if (!/^\d{6}$/.test(formData.postalCode)) {
+                    setError('Postal code must be a 6 digit number');
+                    return;
+                }
+            } else {
+                const vehicleYear = Number(formData.year);
+                const currentYear = getCurrentVehicleYear();
+                const normalizedNumber = normalizeVehicleNumber(formData.number);
+
+                if (!/^\d{4}$/.test(formData.year) || vehicleYear < 1980 || vehicleYear > currentYear) {
+                    setError(`Vehicle year must be between 1980 and ${currentYear}`);
+                    return;
+                }
+
+                if (!VEHICLE_NUMBER_REGEX.test(normalizedNumber)) {
+                    setError('Vehicle number must be in this format: PP09KK1234');
+                    return;
+                }
+            }
+
             setLoading(true);
             setError('');
 
             try {
+                const normalizedNumber = normalizeVehicleNumber(formData.number);
                 const selectedServiceLocation = locations.find(
                     (item) => String(item._id || item.id) === String(formData.locationId)
                 );
@@ -115,7 +142,7 @@ const StepVehicle = () => {
                     make: formData.make,
                     model: formData.model,
                     year: formData.year,
-                    number: formData.number,
+                    number: normalizedNumber,
                     color: formData.color,
                     companyName: formData.companyName,
                     companyAddress: formData.companyAddress,
@@ -127,6 +154,7 @@ const StepVehicle = () => {
                 const nextState = saveDriverRegistrationSession({
                     ...session,
                     ...formData,
+                    number: normalizedNumber,
                     vehicleSession: response?.data?.session || null,
                 });
 
@@ -254,8 +282,10 @@ const StepVehicle = () => {
                                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Postal Code</label>
                                     <input 
                                         value={formData.postalCode}
-                                        onChange={(e) => setFormData(p => ({ ...p, postalCode: e.target.value }))}
-                                        placeholder="Zip"
+                                        onChange={(e) => setFormData(p => ({ ...p, postalCode: normalizePostalCode(e.target.value) }))}
+                                        placeholder="452001"
+                                        inputMode="numeric"
+                                        maxLength={6}
                                         className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
                                     />
                                 </div>
@@ -328,7 +358,7 @@ const StepVehicle = () => {
                                         maxLength={4}
                                         value={formData.year}
                                         onChange={(e) => setFormData(p => ({ ...p, year: e.target.value.replace(/\D/g, '') }))}
-                                        placeholder="2024"
+                                        placeholder={String(getCurrentVehicleYear())}
                                         className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
                                     />
                                 </div>
@@ -337,8 +367,8 @@ const StepVehicle = () => {
                                     <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Vehicle Number</label>
                                     <input 
                                         value={formData.number}
-                                        onChange={(e) => setFormData(p => ({ ...p, number: e.target.value.toUpperCase() }))}
-                                        placeholder="MP 09 AB 1234"
+                                        onChange={(e) => setFormData(p => ({ ...p, number: normalizeVehicleNumber(e.target.value) }))}
+                                        placeholder="PP09KK1234"
                                         className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200 uppercase tracking-widest"
                                     />
                                 </div>

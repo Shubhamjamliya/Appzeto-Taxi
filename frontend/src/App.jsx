@@ -4,6 +4,7 @@ import { MapPin, FileText } from 'lucide-react';
 import { Toaster } from 'react-hot-toast';
 import { socketService } from './shared/api/socket';
 import { SettingsProvider } from './shared/context/SettingsContext';
+import AppAutoUpdater from './modules/shared/components/AppAutoUpdater';
 import './App.css';
 
 
@@ -35,6 +36,7 @@ const Wallet = lazy(() => import('./modules/user/pages/Wallet'));
 
 // Coming Soon placeholder (for /tours and any unbuilt routes)
 const ComingSoon = lazy(() => import('./modules/shared/pages/ComingSoon'));
+const LegalPage = lazy(() => import('./modules/shared/pages/LegalPage'));
 
 // Phase 1 — Parcel flow completions
 const ParcelSearchingDriver = lazy(() => import('./modules/user/pages/parcel/ParcelSearchingDriver'));
@@ -110,6 +112,7 @@ const ActiveTrip = lazy(() => import('./modules/driver/pages/ActiveTrip'));
 const DriverWallet = lazy(() => import('./modules/driver/pages/DriverWallet'));
 const DriverProfile = lazy(() => import('./modules/driver/pages/DriverProfile'));
 const RideRequests = lazy(() => import('./modules/driver/pages/RideRequests'));
+const DriverIncentives = lazy(() => import('./modules/driver/pages/DriverIncentives'));
 
 // Driver Module - Settings
 const EditProfile = lazy(() => import('./modules/driver/pages/settings/EditProfile'));
@@ -322,6 +325,16 @@ const MainLayout = ({ children }) => {
   );
 };
 
+const ScrollToTop = () => {
+  const { pathname } = useLocation();
+
+  useEffect(() => {
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [pathname]);
+
+  return null;
+};
+
 const clearUserSession = () => {
   localStorage.removeItem('token');
   localStorage.removeItem('userToken');
@@ -355,7 +368,10 @@ const UserAccountInvalidationListener = () => {
     socketService.on('account:deleted', handleLogout);
 
     const handleAuthStale = (event) => {
-      if (event.detail?.role === 'user') {
+      const staleToken = event.detail?.token || '';
+      const currentUserToken = localStorage.getItem('userToken') || localStorage.getItem('token') || '';
+
+      if (event.detail?.role === 'user' && (!staleToken || staleToken === currentUserToken)) {
         handleLogout();
       }
     };
@@ -379,6 +395,8 @@ function App() {
   return (
     <Router>
       <SettingsProvider>
+        <AppAutoUpdater />
+        <ScrollToTop />
         <UserAccountInvalidationListener />
         <MainLayout>
         <Suspense fallback={
@@ -392,6 +410,8 @@ function App() {
             {/* User Module Routes */}
             <Route path="/onboarding" element={<Onboarding />} />
             <Route path="/login" element={<Login />} />
+            <Route path="/terms" element={<LegalPage />} />
+            <Route path="/privacy" element={<LegalPage />} />
             <Route path="/verify-otp" element={<VerifyOTP />} />
             <Route path="/signup" element={<Signup />} />
             <Route path="/" element={<UserHome />} />
@@ -459,6 +479,8 @@ function App() {
             {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
             <Route path="/taxi/user/onboarding" element={<Onboarding />} />
             <Route path="/taxi/user/login" element={<Login />} />
+            <Route path="/taxi/user/terms" element={<LegalPage />} />
+            <Route path="/taxi/user/privacy" element={<LegalPage />} />
             <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
             <Route path="/taxi/user/signup" element={<Signup />} />
             <Route path="/taxi/user" element={<UserHome />} />
@@ -539,9 +561,11 @@ function App() {
               <Route path="home" element={<DriverHome />} />
               <Route path="dashboard" element={<DriverHome />} />
               <Route path="active-trip" element={<ActiveTrip />} />
+              <Route path="chat" element={<Chat />} />
               <Route path="wallet" element={<DriverWallet />} />
               <Route path="profile" element={<DriverProfile />} />
               <Route path="history" element={<RideRequests />} />
+              <Route path="incentives" element={<DriverIncentives />} />
 
               <Route path="edit-profile" element={<EditProfile />} />
               <Route path="documents" element={<DriverDocuments />} />

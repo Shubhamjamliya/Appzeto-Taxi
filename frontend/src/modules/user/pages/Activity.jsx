@@ -58,20 +58,24 @@ const normalizeRide = (ride) => {
   const driverName = ride.driver?.name || 'Captain';
   const vehicle = ride.driver?.vehicleType || ride.vehicleIconType || 'Ride';
   const status = formatStatus(ride.status || ride.liveStatus);
-  const pickup = coordLabel(ride.pickupLocation, 'Pickup');
-  const drop = coordLabel(ride.dropLocation, 'Drop');
+  const serviceType = String(ride.serviceType || ride.type || 'ride').toLowerCase();
+  const type = serviceType === 'parcel' ? 'parcel' : 'ride';
+  const pickup = ride.pickupAddress || coordLabel(ride.pickupLocation, 'Pickup');
+  const drop = ride.dropAddress || coordLabel(ride.dropLocation, 'Drop');
 
   return {
     id: ride.rideId || ride._id || ride.id,
-    type: 'ride',
-    title: status === 'Searching' ? 'Ride request' : `Ride with ${driverName}`,
+    type,
+    title: type === 'parcel'
+      ? (status === 'Searching' ? 'Parcel request' : 'Parcel delivery')
+      : (status === 'Searching' ? 'Ride request' : `Ride with ${driverName}`),
     address: `${pickup} to ${drop}`,
     date: formatRideDate(timeSource),
     time: formatRideTime(timeSource),
     status,
     price: Number(ride.fare || 0).toFixed(0),
     ride,
-    vehicle,
+    vehicle: type === 'parcel' ? 'Parcel' : vehicle,
   };
 };
 

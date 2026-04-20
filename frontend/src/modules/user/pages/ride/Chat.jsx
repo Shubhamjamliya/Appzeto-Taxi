@@ -7,6 +7,7 @@ import SupportChatPanel from '../../../shared/components/SupportChatPanel';
 const Chat = () => {
   const navigate = useNavigate();
   const location = useLocation();
+  const peer = location.state?.peer || location.state?.driver || {};
   const searchParams = new URLSearchParams(location.search);
   const isAdminChat = searchParams.get('admin') === 'true';
   const routeRole = searchParams.get('role');
@@ -49,8 +50,7 @@ const Chat = () => {
   const initMessages = isAdminChat
     ? [{ id: 1, sender: 'other', text: 'Hello! How can we help you today?', time: '12:45' }]
     : [
-        { id: 1, sender: 'other', text: "I've arrived at your location.", time: '12:45' },
-        { id: 2, sender: 'user', text: 'Okay, coming in 2 minutes.', time: '12:46' },
+        { id: 1, sender: 'other', text: 'Trip chat is connected.', time: '12:45' },
       ];
 
   const quickReplies = isAdminChat
@@ -83,8 +83,10 @@ const Chat = () => {
     }
   };
 
-  const otherName = isAdminChat ? 'Rydon24 Support' : 'Kishan Kumawat';
-  const otherSub = isAdminChat ? 'Active now' : 'Driver · Active now';
+  const otherName = isAdminChat ? 'Rydon24 Support' : peer.name || (supportRole === 'driver' ? 'Passenger' : 'Driver');
+  const otherSub = isAdminChat ? 'Active now' : peer.subtitle || `${supportRole === 'driver' ? 'Passenger' : 'Driver'} - Active now`;
+  const otherPhone = peer.phone || peer.mobile || peer.phoneNumber || '';
+  const avatarName = encodeURIComponent(otherName);
 
   return (
     <div className="min-h-screen bg-[linear-gradient(180deg,#F8FAFC_0%,#F3F4F6_60%,#EEF2F7_100%)] max-w-lg mx-auto flex flex-col font-sans relative overflow-hidden">
@@ -102,7 +104,7 @@ const Chat = () => {
             {isAdminChat ? (
               <Headset size={18} className="text-orange-500" strokeWidth={2} />
             ) : (
-              <img src="https://ui-avatars.com/api/?name=Kishan+Kumawat&background=f1f5f9&color=0f172a" alt="Driver" className="w-full h-full object-cover" />
+              <img src={`https://ui-avatars.com/api/?name=${avatarName}&background=f1f5f9&color=0f172a`} alt={otherName} className="w-full h-full object-cover" />
             )}
           </div>
           <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-emerald-500 rounded-full border-2 border-white" />
@@ -114,7 +116,17 @@ const Chat = () => {
         </div>
 
         {!isAdminChat && (
-          <motion.button whileTap={{ scale: 0.9 }} onClick={() => window.open('tel:+919876543210')} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)] shrink-0">
+          <motion.button
+            whileTap={{ scale: 0.9 }}
+            onClick={() => {
+              if (!otherPhone) {
+                window.alert('Phone number is not available for this chat yet.');
+                return;
+              }
+              window.open(`tel:${String(otherPhone).replace(/[^\d+]/g, '')}`, '_self');
+            }}
+            className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-[0_4px_12px_rgba(15,23,42,0.07)] shrink-0"
+          >
             <Phone size={15} className="text-slate-700" strokeWidth={2.5} />
           </motion.button>
         )}

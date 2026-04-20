@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { clearDriverAuthState, getCurrentDriver } from '../services/registrationService';
+import DriverRideRequestListener from './DriverRideRequestListener';
 
 const unwrapDriver = (response) => response?.data?.data || response?.data || response;
 
@@ -127,7 +128,10 @@ const DriverLayout = () => {
                     <div className="w-10 h-10 border-4 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
                 </div>
             ) : (
-                <Outlet context={{ isAllowed }} />
+                <>
+                    <Outlet context={{ isAllowed }} />
+                    {isAllowed && <DriverRideRequestListener />}
+                </>
             )}
         </div>
     );

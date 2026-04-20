@@ -9,6 +9,23 @@ const api = axios.create({
   },
 });
 
+const DEDUPED_GET_TTL_MS = 2500;
+const dedupedGetRequests = new Map();
+const recentDedupedGetResponses = new Map();
+
+const isDedupedMeGet = (url = '') => {
+  const requestPath = String(url || '').split('?')[0];
+  return /^\/users\/me$/.test(requestPath) ||
+    /^\/drivers\/me$/.test(requestPath) ||
+    /^\/rides\/active\/me$/.test(requestPath) ||
+    /^\/deliveries\/active\/me$/.test(requestPath);
+};
+
+const getDedupedRequestKey = (url = '', config = {}) => {
+  const params = config?.params ? JSON.stringify(config.params) : '';
+  return `${String(url || '')}|${params}`;
+};
+
 const decodeBase64Url = (value) => {
   const normalized = String(value || '').replace(/-/g, '+').replace(/_/g, '/');
   const padding = (4 - (normalized.length % 4)) % 4;
@@ -69,23 +86,36 @@ const getRoleFromPathname = () => {
   return '';
 };
 
-const clearStaleAuthState = (role = '') => {
+const clearStaleAuthState = (role = '', staleToken = '') => {
   const normalizedRole = String(role || '').toLowerCase();
+  const currentGenericToken = localStorage.getItem('token');
+  const shouldClearGenericToken =
+    !staleToken ||
+    currentGenericToken === staleToken ||
+    getTokenPayload(currentGenericToken)?.role === normalizedRole;
 
-  localStorage.removeItem('token');
+  if (shouldClearGenericToken) {
+    localStorage.removeItem('token');
+  }
 
   if (!normalizedRole || normalizedRole === 'user') {
-    localStorage.removeItem('userToken');
+    if (!staleToken || localStorage.getItem('userToken') === staleToken) {
+      localStorage.removeItem('userToken');
+    }
     localStorage.removeItem('userInfo');
   }
 
   if (!normalizedRole || normalizedRole === 'driver') {
-    localStorage.removeItem('driverToken');
+    if (!staleToken || localStorage.getItem('driverToken') === staleToken) {
+      localStorage.removeItem('driverToken');
+    }
     localStorage.removeItem('driverInfo');
   }
 
   if (!normalizedRole || normalizedRole === 'admin') {
-    localStorage.removeItem('adminToken');
+    if (!staleToken || localStorage.getItem('adminToken') === staleToken) {
+      localStorage.removeItem('adminToken');
+    }
     localStorage.removeItem('adminInfo');
   }
 
@@ -172,7 +202,6 @@ api.interceptors.response.use(
     if (error.response) {
       // Global error handling: e.g. deleted or inactive account logout
       if (error.response.status === 401 || error.response.status === 403) {
-        console.warn('Unauthorized! Logging out...');
         const serverMessage = String(error.response.data?.message || '');
         const authHeader = error.config?.headers?.Authorization || error.config?.headers?.authorization || '';
         const token = String(authHeader).startsWith('Bearer ') ? String(authHeader).slice(7) : '';
@@ -183,9 +212,9 @@ api.interceptors.response.use(
           (tokenRole === 'user' && serverMessage === 'User account is not active');
 
         if (shouldClearAuth) {
-          clearStaleAuthState(tokenRole);
+          clearStaleAuthState(tokenRole, token);
           window.dispatchEvent(new CustomEvent('app:auth-stale', {
-            detail: { role: tokenRole || null, message: serverMessage },
+            detail: { role: tokenRole || null, message: serverMessage, token },
           }));
         }
       }
@@ -194,5 +223,42 @@ api.interceptors.response.use(
     return Promise.reject({ message: 'Network error or server down.' });
   }
 );
+
+const rawGet = api.get.bind(api);
+
+api.get = (url, config = {}) => {
+  if (!isDedupedMeGet(url)) {
+    return rawGet(url, config);
+  }
+
+  const key = getDedupedRequestKey(url, config);
+  const now = Date.now();
+  const cached = recentDedupedGetResponses.get(key);
+
+  if (cached && now - cached.timestamp < DEDUPED_GET_TTL_MS) {
+    return Promise.resolve(cached.data);
+  }
+
+  const pending = dedupedGetRequests.get(key);
+
+  if (pending) {
+    return pending;
+  }
+
+  const request = rawGet(url, config)
+    .then((data) => {
+      recentDedupedGetResponses.set(key, {
+        data,
+        timestamp: Date.now(),
+      });
+      return data;
+    })
+    .finally(() => {
+      dedupedGetRequests.delete(key);
+    });
+
+  dedupedGetRequests.set(key, request);
+  return request;
+};
 
 export default api;

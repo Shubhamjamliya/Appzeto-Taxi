@@ -754,6 +754,7 @@ const SelectVehicle = () => {
         fare: selectedVehicle.price,
         estimatedDistanceMeters: tripMetrics.distanceMeters,
         estimatedDurationMinutes: tripMetrics.durationMinutes,
+        searchNonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
   };

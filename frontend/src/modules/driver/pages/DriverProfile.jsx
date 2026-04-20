@@ -22,7 +22,6 @@ import {
     Info,
     Gift,
     Shield,
-    BarChart3,
     Languages,
     BadgePercent,
     Check
@@ -149,15 +148,8 @@ const DriverProfile = () => {
             title: 'Benefits',
             items: [
                 { id: 'refer', label: 'Refer & Earn', icon: <Gift size={20} />, path: '/taxi/driver/referral' },
-                { id: 'incentives', label: 'Incentives', icon: <BadgePercent size={20} />, path: '/taxi/driver/wallet' },
+                { id: 'incentives', label: 'Incentives', icon: <BadgePercent size={20} />, path: '/taxi/driver/incentives' },
                 { id: 'sos', label: 'Emergency SOS', icon: <Shield size={20} />, path: '/taxi/driver/security' },
-            ]
-        },
-        {
-            title: 'Earnings',
-            items: [
-                { id: 'earnings', label: 'My Earnings', icon: <Wallet size={20} />, path: '/taxi/driver/wallet' },
-                { id: 'reports', label: 'Earnings Report', icon: <BarChart3 size={20} />, path: '/taxi/driver/history' },
             ]
         },
         {

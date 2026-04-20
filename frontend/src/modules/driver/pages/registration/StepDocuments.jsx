@@ -176,13 +176,13 @@ const StepDocuments = () => {
   };
 
   const isComplete =
-    uploadFields.every((item) => !item.isRequired || Boolean(docs[item.key]?.uploaded)) &&
+    uploadFields.every((item) => Boolean(docs[item.key]?.uploaded)) &&
     !uploading &&
     !templatesLoading;
 
   const handleSubmit = async () => {
     if (!isComplete) {
-      setError(uploading ? 'Please wait for the current upload to finish' : 'Please upload all required documents');
+      setError(uploading ? 'Please wait for the current upload to finish' : 'Please upload every document image');
       return;
     }
 
@@ -264,6 +264,9 @@ const StepDocuments = () => {
                   <div>
                     <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tight">{template.name}</h3>
                     <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
+                      Mandatory | {template.fields.length > 1 ? 'Multiple uploads' : 'Single upload'}
+                    </p>
+                    <p className="hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
                       {template.is_required ? 'Required' : 'Optional'} • {template.fields.length > 1 ? 'Multiple uploads' : 'Single upload'}
                     </p>
                   </div>
@@ -277,10 +280,16 @@ const StepDocuments = () => {
                     const document = docs[field.key];
 
                     return (
-                      <button
+                      <label
                         key={field.key}
-                        type="button"
-                        onClick={() => openPicker(field.key)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter' || event.key === ' ') {
+                            event.preventDefault();
+                            openPicker(field.key);
+                          }
+                        }}
+                        tabIndex={0}
+                        role="button"
                         className={`relative min-h-[120px] rounded-2xl border transition-all overflow-hidden ${
                           document?.previewUrl
                             ? 'border-emerald-100 bg-emerald-50'
@@ -333,7 +342,7 @@ const StepDocuments = () => {
                             </div>
                           ) : null}
                         </div>
-                      </button>
+                      </label>
                     );
                   })}
                 </div>

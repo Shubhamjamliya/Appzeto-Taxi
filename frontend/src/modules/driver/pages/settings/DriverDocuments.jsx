@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { ArrowLeft, CheckCircle2, Eye, FileText, RefreshCw, X } from 'lucide-react';
+import { ArrowLeft, Camera, CheckCircle2, Eye, FileText, Loader2, RefreshCw, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import { getCurrentDriver, getDriverDocumentTemplates } from '../../services/registrationService';
+import { getCurrentDriver, getDriverDocumentTemplates, updateDriverDocument } from '../../services/registrationService';
+import { useImageUpload } from '../../../../shared/hooks/useImageUpload';
 import {
   flattenDriverDocumentFields,
   getDocumentPreviewUrl,
@@ -26,6 +27,49 @@ const DriverDocuments = () => {
   const [templates, setTemplates] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [uploadingDocumentKey, setUploadingDocumentKey] = useState('');
+  const uploadingDocumentKeyRef = useRef('');
+
+  const {
+    uploading: imageUploading,
+    handleFileChange: onDocumentImageChange,
+  } = useImageUpload({
+    folder: 'driver-documents',
+    onSuccess: async (url) => {
+      const activeDocumentKey = uploadingDocumentKeyRef.current;
+
+      if (!activeDocumentKey) {
+        return;
+      }
+
+      const updatedDocument = {
+        key: activeDocumentKey,
+        fileName: activeDocumentKey,
+        previewUrl: url,
+        secureUrl: url,
+        uploaded: true,
+        uploadedAt: new Date().toISOString(),
+      };
+
+      try {
+        const response = await updateDriverDocument(activeDocumentKey, updatedDocument);
+        const documents = response?.data?.documents || {
+          ...(driver?.documents || {}),
+          [activeDocumentKey]: updatedDocument,
+        };
+        setDriver((prev) => ({ ...(prev || {}), documents }));
+      } catch (requestError) {
+        setError(requestError?.message || 'Unable to update document image');
+      } finally {
+        uploadingDocumentKeyRef.current = '';
+        setUploadingDocumentKey('');
+      }
+    },
+    onError: () => {
+      uploadingDocumentKeyRef.current = '';
+      setUploadingDocumentKey('');
+    },
+  });
 
   const loadDriver = async () => {
     setIsSyncing(true);
@@ -177,6 +221,28 @@ const DriverDocuments = () => {
                     <span className={`text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border shadow-sm ${doc.status === 'Uploaded' ? 'bg-emerald-50 text-emerald-500 border-emerald-500/10' : 'bg-rose-50 text-rose-500 border-rose-500/10 animate-pulse'}`}>
                       {doc.status}
                     </span>
+                    <label
+                      onClick={(event) => event.stopPropagation()}
+                      className="h-8 w-8 rounded-xl bg-blue-50 text-blue-500 flex items-center justify-center cursor-pointer active:scale-95 transition-all"
+                      title="Change document image"
+                    >
+                      {imageUploading && uploadingDocumentKey === doc.id ? (
+                        <Loader2 size={15} className="animate-spin" />
+                      ) : (
+                        <Camera size={15} strokeWidth={2.5} />
+                      )}
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        disabled={imageUploading}
+                        onChange={(event) => {
+                          uploadingDocumentKeyRef.current = doc.id;
+                          setUploadingDocumentKey(doc.id);
+                          onDocumentImageChange(event);
+                        }}
+                      />
+                    </label>
                     <Eye size={18} className="text-slate-200 group-hover:text-blue-500 transition-colors" />
                   </div>
                 </div>

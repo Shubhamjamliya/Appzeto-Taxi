@@ -1,8 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, AlertTriangle, X } from 'lucide-react';
-import { clearDriverAuthState, deleteCurrentDriverAccount } from '../../services/registrationService';
+import { ArrowLeft, AlertTriangle, ShieldCheck, X } from 'lucide-react';
+import {
+  clearDriverAuthState,
+  deleteCurrentDriverAccount,
+  getCurrentDriver,
+  sendDriverLoginOtp,
+  verifyDriverLoginOtp,
+} from '../../services/registrationService';
 
 const MotionDiv = motion.div;
 const MotionButton = motion.button;
@@ -32,20 +38,84 @@ const DriverDeleteAccount = () => {
   const [error, setError] = useState(null);
   const [success, setSuccess] = useState(null);
   const [pendingRequest, setPendingRequest] = useState(null);
+  const [driverPhone, setDriverPhone] = useState('');
+  const [otp, setOtp] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [debugOtp, setDebugOtp] = useState('');
 
   useEffect(() => {
-    setPendingRequest(null);
-    setIsFetching(false);
+    let active = true;
+
+    const loadDriver = async () => {
+      setIsFetching(true);
+      setError(null);
+
+      try {
+        const response = await getCurrentDriver();
+        const driver = response?.data || {};
+
+        if (!active) {
+          return;
+        }
+
+        setDriverPhone(String(driver.phone || '').replace(/\D/g, '').slice(-10));
+        setPendingRequest(driver.deletionRequest || null);
+      } catch (requestError) {
+        if (active) {
+          setError(requestError?.message || 'Unable to load driver account');
+        }
+      } finally {
+        if (active) {
+          setIsFetching(false);
+        }
+      }
+    };
+
+    loadDriver();
+
+    return () => {
+      active = false;
+    };
   }, []);
 
   const hasPendingRequest = pendingRequest?.status === 'pending';
 
-  const handleDelete = async () => {
+  const handleSendOtp = async () => {
+    if (!driverPhone) {
+      setError('Driver phone number is not available. Please login again.');
+      return;
+    }
+
     setLoading(true);
     setError(null);
     setSuccess(null);
 
     try {
+      const response = await sendDriverLoginOtp({ phone: driverPhone });
+      const session = response?.data?.session || response?.session || {};
+      setDebugOtp(session.debugOtp || '');
+      setOtp(String(session.debugOtp || '').slice(0, 4));
+      setOtpSent(true);
+      setSuccess(`OTP sent to +91 ${driverPhone}`);
+    } catch (requestError) {
+      setError(requestError?.message || 'Unable to send OTP. Please try again.');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!/^\d{4}$/.test(otp)) {
+      setError('Please enter the 4-digit OTP sent to your phone.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+    setSuccess(null);
+
+    try {
+      await verifyDriverLoginOtp({ phone: driverPhone, otp });
       await deleteCurrentDriverAccount();
       clearDriverAuthState();
       setSuccess('Your driver account has been deleted.');
@@ -54,7 +124,7 @@ const DriverDeleteAccount = () => {
         navigate('/taxi/driver/login', { replace: true });
       }, 900);
     } catch (requestError) {
-      setError(requestError?.message || 'Something went wrong. Please try again.');
+      setError(requestError?.message || 'OTP verification or deletion failed. Please try again.');
       setShowConfirm(false);
     } finally {
       setLoading(false);
@@ -161,11 +231,31 @@ const DriverDeleteAccount = () => {
               </div>
               <h3 className="text-[18px] font-black text-slate-900 mb-2">Delete this account?</h3>
               <p className="text-[13px] font-bold text-slate-500 mb-1 leading-relaxed">Your driver account will be removed from the database.</p>
-              <p className="text-[12px] font-bold text-red-400 mb-6">This action cannot be undone from the app.</p>
+              <p className="text-[12px] font-bold text-red-400 mb-5">Verify OTP first. This action cannot be undone from the app.</p>
+              {otpSent ? (
+                <div className="mb-5 text-left">
+                  <label className="text-[10px] font-black uppercase tracking-[0.22em] text-slate-400 ml-1">OTP sent to +91 {driverPhone}</label>
+                  <div className="mt-2 flex items-center gap-2 rounded-[16px] border-2 border-slate-100 bg-slate-50 px-4 py-3">
+                    <ShieldCheck size={16} className="text-slate-400 shrink-0" strokeWidth={2.5} />
+                    <input
+                      type="tel"
+                      inputMode="numeric"
+                      maxLength={4}
+                      value={otp}
+                      onChange={(event) => setOtp(event.target.value.replace(/\D/g, '').slice(0, 4))}
+                      className="flex-1 bg-transparent text-center text-[20px] font-black tracking-[0.35em] text-slate-900 outline-none"
+                      placeholder="0000"
+                    />
+                  </div>
+                  {debugOtp ? (
+                    <p className="mt-1 text-center text-[10px] font-black text-slate-400">Dev OTP: {debugOtp}</p>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="space-y-2.5">
-                <MotionButton whileTap={{ scale: 0.97 }} onClick={handleDelete} disabled={loading}
+                <MotionButton whileTap={{ scale: 0.97 }} onClick={otpSent ? handleDelete : handleSendOtp} disabled={loading}
                   className="w-full bg-red-500 text-white py-3.5 rounded-[16px] text-[13px] font-black uppercase tracking-widest flex items-center justify-center gap-2">
-                  {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : 'Yes, Delete Account'}
+                  {loading ? <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : otpSent ? 'Verify OTP & Delete' : 'Send OTP'}
                 </MotionButton>
                 <button onClick={() => setShowConfirm(false)}
                   className="w-full py-3.5 text-[13px] font-black text-slate-400 uppercase tracking-widest">

@@ -382,6 +382,8 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
         parcel: ride.parcel || null,
         intercity: ride.intercity || null,
         radius,
+        acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds,
+        expiresInSeconds: dispatchConfig.retryWindowSeconds,
         zoneId: zone?._id ? String(zone._id) : null,
       });
     }

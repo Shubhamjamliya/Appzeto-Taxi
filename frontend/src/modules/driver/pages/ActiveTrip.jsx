@@ -66,15 +66,22 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
     Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
 
-const formatAddressFromPoint = (point, fallback) => {
-    const [lng, lat] = point?.coordinates || [];
+const getAreaName = (address, fallback) => {
+    const cleanAddress = String(address || '').trim();
 
-    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
-        return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
+    if (!cleanAddress) {
+        return fallback;
     }
 
-    return fallback;
+    return cleanAddress
+        .split(',')
+        .map((part) => part.trim())
+        .filter(Boolean)
+        .slice(0, 2)
+        .join(', ') || fallback;
 };
+
+const formatAddressFromPoint = (_point, fallback) => fallback;
 
 const normalizeTripType = (job = {}) => {
     const value = String(job.type || job.serviceType || 'ride').toLowerCase();
@@ -88,6 +95,8 @@ const getTripTitle = (type) => {
     if (type === 'intercity') return 'Intercity Ride';
     return 'Taxi Ride';
 };
+
+const cleanPhoneNumber = (phone) => String(phone || '').replace(/[^\d+]/g, '');
 
 const buildFallbackRoute = (origin, destination) => [origin, destination];
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
@@ -175,8 +184,8 @@ const ActiveTrip = () => {
                         title: getTripTitle(currentType),
                         fare: `Rs ${currentJob.fare || 0}`,
                         payment: currentJob.paymentMethod || 'Cash',
-                        pickup: currentJob.pickupAddress || formatAddressFromPoint(currentJob.pickupLocation, 'Pickup Location'),
-                        drop: currentJob.dropAddress || formatAddressFromPoint(currentJob.dropLocation, 'Drop Location'),
+                        pickup: getAreaName(currentJob.pickupAddress, formatAddressFromPoint(currentJob.pickupLocation, 'Pickup area')),
+                        drop: getAreaName(currentJob.dropAddress, formatAddressFromPoint(currentJob.dropLocation, 'Drop area')),
                         requestId: currentJob.rideId,
                         rideId: currentJob.rideId,
                         raw: currentJob,
@@ -252,8 +261,8 @@ const ActiveTrip = () => {
             name: liveRaw.parcel?.receiverName || 'Receiver',
             phone: liveRaw.parcel?.receiverMobile || '',
         },
-        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Flat 402, Swamclose Apts, JP Nagar'),
-        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, 12th Main, HSR Layout'),
+        pickup: getAreaName(liveRaw.pickupAddress || liveRequest?.pickup, formatAddressFromPoint(liveRaw.pickupLocation, 'Pickup area')),
+        drop: getAreaName(liveRaw.dropAddress || liveRequest?.drop, formatAddressFromPoint(liveRaw.dropLocation, 'Drop area')),
         fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
         payment: effectiveState?.paymentMethod || 'Online'
     } : {
@@ -262,14 +271,50 @@ const ActiveTrip = () => {
             rating: liveRaw.user?.rating || liveRequest?.user?.rating || '4.8',
             phone: liveRaw.user?.phone || liveRequest?.user?.phone || '',
         },
-        pickup: liveRaw.pickupAddress || liveRequest?.pickup || formatAddressFromPoint(liveRaw.pickupLocation, 'Swamclose Apartments, JP Nagar'),
-        drop: liveRaw.dropAddress || liveRequest?.drop || formatAddressFromPoint(liveRaw.dropLocation, 'Tea Villa Cafe, HSR Layout'),
+        pickup: getAreaName(liveRaw.pickupAddress || liveRequest?.pickup, formatAddressFromPoint(liveRaw.pickupLocation, 'Pickup area')),
+        drop: getAreaName(liveRaw.dropAddress || liveRequest?.drop, formatAddressFromPoint(liveRaw.dropLocation, 'Drop area')),
         fare: `Rs ${liveRaw.fare || effectiveState?.fare || 120}`,
         payment: liveRequest?.payment || effectiveState?.paymentMethod || 'Online'
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
     const expectedOtp = String(liveRequest?.otp || effectiveState?.otp || '1234');
+    const pickupContact = isParcel ? tripData.sender : tripData.user;
+    const destinationContact = isParcel ? tripData.receiver : tripData.user;
+    const routeStrokeColor = phase === 'to_pickup' || phase === 'otp_verification' ? '#f97316' : '#10b981';
+
+    const callContact = (phone) => {
+        const cleanPhone = cleanPhoneNumber(phone);
+
+        if (!cleanPhone) {
+            window.alert('Phone number is not available for this trip yet.');
+            return;
+        }
+
+        window.open(`tel:${cleanPhone}`, '_self');
+    };
+
+    const openTripChat = () => {
+        navigate('/taxi/driver/chat', {
+            state: {
+                rideId,
+                peer: {
+                    name: pickupContact?.name || 'Passenger',
+                    phone: pickupContact?.phone || '',
+                    subtitle: `${isParcel ? 'Sender' : 'Passenger'} - Active now`,
+                    role: isParcel ? 'Sender' : 'Passenger',
+                },
+            },
+        });
+    };
+
+    const openSupportChat = () => {
+        navigate('/taxi/driver/support/chat', { state: { rideId } });
+    };
+
+    const triggerEmergencySos = () => {
+        window.open('tel:112', '_self');
+    };
 
     const publishRideStatus = (nextStatus) => {
         if (!rideId) {
@@ -456,8 +501,15 @@ const ActiveTrip = () => {
 
         setOtpError('');
 
-        if (nextOtp.join('').length === 4 && nextOtp.join('') === expectedOtp) {
-            setTimeout(() => startTripAfterOtp(nextOtp.join('')), 250);
+        const enteredOtp = nextOtp.join('');
+
+        if (enteredOtp.length === 4 && enteredOtp === expectedOtp) {
+            setTimeout(() => startTripAfterOtp(enteredOtp), 250);
+            return;
+        }
+
+        if (enteredOtp.length === 4) {
+            setOtpError('Incorrect PIN. Please enter the PIN shown to the passenger.');
         }
     };
 
@@ -527,14 +579,26 @@ const ActiveTrip = () => {
                         options={mapOptions}
                     >
                         {routePath.length > 1 && (
-                            <PolylineF
-                                path={routePath}
-                                options={{
-                                    strokeColor: '#111827',
-                                    strokeOpacity: 0.9,
-                                    strokeWeight: 5,
-                                }}
-                            />
+                            <>
+                                <PolylineF
+                                    path={routePath}
+                                    options={{
+                                        strokeColor: '#ffffff',
+                                        strokeOpacity: 0.95,
+                                        strokeWeight: 9,
+                                        zIndex: 10,
+                                    }}
+                                />
+                                <PolylineF
+                                    path={routePath}
+                                    options={{
+                                        strokeColor: routeStrokeColor,
+                                        strokeOpacity: 0.95,
+                                        strokeWeight: 5,
+                                        zIndex: 20,
+                                    }}
+                                />
+                            </>
                         )}
                         <MarkerF
                             position={driverPosition}
@@ -581,7 +645,7 @@ const ActiveTrip = () => {
                             <ArrowUpRight size={12} strokeWidth={3} />
                         </h4>
                         <p className="text-[13px] font-semibold text-white leading-tight truncate uppercase">
-                            {driverPosition.lat.toFixed(4)}, {driverPosition.lng.toFixed(4)}
+                            {phase === 'to_pickup' || phase === 'otp_verification' ? `Near ${tripData.pickup}` : `Toward ${tripData.drop}`}
                         </p>
                     </div>
                 </div>
@@ -645,8 +709,8 @@ const ActiveTrip = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-2">
-                                    <button className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform"><MessageSquare size={18} strokeWidth={2.5} /></button>
-                                    <button className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-emerald-500 active:scale-95 transition-transform"><Phone size={18} strokeWidth={2.5} /></button>
+                                    <button onClick={openTripChat} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={18} strokeWidth={2.5} /></button>
+                                    <button onClick={() => callContact(pickupContact?.phone)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-emerald-500 active:scale-95 transition-transform" aria-label="Call contact"><Phone size={18} strokeWidth={2.5} /></button>
                                 </div>
                             </div>
                             <motion.button
@@ -706,7 +770,7 @@ const ActiveTrip = () => {
                                     setPhase('to_pickup');
                                     publishRideStatus('accepted');
                                 }} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Go Back</button>
-                                <button className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Support</button>
+                                <button onClick={openSupportChat} className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Support</button>
                             </div>
                         </motion.div>
                     )}
@@ -727,7 +791,7 @@ const ActiveTrip = () => {
                                             {tripData.drop}
                                         </p>
                                     </div>
-                                    <button className="shrink-0 w-11 h-11 bg-white text-rose-500 rounded-xl border border-rose-100 flex items-center justify-center active:scale-90 transition-transform shadow-sm">
+                                    <button onClick={triggerEmergencySos} className="shrink-0 w-11 h-11 bg-white text-rose-500 rounded-xl border border-rose-100 flex items-center justify-center active:scale-90 transition-transform shadow-sm" aria-label="Call emergency SOS">
                                         <ShieldAlert size={22} strokeWidth={2.5} />
                                     </button>
                                 </div>
@@ -742,7 +806,7 @@ const ActiveTrip = () => {
                                         <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
-                                <button className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500"><Phone size={16} strokeWidth={2.5} /></button>
+                                <button onClick={() => callContact(destinationContact?.phone)} className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500" aria-label="Call destination contact"><Phone size={16} strokeWidth={2.5} /></button>
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.96 }}

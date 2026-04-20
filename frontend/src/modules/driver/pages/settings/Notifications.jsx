@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
-import { ArrowLeft, Bell, AlertCircle, RefreshCw, Megaphone, Trash2, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Bell, AlertCircle, RefreshCw, Radio, Trash2, CheckCircle2 } from 'lucide-react';
 import { getDriverNotifications, deleteDriverNotification, clearAllDriverNotifications } from '../../services/registrationService';
 import toast from 'react-hot-toast';
 
@@ -99,7 +99,7 @@ const DriverNotifications = () => {
 
       <header className="bg-white/90 backdrop-blur-md px-5 pt-10 pb-4 sticky top-0 z-20 border-b border-white/80 shadow-[0_4px_20px_rgba(15,23,42,0.05)]">
         <div className="flex items-center gap-3">
-          <button onClick={() => navigate('/taxi/driver/profile')} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-sm active:scale-95 transition-all">
+          <button onClick={() => navigate('/taxi/driver/home')} className="w-9 h-9 rounded-[12px] border border-white/80 bg-white/90 flex items-center justify-center shadow-sm active:scale-95 transition-all">
             <ArrowLeft size={18} className="text-slate-900" strokeWidth={2.5} />
           </button>
           <div className="flex-1 min-w-0">
@@ -178,8 +178,8 @@ const DriverNotifications = () => {
               exit={{ opacity: 0, y: -8 }}
               className="relative rounded-[20px] border border-white/80 bg-white p-4 flex items-start gap-3 transition-all shadow-[0_4px_14px_rgba(15,23,42,0.07)]"
             >
-              <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-blue-50">
-                <Megaphone size={16} className="text-blue-500" strokeWidth={2} />
+              <div className="w-10 h-10 rounded-[12px] flex items-center justify-center shrink-0 bg-emerald-50">
+                <Radio size={16} className="text-emerald-500" strokeWidth={2.3} />
               </div>
               <div className="flex-1 min-w-0">
                 <div className="flex items-start justify-between gap-2">

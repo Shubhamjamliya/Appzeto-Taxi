@@ -7,6 +7,9 @@ import {
     saveDriverRegistrationSession,
 } from '../../services/registrationService';
 
+const NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
+const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
 const StepPersonal = () => {
     const navigate = useNavigate();
     const location = useLocation();
@@ -17,6 +20,7 @@ const StepPersonal = () => {
     const phone = session.phone || '95898 14119';
     const registrationId = session.registrationId || '';
     const role = session.role || 'driver';
+    const isOwner = role === 'owner';
 
     const [formData, setFormData] = useState({
         fullName: session.fullName || '',
@@ -28,16 +32,44 @@ const StepPersonal = () => {
     const [error, setError] = useState('');
 
     const handleContinue = async () => {
-        if (formData.fullName && formData.email && formData.gender && formData.password) {
+        const fullName = formData.fullName.trim();
+        const email = formData.email.trim().toLowerCase();
+
+        if (!fullName || !email || !formData.gender || (!isOwner && !formData.password)) {
+            setError('Please fill all required details');
+            return;
+        }
+
+        if (!NAME_REGEX.test(fullName)) {
+            setError(`${isOwner ? 'Owner' : 'Driver'} name should contain alphabets only`);
+            return;
+        }
+
+        if (!EMAIL_REGEX.test(email)) {
+            setError('Please enter a valid email address, example aa@gmail.com');
+            return;
+        }
+
+        if (!isOwner && formData.password.length < 6) {
+            setError('Password must be at least 6 characters');
+            return;
+        }
+
             setLoading(true);
             setError('');
 
             try {
-                const { password: _password, ...safeFormData } = formData;
+                const normalizedFormData = {
+                    ...formData,
+                    fullName,
+                    email,
+                    password: isOwner ? '' : formData.password,
+                };
+                const { password: _password, ...safeFormData } = normalizedFormData;
                 const response = await saveDriverPersonalDetails({
                     registrationId,
                     phone,
-                    ...formData,
+                    ...normalizedFormData,
                 });
 
                 const nextState = saveDriverRegistrationSession({
@@ -55,9 +87,6 @@ const StepPersonal = () => {
             } finally {
                 setLoading(false);
             }
-        } else {
-            setError('Please fill all required details');
-        }
     };
 
     const genders = ['Male', 'Female', 'Other'];
@@ -90,7 +119,7 @@ const StepPersonal = () => {
                             <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Full Name</label>
                             <input 
                                 value={formData.fullName}
-                                onChange={(e) => setFormData(p => ({ ...p, fullName: e.target.value }))}
+                                onChange={(e) => setFormData(p => ({ ...p, fullName: e.target.value.replace(/[^A-Za-z .'-]/g, '') }))}
                                 placeholder="Hritik Raghuwanshi"
                                 className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
                             />
@@ -118,8 +147,8 @@ const StepPersonal = () => {
                             <input 
                                 type="email"
                                 value={formData.email}
-                                onChange={(e) => setFormData(p => ({ ...p, email: e.target.value }))}
-                                placeholder="hritik@redigo.in"
+                                onChange={(e) => setFormData(p => ({ ...p, email: e.target.value.trim().toLowerCase() }))}
+                                placeholder="aa@gmail.com"
                                 className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
                             />
                         </div>
@@ -145,22 +174,23 @@ const StepPersonal = () => {
                         </div>
                     </div>
 
-                    {/* Password */}
-                    <div className="bg-slate-50 p-3.5 rounded-2xl flex items-center gap-3 transition-all shadow-sm">
-                        <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-slate-300">
-                            <Lock size={16} />
+                    {!isOwner && (
+                        <div className="bg-slate-50 p-3.5 rounded-2xl flex items-center gap-3 transition-all shadow-sm">
+                            <div className="w-9 h-9 bg-white rounded-xl flex items-center justify-center text-slate-300">
+                                <Lock size={16} />
+                            </div>
+                            <div className="flex-1 space-y-0.5">
+                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Password</label>
+                                <input 
+                                    type="password"
+                                    value={formData.password}
+                                    onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
+                                    placeholder="********"
+                                    className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
+                                />
+                            </div>
                         </div>
-                        <div className="flex-1 space-y-0.5">
-                            <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest">Password</label>
-                            <input 
-                                type="password"
-                                value={formData.password}
-                                onChange={(e) => setFormData(p => ({ ...p, password: e.target.value }))}
-                                placeholder="********"
-                                className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                            />
-                        </div>
-                    </div>
+                    )}
                 </div>
 
                 <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
@@ -168,7 +198,7 @@ const StepPersonal = () => {
                         onClick={handleContinue}
                         disabled={loading}
                         className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
-                            formData.fullName && formData.email && formData.gender && formData.password 
+                            formData.fullName && formData.email && formData.gender && (isOwner || formData.password)
                             ? 'bg-slate-900 text-white shadow-slate-900/10' 
                             : 'bg-slate-100 text-slate-300 pointer-events-none'
                         }`}

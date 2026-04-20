@@ -9,6 +9,10 @@ const LOCATION_UPDATED_EVENT = 'rydon24:location-updated';
 const DEFAULT_CENTER = { lat: 17.385, lon: 78.4867 };
 const DEFAULT_ZOOM = 16;
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
+const areCentersNearlyEqual = (first, second, threshold = 0.00001) => (
+  Math.abs(Number(first?.lat ?? 0) - Number(second?.lat ?? 0)) < threshold &&
+  Math.abs(Number(first?.lon ?? 0) - Number(second?.lon ?? 0)) < threshold
+);
 
 const LocationMapSection = () => {
   const [coords, setCoords] = useState(null);
@@ -267,6 +271,11 @@ const LocationMapSection = () => {
                   }
 
                   const next = { lat: center.lat(), lon: center.lng() };
+
+                  if (areCentersNearlyEqual(centerCoords, next)) {
+                    return;
+                  }
+
                   setCenterCoords(next);
 
                   if (!isDraggingRef.current && status === 'ready') {

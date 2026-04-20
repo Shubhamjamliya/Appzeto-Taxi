@@ -119,6 +119,9 @@ const withDriverAuth = (config = {}) => {
 
 export const getCurrentDriver = () => api.get("/drivers/me", withDriverAuth());
 
+export const getDriverRideHistory = (params = {}) =>
+  api.get("/rides", withDriverAuth({ params }));
+
 export const updateDriverProfile = (payload) =>
   api.patch("/drivers/me", payload, withDriverAuth());
 export const deleteCurrentDriverAccount = () =>
@@ -182,3 +185,10 @@ export const getDriverServiceLocations = () =>
   api.get("/drivers/service-locations");
 export const getDriverDocumentTemplates = () =>
   api.get("/drivers/document-templates");
+
+export const updateDriverDocument = (documentKey, document) =>
+  api.patch(
+    `/drivers/documents/${encodeURIComponent(documentKey)}`,
+    { document },
+    withDriverAuth(),
+  );

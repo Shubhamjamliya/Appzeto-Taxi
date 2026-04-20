@@ -13,49 +13,14 @@ import carIcon from '../../../assets/icons/car.png';
 import bikeIcon from '../../../assets/icons/bike.png';
 import autoIcon from '../../../assets/icons/auto.png';
 import deliveryIcon from '../../../assets/icons/Delivery.png';
-import api from '../../../shared/api/axiosInstance';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
-  clearCurrentRide,
   getCurrentRide,
   isActiveCurrentRide,
-  saveCurrentRide,
 } from '../services/currentRideService';
 
 const Motion = motion;
-
-const normalizeActiveRide = (ride) => {
-  if (!ride?.rideId) {
-    return null;
-  }
-
-  const formatPoint = (point, fallback) => {
-    const [lng, lat] = point?.coordinates || [];
-
-    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
-      return `${Number(lat).toFixed(4)}, ${Number(lng).toFixed(4)}`;
-    }
-
-    return fallback;
-  };
-
-  return {
-    rideId: ride.rideId,
-    status: ride.status || ride.liveStatus || 'accepted',
-    liveStatus: ride.liveStatus || ride.status || 'accepted',
-    type: ride.type || ride.serviceType || 'ride',
-    serviceType: ride.serviceType || ride.type || 'ride',
-    driver: ride.driver || null,
-    fare: ride.fare || 22,
-    vehicleIconType: ride.vehicleIconType || ride.driver?.vehicleIconType || '',
-    pickupCoords: ride.pickupLocation?.coordinates,
-    dropCoords: ride.dropLocation?.coordinates,
-    pickup: formatPoint(ride.pickupLocation, 'Pickup location'),
-    drop: formatPoint(ride.dropLocation, 'Drop location'),
-    paymentMethod: ride.paymentMethod || 'Cash',
-  };
-};
 
 const getCurrentRideIcon = (ride) => {
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
@@ -100,42 +65,6 @@ const Home = () => {
     return () => {
       window.removeEventListener('storage', refreshCurrentRide);
       window.removeEventListener(CURRENT_RIDE_UPDATED_EVENT, refreshCurrentRide);
-    };
-  }, []);
-
-  useEffect(() => {
-    let active = true;
-
-    const loadActiveRide = async () => {
-      try {
-        const [rideResponse, parcelResponse] = await Promise.allSettled([
-          api.get('/rides/active/me'),
-          api.get('/deliveries/active/me'),
-        ]);
-        const activeResponse = parcelResponse.status === 'fulfilled' && parcelResponse.value?.data
-          ? parcelResponse.value
-          : rideResponse.status === 'fulfilled'
-            ? rideResponse.value
-            : null;
-        const ride = normalizeActiveRide(activeResponse?.data || activeResponse);
-
-        if (!active || !isActiveCurrentRide(ride)) {
-          clearCurrentRide();
-          setCurrentRide(null);
-          return;
-        }
-
-        saveCurrentRide(ride);
-        setCurrentRide(ride);
-      } catch {
-        // Local storage remains the fallback; missing auth should not break the home page.
-      }
-    };
-
-    loadActiveRide();
-
-    return () => {
-      active = false;
     };
   }, []);
 

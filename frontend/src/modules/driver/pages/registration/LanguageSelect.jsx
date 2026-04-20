@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { Check, Globe, ChevronRight } from 'lucide-react';
 
 const LanguageSelect = () => {
     const navigate = useNavigate();
+    const location = useLocation();
     const [selectedLang, setSelectedLang] = useState('english');
+    const isAuthenticatedDriver = Boolean(localStorage.getItem('driverToken') || localStorage.getItem('token')) && !location.state?.registrationFlow;
 
     const languages = [
         { id: 'english', label: 'English', sub: 'Standard Experience', native: 'English' },
@@ -15,9 +17,8 @@ const LanguageSelect = () => {
     ];
 
     const handleConfirm = () => {
-        // Here you would typically save language to local storage/context
         localStorage.setItem('driver_lang', selectedLang);
-        navigate('/taxi/driver/reg-phone');
+        navigate(isAuthenticatedDriver ? '/taxi/driver/profile' : '/taxi/driver/reg-phone', { replace: true });
     };
 
     return (
@@ -83,7 +84,7 @@ const LanguageSelect = () => {
                     onClick={handleConfirm}
                     className="w-full h-15 bg-primary text-white rounded-2xl flex items-center justify-center gap-3 text-[17px] font-display font-bold shadow-premium transition-all hover:bg-primary/95 group"
                 >
-                    Confirm & Continue
+                    {isAuthenticatedDriver ? 'Save Language' : 'Confirm & Continue'}
                     <ChevronRight size={20} strokeWidth={2.5} className="group-hover:translate-x-1 transition-transform" />
                 </motion.button>
             </div>

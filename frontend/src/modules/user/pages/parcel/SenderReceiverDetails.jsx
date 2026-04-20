@@ -596,6 +596,7 @@ const SenderReceiverDetails = () => {
           receiverMobile,
         },
         isParcel: true,
+        searchNonce: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       },
     });
   };

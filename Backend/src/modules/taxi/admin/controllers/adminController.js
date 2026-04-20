@@ -296,6 +296,9 @@ export const getVehicleTypes = asyncHandler(async (req, res) =>
 export const getVehicleTypeCatalog = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listVehicleCatalog()),
 );
+export const getPublicVehicleTypeCatalog = asyncHandler(async (_req, res) =>
+  ok(res, await adminService.listPublicVehicleCatalog()),
+);
 export const getVehiclePreferenceOptions = asyncHandler(async (_req, res) =>
   ok(res, await adminService.listVehiclePreferences()),
 );

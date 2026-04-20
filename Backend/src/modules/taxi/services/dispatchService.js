@@ -317,8 +317,15 @@ const scheduleNextAttempt = (rideId, nextAttemptIndex, retryDelayMs) => {
   saveDispatchState(rideId, { timer });
 };
 
+const getAttemptRadiusMeters = (baseDistanceMeters, attemptIndex) => {
+  const safeBaseDistance = Math.max(1000, Number(baseDistanceMeters) || 0);
+  const growthMultiplier = Math.min(1 + (Math.max(0, attemptIndex) * 0.5), 3);
+
+  return Math.round(safeBaseDistance * growthMultiplier);
+};
+
 const dispatchAttempt = async (rideId, attemptIndex = 0) => {
-  const ride = await Ride.findById(rideId);
+  const ride = await Ride.findById(rideId).populate('userId', 'name phone countryCode');
 
   if (!ride || ride.status !== RIDE_STATUS.SEARCHING) {
     stopDispatchFlow(rideId);
@@ -327,9 +334,13 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
 
   try {
     const dispatchConfig = await resolveTransportDispatchConfig();
-    const radius = dispatchConfig.maxDistanceMeters;
+    const radius = getAttemptRadiusMeters(
+      dispatchConfig.baseDistanceMeters || dispatchConfig.maxDistanceMeters,
+      attemptIndex,
+    );
     const dispatchVehicleTypeIds = getDispatchVehicleTypeIds(ride);
     const dispatchState = getDispatchState(rideId);
+    const requestExpiresAt = new Date(Date.now() + dispatchConfig.retryDelayMs).toISOString();
 
     if (dispatchConfig.dispatchType === 'one_by_one' && attemptIndex > 0 && dispatchState.driverIds.length) {
       closeDriverRequestWindow(rideId, dispatchState.driverIds);
@@ -368,6 +379,12 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
         type: ride.serviceType || 'ride',
         serviceType: ride.serviceType || 'ride',
         userId: String(ride.userId),
+        user: {
+          id: ride.userId?._id ? String(ride.userId._id) : String(ride.userId || ''),
+          name: ride.userId?.name || 'Customer',
+          phone: ride.userId?.phone || '',
+          countryCode: ride.userId?.countryCode || '',
+        },
         pickupLocation: ride.pickupLocation,
         pickupAddress: ride.pickupAddress || '',
         dropLocation: ride.dropLocation,
@@ -383,8 +400,11 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
         parcel: ride.parcel || null,
         intercity: ride.intercity || null,
         radius,
+        attempt: attemptIndex + 1,
+        maxAttempts: dispatchConfig.maxAttempts,
         acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds,
         expiresInSeconds: dispatchConfig.retryWindowSeconds,
+        requestExpiresAt,
         zoneId: zone?._id ? String(zone._id) : null,
       });
     }
@@ -452,6 +472,7 @@ export const notifyRideAccepted = async (ride) => {
     serviceType: populatedRide.serviceType || 'ride',
     status: populatedRide.status,
     liveStatus: populatedRide.liveStatus,
+    otp: populatedRide.otp || '',
     vehicleIconType: populatedRide.vehicleIconType || '',
     vehicleIconUrl: populatedRide.vehicleIconUrl || '',
     driver: populatedRide.driverId,
@@ -469,6 +490,7 @@ export const notifyRideAccepted = async (ride) => {
     estimatedDistanceMeters: populatedRide.estimatedDistanceMeters || 0,
     estimatedDurationMinutes: populatedRide.estimatedDurationMinutes || 0,
     paymentMethod: populatedRide.paymentMethod,
+    otp: populatedRide.otp || '',
     vehicleIconType: populatedRide.vehicleIconType || '',
     vehicleIconUrl: populatedRide.vehicleIconUrl || '',
     parcel: populatedRide.parcel || null,

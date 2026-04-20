@@ -100,6 +100,19 @@ const cleanPhoneNumber = (phone) => String(phone || '').replace(/[^\d+]/g, '');
 
 const buildFallbackRoute = (origin, destination) => [origin, destination];
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+const hexToRgba = (hex, alpha = 1) => {
+    const sanitized = String(hex || '').replace('#', '');
+
+    if (sanitized.length !== 6) {
+        return `rgba(15, 23, 42, ${alpha})`;
+    }
+
+    const red = Number.parseInt(sanitized.slice(0, 2), 16);
+    const green = Number.parseInt(sanitized.slice(2, 4), 16);
+    const blue = Number.parseInt(sanitized.slice(4, 6), 16);
+
+    return `rgba(${red}, ${green}, ${blue}, ${alpha})`;
+};
 
 const getJobRideId = (job = {}) => String(job.rideId || job.id || job._id || job.requestId || '').trim();
 
@@ -141,12 +154,15 @@ const clearStoredTripPhase = (id) => {
 const resolvePhaseFromJob = (job = {}) => {
     const rideId = getJobRideId(job);
     const storedPhase = readStoredTripPhase(rideId);
+    const liveStatus = String(job.liveStatus || job.status || '').toLowerCase();
+
+    if (liveStatus === 'cancelled' || liveStatus === 'canceled') {
+        return 'cancelled';
+    }
 
     if (['to_pickup', 'otp_verification', 'in_trip', 'payment_confirm', 'review'].includes(storedPhase)) {
         return storedPhase;
     }
-
-    const liveStatus = String(job.liveStatus || job.status || '').toLowerCase();
 
     if (liveStatus === 'arriving') return 'otp_verification';
     if (liveStatus === 'started' || liveStatus === 'ongoing') return 'in_trip';
@@ -251,16 +267,26 @@ const ActiveTrip = () => {
     const location = useLocation();
     const routeState = useMemo(() => location.state || {}, [location.state]);
     const [hydratedTripState, setHydratedTripState] = useState(null);
-    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeState?.rideId && !routeState?.request?.rideId);
+    const routeRideId = routeState?.rideId || routeState?.request?.rideId || '';
+    const routeOtp = routeState?.request?.raw?.otp || routeState?.request?.otp || routeState?.otp || '';
+    const [isHydratingTrip, setIsHydratingTrip] = useState(!routeRideId || !routeOtp);
+    const exitToDriverHome = React.useCallback((statusMessage = '') => {
+        if (routeRideId) {
+            clearStoredTripPhase(routeRideId);
+        }
+
+        navigate('/taxi/driver/home', {
+            replace: true,
+            state: statusMessage ? { statusMessage } : undefined,
+        });
+    }, [navigate, routeRideId]);
 
     useEffect(() => {
         let active = true;
+        const hasRestorableRouteState = Boolean(routeRideId && routeOtp);
 
-        if (routeState?.rideId || routeState?.request?.rideId) {
+        if (hasRestorableRouteState) {
             setIsHydratingTrip(false);
-            return () => {
-                active = false;
-            };
         }
 
         const hydrateTripState = async () => {
@@ -286,9 +312,10 @@ const ActiveTrip = () => {
                         ? ridePayload
                         : null;
                 const currentRideId = getJobRideId(currentJob);
+                const currentStatus = String(currentJob?.liveStatus || currentJob?.status || '').toLowerCase();
 
-                if (!currentRideId) {
-                    navigate('/taxi/driver/home', { replace: true });
+                if (!currentRideId || currentStatus === 'cancelled' || currentStatus === 'canceled') {
+                    exitToDriverHome('Ride was cancelled or is no longer active.');
                     return;
                 }
 
@@ -314,7 +341,7 @@ const ActiveTrip = () => {
                 setPhase(restoredPhase);
             } catch {
                 if (active) {
-                    navigate('/taxi/driver/home', { replace: true });
+                    exitToDriverHome('Could not restore active trip.');
                 }
             } finally {
                 if (active) {
@@ -328,7 +355,7 @@ const ActiveTrip = () => {
         return () => {
             active = false;
         };
-    }, [navigate, routeState]);
+    }, [exitToDriverHome, routeOtp, routeRideId]);
 
     const effectiveState = hydratedTripState || routeState;
 
@@ -381,6 +408,86 @@ const ActiveTrip = () => {
     const isSimulationEnabledRef = React.useRef(false);
 
     const activeDestination = phase === 'to_pickup' || phase === 'otp_verification' ? pickupPosition : dropPosition;
+
+    useEffect(() => {
+        const currentStatus = String(
+            liveRaw?.liveStatus ||
+            liveRaw?.status ||
+            liveRequest?.liveStatus ||
+            liveRequest?.status ||
+            effectiveState?.liveStatus ||
+            effectiveState?.status ||
+            '',
+        ).toLowerCase();
+
+        if (currentStatus === 'cancelled' || currentStatus === 'canceled' || phase === 'cancelled') {
+            exitToDriverHome('Ride was cancelled by the user.');
+        }
+    }, [effectiveState?.liveStatus, effectiveState?.status, exitToDriverHome, liveRaw?.liveStatus, liveRaw?.status, liveRequest?.liveStatus, liveRequest?.status, phase]);
+
+    useEffect(() => {
+        const currentRideId = rideId || routeRideId;
+
+        if (!currentRideId) {
+            return undefined;
+        }
+
+        const socket = socketService.connect({ role: 'driver' });
+        if (socket) {
+            socketService.emit('ride:join', { rideId: currentRideId });
+        }
+
+        const handleTripClosed = (payload = {}) => {
+            if (String(payload.rideId || '') !== String(currentRideId)) {
+                return;
+            }
+
+            clearStoredTripPhase(currentRideId);
+            exitToDriverHome(payload.message || 'Ride was cancelled by the user.');
+        };
+
+        const handleRideStatusUpdated = (payload = {}) => {
+            if (String(payload.rideId || '') !== String(currentRideId)) {
+                return;
+            }
+
+            const nextStatus = String(payload.liveStatus || payload.status || '').toLowerCase();
+            if (nextStatus === 'cancelled' || nextStatus === 'canceled') {
+                clearStoredTripPhase(currentRideId);
+                exitToDriverHome('Ride was cancelled by the user.');
+            }
+        };
+
+        const handleRideState = (payload) => {
+            if (!payload) {
+                clearStoredTripPhase(currentRideId);
+                exitToDriverHome('Ride was cancelled or is no longer active.');
+                return;
+            }
+
+            if (String(payload.rideId || payload._id || '') !== String(currentRideId)) {
+                return;
+            }
+
+            const nextStatus = String(payload.liveStatus || payload.status || '').toLowerCase();
+            if (nextStatus === 'cancelled' || nextStatus === 'canceled') {
+                clearStoredTripPhase(currentRideId);
+                exitToDriverHome('Ride was cancelled by the user.');
+            }
+        };
+
+        socketService.on('rideRequestClosed', handleTripClosed);
+        socketService.on('rideCancelled', handleTripClosed);
+        socketService.on('ride:status:updated', handleRideStatusUpdated);
+        socketService.on('ride:state', handleRideState);
+
+        return () => {
+            socketService.off('rideRequestClosed', handleTripClosed);
+            socketService.off('rideCancelled', handleTripClosed);
+            socketService.off('ride:status:updated', handleRideStatusUpdated);
+            socketService.off('ride:state', handleRideState);
+        };
+    }, [exitToDriverHome, rideId, routeRideId]);
 
     useEffect(() => {
         if (!rideId) {
@@ -437,10 +544,13 @@ const ActiveTrip = () => {
 
     const displayFare = liveRequest?.fare || tripData.fare;
     const fareAmount = parseFareAmount(displayFare);
-    const expectedOtp = String(liveRequest?.otp || effectiveState?.otp || '1234');
+    const expectedOtp = String(liveRaw?.otp || liveRequest?.otp || effectiveState?.otp || '');
     const pickupContact = isParcel ? tripData.sender : tripData.user;
     const destinationContact = isParcel ? tripData.receiver : tripData.user;
     const routeStrokeColor = phase === 'to_pickup' || phase === 'otp_verification' ? '#f97316' : '#10b981';
+    const routeAccentSoft = hexToRgba(routeStrokeColor, 0.12);
+    const routeAccentMuted = hexToRgba(routeStrokeColor, 0.18);
+    const routeAccentBorder = hexToRgba(routeStrokeColor, 0.24);
     const simulationTotalSteps = Math.max(0, simulationPathRef.current.length - 1);
     const simulationProgress = simulationTotalSteps > 0
         ? Math.min(100, Math.round((simulationStep / simulationTotalSteps) * 100))
@@ -1003,7 +1113,7 @@ const ActiveTrip = () => {
                             title={phase === 'to_pickup' || phase === 'otp_verification' ? 'Pickup' : 'Drop'}
                             icon={{
                                 path: window.google.maps.SymbolPath.CIRCLE,
-                                fillColor: phase === 'to_pickup' || phase === 'otp_verification' ? '#10b981' : '#ef4444',
+                                fillColor: routeStrokeColor,
                                 fillOpacity: 1,
                                 strokeColor: '#ffffff',
                                 strokeWeight: 2,
@@ -1029,11 +1139,14 @@ const ActiveTrip = () => {
                 </button>
 
                 <div className="absolute top-8 left-16 right-4 z-50 flex items-center gap-3 bg-slate-900/92 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-slate-900 shadow-xl ${isParcel ? 'bg-orange-500' : 'bg-white'}`}>
+                    <div
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-900 shadow-xl"
+                        style={{ backgroundColor: routeStrokeColor }}
+                    >
                         {isParcel ? <Package size={20} strokeWidth={2.5} /> : <img src={carIcon} alt="Taxi" className="h-7 w-7 object-contain" />}
                     </div>
                     <div className="flex-1 space-y-0.5 overflow-hidden">
-                        <h4 className="text-[9px] font-semibold uppercase tracking-wide leading-none flex items-center gap-2 text-amber-300">
+                        <h4 className="text-[9px] font-semibold uppercase tracking-wide leading-none flex items-center gap-2" style={{ color: routeStrokeColor }}>
                             Driver Live
                             <ArrowUpRight size={12} strokeWidth={3} />
                         </h4>
@@ -1053,7 +1166,7 @@ const ActiveTrip = () => {
                     <div className="min-w-0 rounded-2xl bg-white/92 border border-white/80 shadow-lg px-3 py-2">
                         <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">ETA</p>
                         <div className="flex items-center gap-1.5 mt-1">
-                            <Clock3 size={12} className="text-orange-500" />
+                            <Clock3 size={12} style={{ color: routeStrokeColor }} />
                             <p className="text-[11px] font-black text-slate-900 truncate">{phase === 'to_pickup' ? '2 mins' : '12 mins'}</p>
                         </div>
                     </div>
@@ -1067,8 +1180,8 @@ const ActiveTrip = () => {
                 </div>
 
                 {routeError && (
-                    <div className="absolute top-44 right-4 z-40 rounded-2xl bg-white/92 border border-amber-100 shadow-lg px-3 py-2 min-w-[148px]">
-                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em] text-amber-500">Route</p>
+                    <div className="absolute top-44 right-4 z-40 rounded-2xl bg-white/92 shadow-lg px-3 py-2 min-w-[148px]" style={{ border: `1px solid ${routeAccentBorder}` }}>
+                        <p className="text-[8px] font-semibold uppercase tracking-[0.22em]" style={{ color: routeStrokeColor }}>Route</p>
                         <p className="mt-1 text-[10px] font-semibold text-slate-700">Using fallback path while directions load.</p>
                     </div>
                 )}
@@ -1081,19 +1194,23 @@ const ActiveTrip = () => {
                                 {isSimulationRunning ? 'Following route' : isSimulationEnabled ? 'Paused' : 'Real GPS'}
                             </p>
                         </div>
-                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isSimulationRunning ? 'bg-emerald-500 animate-pulse' : isSimulationEnabled ? 'bg-amber-400' : 'bg-slate-300'}`} />
+                        <span
+                            className={`h-2.5 w-2.5 shrink-0 rounded-full ${isSimulationRunning ? 'animate-pulse' : ''}`}
+                            style={{ backgroundColor: isSimulationEnabled ? routeStrokeColor : '#cbd5e1' }}
+                        />
                     </div>
                     <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
                         <div
-                            className="h-full rounded-full bg-slate-900 transition-all"
-                            style={{ width: `${isSimulationEnabled ? simulationProgress : 0}%` }}
+                            className="h-full rounded-full transition-all"
+                            style={{ backgroundColor: routeStrokeColor, width: `${isSimulationEnabled ? simulationProgress : 0}%` }}
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-2">
                         <button
                             type="button"
                             onClick={isSimulationRunning ? pauseSimulation : isSimulationEnabled ? resumeSimulation : startSimulation}
-                            className="h-9 rounded-xl bg-slate-900 px-2 text-[9px] font-black uppercase tracking-wide text-white active:scale-95"
+                            className="h-9 rounded-xl px-2 text-[9px] font-black uppercase tracking-wide text-white active:scale-95"
+                            style={{ backgroundColor: routeStrokeColor }}
                         >
                             {isSimulationRunning ? 'Pause' : isSimulationEnabled ? 'Resume' : 'Start'}
                         </button>
@@ -1141,7 +1258,7 @@ const ActiveTrip = () => {
                                 </div>
                                 <div className="flex gap-2">
                                     <button onClick={openTripChat} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-slate-600 active:scale-95 transition-transform" aria-label="Open trip chat"><MessageSquare size={18} strokeWidth={2.5} /></button>
-                                    <button onClick={() => callContact(pickupContact?.phone)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center text-emerald-500 active:scale-95 transition-transform" aria-label="Call contact"><Phone size={18} strokeWidth={2.5} /></button>
+                                    <button onClick={() => callContact(pickupContact?.phone)} className="w-11 h-11 bg-slate-50 rounded-xl flex items-center justify-center active:scale-95 transition-transform" style={{ color: routeStrokeColor }} aria-label="Call contact"><Phone size={18} strokeWidth={2.5} /></button>
                                 </div>
                             </div>
                             <motion.button
@@ -1150,7 +1267,8 @@ const ActiveTrip = () => {
                                     setPhase('otp_verification');
                                     publishRideStatus('arriving');
                                 }}
-                                className="w-full h-15 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-lg shadow-slate-900/20"
+                                className="w-full h-15 text-white rounded-2xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-lg"
+                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` }}
                             >
                                 {isParcel ? 'Arrived at Sender' : 'I Have Arrived'} <CheckCircle2 size={18} strokeWidth={3} />
                             </motion.button>
@@ -1181,7 +1299,8 @@ const ActiveTrip = () => {
                                         value={digit}
                                         onChange={(e) => handleOTPChange(index, e.target.value)}
                                         onKeyDown={(e) => handleOTPKeyDown(index, e)}
-                                        className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-semibold text-slate-900 focus:outline-none focus:border-slate-900 transition-all shadow-inner"
+                                        className="w-12 h-16 bg-slate-50 border-2 border-slate-100 rounded-2xl text-center text-3xl font-semibold text-slate-900 focus:outline-none transition-all shadow-inner"
+                                        style={{ '--tw-ring-color': routeStrokeColor, borderColor: routeAccentBorder }}
                                     />
                                 ))}
                             </div>
@@ -1192,7 +1311,8 @@ const ActiveTrip = () => {
                             )}
                             <button
                                 onClick={() => startTripAfterOtp(otp.join(''))}
-                                className="mb-3 h-13 w-full rounded-xl bg-slate-900 text-[12px] font-black uppercase tracking-widest text-white shadow-lg shadow-slate-900/15 active:scale-95 transition-all"
+                                className="mb-3 h-13 w-full rounded-xl text-[12px] font-black uppercase tracking-widest text-white shadow-lg active:scale-95 transition-all"
+                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 16px 28px ${routeAccentMuted}` }}
                             >
                                 Submit PIN
                             </button>
@@ -1201,7 +1321,7 @@ const ActiveTrip = () => {
                                     setPhase('to_pickup');
                                     publishRideStatus('accepted');
                                 }} className="flex-1 h-13 border-2 border-slate-100 text-slate-400 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Go Back</button>
-                                <button onClick={openSupportChat} className="flex-1 h-13 bg-slate-100 text-slate-900 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all">Support</button>
+                                <button onClick={openSupportChat} className="flex-1 h-13 rounded-xl text-[12px] font-semibold uppercase tracking-wide active:scale-95 transition-all" style={{ backgroundColor: routeAccentSoft, color: routeStrokeColor }}>Support</button>
                             </div>
                         </motion.div>
                     )}
@@ -1214,10 +1334,10 @@ const ActiveTrip = () => {
                             exit={{ y: '100%' }}
                             className="bg-white rounded-t-[2.5rem] p-5 pb-8 shadow-2xl border-t border-slate-100"
                         >
-                            <div className="mb-5 rounded-[22px] border border-slate-100 bg-slate-50/85 px-4 py-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
+                                <div className="mb-5 rounded-[22px] border border-slate-100 bg-slate-50/85 px-4 py-3.5 shadow-[0_2px_10px_rgba(15,23,42,0.04)]">
                                 <div className="flex items-start justify-between gap-3">
                                     <div className="min-w-0 flex-1">
-                                        <h4 className="text-[9px] font-semibold text-rose-500 uppercase tracking-[0.22em] leading-none mb-1.5">Destination</h4>
+                                        <h4 className="text-[9px] font-semibold uppercase tracking-[0.22em] leading-none mb-1.5" style={{ color: routeStrokeColor }}>Destination</h4>
                                         <p className="text-[15px] font-semibold text-slate-900 tracking-tight leading-5 break-words">
                                             {tripData.drop}
                                         </p>
@@ -1237,14 +1357,15 @@ const ActiveTrip = () => {
                                         <p className="text-[8px] font-semibold text-slate-400 uppercase tracking-wide">{isParcel ? 'Receiver' : 'Passenger'}</p>
                                     </div>
                                 </div>
-                                <button onClick={() => callContact(destinationContact?.phone)} className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center text-emerald-500" aria-label="Call destination contact"><Phone size={16} strokeWidth={2.5} /></button>
+                                <button onClick={() => callContact(destinationContact?.phone)} className="shrink-0 w-9 h-9 bg-white rounded-lg border border-slate-100 flex items-center justify-center" style={{ color: routeStrokeColor }} aria-label="Call destination contact"><Phone size={16} strokeWidth={2.5} /></button>
                             </div>
                             <motion.button
                                 whileTap={{ scale: 0.96 }}
                                 onClick={() => {
                                     setPhase('payment_confirm');
                                 }}
-                                className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl"
+                                className="w-full h-15 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl"
+                                style={{ backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` }}
                             >
                                 {isParcel ? 'Deliver Parcel' : 'Arrived at Destination'} <ChevronRight size={18} strokeWidth={3} />
                             </motion.button>
@@ -1260,7 +1381,7 @@ const ActiveTrip = () => {
                             className="bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border-t border-slate-100"
                         >
                             <div className="text-center mb-6">
-                                <div className={`w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg transition-all duration-500 ${driverPaymentStatus === 'success' ? 'bg-emerald-500 text-white' : 'bg-slate-900 text-white'}`}>
+                                <div className="w-16 h-16 rounded-2xl mx-auto flex items-center justify-center mb-3 shadow-lg transition-all duration-500 text-white" style={{ backgroundColor: driverPaymentStatus === 'success' ? routeStrokeColor : '#0f172a' }}>
                                     {driverPaymentStatus === 'success' ? <Check size={32} strokeWidth={4} /> : <QrCode size={32} strokeWidth={2} />}
                                 </div>
                                 <h2 className="text-2xl font-semibold text-slate-900 uppercase">
@@ -1281,9 +1402,10 @@ const ActiveTrip = () => {
                                             key={mode.id}
                                             onClick={() => handlePaymentModeSelect(mode.id)}
                                             disabled={isGeneratingPaymentQr}
-                                            className={`flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all ${selectedPaymentMode === mode.id ? 'border-slate-900 bg-slate-50' : 'border-slate-50 bg-slate-50/50'}`}
+                                            className="flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all bg-slate-50/50"
+                                            style={selectedPaymentMode === mode.id ? { borderColor: routeStrokeColor, backgroundColor: routeAccentSoft } : undefined}
                                         >
-                                            <mode.icon size={22} className={selectedPaymentMode === mode.id ? 'text-slate-900' : 'text-slate-400'} strokeWidth={2.5} />
+                                            <mode.icon size={22} className={selectedPaymentMode === mode.id ? '' : 'text-slate-400'} style={selectedPaymentMode === mode.id ? { color: routeStrokeColor } : undefined} strokeWidth={2.5} />
                                             <span className="text-[9px] font-semibold text-slate-900 uppercase tracking-wide mt-2">
                                                 {mode.id === 'online' && isGeneratingPaymentQr ? 'Generating' : mode.label}
                                             </span>
@@ -1297,7 +1419,7 @@ const ActiveTrip = () => {
                                 </div>
                             )}
                             {driverPaymentStatus === 'qr_generated' && (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-slate-900 rounded-3xl p-5 mb-6 text-center shadow-2xl">
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="rounded-3xl p-5 mb-6 text-center shadow-2xl text-white" style={{ backgroundColor: routeStrokeColor }}>
                                     <div className="bg-white p-3 rounded-2xl inline-block mb-3 relative overflow-hidden">
                                         <img
                                             src={paymentQr?.imageUrl}
@@ -1327,7 +1449,8 @@ const ActiveTrip = () => {
                                 whileTap={{ scale: 0.96 }}
                                 disabled={driverPaymentStatus !== 'success'}
                                 onClick={() => setPhase('review')}
-                                className={`w-full h-15 rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl transition-all ${driverPaymentStatus === 'success' ? 'bg-slate-900 text-white' : 'bg-slate-100 text-slate-300 pointer-events-none'}`}
+                                className={`w-full h-15 rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl transition-all ${driverPaymentStatus === 'success' ? 'text-white' : 'bg-slate-100 text-slate-300 pointer-events-none'}`}
+                                style={driverPaymentStatus === 'success' ? { backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` } : undefined}
                             >
                                 {driverPaymentStatus === 'success' ? 'Finalize Earnings' : 'Waiting...'} <ChevronRight size={18} strokeWidth={3} />
                             </motion.button>
@@ -1342,7 +1465,7 @@ const ActiveTrip = () => {
                             className="bg-white rounded-t-[2.5rem] p-6 pb-8 shadow-2xl border-t border-slate-50 text-center"
                         >
                             <div className="mb-8 space-y-4">
-                                <div className="w-12 h-12 bg-slate-900 rounded-xl flex items-center justify-center mx-auto shadow-lg"><User size={24} className="text-white" /></div>
+                                <div className="w-12 h-12 rounded-xl flex items-center justify-center mx-auto shadow-lg" style={{ backgroundColor: routeStrokeColor }}><User size={24} className="text-white" /></div>
                                 <h3 className="text-xl font-semibold text-slate-900 uppercase tracking-tight">Rate Experience</h3>
                                 <div className="flex justify-center gap-2">
                                     {[1, 2, 3, 4, 5].map((score) => (
@@ -1350,7 +1473,8 @@ const ActiveTrip = () => {
                                             key={score}
                                             size={28}
                                             onClick={() => setSelectedRating(score)}
-                                            className={`transition-all ${score <= selectedRating ? 'text-yellow-500' : 'text-slate-100'}`}
+                                            className={`transition-all ${score <= selectedRating ? '' : 'text-slate-100'}`}
+                                            style={score <= selectedRating ? { color: routeStrokeColor } : undefined}
                                             fill={score <= selectedRating ? 'currentColor' : 'transparent'}
                                             strokeWidth={2}
                                         />
@@ -1361,7 +1485,7 @@ const ActiveTrip = () => {
                                 publishRideStatus('completed');
                                 clearStoredTripPhase(rideId);
                                 navigate('/taxi/driver/home');
-                            }} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
+                            }} className="w-full h-15 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl active:scale-95 transition-all" style={{ backgroundColor: routeStrokeColor, boxShadow: `0 18px 30px ${routeAccentMuted}` }}>Done <Check size={20} strokeWidth={4} /></button>
                         </motion.div>
                     )}
                 </AnimatePresence>

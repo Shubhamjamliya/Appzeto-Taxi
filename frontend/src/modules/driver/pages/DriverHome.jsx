@@ -335,6 +335,7 @@ const DriverHome = () => {
                         state: {
                             type: currentType,
                             rideId: currentJob.rideId,
+                            otp: currentJob.otp || '',
                             request: {
                                 type: currentType,
                                 title: getJobTitle(currentType),
@@ -345,6 +346,7 @@ const DriverHome = () => {
                                 distance: formatTripDistance(currentJob),
                                 requestId: currentJob.rideId,
                                 rideId: currentJob.rideId,
+                                otp: currentJob.otp || '',
                                 raw: currentJob,
                             },
                             currentDriverCoords: driverCoordsRef.current || currentJob.lastDriverLocation?.coordinates || null,
@@ -521,11 +523,14 @@ const DriverHome = () => {
                     state: {
                         type: nextType,
                         rideId: currentJob?.rideId || payload.rideId,
+                        otp: currentJob?.otp || payload?.otp || currentRequest?.raw?.otp || '',
                         request: {
                             ...currentRequest,
                             rideId: currentJob?.rideId || payload.rideId,
+                            otp: currentJob?.otp || payload?.otp || currentRequest?.raw?.otp || '',
                             raw: currentJob || {
                                 ...(currentRequest?.raw || {}),
+                                otp: payload?.otp || currentRequest?.raw?.otp || '',
                                 status: payload.status,
                                 liveStatus: payload.liveStatus,
                                 acceptedAt: payload.acceptedAt,

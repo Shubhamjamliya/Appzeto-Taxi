@@ -4,6 +4,7 @@ import { getDriverRoom } from '../../services/dispatchService.js';
 import {
   appendRideMessage,
   getActiveRideForIdentity,
+  getRideDetails,
   getRideRoom,
   serializeRideRealtime,
   updateRideDriverLocation,
@@ -123,18 +124,19 @@ export const registerRideSocketHandlers = ({ io, socket, onAsync }) => {
         driverId: socket.auth.sub,
         nextStatus: status,
       });
+      const populatedRide = await getRideDetails(rideId);
 
       const payload = {
-        rideId: String(ride._id),
-        status: ride.status,
-        liveStatus: ride.liveStatus,
-        acceptedAt: ride.acceptedAt,
-        startedAt: ride.startedAt,
-        completedAt: ride.completedAt,
+        rideId: String(populatedRide._id),
+        status: populatedRide.status,
+        liveStatus: populatedRide.liveStatus,
+        acceptedAt: populatedRide.acceptedAt,
+        startedAt: populatedRide.startedAt,
+        completedAt: populatedRide.completedAt,
       };
 
       io.to(getRideRoom(rideId)).emit(SOCKET_EVENTS.RIDE_STATUS_UPDATED, payload);
-      emitRideState(ride);
+      emitRideState(populatedRide);
 
       if (status === RIDE_LIVE_STATUS.COMPLETED) {
         const walletUpdate = ride.$locals?.walletUpdate;

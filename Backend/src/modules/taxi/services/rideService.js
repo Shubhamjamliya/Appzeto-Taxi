@@ -79,6 +79,7 @@ const normalizeServiceType = (serviceType) => {
 };
 
 const normalizeAddress = (value = '') => String(value || '').trim();
+const generateRideOtp = () => String(Math.floor(1000 + Math.random() * 9000));
 
 const normalizeParcelPayload = (parcel = {}) => ({
   category: String(parcel.category || '').trim(),
@@ -317,6 +318,7 @@ export const createRideRecord = async ({
       estimatedDistanceMeters: safeEstimatedDistanceMeters,
       estimatedDurationMinutes: safeEstimatedDurationMinutes,
       paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+      otp: generateRideOtp(),
       service_location_id: resolvedServiceLocationId,
       transport_type: normalizedTransportType,
       pricingSnapshot,
@@ -358,6 +360,7 @@ export const createRideRecord = async ({
             estimatedDistanceMeters: safeEstimatedDistanceMeters,
             estimatedDurationMinutes: safeEstimatedDurationMinutes,
             paymentMethod: normalizeRidePaymentMethod(paymentMethod),
+            otp: generateRideOtp(),
             service_location_id: resolvedServiceLocationId,
             transport_type: normalizedTransportType,
             pricingSnapshot,
@@ -442,6 +445,7 @@ export const serializeRideRealtime = (ride) => ({
   estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
   estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
   paymentMethod: ride.paymentMethod,
+  otp: ride.otp || '',
   parcel: ride.deliveryId?.parcel || ride.parcel || null,
   intercity: ride.intercity || null,
   commissionAmount: ride.commissionAmount,
@@ -546,6 +550,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     estimatedDistanceMeters: ride.estimatedDistanceMeters || 0,
     estimatedDurationMinutes: ride.estimatedDurationMinutes || 0,
     paymentMethod: ride.paymentMethod,
+    otp: ride.otp || '',
     parcel: ride.deliveryId?.parcel || ride.parcel || null,
     intercity: ride.intercity || null,
     commissionAmount: ride.commissionAmount,

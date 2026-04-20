@@ -6,6 +6,7 @@ import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
+import { BACKEND_ORIGIN } from '../../../../shared/api/runtimeConfig';
 import { clearCurrentRide, getCurrentRide, saveCurrentRide } from '../../services/currentRideService';
 import carIcon from '../../../../assets/icons/car.png';
 import bikeIcon from '../../../../assets/icons/bike.png';
@@ -122,6 +123,48 @@ const getInitials = (name = '') =>
 
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
 const isLikelyVehiclePhoto = (value = '') => /^(https?:|data:image\/|blob:|\/uploads\/|\/images\/)/i.test(String(value || '').trim());
+const isPlainObject = (value) => value && typeof value === 'object' && !Array.isArray(value);
+const pickPreferredValue = (...values) => values.find((value) => String(value || '').trim()) || '';
+const resolveAssetUrl = (value = '') => {
+  const raw = String(value || '').trim();
+
+  if (!raw) {
+    return '';
+  }
+
+  if (/^(https?:|data:image\/|blob:)/i.test(raw)) {
+    return raw;
+  }
+
+  if (raw.startsWith('/')) {
+    return `${BACKEND_ORIGIN}${raw}`;
+  }
+
+  return `${BACKEND_ORIGIN}/${raw.replace(/^\/+/, '')}`;
+};
+const mergeDriverSnapshot = (baseDriver = {}, incomingDriver = {}) => {
+  const safeBaseDriver = isPlainObject(baseDriver) ? baseDriver : {};
+  const safeIncomingDriver = isPlainObject(incomingDriver) ? incomingDriver : {};
+
+  return {
+    ...safeBaseDriver,
+    ...safeIncomingDriver,
+    profileImage: pickPreferredValue(safeIncomingDriver.profileImage, safeBaseDriver.profileImage),
+    vehicleImage: pickPreferredValue(safeIncomingDriver.vehicleImage, safeBaseDriver.vehicleImage),
+    image: pickPreferredValue(safeIncomingDriver.image, safeBaseDriver.image),
+    avatar: pickPreferredValue(safeIncomingDriver.avatar, safeBaseDriver.avatar),
+    name: pickPreferredValue(safeIncomingDriver.name, safeBaseDriver.name),
+    phone: pickPreferredValue(safeIncomingDriver.phone, safeBaseDriver.phone),
+    vehicle: pickPreferredValue(safeIncomingDriver.vehicle, safeBaseDriver.vehicle),
+    vehicleType: pickPreferredValue(safeIncomingDriver.vehicleType, safeBaseDriver.vehicleType),
+    vehicleNumber: pickPreferredValue(safeIncomingDriver.vehicleNumber, safeBaseDriver.vehicleNumber),
+    plate: pickPreferredValue(safeIncomingDriver.plate, safeBaseDriver.plate),
+    vehicleColor: pickPreferredValue(safeIncomingDriver.vehicleColor, safeBaseDriver.vehicleColor),
+    vehicleMake: pickPreferredValue(safeIncomingDriver.vehicleMake, safeBaseDriver.vehicleMake),
+    vehicleModel: pickPreferredValue(safeIncomingDriver.vehicleModel, safeBaseDriver.vehicleModel),
+    rating: pickPreferredValue(safeIncomingDriver.rating, safeBaseDriver.rating),
+  };
+};
 
 const RideTracking = () => {
   const [drawerOpen, setDrawerOpen] = useState(true);
@@ -131,6 +174,8 @@ const RideTracking = () => {
   const [routePath, setRoutePath] = useState([]);
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
+  const [driverImageFallback, setDriverImageFallback] = useState('');
+  const [vehicleImageFallback, setVehicleImageFallback] = useState('');
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
   const navigate = useNavigate();
   const location = useLocation();
@@ -142,7 +187,7 @@ const RideTracking = () => {
   const routeChat = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/chat' : '/ride/chat';
 
   const rideId = state.rideId || '';
-  const otp = state.otp || '1234';
+  const otp = String(rideRealtime?.otp || state.otp || '');
   const fare = state.fare || 22;
   const paymentMethod = state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
@@ -169,7 +214,10 @@ const RideTracking = () => {
     () => (tripStatus === 'started' ? dropPosition : pickupPosition),
     [dropPosition, pickupPosition, tripStatus],
   );
-  const driver = rideRealtime?.driver || fallbackDriver;
+  const driver = useMemo(
+    () => mergeDriverSnapshot(fallbackDriver, rideRealtime?.driver || {}),
+    [fallbackDriver, rideRealtime?.driver],
+  );
   const vehicleIcon = getTrackingVehicleIcon(state, driver);
   const displayDriverHeading = useMemo(() => {
     if (Number.isFinite(Number(rideRealtime?.driverLocation?.heading))) {
@@ -183,8 +231,12 @@ const RideTracking = () => {
     );
   }, [activeDestination, driverPosition, rideRealtime?.driverLocation?.heading, routePath]);
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
-  const driverImage = driver.profileImage || '';
-  const vehicleImage = driver.vehicleImage || '';
+  const nextDriverImage = resolveAssetUrl(
+    driver.profileImage || driver.image || driver.avatar || '',
+  );
+  const nextVehicleImage = resolveAssetUrl(driver.vehicleImage || '');
+  const driverImage = nextDriverImage || driverImageFallback;
+  const vehicleImage = vehicleImageBroken ? '' : (nextVehicleImage || vehicleImageFallback);
   const hasVehiclePhoto = isLikelyVehiclePhoto(vehicleImage) && !vehicleImageBroken;
   const driverSubtitle = tripStatus === 'started'
     ? (serviceType === 'parcel' ? 'Parcel picked up' : 'Trip started')
@@ -231,8 +283,17 @@ const RideTracking = () => {
   };
 
   useEffect(() => {
-    setVehicleImageBroken(false);
-  }, [vehicleImage]);
+    if (nextDriverImage) {
+      setDriverImageFallback(nextDriverImage);
+    }
+  }, [nextDriverImage]);
+
+  useEffect(() => {
+    if (nextVehicleImage) {
+      setVehicleImageFallback(nextVehicleImage);
+      setVehicleImageBroken(false);
+    }
+  }, [nextVehicleImage]);
 
   const exitTracking = useMemo(
     () => () => {
@@ -313,6 +374,7 @@ const RideTracking = () => {
 
         if (TERMINAL_STATUSES.has(nextStatus)) {
           if (COMPLETED_TRACKING_STATUSES.has(nextStatus)) {
+            const mergedDriver = mergeDriverSnapshot(fallbackDriver, payload?.driver || {});
             setRideRealtime({
               pickup: {
                 coordinates: payload?.pickupLocation?.coordinates,
@@ -328,7 +390,7 @@ const RideTracking = () => {
               status: nextStatus,
               completedAt: payload?.completedAt || null,
               feedback: payload?.feedback || null,
-              driver: payload?.driver || fallbackDriver,
+              driver: mergedDriver,
             });
             completeTracking(nextStatus);
             return;
@@ -336,6 +398,8 @@ const RideTracking = () => {
           exitTracking();
           return;
         }
+
+        const mergedDriver = mergeDriverSnapshot(fallbackDriver, payload?.driver || {});
 
         setRideRealtime({
           pickup: {
@@ -355,13 +419,13 @@ const RideTracking = () => {
           status: payload?.liveStatus || payload?.status || 'accepted',
           completedAt: payload?.completedAt || null,
           feedback: payload?.feedback || null,
-          driver: payload?.driver || fallbackDriver,
+          driver: mergedDriver,
         });
 
         saveCurrentRide({
           ...state,
           rideId,
-          driver: payload?.driver || fallbackDriver,
+          driver: mergedDriver,
           status: payload?.status || state.status || 'accepted',
           liveStatus: payload?.liveStatus || payload?.status || state.liveStatus || state.status || 'accepted',
         });
@@ -417,7 +481,7 @@ const RideTracking = () => {
       const latestState = latestStateRef.current;
       const latestFallbackDriver = latestFallbackDriverRef.current;
 
-      setRideRealtime({
+      setRideRealtime((prev) => ({
         pickup: {
           coordinates: payload.pickupLocation?.coordinates,
           address: payload.pickupAddress || latestState.pickup || 'Pickup',
@@ -435,8 +499,8 @@ const RideTracking = () => {
         status: payload.liveStatus || payload.status || 'accepted',
         completedAt: payload.completedAt || null,
         feedback: payload.feedback || null,
-        driver: payload.driver || latestFallbackDriver,
-      });
+        driver: mergeDriverSnapshot(prev?.driver || latestFallbackDriver, payload.driver || {}),
+      }));
     };
 
     const onLocationUpdated = (payload) => {
@@ -783,7 +847,7 @@ const RideTracking = () => {
               <p className="text-[12px] font-black text-orange-500 mt-0.5">
                 {driverSubtitle}
               </p>
-              <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} · {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
+              <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} &middot; {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
             </div>
             <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[14px] px-3 py-2 text-right shadow-sm">
               <p className="text-[8px] font-black text-orange-400 uppercase tracking-wider">OTP</p>

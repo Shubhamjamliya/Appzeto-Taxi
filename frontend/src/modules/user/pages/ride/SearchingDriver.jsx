@@ -33,7 +33,6 @@ const MAP_OPTIONS = {
   ]
 };
 
-const generateOTP = () => String(Math.floor(1000 + Math.random() * 9000));
 const unwrap = (response) => response?.data?.data || response?.data || response;
 import LuxuryIcon from '@/assets/icons/Luxury.png';
 import PremiumIcon from '@/assets/icons/Premium.png';
@@ -187,7 +186,6 @@ const SearchingDriver = () => {
   const routeState = useMemo(() => location.state || {}, [location.state]);
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
-  const [otp] = useState(generateOTP);
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
   const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
   const [nearbyVehicleCount, setNearbyVehicleCount] = useState(4);
@@ -339,6 +337,7 @@ const SearchingDriver = () => {
       }
 
       const nextDriver = normalizeDriver(acceptedDriver);
+      const nextOtp = String(rideSnapshot?.otp || routeState?.otp || '');
       driverRef.current = nextDriver;
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
@@ -352,7 +351,7 @@ const SearchingDriver = () => {
         pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
         dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
         rideId: activeRideIdRef.current,
-        otp,
+        otp: nextOtp,
         driver: nextDriver,
         fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
         vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
@@ -372,7 +371,7 @@ const SearchingDriver = () => {
             pickupCoords: rideSnapshot?.pickupLocation?.coordinates || routeState.pickupCoords,
             dropCoords: rideSnapshot?.dropLocation?.coordinates || routeState.dropCoords,
             rideId: activeRideIdRef.current,
-            otp,
+            otp: nextOtp,
             driver: nextDriver,
             fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
             vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
@@ -565,7 +564,7 @@ const SearchingDriver = () => {
         cleanupSearchRef.current?.();
       }, 0);
     };
-  }, [navigate, otp, routePrefix, routeState, searchNonce, selectedVehicleTypeId]);
+  }, [navigate, routePrefix, routeState, searchNonce, selectedVehicleTypeId]);
 
   const handleCancel = async () => {
     clearTimeout(timerRef.current);

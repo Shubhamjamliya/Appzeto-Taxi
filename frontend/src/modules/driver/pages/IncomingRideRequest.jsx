@@ -7,8 +7,10 @@ import {
   CreditCard,
   MapPin,
   Navigation,
+  Phone,
   Package,
   Route,
+  User,
   X,
 } from 'lucide-react';
 
@@ -16,6 +18,18 @@ const Motion = motion;
 const DEFAULT_ACCEPT_REJECT_SECONDS = 15;
 
 const normalizePayment = (value = '') => String(value || 'cash').toUpperCase();
+const getRequestExpiryTime = (data, requestDurationSeconds) => {
+  const safeData = data || {};
+  const rawExpiryTime = safeData.requestExpiresAt || safeData.raw?.requestExpiresAt;
+  const expiryTimestamp = rawExpiryTime ? new Date(rawExpiryTime).getTime() : NaN;
+
+  if (Number.isFinite(expiryTimestamp) && expiryTimestamp > Date.now()) {
+    return expiryTimestamp;
+  }
+
+  return Date.now() + (requestDurationSeconds * 1000);
+};
+
 const getRequestDurationSeconds = (data) => {
   const safeData = data || {};
   const rawDuration = safeData.acceptRejectDurationSeconds ||
@@ -35,26 +49,30 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   const data = requestData;
 
   useEffect(() => {
-    let interval;
-    let resetTimer;
-    if (visible) {
-      resetTimer = setTimeout(() => setTimer(requestDurationSeconds), 0);
-      interval = setInterval(() => {
-        setTimer((current) => {
-          if (current <= 1) {
-            onDecline();
-            return 0;
-          }
-          return current - 1;
-        });
-      }, 1000);
+    if (!visible || !data?.rideId) {
+      return undefined;
     }
 
+    const expiresAt = getRequestExpiryTime(data, requestDurationSeconds);
+    let hasExpired = false;
+
+    const syncTimer = () => {
+      const remainingSeconds = Math.max(0, Math.ceil((expiresAt - Date.now()) / 1000));
+      setTimer(remainingSeconds);
+
+      if (!hasExpired && remainingSeconds <= 0) {
+        hasExpired = true;
+        onDecline();
+      }
+    };
+
+    syncTimer();
+    const interval = setInterval(syncTimer, 250);
+
     return () => {
-      clearTimeout(resetTimer);
       clearInterval(interval);
     };
-  }, [visible, onDecline, requestDurationSeconds, data?.rideId]);
+  }, [visible, onDecline, requestDurationSeconds, data?.rideId, data?.requestExpiresAt]);
 
   if (!visible || !data) return null;
 
@@ -69,6 +87,15 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   const accentTextClass = isParcel ? 'text-orange-600' : isIntercity ? 'text-yellow-700' : 'text-emerald-600';
   const pickupAddress = data.raw?.pickupAddress || data.pickup || 'Pickup point';
   const dropAddress = data.raw?.dropAddress || data.drop || 'Drop point';
+  const attemptCount = Number(data.attempt || data.raw?.attempt || 1);
+  const maxAttempts = Number(data.maxAttempts || data.raw?.maxAttempts || 1);
+  const searchRadiusMeters = Number(data.raw?.radius || data.radius || 0);
+  const searchRadiusLabel = searchRadiusMeters > 0 ? `${(searchRadiusMeters / 1000).toFixed(1)} km` : 'nearby';
+  const customerName = data.customer?.name || data.raw?.user?.name || 'Customer';
+  const customerPhone = [data.customer?.countryCode, data.customer?.phone]
+    .filter(Boolean)
+    .join(' ')
+    .trim() || data.raw?.user?.phone || '';
 
   return (
     <AnimatePresence mode="wait">
@@ -99,6 +126,9 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                   <p className="text-[10px] font-black uppercase tracking-[0.2em] text-white/45">Ride offer</p>
                   <h2 className="mt-1 truncate text-[22px] font-black leading-tight tracking-tight">{title}</h2>
                   <p className="mt-0.5 truncate text-[12px] font-semibold text-white/55">{category}</p>
+                  <p className="mt-1 truncate text-[10px] font-black uppercase tracking-[0.14em] text-white/35">
+                    Wave {attemptCount} of {maxAttempts} • Radius {searchRadiusLabel}
+                  </p>
                 </div>
               </div>
 
@@ -155,6 +185,22 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                 </div>
               </div>
             )}
+
+            <div className="mb-4 rounded-[18px] border border-slate-100 bg-slate-50 px-4 py-3">
+              <div className="flex items-center gap-3">
+                <div className="grid h-10 w-10 shrink-0 place-items-center rounded-[12px] bg-white border border-slate-100 text-slate-700 shadow-sm">
+                  <User size={18} strokeWidth={2.3} />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="text-[8px] font-black uppercase tracking-[0.18em] text-slate-400">Customer</p>
+                  <p className="mt-1 truncate text-[14px] font-black text-slate-950">{customerName}</p>
+                  <div className="mt-1 flex items-center gap-1.5 text-slate-500">
+                    <Phone size={11} strokeWidth={2.5} />
+                    <p className="truncate text-[11px] font-bold">{customerPhone || 'Phone not available'}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
 
             <div className="mb-5 rounded-[20px] border border-slate-100 bg-white px-4 py-4 shadow-[0_10px_24px_rgba(15,23,42,0.06)]">
               <div className="relative">

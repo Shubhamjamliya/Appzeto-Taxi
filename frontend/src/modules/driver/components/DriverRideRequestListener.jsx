@@ -157,7 +157,11 @@ const DriverRideRequestListener = () => {
                 distance: formatTripDistance(data),
                 requestId: data.rideId,
                 rideId: data.rideId,
+                attempt: data.attempt,
+                maxAttempts: data.maxAttempts,
                 acceptRejectDurationSeconds: data.acceptRejectDurationSeconds || data.expiresInSeconds,
+                requestExpiresAt: data.requestExpiresAt || null,
+                customer: data.user || null,
                 raw: data,
             };
 
@@ -209,11 +213,14 @@ const DriverRideRequestListener = () => {
                 state: {
                     type: nextType,
                     rideId: currentJob?.rideId || payload.rideId,
+                    otp: currentJob?.otp || payload?.otp || activeRequest?.raw?.otp || '',
                     request: {
                         ...activeRequest,
                         rideId: currentJob?.rideId || payload.rideId,
+                        otp: currentJob?.otp || payload?.otp || activeRequest?.raw?.otp || '',
                         raw: currentJob || {
                             ...(activeRequest?.raw || {}),
+                            otp: payload?.otp || activeRequest?.raw?.otp || '',
                             status: payload.status,
                             liveStatus: payload.liveStatus,
                             acceptedAt: payload.acceptedAt,

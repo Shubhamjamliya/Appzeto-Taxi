@@ -39,6 +39,7 @@ export const resolveTransportDispatchConfig = async () => {
     dispatchType: String(settings.trip_dispatch_type || defaultTransportRideSettings.trip_dispatch_type) === '2'
       ? 'broadcast'
       : 'one_by_one',
+    baseDistanceMeters: Math.round(driverSearchRadiusKm * 1000),
     maxDistanceMeters: Math.round(driverSearchRadiusKm * 1000),
     retryWindowSeconds,
     retryDelayMs: Math.round(retryWindowSeconds * 1000),

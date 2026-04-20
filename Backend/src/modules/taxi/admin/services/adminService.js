@@ -41,6 +41,12 @@ import { comparePassword, hashPassword } from '../../driver/services/authService
 import { RIDE_LIVE_STATUS, RIDE_STATUS, VEHICLE_TYPES } from '../../constants/index.js';
 import { cancelRideByAdmin, notifyUserAccountDeleted } from '../../services/dispatchService.js';
 
+const PUBLIC_VEHICLE_CATALOG_CACHE_TTL_MS = 5 * 60 * 1000;
+let publicVehicleCatalogCache = {
+  expiresAt: 0,
+  value: null,
+};
+
 const deepMerge = (target, source) => {
   const result = { ...target };
   for (const key in source) {
@@ -3082,6 +3088,52 @@ export const listVehicleCatalog = async () => {
   };
 };
 
+export const listPublicVehicleCatalog = async () => {
+  if (publicVehicleCatalogCache.value && publicVehicleCatalogCache.expiresAt > Date.now()) {
+    return publicVehicleCatalogCache.value;
+  }
+
+  const items = await Vehicle.find()
+    .select('name short_description description transport_type icon_types capacity image icon map_icon status active')
+    .sort({ createdAt: -1 })
+    .lean();
+
+  const results = items.map((item) => ({
+    id: String(item._id),
+    _id: item._id,
+    name: item.name || '',
+    short_description: item.short_description || '',
+    description: item.description || '',
+    transport_type: item.transport_type || 'taxi',
+    icon_types: item.icon_types || 'car',
+    capacity: Number(item.capacity || 0),
+    image: item.image || '',
+    map_icon: item.map_icon || item.icon || item.image || '',
+    status: item.status ?? 1,
+    active: item.active !== false && Number(item.status ?? 1) !== 0,
+  }));
+
+  const payload = {
+    results,
+    paginator: {
+      data: results,
+      total: results.length,
+      current_page: 1,
+      last_page: 1,
+      per_page: results.length,
+      from: results.length ? 1 : 0,
+      to: results.length,
+    },
+  };
+
+  publicVehicleCatalogCache = {
+    value: payload,
+    expiresAt: Date.now() + PUBLIC_VEHICLE_CATALOG_CACHE_TTL_MS,
+  };
+
+  return payload;
+};
+
 export const listVehiclePreferences = async () => {
   return listPreferences();
 };
@@ -3120,6 +3172,8 @@ export const createVehicleType = async (payload) => {
       ? payload.vehicle_preference.filter(Boolean).map(toObjectId)
       : [],
   });
+
+  publicVehicleCatalogCache = { value: null, expiresAt: 0 };
 
   return vehicle.toObject();
 };
@@ -3184,6 +3238,7 @@ export const updateVehicleType = async (id, payload) => {
   }
 
   await vehicle.save();
+  publicVehicleCatalogCache = { value: null, expiresAt: 0 };
   return vehicle.toObject();
 };
 
@@ -3192,6 +3247,7 @@ export const deleteVehicleType = async (id) => {
   if (!deleted) {
     throw new ApiError(404, 'Vehicle type not found');
   }
+  publicVehicleCatalogCache = { value: null, expiresAt: 0 };
   return true;
 };
 

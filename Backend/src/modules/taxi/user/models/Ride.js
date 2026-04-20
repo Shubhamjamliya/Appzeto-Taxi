@@ -180,6 +180,13 @@ const rideSchema = new mongoose.Schema(
       lowercase: true,
       trim: true,
     },
+    otp: {
+      type: String,
+      default: '',
+      trim: true,
+      minlength: 4,
+      maxlength: 4,
+    },
     driverPaymentCollection: {
       provider: {
         type: String,

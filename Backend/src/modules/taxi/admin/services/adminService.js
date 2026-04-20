@@ -3030,16 +3030,22 @@ export const listVehicleTypes = async (queryParams = {}) => {
   const query = {};
   if (queryParams.transport_type) query.transport_type = queryParams.transport_type;
   const items = await Vehicle.find(query).sort({ createdAt: -1 }).lean();
+  const results = items.map((item) => ({
+    ...item,
+    icon: item.map_icon || item.icon || item.image || '',
+    map_icon: item.map_icon || item.icon || item.image || '',
+  }));
+
   return {
-    results: items,
+    results,
     paginator: {
-      data: items,
-      total: items.length,
+      data: results,
+      total: results.length,
       current_page: 1,
       last_page: 1,
-      per_page: items.length,
+      per_page: results.length,
       from: 1,
-      to: items.length
+      to: results.length
     }
   };
 };
@@ -3051,6 +3057,8 @@ export const listVehicleCatalog = async () => {
   const results = items.map((item) => ({
     ...item,
     id: String(item._id),
+    icon: item.map_icon || item.icon || item.image || '',
+    map_icon: item.map_icon || item.icon || item.image || '',
     supported_vehicles: Array.isArray(item.supported_other_vehicle_types)
       ? item.supported_other_vehicle_types.map((v) => String(v)).join(',')
       : '',
@@ -3087,6 +3095,8 @@ export const createVehicleType = async (payload) => {
     throw new ApiError(400, 'Transport type is required');
   }
 
+  const mapIcon = payload.map_icon ?? payload.mapIcon ?? payload.icon ?? payload.image ?? '';
+
   const vehicle = await Vehicle.create({
     name: payload.name.trim(),
     short_description: payload.short_description ?? '',
@@ -3094,7 +3104,13 @@ export const createVehicleType = async (payload) => {
     transport_type: payload.transport_type,
     dispatch_type: payload.dispatch_type || 'normal',
     icon_types: payload.icon_types || 'car',
-    image: payload.image ?? '',
+    capacity: Number(payload.capacity || 0),
+    size: payload.size ?? '',
+    is_taxi: payload.is_taxi || payload.transport_type,
+    is_accept_share_ride: Number(payload.is_accept_share_ride || 0) ? 1 : 0,
+    image: payload.image ?? mapIcon,
+    icon: mapIcon,
+    map_icon: mapIcon,
     status: Number(payload.status ?? 1) ? 1 : 0,
     active: Number(payload.status ?? 1) === 1,
     supported_other_vehicle_types: Array.isArray(payload.supported_other_vehicle_types)
@@ -3134,6 +3150,23 @@ export const updateVehicleType = async (id, payload) => {
   }
   if (payload.image !== undefined) {
     vehicle.image = payload.image ?? '';
+  }
+  if (payload.icon !== undefined || payload.map_icon !== undefined || payload.mapIcon !== undefined || payload.image !== undefined) {
+    const mapIcon = payload.map_icon ?? payload.mapIcon ?? payload.icon ?? payload.image ?? '';
+    vehicle.icon = mapIcon;
+    vehicle.map_icon = mapIcon;
+  }
+  if (payload.capacity !== undefined) {
+    vehicle.capacity = Number(payload.capacity || 0);
+  }
+  if (payload.size !== undefined) {
+    vehicle.size = payload.size ?? '';
+  }
+  if (payload.is_taxi !== undefined) {
+    vehicle.is_taxi = payload.is_taxi || vehicle.transport_type;
+  }
+  if (payload.is_accept_share_ride !== undefined) {
+    vehicle.is_accept_share_ride = Number(payload.is_accept_share_ride || 0) ? 1 : 0;
   }
   if (payload.status !== undefined) {
     vehicle.status = Number(payload.status) ? 1 : 0;
@@ -3890,6 +3923,210 @@ export const deleteOwner = async (id) => {
     const deleted = await OwnerBooking.findByIdAndDelete(id);
     if (!deleted) throw new ApiError(404, 'Owner booking not found');
     return true;
+  };
+
+  const normalizeAdminEarningOption = (value) => String(value || '').trim();
+
+  const formatAdminEarningDate = (value) => {
+    const date = value ? new Date(value) : null;
+    return date && !Number.isNaN(date.getTime()) ? date : null;
+  };
+
+  const getRideCompletedDate = (ride) => formatAdminEarningDate(ride.completedAt || ride.updatedAt || ride.createdAt);
+
+  const matchesAdminEarningDateRange = (ride, startDate, endDate) => {
+    if (!startDate && !endDate) return true;
+
+    const completedDate = getRideCompletedDate(ride);
+    if (!completedDate) return false;
+
+    if (startDate && completedDate < startDate) return false;
+    if (endDate && completedDate > endDate) return false;
+    return true;
+  };
+
+  const groupAdminEarnings = (rows, keyGetter, labelGetter) => {
+    const map = new Map();
+
+    rows.forEach((row) => {
+      const key = keyGetter(row) || 'unknown';
+      const label = labelGetter(row) || 'Unknown';
+      const current = map.get(key) || {
+        key,
+        label,
+        trips: 0,
+        grossFare: 0,
+        adminCommission: 0,
+        driverEarnings: 0,
+      };
+
+      current.trips += 1;
+      current.grossFare += row.grossFare;
+      current.adminCommission += row.adminCommission;
+      current.driverEarnings += row.driverEarnings;
+      map.set(key, current);
+    });
+
+    return [...map.values()]
+      .map((item) => ({
+        ...item,
+        grossFare: Number(item.grossFare.toFixed(2)),
+        adminCommission: Number(item.adminCommission.toFixed(2)),
+        driverEarnings: Number(item.driverEarnings.toFixed(2)),
+      }))
+      .sort((a, b) => b.adminCommission - a.adminCommission);
+  };
+
+  export const getAdminEarnings = async (query = {}) => {
+    const {
+      from,
+      to,
+      zone,
+      vehicle,
+      riderType,
+      paymentMethod,
+      search,
+      page = 1,
+      limit = 10,
+    } = query;
+
+    const startDate = from ? new Date(from) : null;
+    const endDate = to ? new Date(to) : null;
+
+    if (startDate && Number.isNaN(startDate.getTime())) {
+      throw new ApiError(400, 'Invalid from date');
+    }
+
+    if (endDate && Number.isNaN(endDate.getTime())) {
+      throw new ApiError(400, 'Invalid to date');
+    }
+
+    if (endDate) {
+      endDate.setHours(23, 59, 59, 999);
+    }
+
+    const rides = await Ride.find({ status: RIDE_STATUS.COMPLETED })
+      .sort({ completedAt: -1, updatedAt: -1, createdAt: -1 })
+      .populate('userId', 'name phone')
+      .populate({
+        path: 'driverId',
+        select: 'name phone vehicleType vehicleNumber zoneId',
+        populate: { path: 'zoneId', select: 'name' },
+      })
+      .populate('vehicleTypeId', 'name type_name transport_type icon_types')
+      .lean();
+
+    const zoneFilter = normalizeAdminEarningOption(zone);
+    const vehicleFilter = normalizeAdminEarningOption(vehicle);
+    const riderTypeFilter = normalizeAdminEarningOption(riderType).toLowerCase();
+    const paymentFilter = normalizeAdminEarningOption(paymentMethod).toLowerCase();
+    const searchFilter = normalizeAdminEarningOption(search).toLowerCase();
+
+    let rows = rides
+      .filter((ride) => matchesAdminEarningDateRange(ride, startDate, endDate))
+      .map((ride) => {
+        const vehicleDoc = ride.vehicleTypeId || {};
+        const driver = ride.driverId || {};
+        const zoneDoc = driver.zoneId || {};
+        const requestId = `REQ_${String(ride._id).slice(-12).toUpperCase()}`;
+        const grossFare = Number(ride.fare || 0);
+        const adminCommission = Number(ride.commissionAmount || 0);
+        const driverEarnings = Number(ride.driverEarnings || Math.max(grossFare - adminCommission, 0));
+        const completedDate = getRideCompletedDate(ride);
+
+        return {
+          id: String(ride._id),
+          requestId,
+          completedAt: completedDate,
+          userName: ride.userId?.name || 'Unknown Rider',
+          userPhone: ride.userId?.phone || '',
+          driverName: driver.name || 'Unassigned Driver',
+          driverPhone: driver.phone || '',
+          riderType: ride.serviceType || 'ride',
+          paymentMethod: ride.paymentMethod || 'cash',
+          zoneId: zoneDoc?._id ? String(zoneDoc._id) : '',
+          zoneName: zoneDoc?.name || 'Unmapped Zone',
+          vehicleId: vehicleDoc?._id ? String(vehicleDoc._id) : '',
+          vehicleName: vehicleDoc?.name || vehicleDoc?.type_name || ride.vehicleIconType || driver.vehicleType || 'Vehicle',
+          transportType: vehicleDoc?.transport_type || ride.transport_type || 'taxi',
+          grossFare: Number(grossFare.toFixed(2)),
+          adminCommission: Number(adminCommission.toFixed(2)),
+          driverEarnings: Number(driverEarnings.toFixed(2)),
+          commissionRate: Number(ride.pricingSnapshot?.admin_commission_from_driver || 0),
+          commissionType: Number(ride.pricingSnapshot?.admin_commission_type_from_driver || 1) === 1 ? 'percentage' : 'fixed',
+        };
+      });
+
+    if (zoneFilter) {
+      rows = rows.filter((row) => row.zoneId === zoneFilter || row.zoneName.toLowerCase() === zoneFilter.toLowerCase());
+    }
+
+    if (vehicleFilter) {
+      rows = rows.filter((row) => row.vehicleId === vehicleFilter || row.vehicleName.toLowerCase() === vehicleFilter.toLowerCase());
+    }
+
+    if (riderTypeFilter) {
+      rows = rows.filter((row) => String(row.riderType || '').toLowerCase() === riderTypeFilter);
+    }
+
+    if (paymentFilter) {
+      rows = rows.filter((row) => String(row.paymentMethod || '').toLowerCase() === paymentFilter);
+    }
+
+    if (searchFilter) {
+      rows = rows.filter((row) =>
+        [
+          row.requestId,
+          row.userName,
+          row.userPhone,
+          row.driverName,
+          row.driverPhone,
+          row.zoneName,
+          row.vehicleName,
+          row.riderType,
+          row.paymentMethod,
+        ].some((value) => String(value || '').toLowerCase().includes(searchFilter)),
+      );
+    }
+
+    const totals = rows.reduce(
+      (acc, row) => {
+        acc.totalTrips += 1;
+        acc.grossFare += row.grossFare;
+        acc.adminCommission += row.adminCommission;
+        acc.driverEarnings += row.driverEarnings;
+        if (row.paymentMethod === 'cash') acc.byCash += row.adminCommission;
+        if (row.paymentMethod === 'online') acc.byOnline += row.adminCommission;
+        return acc;
+      },
+      { totalTrips: 0, grossFare: 0, adminCommission: 0, driverEarnings: 0, byCash: 0, byOnline: 0 },
+    );
+
+    const roundedTotals = Object.fromEntries(
+      Object.entries(totals).map(([key, value]) => [key, typeof value === 'number' ? Number(value.toFixed(2)) : value]),
+    );
+
+    return {
+      summary: {
+        ...roundedTotals,
+        averageCommission: rows.length ? Number((totals.adminCommission / rows.length).toFixed(2)) : 0,
+      },
+      breakdowns: {
+        zones: groupAdminEarnings(rows, (row) => row.zoneId, (row) => row.zoneName),
+        vehicles: groupAdminEarnings(rows, (row) => row.vehicleId, (row) => row.vehicleName),
+        riderTypes: groupAdminEarnings(rows, (row) => row.riderType, (row) => row.riderType),
+      },
+      filters: {
+        from: from || '',
+        to: to || '',
+        zone: zoneFilter,
+        vehicle: vehicleFilter,
+        riderType: riderTypeFilter,
+        paymentMethod: paymentFilter,
+        search: searchFilter,
+      },
+      ...buildPaginator(rows, Number(page) || 1, Number(limit) || 10),
+    };
   };
 
   export const getDashboardData = async () => {

@@ -43,6 +43,7 @@ export const createDeliveryRecord = async ({
   vehicleTypeId,
   vehicleTypeIds,
   vehicleIconType,
+  vehicleIconUrl,
   paymentMethod,
   parcel,
 }) => {
@@ -56,6 +57,7 @@ export const createDeliveryRecord = async ({
     vehicleTypeId,
     vehicleTypeIds,
     vehicleIconType,
+    vehicleIconUrl,
     paymentMethod,
     serviceType: 'parcel',
     parcel,

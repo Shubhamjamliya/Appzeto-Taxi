@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Phone, MessageCircle, AlertTriangle, Shield, Star, ChevronLeft, Share2 } from 'lucide-react';
-import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
 import { socketService } from '../../../../shared/api/socket';
 import api from '../../../../shared/api/axiosInstance';
@@ -33,13 +33,76 @@ const arePositionsNearlyEqual = (first, second, threshold = 0.0002) => (
   Math.abs(Number(first?.lng ?? 0) - Number(second?.lng ?? 0)) < threshold
 );
 
-const createTrackingMarkerIcon = (iconUrl) => ({
-  url: iconUrl,
-  scaledSize: new window.google.maps.Size(44, 44),
-  anchor: new window.google.maps.Point(22, 22),
+const normalizeHeading = (value, fallback = 0) => {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) {
+    return fallback;
+  }
+
+  return ((numeric % 360) + 360) % 360;
+};
+
+const calculateBearing = (from, to, fallback = 0) => {
+  if (!from || !to || arePositionsNearlyEqual(from, to, 0.00001)) {
+    return fallback;
+  }
+
+  const fromLat = Number(from.lat) * (Math.PI / 180);
+  const toLat = Number(to.lat) * (Math.PI / 180);
+  const deltaLng = (Number(to.lng) - Number(from.lng)) * (Math.PI / 180);
+  const y = Math.sin(deltaLng) * Math.cos(toLat);
+  const x = Math.cos(fromLat) * Math.sin(toLat) -
+    Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+
+  return normalizeHeading(Math.atan2(y, x) * (180 / Math.PI), fallback);
+};
+
+const getRouteHeading = (position, path = [], fallback = 0) => {
+  const nextPoint = path.find((point) => !arePositionsNearlyEqual(position, point, 0.00001));
+  return nextPoint ? calculateBearing(position, nextPoint, fallback) : fallback;
+};
+
+const getVehicleMarkerOffset = (width, height) => ({
+  x: -(width / 2),
+  y: -(height / 2),
 });
 
+const RotatingVehicleMarker = ({ position, iconUrl = carIcon, heading = 0, title = 'Driver' }) => (
+  <OverlayViewF
+    position={position}
+    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+    getPixelPositionOffset={getVehicleMarkerOffset}
+  >
+    <div title={title} className="pointer-events-none flex h-14 w-14 items-center justify-center">
+      <div
+        className="flex h-11 w-11 items-center justify-center transition-transform duration-500 ease-out"
+        style={{ transform: `rotate(${normalizeHeading(heading)}deg)` }}
+      >
+        <img
+          src={iconUrl || carIcon}
+          alt={title}
+          className="h-12 w-12 object-contain drop-shadow-[0_8px_10px_rgba(15,23,42,0.35)]"
+          draggable={false}
+        />
+      </div>
+    </div>
+  </OverlayViewF>
+);
+
 const getTrackingVehicleIcon = (ride, driver) => {
+  const customIcon = String(
+    ride?.vehicleIconUrl ||
+    ride?.vehicle?.vehicleIconUrl ||
+    ride?.vehicle?.icon ||
+    driver?.vehicleIconUrl ||
+    driver?.map_icon ||
+    driver?.icon ||
+    '',
+  ).trim();
+
+  if (customIcon) return customIcon;
+
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
   const iconType = String(ride?.vehicleIconType || driver?.vehicleIconType || driver?.vehicleType || '').toLowerCase();
 
@@ -108,6 +171,17 @@ const RideTracking = () => {
   );
   const driver = rideRealtime?.driver || fallbackDriver;
   const vehicleIcon = getTrackingVehicleIcon(state, driver);
+  const displayDriverHeading = useMemo(() => {
+    if (Number.isFinite(Number(rideRealtime?.driverLocation?.heading))) {
+      return normalizeHeading(rideRealtime.driverLocation.heading);
+    }
+
+    return getRouteHeading(
+      driverPosition,
+      routePath,
+      calculateBearing(driverPosition, activeDestination),
+    );
+  }, [activeDestination, driverPosition, rideRealtime?.driverLocation?.heading, routePath]);
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
   const driverImage = driver.profileImage || '';
   const vehicleImage = driver.vehicleImage || '';
@@ -374,6 +448,7 @@ const RideTracking = () => {
         ...(prev || {}),
         driverLocation: {
           coordinates: payload.coordinates,
+          heading: payload.heading ?? prev?.driverLocation?.heading ?? null,
         },
       }));
     };
@@ -617,10 +692,11 @@ const RideTracking = () => {
                 }}
               />
             )}
-            <MarkerF
+            <RotatingVehicleMarker
               position={driverPosition}
               title="Driver"
-              icon={createTrackingMarkerIcon(vehicleIcon)}
+              iconUrl={vehicleIcon}
+              heading={displayDriverHeading}
             />
             <MarkerF
               position={activeDestination}

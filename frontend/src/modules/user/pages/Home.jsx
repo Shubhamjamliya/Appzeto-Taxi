@@ -23,6 +23,18 @@ import {
 const Motion = motion;
 
 const getCurrentRideIcon = (ride) => {
+  const customIcon = String(
+    ride?.vehicleIconUrl ||
+    ride?.vehicle?.vehicleIconUrl ||
+    ride?.vehicle?.icon ||
+    ride?.driver?.vehicleIconUrl ||
+    '',
+  ).trim();
+
+  if (customIcon) {
+    return customIcon;
+  }
+
   const serviceType = String(ride?.serviceType || ride?.type || '').toLowerCase();
   const iconType = String(ride?.vehicleIconType || ride?.driver?.vehicleIconType || ride?.driver?.vehicleType || '').toLowerCase();
 

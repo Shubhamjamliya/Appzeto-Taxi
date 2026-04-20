@@ -79,6 +79,11 @@ const vehicleSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    map_icon: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     status: {
       type: Number,
       enum: [0, 1],

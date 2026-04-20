@@ -1,7 +1,7 @@
 import { createDeliveryRecord, getActiveDeliveryForIdentity, getDeliveryById, listDeliveriesForIdentity } from '../services/deliveryService.js';
 
 export const createDelivery = async (req, res) => {
-  const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleTypeIds, vehicleIconType, paymentMethod, parcel } = req.body;
+  const { pickup, drop, pickupAddress, dropAddress, fare, vehicleTypeId, vehicleTypeIds, vehicleIconType, vehicleIconUrl, paymentMethod, parcel } = req.body;
 
   const delivery = await createDeliveryRecord({
     userId: req.auth.sub,
@@ -13,6 +13,7 @@ export const createDelivery = async (req, res) => {
     vehicleTypeId,
     vehicleTypeIds,
     vehicleIconType,
+    vehicleIconUrl,
     paymentMethod,
     parcel,
   });

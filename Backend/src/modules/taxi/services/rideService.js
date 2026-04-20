@@ -207,6 +207,7 @@ const syncDeliveryWithRide = async (ride) => {
     driverId: ride.driverId || null,
     vehicleTypeId: ride.vehicleTypeId || null,
     vehicleIconType: ride.vehicleIconType || '',
+    vehicleIconUrl: ride.vehicleIconUrl || '',
     status: ride.status,
     liveStatus: ride.liveStatus,
     pickupLocation: ride.pickupLocation,
@@ -243,6 +244,7 @@ export const createRideRecord = async ({
   vehicleTypeId,
   vehicleTypeIds,
   vehicleIconType,
+  vehicleIconUrl,
   paymentMethod,
   serviceType,
   parcel,
@@ -274,6 +276,12 @@ export const createRideRecord = async ({
   }
 
   const primaryVehicleTypeId = dispatchVehicleTypeIds[0] || null;
+  const primaryVehicle = primaryVehicleTypeId
+    ? await Vehicle.findById(primaryVehicleTypeId).select('icon map_icon image').lean()
+    : null;
+  const resolvedVehicleIconUrl = String(
+    vehicleIconUrl || primaryVehicle?.map_icon || primaryVehicle?.icon || primaryVehicle?.image || '',
+  ).trim();
   const normalizedTransportType = String(transport_type || 'taxi').trim().toLowerCase() || 'taxi';
   const resolvedServiceLocationId =
     service_location_id && mongoose.Types.ObjectId.isValid(service_location_id)
@@ -299,6 +307,7 @@ export const createRideRecord = async ({
       vehicleTypeId: primaryVehicleTypeId,
       dispatchVehicleTypeIds,
       vehicleIconType: vehicleIconType || '',
+      vehicleIconUrl: resolvedVehicleIconUrl,
       serviceType: normalizeServiceType(serviceType),
       pickupLocation: toPoint(pickupCoords, 'pickup'),
       pickupAddress: normalizeAddress(pickupAddress),
@@ -339,6 +348,7 @@ export const createRideRecord = async ({
             vehicleTypeId: primaryVehicleTypeId,
             dispatchVehicleTypeIds,
             vehicleIconType: vehicleIconType || '',
+            vehicleIconUrl: resolvedVehicleIconUrl,
             serviceType: normalizeServiceType(serviceType),
             pickupLocation: toPoint(pickupCoords, 'pickup'),
             pickupAddress: normalizeAddress(pickupAddress),
@@ -437,6 +447,8 @@ export const serializeRideRealtime = (ride) => ({
   commissionAmount: ride.commissionAmount,
   driverEarnings: ride.driverEarnings,
   promo: ride.promo?.code ? ride.promo : null,
+  vehicleIconType: ride.vehicleIconType || '',
+  vehicleIconUrl: ride.vehicleIconUrl || '',
   pickupLocation: ride.pickupLocation,
   pickupAddress: ride.pickupAddress || '',
   dropLocation: ride.dropLocation,
@@ -539,6 +551,7 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     commissionAmount: ride.commissionAmount,
     driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,
+    vehicleIconUrl: ride.vehicleIconUrl || '',
     pickupLocation: ride.pickupLocation,
     pickupAddress: ride.pickupAddress || '',
     dropLocation: ride.dropLocation,

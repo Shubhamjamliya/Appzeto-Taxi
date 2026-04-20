@@ -20,7 +20,7 @@ import {
     MapPinned,
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
+import { GoogleMap, MarkerF, OverlayView, OverlayViewF, PolylineF } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
 import { socketService } from '../../../shared/api/socket';
 import api from '../../../shared/api/axiosInstance';
@@ -100,6 +100,60 @@ const cleanPhoneNumber = (phone) => String(phone || '').replace(/[^\d+]/g, '');
 
 const buildFallbackRoute = (origin, destination) => [origin, destination];
 const unwrapApiPayload = (response) => response?.data?.data || response?.data || response;
+
+const getJobRideId = (job = {}) => String(job.rideId || job.id || job._id || job.requestId || '').trim();
+
+const getActiveTripPhaseKey = (id) => (id ? `driverActiveTripPhase:${id}` : '');
+
+const readStoredTripPhase = (id) => {
+    const key = getActiveTripPhaseKey(id);
+    if (!key) return '';
+
+    try {
+        return localStorage.getItem(key) || '';
+    } catch {
+        return '';
+    }
+};
+
+const writeStoredTripPhase = (id, nextPhase) => {
+    const key = getActiveTripPhaseKey(id);
+    if (!key) return;
+
+    try {
+        localStorage.setItem(key, nextPhase);
+    } catch {
+        // Local storage can be blocked in private contexts; trip still works without it.
+    }
+};
+
+const clearStoredTripPhase = (id) => {
+    const key = getActiveTripPhaseKey(id);
+    if (!key) return;
+
+    try {
+        localStorage.removeItem(key);
+    } catch {
+        // No-op.
+    }
+};
+
+const resolvePhaseFromJob = (job = {}) => {
+    const rideId = getJobRideId(job);
+    const storedPhase = readStoredTripPhase(rideId);
+
+    if (['to_pickup', 'otp_verification', 'in_trip', 'payment_confirm', 'review'].includes(storedPhase)) {
+        return storedPhase;
+    }
+
+    const liveStatus = String(job.liveStatus || job.status || '').toLowerCase();
+
+    if (liveStatus === 'arriving') return 'otp_verification';
+    if (liveStatus === 'started' || liveStatus === 'ongoing') return 'in_trip';
+    if (liveStatus === 'completed') return 'review';
+
+    return 'to_pickup';
+};
 const withDriverAuthorization = (token) => (
     token
         ? {
@@ -110,11 +164,62 @@ const withDriverAuthorization = (token) => (
         : {}
 );
 
-const createTaxiMarkerIcon = () => ({
-    url: carIcon,
-    scaledSize: new window.google.maps.Size(44, 44),
-    anchor: new window.google.maps.Point(22, 22),
+const normalizeHeading = (value, fallback = 0) => {
+    const numeric = Number(value);
+
+    if (!Number.isFinite(numeric)) {
+        return fallback;
+    }
+
+    return ((numeric % 360) + 360) % 360;
+};
+
+const calculateBearing = (from, to, fallback = 0) => {
+    if (!from || !to || arePositionsNearlyEqual(from, to, 0.00001)) {
+        return fallback;
+    }
+
+    const fromLat = Number(from.lat) * (Math.PI / 180);
+    const toLat = Number(to.lat) * (Math.PI / 180);
+    const deltaLng = (Number(to.lng) - Number(from.lng)) * (Math.PI / 180);
+    const y = Math.sin(deltaLng) * Math.cos(toLat);
+    const x = Math.cos(fromLat) * Math.sin(toLat) -
+        Math.sin(fromLat) * Math.cos(toLat) * Math.cos(deltaLng);
+
+    return normalizeHeading(Math.atan2(y, x) * (180 / Math.PI), fallback);
+};
+
+const getRouteHeading = (position, path = [], fallback = 0) => {
+    const nextPoint = path.find((point) => !arePositionsNearlyEqual(position, point, 0.00001));
+    return nextPoint ? calculateBearing(position, nextPoint, fallback) : fallback;
+};
+
+const getVehicleMarkerOffset = (width, height) => ({
+    x: -(width / 2),
+    y: -(height / 2),
 });
+
+const RotatingVehicleMarker = ({ position, iconUrl = carIcon, heading = 0, title = 'Driver' }) => (
+    <OverlayViewF
+        position={position}
+        mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+        getPixelPositionOffset={getVehicleMarkerOffset}
+    >
+        <div title={title} className="pointer-events-none flex h-14 w-14 items-center justify-center">
+            <div
+                className="flex h-11 w-11 items-center justify-center transition-transform duration-500 ease-out"
+                style={{ transform: `rotate(${normalizeHeading(heading)}deg)` }}
+            >
+                <img
+                    src={iconUrl || carIcon}
+                    alt={title}
+                    className="h-12 w-12 object-contain drop-shadow-[0_8px_10px_rgba(15,23,42,0.35)]"
+                    draggable={false}
+                />
+            </div>
+        </div>
+    </OverlayViewF>
+);
 
 const getCurrentCoords = () => new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
@@ -128,6 +233,18 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
         { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
     );
 });
+
+const parseFareAmount = (value) => {
+    const numeric = Number(String(value || '').replace(/[^0-9.]/g, ''));
+    return Number.isFinite(numeric) ? numeric : 0;
+};
+
+const getSimulationPath = ({ routePath = [], from, to }) => {
+    const path = routePath.length > 1 ? routePath : [from, to].filter(Boolean);
+    return path
+        .filter((point) => Number.isFinite(Number(point?.lat)) && Number.isFinite(Number(point?.lng)))
+        .map((point) => ({ lat: Number(point.lat), lng: Number(point.lng) }));
+};
 
 const ActiveTrip = () => {
     const navigate = useNavigate();
@@ -163,22 +280,24 @@ const ActiveTrip = () => {
                 const ridePayload =
                     activeRide.status === 'fulfilled' ? unwrapApiPayload(activeRide.value) : null;
 
-                const currentJob = deliveryPayload?.rideId
+                const currentJob = getJobRideId(deliveryPayload)
                     ? deliveryPayload
-                    : ridePayload?.rideId
+                    : getJobRideId(ridePayload)
                         ? ridePayload
                         : null;
+                const currentRideId = getJobRideId(currentJob);
 
-                if (!currentJob?.rideId) {
+                if (!currentRideId) {
                     navigate('/taxi/driver/home', { replace: true });
                     return;
                 }
 
                 const currentType = normalizeTripType(currentJob);
+                const restoredPhase = resolvePhaseFromJob(currentJob);
 
                 setHydratedTripState({
                     type: currentType,
-                    rideId: currentJob.rideId,
+                    rideId: currentRideId,
                     request: {
                         type: currentType,
                         title: getTripTitle(currentType),
@@ -186,12 +305,13 @@ const ActiveTrip = () => {
                         payment: currentJob.paymentMethod || 'Cash',
                         pickup: getAreaName(currentJob.pickupAddress, formatAddressFromPoint(currentJob.pickupLocation, 'Pickup area')),
                         drop: getAreaName(currentJob.dropAddress, formatAddressFromPoint(currentJob.dropLocation, 'Drop area')),
-                        requestId: currentJob.rideId,
-                        rideId: currentJob.rideId,
+                        requestId: currentRideId,
+                        rideId: currentRideId,
                         raw: currentJob,
                     },
                     currentDriverCoords: currentJob.lastDriverLocation?.coordinates || null,
                 });
+                setPhase(restoredPhase);
             } catch {
                 if (active) {
                     navigate('/taxi/driver/home', { replace: true });
@@ -216,7 +336,8 @@ const ActiveTrip = () => {
     const isParcel = tripType === 'parcel';
     const liveRequest = effectiveState?.request || {};
     const liveRaw = liveRequest.raw || {};
-    const rideId = liveRequest?.rideId || effectiveState?.rideId || '';
+    const rideId = getJobRideId(liveRequest) || getJobRideId(effectiveState);
+    const vehicleIconUrl = liveRaw.vehicleIconUrl || liveRequest.vehicleIconUrl || effectiveState.vehicleIconUrl || carIcon;
 
     const pickupCoords = liveRaw.pickupLocation?.coordinates || effectiveState?.pickupCoords || DEFAULT_DRIVER_COORDS;
     const dropCoords = useMemo(
@@ -243,13 +364,50 @@ const ActiveTrip = () => {
     const [selectedRating, setSelectedRating] = useState(0);
     const [driverPaymentStatus, setDriverPaymentStatus] = useState('pending');
     const [selectedPaymentMode, setSelectedPaymentMode] = useState('');
+    const [paymentQr, setPaymentQr] = useState(null);
+    const [paymentQrError, setPaymentQrError] = useState('');
+    const [isGeneratingPaymentQr, setIsGeneratingPaymentQr] = useState(false);
     const [map, setMap] = useState(null);
     const [driverPosition, setDriverPosition] = useState(initialDriverPosition);
+    const [driverHeading, setDriverHeading] = useState(null);
     const [routePath, setRoutePath] = useState([]);
     const [routeError, setRouteError] = useState('');
+    const [isSimulationEnabled, setIsSimulationEnabled] = useState(false);
+    const [isSimulationRunning, setIsSimulationRunning] = useState(false);
+    const [simulationStep, setSimulationStep] = useState(0);
     const { isLoaded, loadError } = useAppGoogleMapsLoader();
+    const simulationPathRef = React.useRef([]);
+    const simulationTimerRef = React.useRef(null);
+    const isSimulationEnabledRef = React.useRef(false);
 
     const activeDestination = phase === 'to_pickup' || phase === 'otp_verification' ? pickupPosition : dropPosition;
+
+    useEffect(() => {
+        if (!rideId) {
+            return;
+        }
+
+        writeStoredTripPhase(rideId, phase);
+    }, [phase, rideId]);
+
+    useEffect(() => {
+        if (!rideId || hydratedTripState) {
+            return;
+        }
+
+        const routeJob = liveRaw?.rideId || liveRaw?._id || liveRaw?.id
+            ? liveRaw
+            : liveRequest?.rideId || liveRequest?._id || liveRequest?.id
+                ? liveRequest
+                : effectiveState;
+
+        const restoredPhase = resolvePhaseFromJob({
+            ...routeJob,
+            rideId,
+        });
+
+        setPhase((current) => (current === 'to_pickup' ? restoredPhase : current));
+    }, [effectiveState, hydratedTripState, liveRaw, liveRequest, rideId]);
 
     const tripData = isParcel ? {
         sender: {
@@ -278,10 +436,27 @@ const ActiveTrip = () => {
     };
 
     const displayFare = liveRequest?.fare || tripData.fare;
+    const fareAmount = parseFareAmount(displayFare);
     const expectedOtp = String(liveRequest?.otp || effectiveState?.otp || '1234');
     const pickupContact = isParcel ? tripData.sender : tripData.user;
     const destinationContact = isParcel ? tripData.receiver : tripData.user;
     const routeStrokeColor = phase === 'to_pickup' || phase === 'otp_verification' ? '#f97316' : '#10b981';
+    const simulationTotalSteps = Math.max(0, simulationPathRef.current.length - 1);
+    const simulationProgress = simulationTotalSteps > 0
+        ? Math.min(100, Math.round((simulationStep / simulationTotalSteps) * 100))
+        : 0;
+    const displayDriverHeading = useMemo(() => {
+        if (Number.isFinite(Number(driverHeading))) {
+            return normalizeHeading(driverHeading);
+        }
+
+        return getRouteHeading(
+            driverPosition,
+            routePath,
+            calculateBearing(driverPosition, activeDestination),
+        );
+    }, [activeDestination, driverHeading, driverPosition, routePath]);
+    const displayDriverHeadingRef = React.useRef(displayDriverHeading);
 
     const callContact = (phone) => {
         const cleanPhone = cleanPhoneNumber(phone);
@@ -324,6 +499,159 @@ const ActiveTrip = () => {
         socketService.emit('ride:status:update', { rideId, status: nextStatus });
     };
 
+    const publishDriverLocation = (position, heading = displayDriverHeading) => {
+        if (!rideId || !position) {
+            return;
+        }
+
+        socketService.emit('ride:driver-location:update', {
+            rideId,
+            coordinates: [position.lng, position.lat],
+            heading: normalizeHeading(heading),
+            simulated: isSimulationEnabledRef.current,
+        });
+    };
+
+    const stopSimulationTimer = () => {
+        if (simulationTimerRef.current) {
+            clearInterval(simulationTimerRef.current);
+            simulationTimerRef.current = null;
+        }
+    };
+
+    const startSimulation = () => {
+        const nextPath = getSimulationPath({
+            routePath,
+            from: driverPosition,
+            to: activeDestination,
+        });
+
+        if (nextPath.length < 2) {
+            return;
+        }
+
+        stopSimulationTimer();
+        simulationPathRef.current = nextPath;
+        const nextHeading = getRouteHeading(nextPath[0], nextPath.slice(1), displayDriverHeading);
+        setSimulationStep(0);
+        setIsSimulationEnabled(true);
+        setIsSimulationRunning(true);
+        setRoutePath(nextPath);
+        setDriverPosition(nextPath[0]);
+        setDriverHeading(nextHeading);
+        publishDriverLocation(nextPath[0], nextHeading);
+    };
+
+    const pauseSimulation = () => {
+        stopSimulationTimer();
+        setIsSimulationRunning(false);
+    };
+
+    const resumeSimulation = () => {
+        if (simulationPathRef.current.length < 2) {
+            startSimulation();
+            return;
+        }
+
+        setIsSimulationEnabled(true);
+        setIsSimulationRunning(true);
+    };
+
+    const resetSimulation = () => {
+        stopSimulationTimer();
+        simulationPathRef.current = [];
+        setIsSimulationEnabled(false);
+        setIsSimulationRunning(false);
+        setSimulationStep(0);
+        setDriverPosition(initialDriverPosition);
+        const nextHeading = calculateBearing(initialDriverPosition, activeDestination, displayDriverHeading);
+        setDriverHeading(nextHeading);
+        publishDriverLocation(initialDriverPosition, nextHeading);
+    };
+
+    const generatePaymentQr = async () => {
+        if (!rideId || !fareAmount) {
+            setPaymentQrError('Ride fare is missing.');
+            return;
+        }
+
+        setIsGeneratingPaymentQr(true);
+        setPaymentQrError('');
+        setPaymentQr(null);
+
+        try {
+            const response = await api.post('/drivers/payments/qr', {
+                rideId,
+                amount: fareAmount,
+            });
+            const qr = response?.data?.data || response?.data || {};
+
+            if (!qr.imageUrl) {
+                throw new Error('Payment QR image was not returned.');
+            }
+
+            setPaymentQr(qr);
+            setDriverPaymentStatus('qr_generated');
+        } catch (error) {
+            setDriverPaymentStatus('pending');
+            setPaymentQrError(error?.response?.data?.message || error?.message || 'Could not generate payment QR.');
+        } finally {
+            setIsGeneratingPaymentQr(false);
+        }
+    };
+
+    const refreshPaymentStatus = async () => {
+        if (!rideId || !paymentQr?.id) {
+            return;
+        }
+
+        try {
+            const response = await api.get('/drivers/payments/qr/status', {
+                params: { rideId },
+            });
+            const status = response?.data?.data || response?.data || {};
+
+            if (status?.paid || ['paid', 'captured', 'completed'].includes(String(status?.status || '').toLowerCase())) {
+                setPaymentQr((current) => ({
+                    ...(current || paymentQr),
+                    status: status.status,
+                    paidAt: status.paidAt || Date.now(),
+                }));
+                setPaymentQrError('');
+                setDriverPaymentStatus('success');
+            }
+        } catch (error) {
+            const message = error?.response?.data?.message || error?.message || '';
+            if (message) {
+                setPaymentQrError(message);
+            }
+        }
+    };
+
+    const handlePaymentModeSelect = (modeId) => {
+        setSelectedPaymentMode(modeId);
+
+        if (modeId === 'online') {
+            generatePaymentQr();
+            return;
+        }
+
+        setPaymentQr(null);
+        setPaymentQrError('');
+        setDriverPaymentStatus('success');
+    };
+
+    useEffect(() => {
+        if (driverPaymentStatus !== 'qr_generated' || !paymentQr?.id) {
+            return undefined;
+        }
+
+        refreshPaymentStatus();
+        const intervalId = window.setInterval(refreshPaymentStatus, 3000);
+
+        return () => window.clearInterval(intervalId);
+    }, [driverPaymentStatus, paymentQr?.id, rideId]);
+
     const startTripAfterOtp = (enteredOtp) => {
         if (String(enteredOtp).length !== 4) {
             setOtpError('Enter the full 4 digit PIN.');
@@ -341,8 +669,18 @@ const ActiveTrip = () => {
     };
 
     useEffect(() => {
-        setDriverPosition(initialDriverPosition);
-    }, [initialDriverPosition]);
+        isSimulationEnabledRef.current = isSimulationEnabled;
+    }, [isSimulationEnabled]);
+
+    useEffect(() => {
+        displayDriverHeadingRef.current = displayDriverHeading;
+    }, [displayDriverHeading]);
+
+    useEffect(() => {
+        if (!isSimulationEnabled) {
+            setDriverPosition(initialDriverPosition);
+        }
+    }, [initialDriverPosition, isSimulationEnabled]);
 
     useEffect(() => {
         let watchId = null;
@@ -355,14 +693,13 @@ const ActiveTrip = () => {
 
         getCurrentCoords()
             .then((position) => {
-                if (!cancelled) {
-                    setDriverPosition(position);
-                    if (rideId) {
-                        socketService.emit('ride:driver-location:update', {
-                            rideId,
-                            coordinates: [position.lng, position.lat],
-                        });
-                    }
+                if (!cancelled && !isSimulationEnabledRef.current) {
+                    setDriverPosition((previousPosition) => {
+                        const nextHeading = calculateBearing(previousPosition, position, displayDriverHeadingRef.current);
+                        setDriverHeading(nextHeading);
+                        publishDriverLocation(position, nextHeading);
+                        return position;
+                    });
                 }
             })
             .catch(() => {});
@@ -375,7 +712,7 @@ const ActiveTrip = () => {
 
         watchId = navigator.geolocation.watchPosition(
             (pos) => {
-                if (cancelled) {
+                if (cancelled || isSimulationEnabledRef.current) {
                     return;
                 }
 
@@ -384,16 +721,22 @@ const ActiveTrip = () => {
                     lng: pos.coords.longitude,
                 };
 
-                setDriverPosition(nextPosition);
-
-                if (rideId) {
-                    socketService.emit('ride:driver-location:update', {
-                        rideId,
-                        coordinates: [nextPosition.lng, nextPosition.lat],
-                        heading: pos.coords.heading,
-                        speed: pos.coords.speed,
-                    });
-                }
+                setDriverPosition((previousPosition) => {
+                    const nextHeading = normalizeHeading(
+                        pos.coords.heading,
+                        calculateBearing(previousPosition, nextPosition, displayDriverHeadingRef.current),
+                    );
+                    setDriverHeading(nextHeading);
+                    if (rideId) {
+                        socketService.emit('ride:driver-location:update', {
+                            rideId,
+                            coordinates: [nextPosition.lng, nextPosition.lat],
+                            heading: nextHeading,
+                            speed: pos.coords.speed,
+                        });
+                    }
+                    return nextPosition;
+                });
             },
             () => {},
             {
@@ -412,6 +755,50 @@ const ActiveTrip = () => {
     }, [rideId]);
 
     useEffect(() => {
+        stopSimulationTimer();
+
+        if (!isSimulationRunning || simulationPathRef.current.length < 2) {
+            return undefined;
+        }
+
+        simulationTimerRef.current = setInterval(() => {
+            setSimulationStep((currentStep) => {
+                const nextStep = Math.min(currentStep + 1, simulationPathRef.current.length - 1);
+                const previousPosition = simulationPathRef.current[currentStep];
+                const nextPosition = simulationPathRef.current[nextStep];
+
+                if (nextPosition) {
+                    const nextHeading = calculateBearing(
+                        previousPosition,
+                        nextPosition,
+                        getRouteHeading(nextPosition, simulationPathRef.current.slice(nextStep + 1), displayDriverHeadingRef.current),
+                    );
+                    setDriverPosition(nextPosition);
+                    setDriverHeading(nextHeading);
+                    setRoutePath(simulationPathRef.current.slice(nextStep));
+                    publishDriverLocation(nextPosition, nextHeading);
+                    map?.panTo(nextPosition);
+                }
+
+                if (nextStep >= simulationPathRef.current.length - 1) {
+                    stopSimulationTimer();
+                    setIsSimulationRunning(false);
+                }
+
+                return nextStep;
+            });
+        }, 750);
+
+        return () => stopSimulationTimer();
+    }, [isSimulationRunning, map, rideId]);
+
+    useEffect(() => () => stopSimulationTimer(), []);
+
+    useEffect(() => {
+        if (isSimulationEnabled) {
+            return;
+        }
+
         if (!isLoaded || !window.google?.maps?.DirectionsService) {
             setRoutePath(buildFallbackRoute(driverPosition, activeDestination));
             setRouteError('');
@@ -458,10 +845,15 @@ const ActiveTrip = () => {
         return () => {
             active = false;
         };
-    }, [activeDestination, driverPosition, isLoaded]);
+    }, [activeDestination, driverPosition, isLoaded, isSimulationEnabled]);
 
     useEffect(() => {
         if (!map || !window.google?.maps) {
+            return;
+        }
+
+        if (isSimulationRunning) {
+            map.panTo(driverPosition);
             return;
         }
 
@@ -484,7 +876,7 @@ const ActiveTrip = () => {
         bounds.extend(driverPosition);
         bounds.extend(activeDestination);
         map.fitBounds(bounds, 80);
-    }, [activeDestination, driverPosition, map, routePath]);
+    }, [activeDestination, driverPosition, isSimulationRunning, map, routePath]);
 
     const handleOTPChange = (index, value) => {
         if (!/^\d*$/.test(value)) return;
@@ -600,10 +992,11 @@ const ActiveTrip = () => {
                                 />
                             </>
                         )}
-                        <MarkerF
+                        <RotatingVehicleMarker
                             position={driverPosition}
+                            iconUrl={vehicleIconUrl}
+                            heading={displayDriverHeading}
                             title="Driver"
-                            icon={createTaxiMarkerIcon()}
                         />
                         <MarkerF
                             position={activeDestination}
@@ -679,6 +1072,44 @@ const ActiveTrip = () => {
                         <p className="mt-1 text-[10px] font-semibold text-slate-700">Using fallback path while directions load.</p>
                     </div>
                 )}
+
+                <div className="absolute top-44 left-4 z-40 w-[190px] rounded-2xl border border-white/80 bg-white/94 px-3 py-3 shadow-lg backdrop-blur-md">
+                    <div className="mb-2 flex items-center justify-between gap-2">
+                        <div className="min-w-0">
+                            <p className="text-[8px] font-black uppercase tracking-[0.22em] text-slate-400">Simulation</p>
+                            <p className="mt-0.5 truncate text-[11px] font-black text-slate-900">
+                                {isSimulationRunning ? 'Following route' : isSimulationEnabled ? 'Paused' : 'Real GPS'}
+                            </p>
+                        </div>
+                        <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${isSimulationRunning ? 'bg-emerald-500 animate-pulse' : isSimulationEnabled ? 'bg-amber-400' : 'bg-slate-300'}`} />
+                    </div>
+                    <div className="mb-2 h-1.5 overflow-hidden rounded-full bg-slate-100">
+                        <div
+                            className="h-full rounded-full bg-slate-900 transition-all"
+                            style={{ width: `${isSimulationEnabled ? simulationProgress : 0}%` }}
+                        />
+                    </div>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button
+                            type="button"
+                            onClick={isSimulationRunning ? pauseSimulation : isSimulationEnabled ? resumeSimulation : startSimulation}
+                            className="h-9 rounded-xl bg-slate-900 px-2 text-[9px] font-black uppercase tracking-wide text-white active:scale-95"
+                        >
+                            {isSimulationRunning ? 'Pause' : isSimulationEnabled ? 'Resume' : 'Start'}
+                        </button>
+                        <button
+                            type="button"
+                            onClick={resetSimulation}
+                            disabled={!isSimulationEnabled}
+                            className="h-9 rounded-xl border border-slate-100 bg-slate-50 px-2 text-[9px] font-black uppercase tracking-wide text-slate-500 active:scale-95 disabled:opacity-40"
+                        >
+                            Reset
+                        </button>
+                    </div>
+                    <p className="mt-2 text-[9px] font-semibold leading-tight text-slate-400">
+                        Test mode emits live location events along this polyline.
+                    </p>
+                </div>
             </div>
 
             <div className="absolute bottom-0 left-0 right-0 z-40">
@@ -848,25 +1279,47 @@ const ActiveTrip = () => {
                                     ].map((mode) => (
                                         <button
                                             key={mode.id}
-                                            onClick={() => {
-                                                setSelectedPaymentMode(mode.id);
-                                                setDriverPaymentStatus(mode.id === 'online' ? 'qr_generated' : 'success');
-                                            }}
+                                            onClick={() => handlePaymentModeSelect(mode.id)}
+                                            disabled={isGeneratingPaymentQr}
                                             className={`flex flex-col items-center justify-center py-4 rounded-2xl border-2 transition-all ${selectedPaymentMode === mode.id ? 'border-slate-900 bg-slate-50' : 'border-slate-50 bg-slate-50/50'}`}
                                         >
                                             <mode.icon size={22} className={selectedPaymentMode === mode.id ? 'text-slate-900' : 'text-slate-400'} strokeWidth={2.5} />
-                                            <span className="text-[9px] font-semibold text-slate-900 uppercase tracking-wide mt-2">{mode.label}</span>
+                                            <span className="text-[9px] font-semibold text-slate-900 uppercase tracking-wide mt-2">
+                                                {mode.id === 'online' && isGeneratingPaymentQr ? 'Generating' : mode.label}
+                                            </span>
                                         </button>
                                     ))}
                                 </div>
                             )}
+                            {paymentQrError && (
+                                <div className="mb-6 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-center">
+                                    <p className="text-[11px] font-bold text-red-500">{paymentQrError}</p>
+                                </div>
+                            )}
                             {driverPaymentStatus === 'qr_generated' && (
-                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-slate-900 rounded-3xl p-6 mb-6 text-center shadow-2xl">
-                                    <div className="bg-white p-4 rounded-2xl inline-block mb-3 relative overflow-hidden">
-                                        <QrCode size={90} className="text-slate-900 opacity-90" />
+                                <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="bg-slate-900 rounded-3xl p-5 mb-6 text-center shadow-2xl">
+                                    <div className="bg-white p-3 rounded-2xl inline-block mb-3 relative overflow-hidden">
+                                        <img
+                                            src={paymentQr?.imageUrl}
+                                            alt={`Payment QR for ${displayFare}`}
+                                            className="h-36 w-36 object-contain"
+                                        />
                                         <motion.div animate={{ top: ['0%', '100%', '0%'] }} transition={{ duration: 2, repeat: Infinity, ease: 'linear' }} className="absolute left-0 w-full h-0.5 bg-slate-200" />
                                     </div>
-                                    <p className="text-white font-semibold text-sm uppercase tracking-wide mb-4">Scan Code - {displayFare}</p>
+                                    <p className="text-white font-semibold text-sm uppercase tracking-wide">Scan to pay {displayFare}</p>
+                                    <p className="text-white/45 text-[10px] font-semibold mt-1 mb-4 uppercase tracking-wide">
+                                        Razorpay collection QR for this ride
+                                    </p>
+                                    {paymentQr?.linkUrl && (
+                                        <a
+                                            href={paymentQr.linkUrl}
+                                            target="_blank"
+                                            rel="noreferrer"
+                                            className="mb-3 block text-[10px] font-semibold uppercase tracking-wide text-white/70 underline underline-offset-4"
+                                        >
+                                            Open payment link
+                                        </a>
+                                    )}
                                     <button onClick={() => setDriverPaymentStatus('success')} className="w-full py-3 bg-white/10 text-white rounded-xl text-[10px] font-semibold uppercase tracking-wide border border-white/5">Confirm Received</button>
                                 </motion.div>
                             )}
@@ -906,6 +1359,7 @@ const ActiveTrip = () => {
                             </div>
                             <button onClick={() => {
                                 publishRideStatus('completed');
+                                clearStoredTripPhase(rideId);
                                 navigate('/taxi/driver/home');
                             }} className="w-full h-15 bg-slate-900 text-white rounded-xl flex items-center justify-center gap-3 text-[14px] font-semibold uppercase tracking-wide shadow-xl active:scale-95 transition-all">Done <Check size={20} strokeWidth={4} /></button>
                         </motion.div>

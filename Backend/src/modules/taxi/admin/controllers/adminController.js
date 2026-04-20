@@ -370,6 +370,9 @@ export const getOwnerDashboardData = asyncHandler(async (_req, res) =>
 export const getOverallEarnings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getOverallEarnings()),
 );
+export const getAdminEarnings = asyncHandler(async (req, res) =>
+  ok(res, await adminService.getAdminEarnings(req.query)),
+);
 export const getTodayEarnings = asyncHandler(async (_req, res) =>
   ok(res, await adminService.getTodayEarnings()),
 );

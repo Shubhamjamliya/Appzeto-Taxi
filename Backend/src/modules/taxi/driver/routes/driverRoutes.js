@@ -4,12 +4,14 @@ import { authenticate } from "../../middlewares/authMiddleware.js";
 import {
   addDriverEmergencyContact,
   completeOnboarding,
+  createDriverPaymentQr,
   createOwnerFleetDriver,
   deleteCurrentDriverAccount,
   deleteDriverEmergencyContact,
   goOffline,
   goOnline,
   getCurrentDriver,
+  getDriverPaymentQrStatus,
   getDriverApprovalStatus,
   getDriverDocumentTemplates,
   getDriverEmergencyContacts,
@@ -101,6 +103,16 @@ driverRouter.post(
   "/wallet/top-up",
   authenticate(["driver"]),
   asyncHandler(topUpMyWallet),
+);
+driverRouter.post(
+  "/payments/qr",
+  authenticate(["driver"]),
+  asyncHandler(createDriverPaymentQr),
+);
+driverRouter.get(
+  "/payments/qr/status",
+  authenticate(["driver"]),
+  asyncHandler(getDriverPaymentQrStatus),
 );
 driverRouter.patch(
   "/vehicle",

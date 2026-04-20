@@ -22,6 +22,9 @@ const getInitials = (name = '') =>
 const isLikelyVehiclePhoto = (value = '') => /^(https?:|data:image\/|blob:|\/uploads\/|\/images\/)/i.test(String(value || '').trim());
 
 const getVehicleIcon = (serviceType = 'ride', driver = {}) => {
+  const customIcon = String(driver.vehicleIconUrl || driver.map_icon || driver.icon || '').trim();
+  if (customIcon) return customIcon;
+
   const normalizedService = String(serviceType || '').toLowerCase();
   const iconType = String(driver.vehicleIconType || driver.vehicleType || '').toLowerCase();
 
@@ -69,7 +72,10 @@ const RideComplete = () => {
   const driverImage = driver.profileImage || '';
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Delivery' : 'Taxi');
   const hasVehiclePhoto = isLikelyVehiclePhoto(driver.vehicleImage) && !vehicleImageBroken;
-  const vehicleVisual = hasVehiclePhoto ? driver.vehicleImage : getVehicleIcon(serviceType, driver);
+  const vehicleVisual = hasVehiclePhoto ? driver.vehicleImage : getVehicleIcon(serviceType, {
+    ...driver,
+    vehicleIconUrl: driver.vehicleIconUrl || state.vehicleIconUrl || state.vehicle?.vehicleIconUrl || state.vehicle?.icon || '',
+  });
   const totalBill = fare + Number(selectedTip || 0);
   const tipsEnabled = String(tipSettings.enable_tips || '1') === '1';
   const minimumTipAmount = Number(tipSettings.min_tip_amount || 0);

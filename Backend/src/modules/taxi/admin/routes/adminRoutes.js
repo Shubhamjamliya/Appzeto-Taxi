@@ -48,6 +48,7 @@ import {
   downloadOwnerReport,
   downloadUserReport,
   getAdminStatus,
+  getAdminEarnings,
   getAirports,
   getAppModules,
   getCancelChart,
@@ -287,6 +288,7 @@ adminRouter.get('/admin/referral/dashboard', getReferralDashboard);
 
 adminRouter.get('/admin/dashboard/data', getDashboardData);
 
+adminRouter.get('/admin/dashboard/admin-earnings', getAdminEarnings);
 adminRouter.get('/admin/dashboard/overall-earnings', getOverallEarnings);
 adminRouter.get('/admin/dashboard/today-earnings', getTodayEarnings);
 adminRouter.get('/admin/dashboard/cancel-chart', getCancelChart);

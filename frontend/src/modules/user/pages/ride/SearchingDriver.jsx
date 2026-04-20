@@ -51,6 +51,84 @@ const getVehicleIcon = (type = 'car') => {
   if (val.includes('suv')) return SuvIcon;
   return CarIcon;
 };
+
+const getOverlayCenterOffset = (width, height) => ({
+  x: -(width / 2),
+  y: -(height / 2),
+});
+
+const clampVehicleCount = (value) => {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric) || numeric <= 0) {
+    return 4;
+  }
+
+  return Math.max(3, Math.min(8, Math.round(numeric)));
+};
+
+const buildAvailableVehicleMarkers = (center, count) => {
+  const safeCount = clampVehicleCount(count);
+  const lat = Number(center?.lat || 0);
+  const lng = Number(center?.lng || 0);
+
+  return Array.from({ length: safeCount }, (_, index) => {
+    const angle = ((Math.PI * 2) / safeCount) * index + (index % 2 ? 0.28 : -0.12);
+    const radius = 0.0022 + (index % 3) * 0.00045;
+
+    return {
+      id: `available-driver-${index}`,
+      position: {
+        lat: lat + Math.sin(angle) * radius,
+        lng: lng + Math.cos(angle) * radius,
+      },
+      heading: (angle * 180) / Math.PI + 90,
+      delay: index * 0.18,
+    };
+  });
+};
+
+const BlinkingVehicleMarker = ({ marker, iconUrl }) => (
+  <OverlayView
+    position={marker.position}
+    mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+    getPixelPositionOffset={getOverlayCenterOffset}
+  >
+    <div className="pointer-events-none relative flex h-14 w-14 items-center justify-center">
+      {[0, 1].map((ring) => (
+        <motion.span
+          key={ring}
+          className="absolute h-10 w-10 rounded-full border border-emerald-500/45 bg-emerald-400/10"
+          animate={{ scale: [0.65, 1.7], opacity: [0.55, 0] }}
+          transition={{
+            repeat: Infinity,
+            duration: 1.8,
+            delay: marker.delay + ring * 0.55,
+            ease: 'easeOut',
+          }}
+        />
+      ))}
+      <motion.img
+        src={iconUrl || CarIcon}
+        alt="Available vehicle"
+        draggable={false}
+        className="relative h-9 w-9 object-contain drop-shadow-[0_6px_8px_rgba(15,23,42,0.34)]"
+        style={{ rotate: `${marker.heading}deg` }}
+        animate={{
+          scale: [1, 1.16, 1],
+          opacity: [0.78, 1, 0.78],
+        }}
+        transition={{
+          repeat: Infinity,
+          duration: 1.35,
+          delay: marker.delay,
+          ease: 'easeInOut',
+        }}
+      />
+    </div>
+  </OverlayView>
+);
+
 const DRIVER_PLACEHOLDER = { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', eta: 2 };
 const STAGES = { SEARCHING: 'searching', ACCEPTED: 'accepted', COMPLETING: 'completing' };
 const CONSUMED_SEARCH_NONCE_PREFIX = 'rydon24_consumed_search_nonce:';
@@ -63,6 +141,7 @@ const normalizeDriver = (driver = {}) => ({
   vehicle: driver.vehicleType || 'Taxi',
   plate: driver.vehicleNumber || 'Assigned',
   phone: driver.phone || '',
+  vehicleIconUrl: driver.vehicleIconUrl || driver.map_icon || driver.icon || '',
   eta: driver.eta || 2,
 });
 
@@ -111,6 +190,7 @@ const SearchingDriver = () => {
   const [otp] = useState(generateOTP);
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
   const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
+  const [nearbyVehicleCount, setNearbyVehicleCount] = useState(4);
   const timerRef = useRef(null);
   const activeRidePollRef = useRef(null);
   const requestStartedRef = useRef(false);
@@ -147,6 +227,19 @@ const SearchingDriver = () => {
         : null
     ),
     [routeState.dropCoords],
+  );
+  const availableVehicleIcon = useMemo(
+    () => (
+      routeState.vehicleIconUrl ||
+      routeState.vehicle?.vehicleIconUrl ||
+      routeState.vehicle?.icon ||
+      getVehicleIcon(routeState.vehicleIconType || routeState.vehicle?.iconType || routeState.vehicle?.name)
+    ),
+    [routeState.vehicle?.icon, routeState.vehicle?.iconType, routeState.vehicle?.name, routeState.vehicle?.vehicleIconUrl, routeState.vehicleIconType, routeState.vehicleIconUrl],
+  );
+  const availableVehicleMarkers = useMemo(
+    () => buildAvailableVehicleMarkers(pickupPos, nearbyVehicleCount),
+    [nearbyVehicleCount, pickupPos],
   );
 
   useEffect(() => {
@@ -227,6 +320,7 @@ const SearchingDriver = () => {
     let disposed = false;
 
     const onRideSearchUpdate = ({ matchedDrivers, radius }) => {
+      setNearbyVehicleCount(clampVehicleCount(matchedDrivers));
       const radiusKm = radius ? (Number(radius) / 1000).toFixed(1) : '';
       setSearchStatus(
         matchedDrivers > 0
@@ -261,6 +355,7 @@ const SearchingDriver = () => {
         otp,
         driver: nextDriver,
         fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
+        vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
         paymentMethod: routeState.paymentMethod || 'Cash',
         status: 'accepted',
       });
@@ -280,6 +375,7 @@ const SearchingDriver = () => {
             otp,
             driver: nextDriver,
             fare: rideSnapshot?.fare || routeState.fare || routeState.vehicle?.price || 22,
+            vehicleIconUrl: rideSnapshot?.vehicleIconUrl || routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
             paymentMethod: routeState.paymentMethod || 'Cash',
           },
         });
@@ -403,6 +499,7 @@ const SearchingDriver = () => {
           estimatedDurationMinutes: routeState.estimatedDurationMinutes || 0,
           vehicleTypeId: selectedVehicleTypeId,
           vehicleIconType: routeState.vehicleIconType || routeState.vehicle?.iconType,
+          vehicleIconUrl: routeState.vehicleIconUrl || routeState.vehicle?.vehicleIconUrl || routeState.vehicle?.icon || '',
           paymentMethod: routeState.paymentMethod || 'Cash',
         }, rideRequestConfig);
 
@@ -532,47 +629,56 @@ const SearchingDriver = () => {
 
             {/* Radar Animation centered strictly on Pickup */}
             {isSearching && (
-              <OverlayView
-                position={pickupPos}
-                mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
-              >
-                {/* Wrap in a container to ensure perfect centering over the marker pin head */}
-                <div className="flex items-center justify-center -translate-y-[22px]">
-                   <motion.div 
-                    initial={{ opacity: 0 }} 
-                    animate={{ opacity: 1 }} 
-                    className="relative flex items-center justify-center pointer-events-none"
-                  >
-                    {/* Concentric Ripples */}
-                    {[1, 2, 3, 4].map((i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ 
-                          scale: [0.5, 4.5], 
-                          opacity: [0.5, 0] 
-                        }}
-                        transition={{
-                          repeat: Infinity,
-                          duration: 3,
-                          delay: i * 0.75,
-                          ease: "easeOut"
-                        }}
-                        className="absolute w-20 h-20 rounded-full border-2 border-orange-400/40 bg-orange-400/5 shadow-[0_0_20px_rgba(249,115,22,0.2)]"
-                      />
-                    ))}
+              <>
+                {availableVehicleMarkers.map((marker) => (
+                  <BlinkingVehicleMarker
+                    key={marker.id}
+                    marker={marker}
+                    iconUrl={availableVehicleIcon}
+                  />
+                ))}
+                <OverlayView
+                  position={pickupPos}
+                  mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
+                >
+                  {/* Wrap in a container to ensure perfect centering over the marker pin head */}
+                  <div className="flex items-center justify-center -translate-y-[22px]">
+                     <motion.div 
+                      initial={{ opacity: 0 }} 
+                      animate={{ opacity: 1 }} 
+                      className="relative flex items-center justify-center pointer-events-none"
+                    >
+                      {/* Concentric Ripples */}
+                      {[1, 2, 3, 4].map((i) => (
+                        <motion.div
+                          key={i}
+                          animate={{ 
+                            scale: [0.5, 4.5], 
+                            opacity: [0.5, 0] 
+                          }}
+                          transition={{
+                            repeat: Infinity,
+                            duration: 3,
+                            delay: i * 0.75,
+                            ease: "easeOut"
+                          }}
+                          className="absolute w-20 h-20 rounded-full border-2 border-orange-400/40 bg-orange-400/5 shadow-[0_0_20px_rgba(249,115,22,0.2)]"
+                        />
+                      ))}
 
-                    {/* Scanning Line overlaying on ripples */}
-                    <motion.div
-                      animate={{ rotate: 360 }}
-                      transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
-                      className="absolute w-[320px] h-[320px] rounded-full overflow-hidden"
-                      style={{ 
-                        background: 'conic-gradient(from 0deg, rgba(249, 115, 22, 0.5) 0deg, transparent 60deg, transparent 360deg)' 
-                      }}
-                    />
-                  </motion.div>
-                </div>
-              </OverlayView>
+                      {/* Scanning Line overlaying on ripples */}
+                      <motion.div
+                        animate={{ rotate: 360 }}
+                        transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                        className="absolute w-[320px] h-[320px] rounded-full overflow-hidden"
+                        style={{ 
+                          background: 'conic-gradient(from 0deg, rgba(249, 115, 22, 0.5) 0deg, transparent 60deg, transparent 360deg)' 
+                        }}
+                      />
+                    </motion.div>
+                  </div>
+                </OverlayView>
+              </>
             )}
 
             {/* Simplified Route Line */}

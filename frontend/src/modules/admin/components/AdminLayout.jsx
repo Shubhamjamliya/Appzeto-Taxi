@@ -278,6 +278,7 @@ const AdminLayout = () => {
         title: 'Home',
         items: [
           { icon: Home, label: 'Dashboard', path: '/admin/dashboard' },
+          { icon: IndianRupee, label: 'Admin Earnings', path: '/admin/earnings' },
           { icon: MessageCircle, label: 'Chat', path: '/admin/chat' },
           {
             icon: TrendingUp,

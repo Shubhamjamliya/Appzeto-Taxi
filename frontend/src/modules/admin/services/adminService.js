@@ -132,6 +132,7 @@ export const adminService = {
    */
   getDashboardPage: () => api.get('/admin/dashboard/page'),
   getDashboardData: () => api.get('/admin/dashboard/data'),
+  getAdminEarnings: (params = {}) => api.get('/admin/dashboard/admin-earnings', { params }),
   getTodayEarnings: () => api.get('/admin/dashboard/today-earnings'),
   getOverallEarnings: () => api.get('/admin/dashboard/overall-earnings'),
   getCancelChart: () => api.get('/admin/dashboard/cancel-chart'),

@@ -75,6 +75,7 @@ const defaultFormData = {
   dispatch_type: 'normal',
   icon_types: 'car',
   image: '',
+  map_icon: '',
   capacity: 0,
   size: '',
   is_taxi: 'taxi',
@@ -228,7 +229,8 @@ const VehicleType = ({ mode: propMode }) => {
               transport_type: selectedVehicle.transport_type || 'taxi',
               dispatch_type: selectedVehicle.dispatch_type || selectedVehicle.trip_dispatch_type || 'normal',
               icon_types: normalizeIconType(selectedVehicle.icon_types || selectedVehicle.icon_types_for),
-              image: selectedVehicle.icon || selectedVehicle.image || '',
+              image: selectedVehicle.image || '',
+              map_icon: selectedVehicle.map_icon || selectedVehicle.icon || selectedVehicle.image || '',
               capacity: Number(selectedVehicle.capacity || 0),
               size: String(selectedVehicle.size || ''),
               is_taxi: selectedVehicle.is_taxi || 'taxi',
@@ -273,7 +275,12 @@ const VehicleType = ({ mode: propMode }) => {
     return '';
   }, [formData.image]);
 
-  const currentIconPreview = iconMap[formData.icon_types] || CarIcon;
+  const mapIconPreview = useMemo(() => {
+    if (formData.map_icon && typeof formData.map_icon === 'string') {
+      return formData.map_icon;
+    }
+    return iconMap[formData.icon_types] || CarIcon;
+  }, [formData.icon_types, formData.map_icon]);
 
   const availableSupportVehicles = useMemo(
     () => vehicles.filter((item) => String(item.id) !== String(id)),
@@ -289,13 +296,14 @@ const VehicleType = ({ mode: propMode }) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
 
-  const handleImageChange = async (event) => {
+  const handleImageChange = async (event, field = 'image') => {
     const file = event.target.files?.[0];
     if (!file) {
       return;
     }
     const dataUrl = await fileToDataUrl(file);
-    updateForm('image', dataUrl);
+    updateForm(field, dataUrl);
+    event.target.value = '';
   };
 
   const handleSave = async () => {
@@ -311,7 +319,8 @@ const VehicleType = ({ mode: propMode }) => {
         dispatch_type: formData.dispatch_type,
         icon_types: normalizeIconType(formData.icon_types),
         image: formData.image || '',
-        icon: formData.image || '',
+        icon: formData.map_icon || '',
+        map_icon: formData.map_icon || '',
         capacity: Number(formData.capacity || 0),
         size: formData.size,
         is_taxi: formData.is_taxi,
@@ -441,7 +450,7 @@ const VehicleType = ({ mode: propMode }) => {
                     <td className="px-6 py-5">
                       <div className="flex items-center gap-4">
                         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-50">
-                          <img src={vehicle.icon || vehicle.image || currentIconPreview} alt={vehicle.name} className="h-10 w-10 object-contain" />
+                          <img src={vehicle.image || vehicle.map_icon || vehicle.icon || iconMap[normalizeIconType(vehicle.icon_types)] || CarIcon} alt={vehicle.name} className="h-10 w-10 object-contain" />
                         </div>
                         <div>
                           <p className="text-sm font-semibold text-slate-900">{vehicle.name}</p>
@@ -535,7 +544,7 @@ const VehicleType = ({ mode: propMode }) => {
           </div>
 
           <div>
-            <label className={labelClass}>Vehicle Image</label>
+            <label className={labelClass}>Preview Image</label>
             <div className="rounded-2xl border border-dashed border-slate-300 p-4">
               <div className="group relative flex min-h-[320px] items-center justify-center overflow-hidden rounded-2xl bg-slate-50">
                 {previewImage ? (
@@ -551,27 +560,66 @@ const VehicleType = ({ mode: propMode }) => {
                   </>
                 ) : (
                   <label className="flex cursor-pointer flex-col items-center gap-3">
-                    <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
+                    <input type="file" accept="image/*" className="hidden" onChange={(event) => handleImageChange(event, 'image')} />
                     <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-orange-500 shadow-sm">
                       <Upload size={20} />
                     </span>
-                    <span className="text-sm font-semibold text-slate-700">Upload image</span>
-                    <span className="text-xs text-slate-400">Use a square image for the cleanest card preview</span>
+                    <span className="text-sm font-semibold text-slate-700">Upload preview image</span>
+                    <span className="text-xs text-slate-400">This shows in the user vehicle selection card</span>
                   </label>
                 )}
+              </div>
+            </div>
+            <div className="mt-4 rounded-[24px] border border-orange-100 bg-gradient-to-r from-white via-orange-50/30 to-white p-3 shadow-sm">
+              <p className="mb-2 text-[11px] font-black uppercase tracking-[0.18em] text-slate-400">User Card Preview</p>
+              <div className="flex items-center gap-3 rounded-[20px] border border-orange-400 bg-white px-3 py-3">
+                <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-slate-100">
+                  <img
+                    src={previewImage || mapIconPreview}
+                    alt="User card vehicle preview"
+                    className="h-10 w-10 object-contain"
+                  />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <p className="truncate text-sm font-black text-slate-900">{formData.name || 'Taxi'}</p>
+                    <span className="rounded bg-orange-500 px-1.5 py-0.5 text-[7px] font-black text-white">FASTEST</span>
+                  </div>
+                  <p className="truncate text-[11px] font-bold text-slate-500">{formData.short_description || formData.description || 'Closest driver 940 m away'}</p>
+                </div>
+                <p className="text-sm font-black text-slate-900">₹31</p>
               </div>
             </div>
           </div>
 
           <div className="space-y-6">
             <div className="rounded-2xl border border-slate-100 bg-slate-50/70 p-4">
-              <p className="mb-3 text-sm font-semibold text-slate-800">Live Map Icon Preview</p>
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <p className="text-sm font-semibold text-slate-800">Live Map Icon Preview</p>
+                  <p className="text-[11px] font-medium text-slate-500">This uploaded icon is saved to the DB and used on app maps.</p>
+                </div>
+                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl bg-white px-3 py-2 text-[11px] font-bold text-slate-700 shadow-sm transition hover:text-orange-500">
+                  <Upload size={14} />
+                  Change
+                  <input type="file" accept="image/*" className="hidden" onChange={(event) => handleImageChange(event, 'map_icon')} />
+                </label>
+              </div>
               <div className="relative h-[228px] overflow-hidden rounded-2xl border border-slate-200 bg-white">
                 <img src={MapBackground} alt="Map preview" className="absolute inset-0 h-full w-full object-cover opacity-25" />
                 <div className="absolute inset-0 flex items-center justify-center">
-                  <img src={currentIconPreview} alt="Icon preview" className="h-16 w-16 object-contain drop-shadow-xl" />
+                  <img src={mapIconPreview} alt="Icon preview" className="h-16 w-16 object-contain drop-shadow-xl" />
                 </div>
               </div>
+              {formData.map_icon ? (
+                <button
+                  type="button"
+                  onClick={() => updateForm('map_icon', '')}
+                  className="mt-3 text-[11px] font-bold text-red-500 transition hover:text-red-600"
+                >
+                  Remove uploaded map icon and use the selected icon type fallback
+                </button>
+              ) : null}
             </div>
 
             <div>

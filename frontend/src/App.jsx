@@ -134,6 +134,7 @@ const AddDriver = lazy(() => import('./modules/driver/pages/settings/AddDriver')
 const AdminLayout = lazy(() => import('./modules/admin/components/AdminLayout'));
 const AdminLogin = lazy(() => import('./modules/admin/pages/auth/AdminLogin'));
 const AdminDashboard = lazy(() => import('./modules/admin/pages/dashboard/MainDashboard'));
+const AdminEarnings = lazy(() => import('./modules/admin/pages/dashboard/AdminEarnings'));
 const AdminChat = lazy(() => import('./modules/admin/pages/operations/Chat'));
 const AdminTrips = lazy(() => import('./modules/admin/pages/operations/Trips'));
 const AdminDeliveries = lazy(() => import('./modules/admin/pages/operations/Deliveries'));
@@ -546,6 +547,7 @@ function App() {
             
             {/* Driver Module Routes - Centralized under DriverLayout for Theme & Styling */}
             <Route path="/taxi/driver" element={<DriverLayout />}>
+              <Route index element={<Navigate to="/taxi/driver/home" replace />} />
               <Route path="lang-select" element={<LanguageSelect />} />
               <Route path="welcome" element={<DriverWelcome />} />
               <Route path="login" element={<PhoneRegistration />} />
@@ -599,6 +601,7 @@ function App() {
             <Route path="/admin" element={<AdminLayout />}>
               <Route index element={<Navigate to="/admin/dashboard" />} />
               <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="earnings" element={<AdminEarnings />} />
               <Route path="chat" element={<AdminChat />} />
               <Route path="trips" element={<AdminTrips />} />
               <Route path="deliveries" element={<AdminDeliveries />} />

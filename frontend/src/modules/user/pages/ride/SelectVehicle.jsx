@@ -5,6 +5,17 @@ import { ArrowLeft, Users, X, Banknote, CreditCard, ChevronDown, ChevronRight, L
 import { GoogleMap, MarkerF, PolylineF } from '@react-google-maps/api';
 import api from '../../../../shared/api/axiosInstance';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../../admin/utils/googleMaps';
+import BikeIcon from '../../../../assets/icons/bike.png';
+import AutoIcon from '../../../../assets/icons/auto.png';
+import CarIcon from '../../../../assets/icons/car.png';
+import PremiumIcon from '../../../../assets/icons/Premium.png';
+import LuxuryIcon from '../../../../assets/icons/Luxury.png';
+import SuvIcon from '../../../../assets/icons/SUV.png';
+import TruckIcon from '../../../../assets/icons/truck.png';
+import LcvIcon from '../../../../assets/icons/LCV.png';
+import McvIcon from '../../../../assets/icons/mcv.png';
+import HcvIcon from '../../../../assets/icons/hcv.png';
+import EhcvIcon from '../../../../assets/icons/ehcv.png';
 
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 
@@ -186,7 +197,7 @@ const VehicleMapPreview = ({ center, dropPosition, drivers, selectedVehicle, isL
               position={position}
               title={`${driver.name || 'Driver'} - ${driver.vehicleNumber || selectedVehicle?.name || 'Vehicle'}`}
               icon={{
-                url: selectedVehicle?.icon || '/4_Taxi.png',
+                url: selectedVehicle?.vehicleIconUrl || selectedVehicle?.icon || '/4_Taxi.png',
                 scaledSize: new window.google.maps.Size(28, 28),
               }}
             />
@@ -225,7 +236,12 @@ const getTypeLabel = (type) => type?.name || type?.vehicle_type || type?.label |
 
 const getIconValue = (type) => String(type?.icon_types || type?.vehicleIconType || type?.name || '').toLowerCase();
 
-const getVehicleIcon = (type) => {
+const getVehicleMapIcon = (type) => {
+  const customIcon = String(type?.map_icon || type?.icon || type?.vehicleIconUrl || '').trim();
+  if (customIcon) {
+    return customIcon;
+  }
+
   const value = getIconValue(type);
 
   if (value.includes('bike')) {
@@ -269,6 +285,28 @@ const getVehicleIcon = (type) => {
   }
 
   return '/4_Taxi.png';
+};
+
+const getVehiclePreviewImage = (type) => {
+  const previewImage = String(type?.image || type?.preview_image || type?.previewImage || '').trim();
+  if (previewImage) {
+    return previewImage;
+  }
+
+  const value = getIconValue(type);
+
+  if (value.includes('bike')) return BikeIcon;
+  if (value.includes('auto')) return AutoIcon;
+  if (value.includes('ehc')) return EhcvIcon;
+  if (value.includes('hcv')) return HcvIcon;
+  if (value.includes('lcv')) return LcvIcon;
+  if (value.includes('mcv')) return McvIcon;
+  if (value.includes('truck')) return TruckIcon;
+  if (value.includes('lux')) return LuxuryIcon;
+  if (value.includes('premium')) return PremiumIcon;
+  if (value.includes('suv')) return SuvIcon;
+
+  return CarIcon;
 };
 
 const getCapacity = (type) => {
@@ -460,7 +498,8 @@ const normalizeVehicleType = (type, index) => {
     id,
     vehicleTypeId: type?._id || type?.id || '',
     iconType: type?.icon_types || 'car',
-    icon: getVehicleIcon(type),
+    icon: getVehiclePreviewImage(type),
+    vehicleIconUrl: getVehicleMapIcon(type),
     name: getTypeLabel(type),
     capacity: getCapacity(type),
     badge: null,
@@ -523,12 +562,6 @@ const SelectVehicle = () => {
     const hasMore = scrollTop + clientHeight < scrollHeight - 8;
     setShowScrollArrow(hasMore);
   };
-
-  useEffect(() => {
-    // Check scroll state when vehicles are loaded or trip metrics change
-    const timer = setTimeout(handleScroll, 200);
-    return () => clearTimeout(timer);
-  }, [vehicles, tripMetrics]);
 
   useEffect(() => {
     let active = true;
@@ -679,9 +712,62 @@ const SelectVehicle = () => {
     [pricingRules, serviceLocationId, tripMetrics.distanceMeters, tripMetrics.durationMinutes, vehicles],
   );
 
+  const hasAvailabilityResults = Object.keys(availabilityByVehicleId).length > 0;
+
+  const displayedVehicles = useMemo(() => {
+    if (!hasAvailabilityResults) {
+      return pricedVehicles;
+    }
+
+    return pricedVehicles
+      .map((vehicle, index) => ({
+        vehicle,
+        index,
+        availability: availabilityByVehicleId[vehicle.id] || DEFAULT_AVAILABILITY,
+      }))
+      .sort((a, b) => {
+        const aAvailable = a.availability.totalDrivers > 0;
+        const bAvailable = b.availability.totalDrivers > 0;
+
+        if (aAvailable !== bAvailable) {
+          return aAvailable ? -1 : 1;
+        }
+
+        if (aAvailable && bAvailable) {
+          const driverDelta = (b.availability.totalDrivers || 0) - (a.availability.totalDrivers || 0);
+          if (driverDelta !== 0) return driverDelta;
+
+          const etaDelta = (a.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY)
+            - (b.availability.closestDriverEtaMinutes || Number.POSITIVE_INFINITY);
+          if (etaDelta !== 0) return etaDelta;
+        }
+
+        return a.index - b.index;
+      })
+      .map(({ vehicle }) => vehicle);
+  }, [availabilityByVehicleId, hasAvailabilityResults, pricedVehicles]);
+
   const selectedVehicle = useMemo(() => pricedVehicles.find((v) => v.id === selected), [pricedVehicles, selected]);
   const selectedAvailability = selectedVehicle ? (availabilityByVehicleId[selectedVehicle.id] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
   const onlineDrivers = selectedAvailability.drivers || [];
+
+  useEffect(() => {
+    const timer = setTimeout(handleScroll, 200);
+    return () => clearTimeout(timer);
+  }, [displayedVehicles, tripMetrics]);
+
+  useEffect(() => {
+    if (!hasAvailabilityResults || !displayedVehicles.length) {
+      return;
+    }
+
+    const currentAvailability = selected ? (availabilityByVehicleId[selected] || DEFAULT_AVAILABILITY) : DEFAULT_AVAILABILITY;
+    const firstAvailable = displayedVehicles.find((vehicle) => (availabilityByVehicleId[vehicle.id]?.totalDrivers || 0) > 0);
+
+    if (firstAvailable && (!selected || currentAvailability.totalDrivers <= 0)) {
+      setSelected(firstAvailable.id);
+    }
+  }, [availabilityByVehicleId, displayedVehicles, hasAvailabilityResults, selected]);
 
   useEffect(() => {
     let active = true;
@@ -750,6 +836,7 @@ const SelectVehicle = () => {
         vehicle: selectedVehicle,
         vehicleTypeId: selectedVehicle.vehicleTypeId,
         vehicleIconType: selectedVehicle.iconType,
+        vehicleIconUrl: selectedVehicle.vehicleIconUrl || selectedVehicle.icon,
         paymentMethod,
         fare: selectedVehicle.price,
         estimatedDistanceMeters: tripMetrics.distanceMeters,
@@ -860,14 +947,14 @@ const SelectVehicle = () => {
               </div>
             )}
 
-            {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.length === 0 && (
+            {!isLoadingVehicles && !vehicleLoadError && displayedVehicles.length === 0 && (
               <div className="bg-white border border-slate-50 rounded-[18px] px-4 py-5 text-center">
                 <p className="text-[13px] font-bold text-slate-900">No vehicles available</p>
                 <p className="text-[11px] font-bold text-slate-400 mt-1">Try changing your location or method.</p>
               </div>
             )}
 
-          {!isLoadingVehicles && !vehicleLoadError && pricedVehicles.map((v, i) => {
+          {!isLoadingVehicles && !vehicleLoadError && displayedVehicles.map((v, i) => {
             const isSelected = selected === v.id;
             const availability = availabilityByVehicleId[v.id] || DEFAULT_AVAILABILITY;
             const badge = getAvailabilityBadge(availability) || v.badge;
@@ -886,7 +973,7 @@ const SelectVehicle = () => {
                     setSelected(v.id);
                   }
                 }}
-                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[24px] border-2 transition-all text-left relative overflow-hidden ${
+                className={`w-full flex items-center gap-3 px-3.5 py-2.5 rounded-[24px] border-2 transition-all text-left relative overflow-hidden min-h-[74px] ${
                   isSelected
                     ? 'bg-orange-50/50 border-orange-500 shadow-[0_12px_24px_-8px_rgba(249,115,22,0.22)]'
                     : isUnavailable
@@ -901,10 +988,10 @@ const SelectVehicle = () => {
                   />
                 )}
 
-                <div className={`w-12 h-12 rounded-[18px] flex items-center justify-center shrink-0 transition-all duration-300 ${
-                  isSelected ? 'bg-white shadow-sm scale-110' : isUnavailable ? 'bg-slate-200' : 'bg-slate-50'
+                <div className={`w-16 h-14 rounded-[18px] flex items-center justify-center shrink-0 transition-all duration-300 ${
+                  isSelected ? 'bg-white shadow-sm scale-105' : isUnavailable ? 'bg-slate-200' : 'bg-slate-50'
                 }`}>
-                  <img src={v.icon} alt={v.name} className="w-9 h-9 object-contain drop-shadow-sm" />
+                  <img src={v.icon} alt={v.name} className="h-12 w-16 max-w-none object-contain drop-shadow-sm" draggable={false} />
                 </div>
 
                 <div className="flex-1 min-w-0 z-10">

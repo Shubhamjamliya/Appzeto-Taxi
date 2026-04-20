@@ -13,11 +13,14 @@ const getIconValue = (type = {}) => String(type.icon_types || type.vehicleIconTy
 const getTypeLabel = (type = {}) => type.name || type.vehicle_type || type.label || 'Vehicle';
 
 const getVehicleIcon = (type = {}) => {
+  const customIcon = String(type.map_icon || type.icon || type.image || '').trim();
+  if (customIcon) return customIcon;
+
   const iconValue = getIconValue(type);
 
   if (iconValue.includes('bike')) return '/1_Bike.png';
   if (iconValue.includes('auto')) return '/2_AutoRickshaw.png';
-  return type.image || '/4_Taxi.png';
+  return '/4_Taxi.png';
 };
 
 const getVehicleSeats = (type = {}) => {
@@ -65,6 +68,7 @@ const normalizeVehicleType = (type, index) => {
     desc: type?.short_description || type?.description || 'Available for your trip',
     seats,
     icon: getVehicleIcon(type),
+    vehicleIconUrl: getVehicleIcon(type),
     baseFare: getBaseFare(type),
     pricePerKm: getPricePerKm(type),
     raw: type,

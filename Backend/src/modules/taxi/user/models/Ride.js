@@ -57,6 +57,11 @@ const rideSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    vehicleIconUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     deliveryId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Delivery',
@@ -174,6 +179,51 @@ const rideSchema = new mongoose.Schema(
       default: 'cash',
       lowercase: true,
       trim: true,
+    },
+    driverPaymentCollection: {
+      provider: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerId: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      providerMode: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      status: {
+        type: String,
+        enum: ['pending', 'created', 'active', 'issued', 'closed', 'paid', 'captured', 'completed', 'expired', 'cancelled', 'failed'],
+        default: 'pending',
+      },
+      amount: {
+        type: Number,
+        default: 0,
+        min: 0,
+      },
+      currency: {
+        type: String,
+        default: 'INR',
+        trim: true,
+      },
+      linkUrl: {
+        type: String,
+        default: '',
+        trim: true,
+      },
+      paidAt: {
+        type: Date,
+        default: null,
+      },
+      updatedAt: {
+        type: Date,
+        default: null,
+      },
     },
     service_location_id: {
       type: mongoose.Schema.Types.ObjectId,

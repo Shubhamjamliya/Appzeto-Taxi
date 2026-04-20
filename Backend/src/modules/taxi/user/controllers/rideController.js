@@ -52,7 +52,7 @@ const estimateEtaMinutes = (distanceMeters) => {
 };
 
 export const createRide = async (req, res) => {
-  const { pickup, drop, pickupAddress, dropAddress, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleIconType, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type } =
+  const { pickup, drop, pickupAddress, dropAddress, fare, estimatedDistanceMeters, estimatedDurationMinutes, vehicleTypeId, vehicleIconType, vehicleIconUrl, paymentMethod, serviceType, intercity, promo_code, service_location_id, transport_type } =
     req.body;
 
   if (!pickup || !drop) {
@@ -70,6 +70,7 @@ export const createRide = async (req, res) => {
     estimatedDurationMinutes: Number(estimatedDurationMinutes || 0),
     vehicleTypeId,
     vehicleIconType,
+    vehicleIconUrl,
     paymentMethod,
     serviceType,
     intercity,

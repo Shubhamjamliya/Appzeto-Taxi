@@ -1,4 +1,5 @@
 import crypto from "node:crypto";
+import QRCode from "qrcode";
 import { ApiError } from "../../../../utils/ApiError.js";
 import { normalizePoint, toPoint } from "../../../../utils/geo.js";
 import { Driver } from "../models/Driver.js";
@@ -54,6 +55,265 @@ const MAX_EMERGENCY_CONTACTS = 5;
 const EMERGENCY_CONTACT_NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
 const DRIVER_NAME_REGEX = /^[A-Za-z]+(?:[ .'-][A-Za-z]+)*$/;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RAZORPAY_QR_MAX_AMOUNT = 500000;
+
+const normalizePaymentAmount = (value) => {
+  const amount = Number(value);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, "amount must be a positive number");
+  }
+
+  if (amount > RAZORPAY_QR_MAX_AMOUNT) {
+    throw new ApiError(400, "amount is too large for QR collection");
+  }
+
+  return Math.round(amount * 100);
+};
+
+const getRazorpayEnvCredentials = () => {
+  const keyId = String(process.env.RAZORPAY_KEY_ID || "").trim();
+  const keySecret = String(process.env.RAZORPAY_KEY_SECRET || "").trim();
+
+  if (!keyId || !keySecret) {
+    throw new ApiError(500, "Razorpay credentials are not configured in backend .env");
+  }
+
+  return { keyId, keySecret };
+};
+
+const razorpayRequest = async ({ method, path, body }) => {
+  const { keyId, keySecret } = getRazorpayEnvCredentials();
+  const credentials = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+  const response = await fetch(`https://api.razorpay.com/v1${path}`, {
+    method,
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const payload = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ApiError(
+      response.status || 502,
+      payload?.error?.description ||
+        payload?.error?.message ||
+        "Razorpay QR request failed",
+      {
+        provider: "razorpay",
+        path,
+        code: payload?.error?.code || null,
+      },
+    );
+  }
+
+  return payload;
+};
+
+const shouldFallbackToPaymentLinkQr = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    error?.statusCode === 404 ||
+    message.includes("requested url was not found") ||
+    message.includes("qr") && message.includes("not") && message.includes("enabled")
+  );
+};
+
+const shouldFallbackToStandardPaymentLink = (error) => {
+  const message = String(error?.message || "").toLowerCase();
+
+  return (
+    message.includes("upi payment links are not supported in test mode") ||
+    message.includes("upi payment link") && message.includes("test mode")
+  );
+};
+
+const buildPaymentLinkBody = ({ amountInPaise, rideId, driverId, serviceType, expireBy, referenceId, upiLink }) => ({
+  ...(upiLink ? { upi_link: true } : {}),
+  amount: amountInPaise,
+  currency: "INR",
+  accept_partial: false,
+  expire_by: expireBy,
+  reference_id: referenceId,
+  description: `Taxi fare for ride ${rideId}`,
+  reminder_enable: false,
+  notes: {
+    rideId: String(rideId),
+    driverId: String(driverId),
+    serviceType: serviceType || "ride",
+    source: "driver_collect_amount",
+    fallback: upiLink ? "upi_payment_link_qr" : "standard_payment_link_qr",
+  },
+});
+
+const createPaymentLinkQr = async ({ amountInPaise, rideId, driverId, serviceType }) => {
+  const referenceId = `ride_${String(rideId).slice(-18)}_${Date.now().toString(36)}`.slice(0, 40);
+  const expireBy = Math.floor(Date.now() / 1000) + 30 * 60;
+  let providerMode = "upi_payment_link_qr";
+  let paymentLink;
+
+  try {
+    paymentLink = await razorpayRequest({
+      method: "POST",
+      path: "/payment_links",
+      body: buildPaymentLinkBody({
+        amountInPaise,
+        rideId,
+        driverId,
+        serviceType,
+        expireBy,
+        referenceId,
+        upiLink: true,
+      }),
+    });
+  } catch (error) {
+    if (!shouldFallbackToStandardPaymentLink(error)) {
+      throw error;
+    }
+
+    providerMode = "standard_payment_link_qr";
+    paymentLink = await razorpayRequest({
+      method: "POST",
+      path: "/payment_links",
+      body: buildPaymentLinkBody({
+        amountInPaise,
+        rideId,
+        driverId,
+        serviceType,
+        expireBy,
+        referenceId: `${referenceId}_std`.slice(0, 40),
+        upiLink: false,
+      }),
+    });
+  }
+
+  const paymentUrl = paymentLink.short_url || paymentLink.shortUrl || paymentLink.url;
+
+  if (!paymentUrl) {
+    throw new ApiError(502, "Razorpay payment link was created without a payment URL");
+  }
+
+  const imageUrl = await QRCode.toDataURL(paymentUrl, {
+    errorCorrectionLevel: "M",
+    margin: 1,
+    scale: 8,
+  });
+
+  return {
+    id: paymentLink.id,
+    entity: paymentLink.entity || "payment_link",
+    status: paymentLink.status || "created",
+    imageUrl,
+    linkUrl: paymentUrl,
+    amount: amountInPaise / 100,
+    currency: "INR",
+    description: paymentLink.description,
+    closeBy: paymentLink.expire_by || expireBy,
+    rawStatus: paymentLink.status || "created",
+    providerMode,
+  };
+};
+
+const PAYMENT_PAID_STATUSES = new Set(["paid", "captured", "completed"]);
+const PAYMENT_OPEN_STATUSES = new Set(["created", "active", "issued", "partially_paid"]);
+
+const normalizeCollectionStatus = (status) => {
+  const normalized = String(status || "").toLowerCase();
+
+  if (PAYMENT_PAID_STATUSES.has(normalized)) {
+    return "paid";
+  }
+
+  if (PAYMENT_OPEN_STATUSES.has(normalized)) {
+    return normalized === "partially_paid" ? "active" : normalized;
+  }
+
+  if (normalized === "closed") {
+    return "closed";
+  }
+
+  if (["cancelled", "canceled", "expired", "failed"].includes(normalized)) {
+    return normalized === "canceled" ? "cancelled" : normalized;
+  }
+
+  return normalized || "pending";
+};
+
+const getPaymentCollectionPath = ({ providerId, providerMode }) => {
+  if (!providerId) {
+    throw new ApiError(400, "payment collection id is required");
+  }
+
+  if (String(providerMode || "").includes("payment_link")) {
+    return `/payment_links/${providerId}`;
+  }
+
+  return `/payments/qr_codes/${providerId}`;
+};
+
+const serializeDriverPaymentCollection = (collection = {}) => {
+  const status = normalizeCollectionStatus(collection.status);
+
+  return {
+    provider: collection.provider || "razorpay",
+    id: collection.providerId || collection.id || "",
+    providerMode: collection.providerMode || "",
+    status,
+    paid: PAYMENT_PAID_STATUSES.has(status),
+    amount: Number(collection.amount || 0),
+    currency: collection.currency || "INR",
+    linkUrl: collection.linkUrl || "",
+    paidAt: collection.paidAt || null,
+    updatedAt: collection.updatedAt || null,
+  };
+};
+
+const refreshDriverPaymentCollection = async (ride) => {
+  const collection = ride?.driverPaymentCollection || {};
+  const providerId = String(collection.providerId || "").trim();
+
+  if (!providerId) {
+    return serializeDriverPaymentCollection(collection);
+  }
+
+  const providerMode = collection.providerMode || "";
+  const providerPayload = await razorpayRequest({
+    method: "GET",
+    path: getPaymentCollectionPath({ providerId, providerMode }),
+  });
+  const receivedAmount = Number(
+    providerPayload?.amount_paid ||
+      providerPayload?.amount_paid_total ||
+      providerPayload?.payments_amount_received ||
+      providerPayload?.amount_received ||
+      0,
+  );
+  const expectedAmount = Number(collection.amount || 0) * 100;
+  const isProviderAmountPaid = expectedAmount > 0 && receivedAmount >= expectedAmount;
+  const providerStatus = normalizeCollectionStatus(providerPayload?.status);
+  const isPaid = PAYMENT_PAID_STATUSES.has(providerStatus) || isProviderAmountPaid;
+  const nextStatus = isPaid ? "paid" : providerStatus;
+  const nextCollection = {
+    provider: "razorpay",
+    providerId,
+    providerMode,
+    status: nextStatus,
+    amount: Number(collection.amount || 0),
+    currency: collection.currency || "INR",
+    linkUrl: collection.linkUrl || providerPayload?.short_url || providerPayload?.url || "",
+    paidAt: isPaid ? collection.paidAt || new Date() : collection.paidAt || null,
+    updatedAt: new Date(),
+  };
+
+  ride.driverPaymentCollection = nextCollection;
+  await ride.save();
+
+  return serializeDriverPaymentCollection(nextCollection);
+};
 
 const sanitizeEmergencyPhone = (value) =>
   String(value || "")
@@ -69,6 +329,15 @@ const serializeEmergencyContact = (contact = {}) => ({
       ? "device"
       : "manual",
 });
+
+const resolveVehicleMapIcon = async (vehicleTypeId) => {
+  if (!vehicleTypeId) {
+    return "";
+  }
+
+  const vehicle = await Vehicle.findById(vehicleTypeId).select("icon map_icon image").lean();
+  return vehicle?.map_icon || vehicle?.icon || vehicle?.image || "";
+};
 
 const normalizePhone = (value) =>
   String(value || "")
@@ -239,9 +508,14 @@ export const goOnline = async (req, res) => {
     throw new ApiError(404, "Driver not found");
   }
 
+  const vehicleIconUrl = await resolveVehicleMapIcon(driver.vehicleTypeId);
+
   res.json({
     success: true,
-    data: driver,
+    data: {
+      ...driver.toObject(),
+      vehicleIconUrl,
+    },
   });
 };
 
@@ -258,6 +532,7 @@ export const getCurrentDriver = async (req, res) => {
   }
 
   await clearDriverActiveRideIfStale(driver);
+  const vehicleIconUrl = await resolveVehicleMapIcon(driver.vehicleTypeId);
 
   res.json({
     success: true,
@@ -271,6 +546,7 @@ export const getCurrentDriver = async (req, res) => {
       vehicleType: driver.vehicleType,
       vehicleTypeId: driver.vehicleTypeId,
       vehicleIconType: driver.vehicleIconType,
+      vehicleIconUrl,
       vehicleMake: driver.vehicleMake,
       vehicleModel: driver.vehicleModel,
       registerFor: driver.registerFor,
@@ -677,6 +953,124 @@ export const topUpMyWallet = async (req, res) => {
   });
 };
 
+export const createDriverPaymentQr = async (req, res) => {
+  const amountInPaise = normalizePaymentAmount(req.body.amount);
+  const rideId = String(req.body.rideId || "").trim();
+
+  if (!rideId) {
+    throw new ApiError(400, "rideId is required");
+  }
+
+  const ride = await Ride.findOne({
+    _id: rideId,
+    driverId: req.auth.sub,
+  })
+    .select("_id fare paymentMethod serviceType driverPaymentCollection");
+
+  if (!ride) {
+    throw new ApiError(404, "Ride not found for this driver");
+  }
+
+  let payload;
+
+  try {
+    const qr = await razorpayRequest({
+      method: "POST",
+      path: "/payments/qr_codes",
+      body: {
+        type: "upi_qr",
+        name: "Appzeto Taxi Fare",
+        usage: "single_use",
+        fixed_amount: true,
+        payment_amount: amountInPaise,
+        description: `Taxi fare for ride ${rideId}`,
+        close_by: Math.floor(Date.now() / 1000) + 30 * 60,
+        notes: {
+          rideId,
+          driverId: String(req.auth.sub),
+          serviceType: ride.serviceType || "ride",
+          source: "driver_collect_amount",
+        },
+      },
+    });
+
+    payload = {
+      id: qr.id,
+      entity: qr.entity,
+      status: qr.status,
+      imageUrl: qr.image_url,
+      linkUrl: qr.image_url,
+      amount: amountInPaise / 100,
+      currency: "INR",
+      description: qr.description,
+      closeBy: qr.close_by || null,
+      rawStatus: qr.status,
+      providerMode: "razorpay_qr",
+    };
+  } catch (error) {
+    if (!shouldFallbackToPaymentLinkQr(error)) {
+      throw error;
+    }
+
+    payload = await createPaymentLinkQr({
+      amountInPaise,
+      rideId,
+      driverId: req.auth.sub,
+      serviceType: ride.serviceType,
+    });
+  }
+
+  ride.driverPaymentCollection = {
+    provider: "razorpay",
+    providerId: payload.id,
+    providerMode: payload.providerMode,
+    status: normalizeCollectionStatus(payload.rawStatus || payload.status),
+    amount: payload.amount,
+    currency: payload.currency || "INR",
+    linkUrl: payload.linkUrl || "",
+    paidAt: null,
+    updatedAt: new Date(),
+  };
+  await ride.save();
+
+  res.json({
+    success: true,
+    data: payload,
+  });
+};
+
+export const getDriverPaymentQrStatus = async (req, res) => {
+  const rideId = String(req.query.rideId || req.params.rideId || "").trim();
+
+  if (!rideId) {
+    throw new ApiError(400, "rideId is required");
+  }
+
+  const ride = await Ride.findOne({
+    _id: rideId,
+    driverId: req.auth.sub,
+  }).select("_id driverPaymentCollection");
+
+  if (!ride) {
+    throw new ApiError(404, "Ride not found for this driver");
+  }
+
+  if (!ride.driverPaymentCollection?.providerId) {
+    res.json({
+      success: true,
+      data: serializeDriverPaymentCollection(ride.driverPaymentCollection),
+    });
+    return;
+  }
+
+  const collection = await refreshDriverPaymentCollection(ride);
+
+  res.json({
+    success: true,
+    data: collection,
+  });
+};
+
 const getGenericVehicleType = (vehicle = {}) => {
   const value = String(vehicle.icon_types || vehicle.name || "").toLowerCase();
 
@@ -749,6 +1143,8 @@ export const updateDriverVehicle = async (req, res) => {
     throw new ApiError(404, "Driver not found");
   }
 
+  const vehicleIconUrl = await resolveVehicleMapIcon(driver.vehicleTypeId);
+
   res.json({
     success: true,
     data: {
@@ -758,6 +1154,7 @@ export const updateDriverVehicle = async (req, res) => {
       vehicleType: driver.vehicleType,
       vehicleTypeId: driver.vehicleTypeId,
       vehicleIconType: driver.vehicleIconType,
+      vehicleIconUrl,
       vehicleMake: driver.vehicleMake,
       vehicleModel: driver.vehicleModel,
       vehicleNumber: driver.vehicleNumber,

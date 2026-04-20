@@ -86,7 +86,12 @@ const toLatLng = (coordinates) => {
 };
 
 const getMapIconForVehicle = (iconType = '') => {
-    const value = String(iconType).toLowerCase();
+    const raw = String(iconType || '').trim();
+    if (/^(https?:|data:image\/|blob:|\/uploads\/|\/images\/|\/[^/])/.test(raw)) {
+        return raw;
+    }
+
+    const value = raw.toLowerCase();
 
     if (value.includes('bike')) return BikeIcon;
     if (value.includes('auto')) return AutoIcon;
@@ -201,13 +206,14 @@ const DriverHome = () => {
     const [acceptingRideId, setAcceptingRideId] = useState('');
     const [isHydratingDriver, setIsHydratingDriver] = useState(true);
     const [vehicleIconType, setVehicleIconType] = useState('car');
+    const [vehicleIconUrl, setVehicleIconUrl] = useState('');
     const [walletSummary, setWalletSummary] = useState({ balance: 0, cashLimit: 500, isBlocked: false });
     const driverCoordsRef = useRef(null);
     const acceptingRideIdRef = useRef('');
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
     const mapVehicleIcon = useMemo(
-        () => getMapIconForVehicle(vehicleIconType),
-        [vehicleIconType],
+        () => getMapIconForVehicle(vehicleIconUrl || vehicleIconType),
+        [vehicleIconType, vehicleIconUrl],
     );
 
     const { isLoaded } = useAppGoogleMapsLoader();
@@ -278,6 +284,7 @@ const DriverHome = () => {
         const savedCoords = driver?.location?.coordinates;
 
         setVehicleIconType(driver?.vehicleIconType || driver?.vehicleType || 'car');
+        setVehicleIconUrl(driver?.vehicleIconUrl || '');
         setIsOnline(Boolean(driver?.isOnline));
         if (driver?.wallet) {
             setWalletSummary(driver.wallet);
@@ -388,6 +395,7 @@ const DriverHome = () => {
                 vehicleTypeId: driver?.vehicleTypeId || null,
             });
             setIsOnline(Boolean(driver?.isOnline));
+            setVehicleIconUrl((current) => driver?.vehicleIconUrl || current);
             if (Array.isArray(driver?.location?.coordinates) && driver.location.coordinates.length === 2) {
                 driverCoordsRef.current = driver.location.coordinates;
                 setDriverCoords(driver.location.coordinates);

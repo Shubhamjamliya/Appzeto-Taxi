@@ -85,6 +85,7 @@ const IntercityConfirm = () => {
           fare: Number(fare || 0),
           vehicleTypeId: vehicle.vehicleTypeId || vehicle.id || '',
           vehicleIconType: vehicle.iconType || vehicle.raw?.icon_types || vehicle.name || 'car',
+          vehicleIconUrl: vehicle.vehicleIconUrl || vehicle.icon || vehicle.raw?.map_icon || vehicle.raw?.icon || vehicle.raw?.image || '',
           paymentMethod: 'Cash',
           serviceType: 'intercity',
           transport_type: 'intercity',

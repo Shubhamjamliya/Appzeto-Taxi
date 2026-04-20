@@ -30,6 +30,11 @@ const deliverySchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    vehicleIconUrl: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     status: {
       type: String,
       enum: Object.values(RIDE_STATUS),

@@ -1851,20 +1851,40 @@ export const adjustUserWallet = async (id, payload = {}) => {
   return { balance: Number(nextBalance.toFixed(2)) };
 };
 
-export const listDrivers = async ({ page = 1, limit = 50 }) => {
+export const listDrivers = async ({ page = 1, limit = 50, status, search, approve }) => {
   const safePage = Number(page) || 1;
   const safeLimit = Number(limit) || 50;
   const start = (safePage - 1) * safeLimit;
 
+  const query = { deletedAt: null };
+
+  if (status) {
+    query.status = status;
+  }
+  
+  if (approve !== undefined) {
+    query.approve = approve === 'true' || approve === true || approve === 1;
+  }
+
+  if (search) {
+    const regex = new RegExp(String(search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i');
+    query.$or = [
+      { name: regex },
+      { phone: regex },
+      { email: regex },
+      { vehicleNumber: regex }
+    ];
+  }
+
   const [drivers, total] = await Promise.all([
-    Driver.find({ deletedAt: null })
+    Driver.find(query)
       .populate('owner_id', 'company_name owner_name name email mobile')
       .populate('service_location_id', 'service_location_name name country')
       .sort({ createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
       .lean(),
-    Driver.countDocuments({ deletedAt: null }),
+    Driver.countDocuments(query),
   ]);
 
   return {

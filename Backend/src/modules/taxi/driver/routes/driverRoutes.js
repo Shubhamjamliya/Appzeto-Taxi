@@ -30,6 +30,9 @@ import {
   requestDriverAccountDeletion,
   startOnboarding,
   topUpMyWallet,
+  createDriverWalletTopupOrder,
+  verifyDriverWalletTopup,
+
   updateCurrentDriver,
   updateDriverVehicle,
   verifyOnboardingOtp,
@@ -104,6 +107,17 @@ driverRouter.post(
   authenticate(["driver"]),
   asyncHandler(topUpMyWallet),
 );
+driverRouter.post(
+  "/wallet/top-up/razorpay/order",
+  authenticate(["driver"]),
+  asyncHandler(createDriverWalletTopupOrder),
+);
+driverRouter.post(
+  "/wallet/top-up/razorpay/verify",
+  authenticate(["driver"]),
+  asyncHandler(verifyDriverWalletTopup),
+);
+
 driverRouter.post(
   "/payments/qr",
   authenticate(["driver"]),

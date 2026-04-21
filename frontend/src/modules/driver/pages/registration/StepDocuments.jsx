@@ -1,5 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Camera, CheckCircle2, FileText, ShieldCheck, AlertCircle } from 'lucide-react';
+import { 
+    ArrowLeft, 
+    Camera, 
+    CheckCircle2, 
+    FileText, 
+    ShieldCheck, 
+    AlertCircle,
+    ChevronRight,
+    UploadCloud
+} from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
   clearDriverRegistrationSession,
@@ -232,142 +241,172 @@ const StepDocuments = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white font-sans p-5 pt-8 select-none overflow-x-hidden pb-32">
-      <header className="mb-6">
-        <button
-          onClick={() => navigate(-1)}
-          className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center text-slate-900 active:scale-95 transition-transform"
-        >
-          <ArrowLeft size={18} strokeWidth={2.5} />
-        </button>
-      </header>
+    <div 
+        className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none overflow-x-hidden"
+        style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+    >
+      <main className="mx-auto max-w-sm space-y-6">
+        <header className="space-y-5">
+            <div className="flex items-center justify-between">
+                <button
+                    onClick={() => navigate(-1)}
+                    className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm transition-transform active:scale-95"
+                >
+                    <ArrowLeft size={18} strokeWidth={2.5} />
+                </button>
+                <div className="rounded-full border border-[#dcc9ab] bg-[#f7efe2] px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-[#8a6a3d] uppercase">
+                    Step 4 of 4
+                </div>
+            </div>
 
-      <main className="space-y-6 max-w-sm mx-auto">
-        <div className="space-y-1.5">
-          <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">KYC Vault</h1>
-          <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">
-            Upload the required documents configured by admin
-          </p>
-        </div>
+            <section className="rounded-[28px] border border-white/80 bg-white/88 p-6 shadow-[0_22px_60px_rgba(148,116,70,0.12)] backdrop-blur-sm">
+                <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f3e4cd] text-[#8a5a22]">
+                    <ShieldCheck size={18} />
+                </div>
+                <div className="space-y-2">
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9a7b50]">
+                        Identity verification
+                    </p>
+                    <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-slate-950">
+                        KYC Vault
+                    </h1>
+                    <p className="max-w-[28ch] text-sm leading-6 text-slate-600">
+                        Please upload clear photos of the required documents to verify your identity.
+                    </p>
+                </div>
+            </section>
+        </header>
 
-        {error ? <p className="text-[11px] font-bold text-rose-500">{error}</p> : null}
+        {error && (
+            <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-[0_10px_30px_rgba(244,63,94,0.08)]">
+                {error}
+            </div>
+        )}
 
         <div className="space-y-5">
           {templatesLoading ? (
-            <div className="bg-slate-50 rounded-3xl p-5 text-center text-[11px] font-bold text-slate-400">
-              Loading document checklist...
+            <div className="bg-white rounded-3xl p-12 text-center space-y-4 shadow-[0_10px_30px_rgba(0,0,0,0.04)]">
+              <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center mx-auto animate-pulse">
+                <FileText size={20} className="text-slate-300" />
+              </div>
+              <p className="text-sm font-medium text-slate-400">Loading checklist...</p>
             </div>
           ) : (
             documentTemplates.map((template) => (
-              <div key={template.id} className="bg-slate-50 rounded-3xl p-4 shadow-sm">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <h3 className="text-[14px] font-black text-slate-900 uppercase tracking-tight">{template.name}</h3>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                      Mandatory | {template.fields.length > 1 ? 'Multiple uploads' : 'Single upload'}
-                    </p>
-                    <p className="hidden text-[10px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                      {template.is_required ? 'Required' : 'Optional'} • {template.fields.length > 1 ? 'Multiple uploads' : 'Single upload'}
-                    </p>
+              <section key={template.id} className="space-y-4 rounded-[30px] border border-slate-200/70 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold tracking-[-0.03em] text-slate-950">{template.name}</h3>
+                    <div className="flex items-center gap-2">
+                        <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                           {template.fields.length > 1 ? 'Multiple Sides' : 'Single Document'}
+                        </span>
+                        <div className="w-1 h-1 rounded-full bg-slate-200" />
+                        <span className="text-[10px] font-bold text-emerald-600 uppercase tracking-wider">Mandatory</span>
+                    </div>
                   </div>
-                  <span className="rounded-full bg-white px-2.5 py-1 text-[9px] font-black uppercase tracking-widest text-slate-500">
+                  <div className="rounded-full bg-slate-50 px-2.5 py-1 text-[9px] font-bold uppercase tracking-wider text-slate-500 border border-slate-100">
                     {template.account_type || 'individual'}
-                  </span>
+                  </div>
                 </div>
 
                 <div className={`grid gap-3 ${template.fields.length > 1 ? 'grid-cols-2' : 'grid-cols-1'}`}>
                   {template.fields.map((field) => {
                     const document = docs[field.key];
+                    const isUploading = uploading === field.key;
 
                     return (
-                      <label
-                        key={field.key}
-                        onKeyDown={(event) => {
-                          if (event.key === 'Enter' || event.key === ' ') {
-                            event.preventDefault();
-                            openPicker(field.key);
-                          }
-                        }}
-                        tabIndex={0}
-                        role="button"
-                        className={`relative min-h-[120px] rounded-2xl border transition-all overflow-hidden ${
-                          document?.previewUrl
-                            ? 'border-emerald-100 bg-emerald-50'
-                            : 'border-dashed border-slate-200 bg-white'
-                        }`}
-                      >
-                        <input
-                          ref={(element) => {
-                            inputRefs.current[field.key] = element;
-                          }}
-                          type="file"
-                          accept="image/*"
-                          capture="environment"
-                          className="hidden"
-                          onChange={(event) => handleFileChange(field.key, event)}
-                        />
+                      <div key={field.key} className="space-y-2">
+                        <label className="block text-[11px] font-semibold text-slate-500 ml-1">{field.label}</label>
+                        <div
+                            onKeyDown={(event) => {
+                                if (event.key === 'Enter' || event.key === ' ') {
+                                    event.preventDefault();
+                                    openPicker(field.key);
+                                }
+                            }}
+                            tabIndex={0}
+                            role="button"
+                            onClick={() => openPicker(field.key)}
+                            className={`relative min-h-[140px] rounded-2xl border-2 transition-all overflow-hidden flex flex-col items-center justify-center gap-2 ${
+                                document?.previewUrl
+                                    ? 'border-emerald-500/20 bg-emerald-50/10'
+                                    : 'border-dashed border-slate-200 bg-[#fcfcfb] hover:border-slate-300'
+                            }`}
+                        >
+                            <input
+                                ref={(element) => {
+                                    inputRefs.current[field.key] = element;
+                                }}
+                                type="file"
+                                accept="image/*"
+                                capture="environment"
+                                className="hidden"
+                                onChange={(event) => handleFileChange(field.key, event)}
+                            />
 
-                        {uploading === field.key ? (
-                          <div className="flex h-full min-h-[120px] items-center justify-center">
-                            <div className="w-5 h-5 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
-                          </div>
-                        ) : document?.previewUrl ? (
-                          <>
-                            <img src={document.previewUrl} alt={field.label} className="absolute inset-0 h-full w-full object-cover" />
-                            <div className="absolute inset-0 bg-black/20" />
-                          </>
-                        ) : (
-                          <div className="flex min-h-[120px] flex-col items-center justify-center gap-2 px-4 text-center">
-                            <div className="w-10 h-10 rounded-2xl bg-slate-50 text-slate-500 flex items-center justify-center">
-                              <FileText size={18} />
-                            </div>
-                            <div>
-                              <p className="text-[11px] font-black uppercase tracking-widest text-slate-700">{field.label}</p>
-                              <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-1">
-                                Tap to upload
-                              </p>
-                            </div>
-                          </div>
-                        )}
-
-                        <div className="absolute top-2 right-2 flex items-center gap-2">
-                          {!document?.previewUrl ? (
-                            <div className="rounded-lg bg-white p-1.5 shadow-sm">
-                              <Camera size={11} className="text-slate-900" />
-                            </div>
-                          ) : null}
-                          {document?.uploaded && uploading !== field.key ? (
-                            <div className="w-7 h-7 bg-white/90 rounded-full flex items-center justify-center text-emerald-500 shadow-sm">
-                              <CheckCircle2 size={15} strokeWidth={3} />
-                            </div>
-                          ) : null}
+                            {isUploading ? (
+                                <div className="flex flex-col items-center gap-3">
+                                    <div className="w-6 h-6 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+                                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Uploading</span>
+                                </div>
+                            ) : document?.previewUrl ? (
+                                <>
+                                    <img src={document.previewUrl} alt={field.label} className="absolute inset-0 h-full w-full object-cover" />
+                                    <div className="absolute inset-0 bg-black/10" />
+                                    <div className="absolute bottom-2 right-2 w-7 h-7 bg-emerald-500 rounded-full flex items-center justify-center text-white shadow-lg border-2 border-white">
+                                        <CheckCircle2 size={14} strokeWidth={3} />
+                                    </div>
+                                    <div className="absolute top-2 left-2 bg-black/40 backdrop-blur-md rounded-lg px-2 py-1 flex items-center gap-1.5 border border-white/20">
+                                        <Camera size={10} className="text-white" />
+                                        <span className="text-[9px] font-bold text-white uppercase tracking-tighter">Retake</span>
+                                    </div>
+                                </>
+                            ) : (
+                                <>
+                                    <div className="w-10 h-10 rounded-xl bg-white text-slate-400 flex items-center justify-center shadow-sm border border-slate-100">
+                                        <UploadCloud size={18} />
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none">Tap to upload</p>
+                                    </div>
+                                    <div className="absolute top-2 right-2 w-6 h-6 rounded-lg bg-slate-100/50 flex items-center justify-center">
+                                        <Camera size={10} className="text-slate-400" />
+                                    </div>
+                                </>
+                            )}
                         </div>
-                      </label>
+                      </div>
                     );
                   })}
                 </div>
-              </div>
+              </section>
             ))
           )}
         </div>
 
-        <div className="bg-amber-50/50 p-4 rounded-2xl flex gap-3 mt-4">
-          <AlertCircle size={16} className="text-amber-500 shrink-0" />
-          <p className="text-[10px] font-bold text-slate-600 leading-snug">
-            Ensure all photos are <span className="text-amber-600 font-black tracking-tight">clear and legible</span>.
+        <div className="bg-amber-50/50 p-4 rounded-3xl flex gap-3 mt-4 border border-amber-100">
+          <AlertCircle size={18} className="text-amber-600 shrink-0" />
+          <p className="text-xs font-medium text-amber-900 leading-relaxed">
+            Ensure all photos are well-lit and all text is clearly readable to avoid rejection.
           </p>
         </div>
 
-        <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
-          <button
-            onClick={handleSubmit}
-            disabled={loading || !isComplete}
-            className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
-              isComplete ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
-            }`}
-          >
-            {loading ? 'Submitting...' : 'Review & Submit'} <ShieldCheck size={16} strokeWidth={3} />
-          </button>
+        <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200/70 bg-white/88 p-5 backdrop-blur-md">
+            <div className="mx-auto max-w-sm">
+                <button
+                    onClick={handleSubmit}
+                    disabled={loading || !isComplete}
+                    className={`flex h-14 w-full items-center justify-center gap-2 rounded-[22px] text-[15px] font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(15,23,42,0.12)] transition-all ${
+                        isComplete
+                            ? 'bg-slate-950 text-white hover:bg-slate-900'
+                            : 'pointer-events-none bg-slate-200 text-slate-500 shadow-none'
+                    }`}
+                >
+                    {loading ? 'Submitting Vault...' : 'Review & Submit'}
+                    {!loading && <ChevronRight size={17} strokeWidth={2.8} />}
+                </button>
+            </div>
         </div>
       </main>
     </div>

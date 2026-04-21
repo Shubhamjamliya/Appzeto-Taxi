@@ -183,6 +183,21 @@ const DriverWallet = () => {
 
     const recentTransactions = useMemo(() => transactions.slice(0, 20), [transactions]);
 
+    const loadRazorpayScript = useCallback(() =>
+        new Promise((resolve) => {
+            if (window.Razorpay) {
+                resolve(true);
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = 'https://checkout.razorpay.com/v1/checkout.js';
+            script.async = true;
+            script.onload = () => resolve(true);
+            script.onerror = () => resolve(false);
+            document.body.appendChild(script);
+        }), []);
+
     const handleTopUp = async () => {
         const amount = Number(topUpAmount);
 
@@ -197,7 +212,7 @@ const DriverWallet = () => {
         }
 
         if (rules.minimumTopUp > 0 && amount < rules.minimumTopUp) {
-            setError(`Minimum top-up amount is ${money(rules.minimumTopUp)}.`);
+            setError(`Minimum top-up amount is Rs ${rules.minimumTopUp}.`);
             return;
         }
 
@@ -205,30 +220,84 @@ const DriverWallet = () => {
         setError('');
 
         try {
-            const response = await api.post('/drivers/wallet/top-up', {
-                amount,
-                source: 'driver-wallet-page',
-            });
-            const data = response?.data || response || {};
-            if (data.wallet) setWallet(data.wallet);
-            if (data.transaction) {
-                setTransactions((previous) => [
-                    data.transaction,
-                    ...previous.filter((item) => item._id !== data.transaction._id),
-                ].slice(0, 50));
+            const scriptLoaded = await loadRazorpayScript();
+            if (!scriptLoaded) {
+                throw new Error('Razorpay SDK failed to load. Please check your internet connection.');
             }
 
-            setTopUpSuccess(true);
-            setTimeout(() => {
-                setTopUpSuccess(false);
-                setShowTopUp(false);
-            }, 1100);
+            // 1. Create order on backend
+            const orderResponse = await api.post('/drivers/wallet/top-up/razorpay/order', {
+                amount,
+            });
+            const orderData = orderResponse.data?.data;
+
+            if (!orderData?.orderId || !orderData?.keyId) {
+                throw new Error('Could not initiate payment. Please try again.');
+            }
+
+            // 2. Open Razorpay checkout
+            const options = {
+                key: orderData.keyId,
+                amount: orderData.amount,
+                currency: orderData.currency || 'INR',
+                name: 'Appzeto Taxi',
+                description: 'Wallet Top-up',
+                order_id: orderData.orderId,
+                handler: async (response) => {
+                    try {
+                        setProcessingTopUp(true);
+                        // 3. Verify payment on backend
+                        const verifyResponse = await api.post('/drivers/wallet/top-up/razorpay/verify', {
+                            razorpay_order_id: response.razorpay_order_id,
+                            razorpay_payment_id: response.razorpay_payment_id,
+                            razorpay_signature: response.razorpay_signature,
+                        });
+
+                        const result = verifyResponse.data?.data;
+                        if (result?.wallet) {
+                            setWallet(result.wallet);
+                        }
+                        if (result?.transaction) {
+                            setTransactions((previous) => [
+                                result.transaction,
+                                ...previous.filter((item) => item._id !== result.transaction._id),
+                            ].slice(0, 50));
+                        }
+                        
+                        setTopUpSuccess(true);
+                        setTimeout(() => {
+                            setTopUpSuccess(false);
+                            setShowTopUp(false);
+                            setTopUpAmount('500');
+                        }, 2000);
+                    } catch (verifyError) {
+                        setError(verifyError?.response?.data?.message || 'Payment verification failed.');
+                    } finally {
+                        setProcessingTopUp(false);
+                    }
+                },
+                modal: {
+                    ondismiss: () => {
+                        setProcessingTopUp(false);
+                    },
+                },
+                theme: {
+                    color: '#0F172A',
+                },
+            };
+
+            const rzp = new window.Razorpay(options);
+            rzp.on('payment.failed', (response) => {
+                setError(response.error?.description || 'Payment failed.');
+                setProcessingTopUp(false);
+            });
+            rzp.open();
         } catch (requestError) {
-            setError(requestError?.response?.data?.message || requestError?.message || 'Top-up failed.');
-        } finally {
+            setError(requestError?.response?.data?.message || requestError?.message || 'Top-up request failed.');
             setProcessingTopUp(false);
         }
     };
+
 
     const statusCopy = rules.walletEnabled
         ? rules.canReceiveOrders

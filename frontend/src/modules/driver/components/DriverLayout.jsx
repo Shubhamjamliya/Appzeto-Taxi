@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { clearDriverAuthState, getCurrentDriver } from '../services/registrationService';
 import DriverRideRequestListener from './DriverRideRequestListener';
@@ -45,6 +45,7 @@ const DriverLayout = () => {
     const navigate = useNavigate();
     const [isChecking, setIsChecking] = useState(false);
     const [isAllowed, setIsAllowed] = useState(true);
+    const verifiedTokenRef = useRef('');
 
     useEffect(() => {
         const currentPath = location.pathname;
@@ -59,7 +60,13 @@ const DriverLayout = () => {
 
         if (!token) {
             setIsAllowed(false);
+            verifiedTokenRef.current = '';
             redirectToDriverLogin(navigate);
+            return;
+        }
+
+        if (verifiedTokenRef.current === token && isAllowed) {
+            setIsChecking(false);
             return;
         }
 
@@ -84,12 +91,14 @@ const DriverLayout = () => {
                 }
 
                 setIsAllowed(true);
+                verifiedTokenRef.current = token;
             } catch (error) {
                 if (!active) {
                     return;
                 }
 
                 setIsAllowed(false);
+                verifiedTokenRef.current = '';
 
                 if (error?.status === 401) {
                     redirectToDriverLogin(navigate);
@@ -119,7 +128,7 @@ const DriverLayout = () => {
         return () => {
             active = false;
         };
-    }, [location.pathname, navigate]);
+    }, [isAllowed, location.pathname, navigate]);
 
     return (
         <div className="driver-theme min-h-screen">

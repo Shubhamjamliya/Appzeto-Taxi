@@ -182,7 +182,6 @@ const rideSchema = new mongoose.Schema(
     },
     otp: {
       type: String,
-      default: '',
       trim: true,
       minlength: 4,
       maxlength: 4,

@@ -16,7 +16,7 @@ import deliveryIcon from '../../../../assets/icons/Delivery.png';
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
 const DEFAULT_CENTER = { lat: 22.7196, lng: 75.8577 };
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'delivered']);
-const ACTIVE_RIDE_VALIDATE_MS = 5000;
+const ACTIVE_RIDE_VALIDATE_MS = 15000;
 const COMPLETED_TRACKING_STATUSES = new Set(['completed', 'delivered']);
 
 const toLatLng = (coords, fallback = DEFAULT_CENTER) => {
@@ -145,23 +145,101 @@ const resolveAssetUrl = (value = '') => {
 const mergeDriverSnapshot = (baseDriver = {}, incomingDriver = {}) => {
   const safeBaseDriver = isPlainObject(baseDriver) ? baseDriver : {};
   const safeIncomingDriver = isPlainObject(incomingDriver) ? incomingDriver : {};
+  const incomingVehicle = isPlainObject(safeIncomingDriver.vehicle) ? safeIncomingDriver.vehicle : {};
+  const baseVehicle = isPlainObject(safeBaseDriver.vehicle) ? safeBaseDriver.vehicle : {};
 
   return {
     ...safeBaseDriver,
     ...safeIncomingDriver,
-    profileImage: pickPreferredValue(safeIncomingDriver.profileImage, safeBaseDriver.profileImage),
-    vehicleImage: pickPreferredValue(safeIncomingDriver.vehicleImage, safeBaseDriver.vehicleImage),
-    image: pickPreferredValue(safeIncomingDriver.image, safeBaseDriver.image),
-    avatar: pickPreferredValue(safeIncomingDriver.avatar, safeBaseDriver.avatar),
+    profileImage: pickPreferredValue(
+      safeIncomingDriver.profileImage,
+      safeIncomingDriver.profile_image,
+      safeIncomingDriver.image,
+      safeIncomingDriver.avatar,
+      safeIncomingDriver.selfie,
+      safeBaseDriver.profileImage,
+      safeBaseDriver.profile_image,
+      safeBaseDriver.image,
+      safeBaseDriver.avatar,
+      safeBaseDriver.selfie,
+    ),
+    vehicleImage: pickPreferredValue(
+      safeIncomingDriver.vehicleImage,
+      safeIncomingDriver.vehicle_image,
+      safeIncomingDriver.vehiclePhoto,
+      safeIncomingDriver.vehicle_photo,
+      incomingVehicle.vehicleImage,
+      incomingVehicle.vehicle_image,
+      incomingVehicle.image,
+      incomingVehicle.photo,
+      safeBaseDriver.vehicleImage,
+      safeBaseDriver.vehicle_image,
+      safeBaseDriver.vehiclePhoto,
+      safeBaseDriver.vehicle_photo,
+      baseVehicle.vehicleImage,
+      baseVehicle.vehicle_image,
+      baseVehicle.image,
+      baseVehicle.photo,
+    ),
+    image: pickPreferredValue(safeIncomingDriver.image, safeIncomingDriver.profileImage, safeBaseDriver.image, safeBaseDriver.profileImage),
+    avatar: pickPreferredValue(safeIncomingDriver.avatar, safeIncomingDriver.profileImage, safeBaseDriver.avatar, safeBaseDriver.profileImage),
     name: pickPreferredValue(safeIncomingDriver.name, safeBaseDriver.name),
-    phone: pickPreferredValue(safeIncomingDriver.phone, safeBaseDriver.phone),
-    vehicle: pickPreferredValue(safeIncomingDriver.vehicle, safeBaseDriver.vehicle),
-    vehicleType: pickPreferredValue(safeIncomingDriver.vehicleType, safeBaseDriver.vehicleType),
-    vehicleNumber: pickPreferredValue(safeIncomingDriver.vehicleNumber, safeBaseDriver.vehicleNumber),
-    plate: pickPreferredValue(safeIncomingDriver.plate, safeBaseDriver.plate),
-    vehicleColor: pickPreferredValue(safeIncomingDriver.vehicleColor, safeBaseDriver.vehicleColor),
-    vehicleMake: pickPreferredValue(safeIncomingDriver.vehicleMake, safeBaseDriver.vehicleMake),
-    vehicleModel: pickPreferredValue(safeIncomingDriver.vehicleModel, safeBaseDriver.vehicleModel),
+    phone: pickPreferredValue(safeIncomingDriver.phone, safeIncomingDriver.mobile, safeIncomingDriver.phoneNumber, safeBaseDriver.phone, safeBaseDriver.mobile, safeBaseDriver.phoneNumber),
+    vehicle: pickPreferredValue(
+      typeof safeIncomingDriver.vehicle === 'string' ? safeIncomingDriver.vehicle : '',
+      safeIncomingDriver.vehicleType,
+      safeIncomingDriver.vehicle_type,
+      incomingVehicle.name,
+      incomingVehicle.vehicleType,
+      incomingVehicle.vehicle_type,
+      typeof safeBaseDriver.vehicle === 'string' ? safeBaseDriver.vehicle : '',
+      safeBaseDriver.vehicleType,
+      safeBaseDriver.vehicle_type,
+      baseVehicle.name,
+      baseVehicle.vehicleType,
+      baseVehicle.vehicle_type,
+    ),
+    vehicleType: pickPreferredValue(
+      safeIncomingDriver.vehicleType,
+      safeIncomingDriver.vehicle_type,
+      incomingVehicle.vehicleType,
+      incomingVehicle.vehicle_type,
+      safeBaseDriver.vehicleType,
+      safeBaseDriver.vehicle_type,
+      baseVehicle.vehicleType,
+      baseVehicle.vehicle_type,
+    ),
+    vehicleNumber: pickPreferredValue(
+      safeIncomingDriver.vehicleNumber,
+      safeIncomingDriver.vehicle_number,
+      safeIncomingDriver.plate,
+      incomingVehicle.vehicleNumber,
+      incomingVehicle.vehicle_number,
+      incomingVehicle.plate,
+      safeBaseDriver.vehicleNumber,
+      safeBaseDriver.vehicle_number,
+      safeBaseDriver.plate,
+      baseVehicle.vehicleNumber,
+      baseVehicle.vehicle_number,
+      baseVehicle.plate,
+    ),
+    plate: pickPreferredValue(
+      safeIncomingDriver.plate,
+      safeIncomingDriver.vehicleNumber,
+      safeIncomingDriver.vehicle_number,
+      incomingVehicle.plate,
+      incomingVehicle.vehicleNumber,
+      incomingVehicle.vehicle_number,
+      safeBaseDriver.plate,
+      safeBaseDriver.vehicleNumber,
+      safeBaseDriver.vehicle_number,
+      baseVehicle.plate,
+      baseVehicle.vehicleNumber,
+      baseVehicle.vehicle_number,
+    ),
+    vehicleColor: pickPreferredValue(safeIncomingDriver.vehicleColor, safeIncomingDriver.vehicle_color, incomingVehicle.vehicleColor, incomingVehicle.vehicle_color, safeBaseDriver.vehicleColor, safeBaseDriver.vehicle_color, baseVehicle.vehicleColor, baseVehicle.vehicle_color),
+    vehicleMake: pickPreferredValue(safeIncomingDriver.vehicleMake, safeIncomingDriver.vehicle_make, incomingVehicle.vehicleMake, incomingVehicle.vehicle_make, safeBaseDriver.vehicleMake, safeBaseDriver.vehicle_make, baseVehicle.vehicleMake, baseVehicle.vehicle_make),
+    vehicleModel: pickPreferredValue(safeIncomingDriver.vehicleModel, safeIncomingDriver.vehicle_model, incomingVehicle.vehicleModel, incomingVehicle.vehicle_model, safeBaseDriver.vehicleModel, safeBaseDriver.vehicle_model, baseVehicle.vehicleModel, baseVehicle.vehicle_model),
     rating: pickPreferredValue(safeIncomingDriver.rating, safeBaseDriver.rating),
   };
 };
@@ -175,6 +253,7 @@ const RideTracking = () => {
   const [routeError, setRouteError] = useState('');
   const [map, setMap] = useState(null);
   const [driverImageFallback, setDriverImageFallback] = useState('');
+  const [driverImageBroken, setDriverImageBroken] = useState(false);
   const [vehicleImageFallback, setVehicleImageFallback] = useState('');
   const [vehicleImageBroken, setVehicleImageBroken] = useState(false);
   const navigate = useNavigate();
@@ -187,9 +266,9 @@ const RideTracking = () => {
   const routeChat = location.pathname.startsWith('/taxi/user') ? '/taxi/user/ride/chat' : '/ride/chat';
 
   const rideId = state.rideId || '';
-  const otp = String(rideRealtime?.otp || state.otp || '');
-  const fare = state.fare || 22;
-  const paymentMethod = state.paymentMethod || 'Cash';
+  const otp = String(rideRealtime?.otp || state.otp || state.ride_otp || '');
+  const fare = rideRealtime?.fare || state.fare || 22;
+  const paymentMethod = rideRealtime?.paymentMethod || state.paymentMethod || 'Cash';
   const fallbackDriver = useMemo(
     () => state.driver || { name: 'Captain', rating: '4.9', vehicle: 'Taxi', plate: 'Assigned', phone: '', profileImage: '', vehicleImage: '' },
     [state.driver],
@@ -218,7 +297,20 @@ const RideTracking = () => {
     () => mergeDriverSnapshot(fallbackDriver, rideRealtime?.driver || {}),
     [fallbackDriver, rideRealtime?.driver],
   );
-  const vehicleIcon = getTrackingVehicleIcon(state, driver);
+  const trackingSnapshot = useMemo(
+    () => ({
+      ...state,
+      ...(rideRealtime || {}),
+      fare,
+      paymentMethod,
+      serviceType,
+      vehicleIconType: rideRealtime?.vehicleIconType || state.vehicleIconType || '',
+      vehicleIconUrl: rideRealtime?.vehicleIconUrl || state.vehicleIconUrl || '',
+      driver,
+    }),
+    [driver, fare, paymentMethod, rideRealtime, serviceType, state],
+  );
+  const vehicleIcon = getTrackingVehicleIcon(trackingSnapshot, driver);
   const displayDriverHeading = useMemo(() => {
     if (Number.isFinite(Number(rideRealtime?.driverLocation?.heading))) {
       return normalizeHeading(rideRealtime.driverLocation.heading);
@@ -232,10 +324,12 @@ const RideTracking = () => {
   }, [activeDestination, driverPosition, rideRealtime?.driverLocation?.heading, routePath]);
   const vehicleLabel = driver.vehicle || driver.vehicleType || (serviceType === 'parcel' ? 'Parcel' : 'Taxi');
   const nextDriverImage = resolveAssetUrl(
-    driver.profileImage || driver.image || driver.avatar || '',
+    driver.profileImage || driver.profile_image || driver.image || driver.avatar || driver.selfie || '',
   );
-  const nextVehicleImage = resolveAssetUrl(driver.vehicleImage || '');
-  const driverImage = nextDriverImage || driverImageFallback;
+  const nextVehicleImage = resolveAssetUrl(
+    driver.vehicleImage || driver.vehicle_image || driver.vehiclePhoto || driver.vehicle_photo || '',
+  );
+  const driverImage = driverImageBroken ? '' : (nextDriverImage || driverImageFallback);
   const vehicleImage = vehicleImageBroken ? '' : (nextVehicleImage || vehicleImageFallback);
   const hasVehiclePhoto = isLikelyVehiclePhoto(vehicleImage) && !vehicleImageBroken;
   const driverSubtitle = tripStatus === 'started'
@@ -249,6 +343,7 @@ const RideTracking = () => {
   const latestFallbackDriverRef = useRef(fallbackDriver);
   const latestDriverRef = useRef(driver);
   const latestCompleteTrackingRef = useRef(() => {});
+  const hasCompletedRedirectRef = useRef(false);
   const hasAutoFramedMapRef = useRef(false);
   const lastMapPanPositionRef = useRef(null);
 
@@ -285,6 +380,7 @@ const RideTracking = () => {
   useEffect(() => {
     if (nextDriverImage) {
       setDriverImageFallback(nextDriverImage);
+      setDriverImageBroken(false);
     }
   }, [nextDriverImage]);
 
@@ -329,6 +425,10 @@ const RideTracking = () => {
   useEffect(() => {
     latestCompleteTrackingRef.current = completeTracking;
   }, [completeTracking]);
+
+  useEffect(() => {
+    hasCompletedRedirectRef.current = false;
+  }, [rideId]);
 
   useEffect(() => {
     let active = true;
@@ -388,6 +488,11 @@ const RideTracking = () => {
                 ? { coordinates: payload.lastDriverLocation.coordinates }
                 : null,
               status: nextStatus,
+              fare: payload?.fare || state.fare || 0,
+              paymentMethod: payload?.paymentMethod || state.paymentMethod || 'Cash',
+              vehicleIconType: payload?.vehicleIconType || state.vehicleIconType || '',
+              vehicleIconUrl: payload?.vehicleIconUrl || state.vehicleIconUrl || '',
+              otp: payload?.otp || state.otp || state.ride_otp || '',
               completedAt: payload?.completedAt || null,
               feedback: payload?.feedback || null,
               driver: mergedDriver,
@@ -417,6 +522,11 @@ const RideTracking = () => {
               }
             : null,
           status: payload?.liveStatus || payload?.status || 'accepted',
+          fare: payload?.fare || state.fare || 0,
+          paymentMethod: payload?.paymentMethod || state.paymentMethod || 'Cash',
+          vehicleIconType: payload?.vehicleIconType || state.vehicleIconType || '',
+          vehicleIconUrl: payload?.vehicleIconUrl || state.vehicleIconUrl || '',
+          otp: payload?.otp || state.otp || state.ride_otp || '',
           completedAt: payload?.completedAt || null,
           feedback: payload?.feedback || null,
           driver: mergedDriver,
@@ -451,6 +561,10 @@ const RideTracking = () => {
     }
 
     if (COMPLETED_TRACKING_STATUSES.has(tripStatus)) {
+      if (!hasCompletedRedirectRef.current) {
+        hasCompletedRedirectRef.current = true;
+        completeTracking(tripStatus);
+      }
       return;
     }
 
@@ -497,6 +611,11 @@ const RideTracking = () => {
             }
           : null,
         status: payload.liveStatus || payload.status || 'accepted',
+        fare: payload.fare || prev?.fare || latestState.fare || 0,
+        paymentMethod: payload.paymentMethod || prev?.paymentMethod || latestState.paymentMethod || 'Cash',
+        vehicleIconType: payload.vehicleIconType || prev?.vehicleIconType || latestState.vehicleIconType || '',
+        vehicleIconUrl: payload.vehicleIconUrl || prev?.vehicleIconUrl || latestState.vehicleIconUrl || '',
+        otp: payload.otp || prev?.otp || latestState.otp || latestState.ride_otp || '',
         completedAt: payload.completedAt || null,
         feedback: payload.feedback || null,
         driver: mergeDriverSnapshot(prev?.driver || latestFallbackDriver, payload.driver || {}),
@@ -827,6 +946,7 @@ const RideTracking = () => {
                     src={driverImage}
                     className="w-full h-full object-cover"
                     alt={driver.name || 'Driver'}
+                    onError={() => setDriverImageBroken(true)}
                   />
                 ) : (
                   <div className="flex h-full w-full items-center justify-center bg-slate-900 text-[18px] font-black text-white">

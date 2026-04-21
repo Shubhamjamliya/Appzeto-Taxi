@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ArrowLeft, CheckCircle2, ShieldAlert } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, ShieldCheck, ChevronRight, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import {
     getStoredDriverRegistrationSession,
@@ -47,7 +47,7 @@ const OTPVerification = () => {
     const handleChange = (index, value) => {
         if (!/^\d*$/.test(value)) return;
         const newOtp = [...otp];
-        newOtp[index] = value;
+        newOtp[index] = value.slice(-1);
         setOtp(newOtp);
 
         if (value && index < 3) {
@@ -104,130 +104,140 @@ const OTPVerification = () => {
 
             const nextState = saveDriverRegistrationSession({
                 ...session,
-                registrationId,
-                phone,
-                role,
                 otpVerified: true,
                 otpSession: payload?.session || null,
             });
 
             navigate('/taxi/driver/step-personal', { state: nextState });
         } catch (err) {
-            setError(err?.message || 'OTP verification failed');
+            setError(err?.message || 'Invalid OTP. Please try again.');
         } finally {
             setLoading(false);
         }
     };
 
     const handleResend = async () => {
-        if (timer > 0) {
-            return;
-        }
-
+        if (timer > 0) return;
         setLoading(true);
         setError('');
-
         try {
-            const response = isLoginFlow
-                ? await sendDriverLoginOtp({ phone })
-                : await sendDriverOtp({ phone, role });
-            const payload = unwrap(response);
-            const nextSession = payload?.session || {};
-
-            saveDriverRegistrationSession({
-                ...session,
-                phone,
-                role,
-                registrationId: nextSession.registrationId || registrationId,
-                debugOtp: nextSession.debugOtp || '',
-                loginMode: isLoginFlow,
-            });
-
-            if (nextSession.debugOtp && /^\d{4}$/.test(String(nextSession.debugOtp))) {
-                setOtp(String(nextSession.debugOtp).split(''));
+            if (isLoginFlow) {
+                await sendDriverLoginOtp({ phone });
             } else {
-                setOtp(['', '', '', '']);
+                await sendDriverOtp({ phone, role });
             }
-
             setTimer(30);
+            setError('OTP Resent Successfully');
         } catch (err) {
-            setError(err?.message || 'Unable to resend OTP');
+            setError(err?.message || 'Failed to resend OTP');
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <div className="min-h-screen bg-white font-sans p-5 pt-8 select-none overflow-x-hidden">
-            <header className="mb-6">
-                <button 
-                    onClick={() => navigate(-1)}
-                    className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center text-slate-900 active:scale-95 transition-transform"
-                >
-                    <ArrowLeft size={18} strokeWidth={2.5} />
-                </button>
-            </header>
-
-            <main className="space-y-5 max-w-sm mx-auto">
-                <div className="space-y-1.5 text-center">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
-                        Verify {role === 'owner' ? 'Owner' : 'Mobile'}
-                    </h1>
-                    <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">Identity Check for +91 {phone}</p>
-                </div>
-
-                    <div className="flex justify-between gap-1.5 py-4">
-                    {otp.map((digit, index) => (
-                        <input
-                            key={index}
-                            ref={el => inputs.current[index] = el}
-                            type="tel"
-                            maxLength={1}
-                            value={digit}
-                            onChange={(e) => handleChange(index, e.target.value)}
-                            onKeyDown={(e) => handleKeyDown(index, e)}
-                            className="w-11 h-14 bg-slate-50 rounded-xl text-center text-xl font-black text-slate-900 transition-all caret-taxi-primary focus:outline-none focus:ring-0"
-                        />
-                    ))}
+        <div 
+            className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none overflow-x-hidden"
+            style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+        >
+            <main className="mx-auto max-w-sm space-y-6">
+                <header className="space-y-5">
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm transition-transform active:scale-95"
+                        >
+                            <ArrowLeft size={18} strokeWidth={2.5} />
+                        </button>
+                        <div className="rounded-full border border-[#dcc9ab] bg-[#f7efe2] px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-[#8a6a3d] uppercase">
+                            Security Check
+                        </div>
                     </div>
 
-                    {error && (
-                        <p className="text-center text-[11px] font-bold text-rose-500">
-                            {error}
-                        </p>
-                    )}
+                    <section className="rounded-[28px] border border-white/80 bg-white/88 p-6 shadow-[0_22px_60px_rgba(148,116,70,0.12)] backdrop-blur-sm">
+                        <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f3e4cd] text-[#8a5a22]">
+                            <ShieldCheck size={18} />
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9a7b50]">
+                                Dynamic verification
+                            </p>
+                            <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-slate-950">
+                                Verify phone
+                            </h1>
+                            <p className="max-w-[24ch] text-sm leading-6 text-slate-600">
+                                Enter the 4-digit code sent to your number <span className="text-slate-900 font-semibold tracking-tight">+91 {phone}</span>
+                            </p>
+                        </div>
+                    </section>
+                </header>
 
-                <div className="text-center space-y-4 mt-2">
-                    <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
-                        {timer > 0 ? (
-                            `Resend Code in ${timer}s`
-                        ) : (
-                            <span
-                                className="text-slate-900 underline underline-offset-4 decoration-slate-200 cursor-pointer"
-                                onClick={handleResend}
-                            >
-                                Resend Now
-                            </span>
+                <section className="space-y-8 rounded-[30px] border border-slate-200/70 bg-white p-6 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+                    <div className="flex justify-between gap-3">
+                        {otp.map((digit, index) => (
+                            <input
+                                key={index}
+                                ref={el => inputs.current[index] = el}
+                                type="text"
+                                maxLength={1}
+                                value={digit}
+                                onChange={e => handleChange(index, e.target.value)}
+                                onKeyDown={e => handleKeyDown(index, e)}
+                                className={`h-16 w-full rounded-[22px] border-2 text-center text-2xl font-bold transition-all outline-none ${
+                                    digit 
+                                        ? 'border-slate-900 bg-white shadow-lg' 
+                                        : 'border-slate-100 bg-[#fcfcfb] focus:border-[#c59d66] focus:bg-white'
+                                }`}
+                            />
+                        ))}
+                    </div>
+
+                    <div className="space-y-4">
+                        {error && (
+                            <div className={`rounded-xl border px-3 py-2 text-xs font-semibold text-center ${
+                                error.includes('Successfully') 
+                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-600'
+                                    : 'border-rose-100 bg-rose-50 text-rose-600'
+                            }`}>
+                                {error}
+                            </div>
                         )}
-                    </p>
 
-                    <button 
-                        onClick={handleVerify}
-                        disabled={loading || otp.join('').length !== 4}
-                        className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
-                            otp.join('').length === 4 ? 'bg-slate-900 text-white shadow-slate-900/10' : 'bg-slate-100 text-slate-300 pointer-events-none'
-                        }`}
-                    >
-                        {loading ? 'Verifying...' : 'Verify & Join'} <CheckCircle2 size={16} strokeWidth={3} />
-                    </button>
-                </div>
+                        <div className="flex flex-col items-center gap-3">
+                            <p className="text-[13px] font-medium text-slate-400">
+                                Didn't receive the code?
+                            </p>
+                            <button
+                                onClick={handleResend}
+                                disabled={timer > 0 || loading}
+                                className={`flex items-center gap-2 text-sm font-bold tracking-tight transition-all ${
+                                    timer > 0 
+                                        ? 'text-slate-300' 
+                                        : 'text-[#8a5a22] hover:text-[#70491b]'
+                                }`}
+                            >
+                                <MessageSquare size={16} />
+                                {timer > 0 ? `Resend in ${timer}s` : 'Resend Code Now'}
+                            </button>
+                        </div>
+                    </div>
+                </section>
 
-                <div className="pt-10 flex flex-col items-center gap-3 opacity-20 grayscale pointer-events-none">
-                   <div className="flex items-center gap-2">
-                      <ShieldAlert size={12} className="text-rose-500" />
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">Security Checkpoint</p>
-                   </div>
-                   <div className="h-0.5 w-10 bg-slate-100 rounded-full" />
+                <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200/70 bg-white/88 p-5 backdrop-blur-md">
+                    <div className="mx-auto max-w-sm">
+                        <button
+                            onClick={handleVerify}
+                            disabled={loading || otp.join('').length !== 4}
+                            className={`flex h-14 w-full items-center justify-center gap-2 rounded-[22px] text-[15px] font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(15,23,42,0.12)] transition-all ${
+                                otp.join('').length === 4
+                                    ? 'bg-slate-950 text-white hover:bg-slate-900'
+                                    : 'pointer-events-none bg-slate-200 text-slate-500 shadow-none'
+                            }`}
+                        >
+                            {loading ? 'Verifying OTP...' : 'Verify & Continue'}
+                            {!loading && <ChevronRight size={17} strokeWidth={2.8} />}
+                        </button>
+                    </div>
                 </div>
             </main>
         </div>

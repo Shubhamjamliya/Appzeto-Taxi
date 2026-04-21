@@ -74,7 +74,6 @@ export const userAuthService = {
   startOtp: (phone) => api.post('/users/auth/send-otp', { phone }),
   verifyOtp: (phone, otp) => api.post('/users/auth/verify-otp', { phone, otp }),
   verifyOtpLogin: (phone) => api.post('/users/otp-login', { phone }),
-  loginDemoUser: () => api.post('/users/otp-login', { phone: '9998887776' }),
   uploadProfileImage: (dataUrl) => api.post('/users/profile-image', { dataUrl }),
   updateCurrentUser: (payload) => api.patch('/users/me', payload, withUserAuth()),
   getCurrentUser: () => api.get('/users/me', withUserAuth()),

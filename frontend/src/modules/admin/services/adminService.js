@@ -25,7 +25,11 @@ export const adminService = {
   /**
    * Driver Management
    */
-  getDrivers: (page = 1, limit = 50) => api.get(`/admin/drivers?page=${page}&limit=${limit}`),
+  getDrivers: (page = 1, limit = 50, filters = {}) => {
+    const params = new URLSearchParams({ page, limit, ...filters }).toString();
+    return api.get(`/admin/drivers?${params}`);
+  },
+
   bulkImportDrivers: (payload) => api.post('/admin/drivers/bulk-import', payload),
   getDriver: (id) => api.get(`/admin/drivers/${id}`),
   createDriver: (driverData) => api.post('/admin/drivers', driverData),

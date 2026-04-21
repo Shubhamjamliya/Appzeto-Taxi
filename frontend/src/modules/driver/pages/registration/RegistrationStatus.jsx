@@ -5,8 +5,10 @@ import {
   ChevronRight,
   Clock,
   Mail,
-  Phone,
   ShieldCheck,
+  LayoutDashboard,
+  Search,
+  CheckCircle
 } from "lucide-react";
 import { useSettings } from "../../../../shared/context/SettingsContext";
 import {
@@ -149,7 +151,7 @@ const RegistrationStatus = () => {
         }
 
         setChecking(false);
-        setStatusMessage("Your request has been sent to the admin team.");
+        setStatusMessage("Your application is being audited by our verification team.");
       } catch (error) {
         if (!mountedRef.current) {
           return;
@@ -188,95 +190,101 @@ const RegistrationStatus = () => {
   }, [location.state, navigate]);
 
   return (
-    <div className="min-h-screen bg-taxi-bg font-sans p-5 pt-8 select-none overflow-x-hidden flex flex-col items-center text-center">
-      <div className="mb-8 flex items-center justify-center">
+    <div 
+        className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-12 select-none overflow-x-hidden flex flex-col items-center"
+        style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+    >
+      <div className="mb-10 w-full flex justify-center">
         {appLogo ? (
           <img
             src={appLogo}
             alt={appName}
-            className="h-8 object-contain drop-shadow-sm"
+            className="h-8 object-contain"
           />
         ) : (
-          <span className="text-xl font-black text-slate-900">{appName}</span>
+          <span className="text-xl font-bold text-slate-900 tracking-tight">{appName}</span>
         )}
       </div>
 
-      <div className="w-20 h-20 bg-white rounded-3xl flex items-center justify-center text-amber-500 shadow-2xl shadow-amber-500/10 mb-6">
-        <Clock size={32} strokeWidth={2.5} className="animate-pulse" />
-      </div>
+      <main className="w-full max-w-sm space-y-8 text-center">
+        <section className="flex flex-col items-center space-y-6">
+            <div className="relative">
+                <div className="w-24 h-24 bg-white rounded-[32px] flex items-center justify-center text-[#8a5a22] shadow-[0_20px_50px_rgba(148,116,70,0.15)] border border-white/80 animate-bounce-slow">
+                    <Clock size={36} strokeWidth={2} />
+                </div>
+                <div className="absolute -bottom-2 -right-2 w-8 h-8 bg-emerald-500 rounded-2xl flex items-center justify-center text-white border-4 border-white shadow-lg">
+                    <Search size={14} strokeWidth={3} />
+                </div>
+            </div>
 
-      <div className="space-y-2 max-w-sm">
-        <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
-          Verification Pending
-        </h1>
-        <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">
-          Account under review by our team
-        </p>
-        <div className="pt-2">
-          <span className="bg-amber-100 text-amber-600 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest">
-            {checking ? "Checking approval status" : "Pending admin action"}
-          </span>
-        </div>
-      </div>
+            <div className="space-y-2">
+                <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9a7b50]">
+                    Registration complete
+                </p>
+                <h1 className="text-[32px] font-semibold leading-[1.05] tracking-[-0.04em] text-slate-950">
+                    Review Pending
+                </h1>
+                <p className="mx-auto max-w-[28ch] text-sm leading-6 text-slate-600">
+                    We've received your documents. Our team is currently performing a manual audit.
+                </p>
+            </div>
+        </section>
 
-      <div className="mt-8 bg-white p-5 rounded-[2rem] border border-slate-100 shadow-sm w-full max-w-sm space-y-4">
-        <div className="flex items-center gap-3 text-left">
-          <div className="w-10 h-10 bg-emerald-50 rounded-2xl flex items-center justify-center text-emerald-500">
-            <ShieldCheck size={20} />
-          </div>
-          <div className="flex-1 space-y-0.5">
-            <h4 className="text-[13px] font-black text-slate-900 leading-none">
-              Security Check Passed
-            </h4>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              Initial KYC Verified
+        <section className="space-y-4 rounded-[30px] border border-slate-200/70 bg-white p-5 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+            <div className="flex items-center gap-4 text-left">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600">
+                    <ShieldCheck size={20} />
+                </div>
+                <div className="flex-1">
+                    <h4 className="text-[15px] font-semibold text-slate-950">Security Verified</h4>
+                    <p className="text-[12px] font-medium text-slate-500">Initial automated checks passed</p>
+                </div>
+                <CheckCircle size={18} className="text-emerald-500" />
+            </div>
+
+            <div className="h-px w-full bg-slate-100" />
+
+            <div className="flex items-center gap-4 text-left">
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f7efe2] text-[#8a5a22]">
+                    <Mail size={18} />
+                </div>
+                <div className="flex-1">
+                    <h4 className="text-[15px] font-semibold text-slate-950">Manual Audit</h4>
+                    <p className="text-[12px] font-medium text-slate-500 leading-tight">
+                        {checking ? "Checking approval status..." : statusMessage}
+                    </p>
+                </div>
+                <div className="h-5 w-5 border-2 border-slate-100 border-t-[#8a5a22] rounded-full animate-spin" />
+            </div>
+        </section>
+
+        <div className="rounded-2xl bg-amber-50/50 border border-amber-100 p-4">
+            <p className="text-xs font-medium text-amber-900 leading-relaxed italic">
+                You will receive a notification once your account is activated. Usually takes 24-48 hours.
             </p>
-          </div>
-          <CheckCircle2 size={16} className="text-emerald-500" />
         </div>
 
-        <div className="flex items-center gap-3 text-left opacity-60 grayscale scale-95 origin-left">
-          <div className="w-10 h-10 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-900">
-            <Mail size={18} />
-          </div>
-          <div className="flex-1 space-y-0.5">
-            <h4 className="text-[13px] font-black text-slate-900 leading-none">
-              Manual Audit
-            </h4>
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-              {statusMessage}
-            </p>
-          </div>
-          <div className="w-4 h-4 border-2 border-slate-200 border-t-slate-900 rounded-full animate-spin" />
+        <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200/70 bg-white/88 p-5 backdrop-blur-md">
+            <div className="mx-auto max-w-sm">
+                <button
+                    onClick={handleDashboard}
+                    disabled={checking}
+                    className={`flex h-14 w-full items-center justify-center gap-2 rounded-[22px] text-[15px] font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(15,23,42,0.12)] transition-all ${
+                        !checking
+                            ? 'bg-slate-950 text-white hover:bg-slate-900'
+                            : 'pointer-events-none bg-slate-200 text-slate-500 shadow-none'
+                    }`}
+                >
+                    <LayoutDashboard size={18} />
+                    {checking ? "Waiting for Audit..." : "Go to Dashboard"}
+                    {!checking && <ChevronRight size={17} strokeWidth={2.8} />}
+                </button>
+            </div>
         </div>
-      </div>
-
-      <div className="mt-8 p-5 bg-amber-50/50 rounded-2xl border border-amber-100/50 max-w-sm">
-        <p className="text-[10px] font-bold text-slate-600 leading-relaxed italic">
-          We have sent your request to admin. You will be able to open the
-          driver panel only after approval.
-        </p>
-      </div>
-
-      <div className="flex-1" />
-
-      <div className="w-full max-w-sm space-y-4 pb-8">
-        <button
-          onClick={handleDashboard}
-          disabled={checking}
-          className="w-full h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center gap-3 text-[13px] font-black uppercase tracking-widest shadow-xl shadow-slate-900/10 active:scale-95 transition-transform">
-          {checking ? "Waiting for Approval" : "Go to Dashboard"}{" "}
-          <ChevronRight size={16} strokeWidth={3} />
-        </button>
-        <div className="flex items-center justify-center gap-2 text-slate-300">
-          <Phone size={12} />
-          <span className="text-[9px] font-black uppercase tracking-widest">
-            +91 0000 0000 00 | Help Center
-          </span>
-        </div>
-      </div>
+      </main>
     </div>
   );
 };
 
 export default RegistrationStatus;
+

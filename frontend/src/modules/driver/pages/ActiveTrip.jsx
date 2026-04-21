@@ -547,10 +547,10 @@ const ActiveTrip = () => {
     const expectedOtp = String(liveRaw?.otp || liveRequest?.otp || effectiveState?.otp || '');
     const pickupContact = isParcel ? tripData.sender : tripData.user;
     const destinationContact = isParcel ? tripData.receiver : tripData.user;
-    const routeStrokeColor = phase === 'to_pickup' || phase === 'otp_verification' ? '#f97316' : '#10b981';
-    const routeAccentSoft = hexToRgba(routeStrokeColor, 0.12);
+    const routeStrokeColor = '#000000';
+    const routeAccentSoft = hexToRgba(routeStrokeColor, 0.08);
     const routeAccentMuted = hexToRgba(routeStrokeColor, 0.18);
-    const routeAccentBorder = hexToRgba(routeStrokeColor, 0.24);
+    const routeAccentBorder = hexToRgba(routeStrokeColor, 0.18);
     const simulationTotalSteps = Math.max(0, simulationPathRef.current.length - 1);
     const simulationProgress = simulationTotalSteps > 0
         ? Math.min(100, Math.round((simulationStep / simulationTotalSteps) * 100))
@@ -1085,8 +1085,8 @@ const ActiveTrip = () => {
                                 <PolylineF
                                     path={routePath}
                                     options={{
-                                        strokeColor: '#ffffff',
-                                        strokeOpacity: 0.95,
+                                        strokeColor: '#000000',
+                                        strokeOpacity: 0.16,
                                         strokeWeight: 9,
                                         zIndex: 10,
                                     }}
@@ -1140,7 +1140,7 @@ const ActiveTrip = () => {
 
                 <div className="absolute top-8 left-16 right-4 z-50 flex items-center gap-3 bg-slate-900/92 backdrop-blur-xl p-3 rounded-2xl border border-white/10 shadow-2xl">
                     <div
-                        className="w-10 h-10 rounded-xl flex items-center justify-center text-slate-900 shadow-xl"
+                        className="w-10 h-10 rounded-xl flex items-center justify-center text-white shadow-xl"
                         style={{ backgroundColor: routeStrokeColor }}
                     >
                         {isParcel ? <Package size={20} strokeWidth={2.5} /> : <img src={carIcon} alt="Taxi" className="h-7 w-7 object-contain" />}
@@ -1249,7 +1249,7 @@ const ActiveTrip = () => {
                                             {isParcel ? tripData.sender.name : tripData.user.name}
                                         </h4>
                                         <div className="flex items-center gap-1.5 opacity-60">
-                                            <Star size={10} fill="#f0c419" className="text-yellow-500" />
+                                            <Star size={10} fill={routeStrokeColor} className="text-black" />
                                             <p className="text-[9px] font-semibold text-slate-400 uppercase tracking-wide">
                                                 {isParcel ? tripData.sender.rating : tripData.user.rating} • 1.2 KM
                                             </p>
@@ -1342,7 +1342,12 @@ const ActiveTrip = () => {
                                             {tripData.drop}
                                         </p>
                                     </div>
-                                    <button onClick={triggerEmergencySos} className="shrink-0 w-11 h-11 bg-white text-rose-500 rounded-xl border border-rose-100 flex items-center justify-center active:scale-90 transition-transform shadow-sm" aria-label="Call emergency SOS">
+                                    <button
+                                        onClick={triggerEmergencySos}
+                                        className="shrink-0 w-11 h-11 rounded-xl border flex items-center justify-center active:scale-90 transition-transform shadow-sm"
+                                        style={{ backgroundColor: routeAccentSoft, color: routeStrokeColor, borderColor: routeAccentBorder }}
+                                        aria-label="Call emergency SOS"
+                                    >
                                         <ShieldAlert size={22} strokeWidth={2.5} />
                                     </button>
                                 </div>

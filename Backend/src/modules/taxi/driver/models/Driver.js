@@ -278,7 +278,11 @@ const driverSchema = new mongoose.Schema(
 );
 
 driverSchema.index({ 'deletionRequest.status': 1, deletedAt: 1 });
+driverSchema.index({ deletedAt: 1, createdAt: -1 });
+driverSchema.index({ status: 1, deletedAt: 1 });
+driverSchema.index({ phone: 1, deletedAt: 1 });
 
 driverSchema.index({ location: '2dsphere' });
 
 export const Driver = mongoose.models.TaxiDriver || mongoose.model('TaxiDriver', driverSchema);
+

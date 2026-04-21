@@ -13,11 +13,14 @@ import carIcon from '../../../assets/icons/car.png';
 import bikeIcon from '../../../assets/icons/bike.png';
 import autoIcon from '../../../assets/icons/auto.png';
 import deliveryIcon from '../../../assets/icons/Delivery.png';
+import api from '../../../shared/api/axiosInstance';
 import { useSettings } from '../../../shared/context/SettingsContext';
 import {
   CURRENT_RIDE_UPDATED_EVENT,
   getCurrentRide,
   isActiveCurrentRide,
+  saveCurrentRide,
+  clearCurrentRide,
 } from '../services/currentRideService';
 
 const Motion = motion;
@@ -65,6 +68,13 @@ const Home = () => {
   });
 
   useEffect(() => {
+    const token = localStorage.getItem('userToken') || localStorage.getItem('token');
+    if (!token) {
+      navigate('/taxi/user/login', { replace: true });
+    }
+  }, [navigate]);
+
+  useEffect(() => {
     const refreshCurrentRide = () => {
       const ride = getCurrentRide();
       setCurrentRide(isActiveCurrentRide(ride) ? ride : null);
@@ -73,6 +83,32 @@ const Home = () => {
     refreshCurrentRide();
     window.addEventListener('storage', refreshCurrentRide);
     window.addEventListener(CURRENT_RIDE_UPDATED_EVENT, refreshCurrentRide);
+
+    // Sync with server on mount
+    api.get('/rides/active/me')
+      .then((res) => {
+        const rideData = res.data?.ride || res.data || res;
+        if (rideData?._id || rideData?.rideId) {
+          const normalizedRide = {
+            rideId: rideData._id || rideData.rideId,
+            pickup: rideData.pickupAddress || rideData.pickup,
+            drop: rideData.dropAddress || rideData.drop,
+            fare: rideData.fare,
+            status: rideData.status,
+            liveStatus: rideData.liveStatus,
+            serviceType: rideData.serviceType,
+            driver: rideData.driverId || rideData.driver,
+            vehicleIconUrl: rideData.vehicleIconUrl,
+            vehicleIconType: rideData.vehicleIconType,
+          };
+          saveCurrentRide(normalizedRide);
+        } else {
+          clearCurrentRide();
+        }
+      })
+      .catch(() => {
+        // Fallback for offline or errors
+      });
 
     return () => {
       window.removeEventListener('storage', refreshCurrentRide);
@@ -207,14 +243,14 @@ const Home = () => {
             onClick={() => navigate(trackingPath, { state: currentRide })}
             className="fixed bottom-24 left-4 right-4 z-[60] mx-auto flex max-w-[calc(32rem-2rem)] items-center gap-3 rounded-[20px] border border-white/80 bg-white/95 px-4 py-3 text-left shadow-[0_12px_34px_rgba(15,23,42,0.16)] backdrop-blur-xl"
           >
-            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900">
+            <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[14px] bg-slate-900 shadow-lg">
               <img src={currentRideIcon} alt={vehicleLabel} className="h-8 w-8 object-contain" draggable={false} />
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-emerald-500" />
-                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-emerald-600">
-                  {serviceType === 'parcel' ? 'Current Parcel' : 'Current Ride'}
+                <span className="h-2 w-2 rounded-full bg-orange-500 animate-pulse" />
+                <p className="text-[9px] font-black uppercase tracking-[0.22em] text-orange-600">
+                  {serviceType === 'parcel' ? 'Parcel in progress' : 'Current Ride'}
                 </p>
               </div>
               <p className="mt-0.5 truncate text-[14px] font-black leading-tight text-slate-900">
@@ -229,10 +265,9 @@ const Home = () => {
                 <span className="truncate">{currentRide.drop || 'Drop location'}</span>
               </div>
             </div>
-            <div className="shrink-0 text-right">
-              <p className="text-[11px] font-black text-slate-900">Rs {Number(currentRide.fare || 0).toFixed(0)}</p>
-              <p className="mt-1 text-[9px] font-black uppercase tracking-[0.18em] text-slate-400">{driverName}</p>
-              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-orange-500 text-white">
+            <div className="shrink-0 text-right flex flex-col items-end gap-1">
+              <p className="text-[11px] font-black text-slate-900 px-2 py-0.5 rounded-lg bg-slate-100">Rs {Number(currentRide.fare || 0).toFixed(0)}</p>
+              <div className="mt-1 inline-flex h-8 w-8 items-center justify-center rounded-[12px] bg-slate-900 text-white shadow-md">
                 <ChevronRight size={18} strokeWidth={3} />
               </div>
             </div>
@@ -246,4 +281,3 @@ const Home = () => {
 };
 
 export default Home;
-

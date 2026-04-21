@@ -137,9 +137,16 @@ const ACTIVE_SEARCH_NONCE_CLEANUPS = new Map();
 const normalizeDriver = (driver = {}) => ({
   name: driver.name || 'Captain',
   rating: driver.rating || '4.9',
-  vehicle: driver.vehicleType || 'Taxi',
-  plate: driver.vehicleNumber || 'Assigned',
-  phone: driver.phone || '',
+  vehicle: driver.vehicle || driver.vehicleType || driver.vehicle_type || 'Taxi',
+  vehicleType: driver.vehicleType || driver.vehicle_type || driver.vehicle || 'Taxi',
+  plate: driver.plate || driver.vehicleNumber || driver.vehicle_number || 'Assigned',
+  vehicleNumber: driver.vehicleNumber || driver.vehicle_number || driver.plate || 'Assigned',
+  phone: driver.phone || driver.mobile || driver.phoneNumber || '',
+  profileImage: driver.profileImage || driver.profile_image || driver.image || driver.avatar || driver.selfie || '',
+  vehicleImage: driver.vehicleImage || driver.vehicle_image || driver.vehiclePhoto || driver.vehicle_photo || driver.vehicle?.image || '',
+  vehicleColor: driver.vehicleColor || driver.vehicle_color || driver.vehicle?.vehicleColor || driver.vehicle?.vehicle_color || '',
+  vehicleMake: driver.vehicleMake || driver.vehicle_make || driver.vehicle?.vehicleMake || driver.vehicle?.vehicle_make || '',
+  vehicleModel: driver.vehicleModel || driver.vehicle_model || driver.vehicle?.vehicleModel || driver.vehicle?.vehicle_model || '',
   vehicleIconUrl: driver.vehicleIconUrl || driver.map_icon || driver.icon || '',
   eta: driver.eta || 2,
 });
@@ -187,6 +194,7 @@ const SearchingDriver = () => {
   const [stage, setStage] = useState(STAGES.SEARCHING);
   const [showCancelConfirm, setShowCancelConfirm] = useState(false);
   const [driver, setDriver] = useState(DRIVER_PLACEHOLDER);
+  const [rideOtp, setRideOtp] = useState('');
   const [searchStatus, setSearchStatus] = useState('Connecting with drivers nearby');
   const [nearbyVehicleCount, setNearbyVehicleCount] = useState(4);
   const timerRef = useRef(null);
@@ -275,6 +283,7 @@ const SearchingDriver = () => {
           replace: true,
           state: activeRide,
         });
+        setRideOtp(activeRide?.otp || '');
         return;
       }
 
@@ -358,6 +367,7 @@ const SearchingDriver = () => {
         paymentMethod: routeState.paymentMethod || 'Cash',
         status: 'accepted',
       });
+      setRideOtp(nextOtp);
 
       clearTimeout(timerRef.current);
       clearInterval(activeRidePollRef.current);
@@ -464,16 +474,8 @@ const SearchingDriver = () => {
         let userToken = getLocalUserToken();
 
         if (!userToken) {
-          const loginResponse = await userAuthService.loginDemoUser();
-          const loginPayload = unwrapLoginPayload(loginResponse);
-
-          if (loginPayload?.token) {
-            userToken = loginPayload.token;
-            localStorage.setItem('token', userToken);
-            localStorage.setItem('userToken', userToken);
-            localStorage.setItem('role', 'user');
-            localStorage.setItem('userInfo', JSON.stringify(loginPayload.user || {}));
-          }
+          navigate('/taxi/user/login', { replace: true });
+          return;
         }
 
         if (disposed) {
@@ -553,8 +555,13 @@ const SearchingDriver = () => {
           setSearchStatus('Booking created. Notifying nearby drivers...');
         }
       } catch (error) {
+        console.error('[searching-driver] Ride creation error:', error);
         if (!disposed) {
-          setSearchStatus(error?.message || 'Could not create ride request.');
+          setSearchStatus(error?.message || 'Could not create ride request. Redirecting...');
+          // Optional: Add a delay and navigate back if it's a critical failure
+          setTimeout(() => {
+             if (!disposed) navigate(routePrefix || '/', { replace: true });
+          }, 3000);
         }
       }
     })();
@@ -838,7 +845,7 @@ const SearchingDriver = () => {
                     <p className="text-[10px] font-bold text-slate-400 mt-0.5">To start your ride</p>
                   </div>
                   <div className="flex gap-1">
-                    {otp.split('').map((d, i) => (
+                    {(rideOtp || "----").split('').map((d, i) => (
                       <motion.div key={i} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.07 }}
                         className="w-8 h-9 bg-white rounded-[8px] border-2 border-orange-200 flex items-center justify-center shadow-sm">
                         <span className="text-[17px] font-bold text-slate-900">{d}</span>

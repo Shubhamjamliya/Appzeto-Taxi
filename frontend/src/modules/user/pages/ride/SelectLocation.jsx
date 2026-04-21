@@ -1,9 +1,11 @@
-import React, { useState, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { ArrowLeft, MapPin, X, Plus, Minus, Check, Map as MapIcon, LoaderCircle, Navigation, AlertTriangle, ChevronRight } from 'lucide-react';
 import { GoogleMap, MarkerF } from '@react-google-maps/api';
 import { useAppGoogleMapsLoader, INDIA_CENTER, HAS_VALID_GOOGLE_MAPS_KEY } from '../../../admin/utils/googleMaps';
+import api from '../../../../shared/api/axiosInstance';
+import { getSavedLocation, getSavedLocationCoords, saveLocation } from '../../services/locationStore';
 
 const LOCATION_COORDS = {
   'Pipaliyahana, Indore': [75.9048, 22.7039],
@@ -25,13 +27,124 @@ const LOCATION_COORDS = {
 };
 
 const getCoords = (title, fallback = [75.8577, 22.7196]) => LOCATION_COORDS[title] || fallback;
+const DEFAULT_COORDS = [75.8577, 22.7196];
+
+const unwrapResults = (response) => {
+  const payload = response?.data?.data || response?.data || response;
+  return payload?.results || payload?.zones || (Array.isArray(payload) ? payload : []);
+};
+
+const getZoneServiceLocationId = (zone) =>
+  zone?.service_location_id?._id
+  || zone?.service_location_id?.id
+  || zone?.service_location_id
+  || zone?.service_location?._id
+  || zone?.service_location?.id
+  || zone?.service_location
+  || '';
+
+const isZoneActive = (zone) => zone?.active !== false && Number(zone?.status ?? 1) !== 0;
+
+const toZonePoint = (point) => {
+  if (Array.isArray(point) && point.length >= 2) {
+    const [lng, lat] = point;
+    if (Number.isFinite(Number(lat)) && Number.isFinite(Number(lng))) {
+      return { lat: Number(lat), lng: Number(lng) };
+    }
+  }
+
+  if (point && typeof point === 'object') {
+    const lat = Number(point.lat ?? point.latitude);
+    const lng = Number(point.lng ?? point.longitude ?? point.lon);
+
+    if (Number.isFinite(lat) && Number.isFinite(lng)) {
+      return { lat, lng };
+    }
+  }
+
+  return null;
+};
+
+const normalizeZonePath = (zone) => {
+  const source = Array.isArray(zone?.coordinates?.[0]) && Array.isArray(zone?.coordinates?.[0]?.[0])
+    ? zone.coordinates[0]
+    : zone?.coordinates;
+
+  if (!Array.isArray(source)) {
+    return [];
+  }
+
+  return source.map(toZonePoint).filter(Boolean);
+};
+
+const getBoundsFromPaths = (paths) => {
+  if (!paths.length) {
+    return null;
+  }
+
+  let north = -90;
+  let south = 90;
+  let east = -180;
+  let west = 180;
+
+  paths.forEach((path) => {
+    path.forEach((point) => {
+      north = Math.max(north, point.lat);
+      south = Math.min(south, point.lat);
+      east = Math.max(east, point.lng);
+      west = Math.min(west, point.lng);
+    });
+  });
+
+  if (![north, south, east, west].every(Number.isFinite)) {
+    return null;
+  }
+
+  return { north, south, east, west };
+};
+
+const isPointInPolygon = (point, polygon) => {
+  if (!point || polygon.length < 3) {
+    return false;
+  }
+
+  let inside = false;
+
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].lng;
+    const yi = polygon[i].lat;
+    const xj = polygon[j].lng;
+    const yj = polygon[j].lat;
+
+    const intersects = ((yi > point.lat) !== (yj > point.lat))
+      && (point.lng < ((xj - xi) * (point.lat - yi)) / ((yj - yi) || Number.EPSILON) + xi);
+
+    if (intersects) {
+      inside = !inside;
+    }
+  }
+
+  return inside;
+};
+
+const isPointInAnyZone = (point, zonePaths) => {
+  if (!zonePaths.length) {
+    return true;
+  }
+
+  return zonePaths.some((path) => isPointInPolygon(point, path));
+};
 
 const SelectLocation = () => {
   const location = useLocation();
   const routeState = location.state || {};
-  const [pickup, setPickup] = useState(() => routeState.pickup || 'Pipaliyahana, Indore');
+  const serviceLocationId = routeState.service_location_id || routeState.serviceLocationId || '';
+  const savedLocation = getSavedLocation();
+  const savedPickupLabel = String(savedLocation?.address || '').trim();
+  const savedPickupCoords = getSavedLocationCoords();
+  const [pickup, setPickup] = useState(() => routeState.pickup || savedPickupLabel || 'Pipaliyahana, Indore');
   const [drop, setDrop] = useState(() => routeState.drop || '');
-  const [pickupCoords, setPickupCoords] = useState(() => routeState.pickupCoords || getCoords(routeState.pickup || 'Pipaliyahana, Indore'));
+  const [pickupCoords, setPickupCoords] = useState(() => routeState.pickupCoords || savedPickupCoords || getCoords(routeState.pickup || savedPickupLabel || 'Pipaliyahana, Indore'));
   const [dropCoords, setDropCoords] = useState(() => routeState.dropCoords || null);
   const [stops, setStops] = useState(() => routeState.stops || []);          // array of stop strings
   const [activeInput, setActiveInput] = useState('drop'); // 'pickup' | 'drop' | stopIdx
@@ -41,8 +154,17 @@ const SelectLocation = () => {
   const [isGeocoding, setIsGeocoding] = useState(false);
   const [isDragging, setIsDragging] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [zonePaths, setZonePaths] = useState([]);
+  const [remoteResults, setRemoteResults] = useState([]);
+  const [isSearchingLocations, setIsSearchingLocations] = useState(false);
   const mapInstanceRef = useRef(null);
   const lastCenterRef = useRef(INDIA_CENTER);
+  const geocoderRef = useRef(null);
+  const autocompleteServiceRef = useRef(null);
+  const placesServiceRef = useRef(null);
+  const autocompleteSessionTokenRef = useRef(null);
+  const searchCacheRef = useRef(new Map());
+  const latestSearchRef = useRef(0);
   const { isLoaded, loadError } = useAppGoogleMapsLoader();
   const navigate = useNavigate();
   const routePrefix = window.location.pathname.startsWith('/taxi/user') ? '/taxi/user' : '';
@@ -66,7 +188,100 @@ const SelectLocation = () => {
     { title: 'Mahalaxmi Nagar', address: 'Mahalaxmi Nagar, Indore, Madhya Pradesh' },
   ];
 
-  const resolveCoords = async (label, fallback = [75.8577, 22.7196]) => {
+  const zoneBounds = useMemo(() => getBoundsFromPaths(zonePaths), [zonePaths]);
+
+  useEffect(() => {
+    let active = true;
+
+    const loadZones = async () => {
+      if (!serviceLocationId) {
+        setZonePaths([]);
+        return;
+      }
+
+      try {
+        const response = await api.get('/admin/zones');
+        if (!active) {
+          return;
+        }
+
+        const matchingPaths = unwrapResults(response)
+          .filter((zone) => isZoneActive(zone) && String(getZoneServiceLocationId(zone)) === String(serviceLocationId))
+          .map(normalizeZonePath)
+          .filter((path) => path.length >= 3);
+
+        setZonePaths(matchingPaths);
+      } catch {
+        if (active) {
+          setZonePaths([]);
+        }
+      }
+    };
+
+    loadZones();
+
+    return () => {
+      active = false;
+    };
+  }, [serviceLocationId]);
+
+  useEffect(() => {
+    if (!isLoaded || !window.google?.maps?.places?.AutocompleteService) {
+      return;
+    }
+
+    autocompleteServiceRef.current = autocompleteServiceRef.current || new window.google.maps.places.AutocompleteService();
+    placesServiceRef.current = placesServiceRef.current || new window.google.maps.places.PlacesService(document.createElement('div'));
+    autocompleteSessionTokenRef.current = autocompleteSessionTokenRef.current
+      || new window.google.maps.places.AutocompleteSessionToken();
+  }, [isLoaded]);
+
+  const getAutocompleteSessionToken = () => {
+    if (!window.google?.maps?.places?.AutocompleteSessionToken) {
+      return null;
+    }
+
+    if (!autocompleteSessionTokenRef.current) {
+      autocompleteSessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+    }
+
+    return autocompleteSessionTokenRef.current;
+  };
+
+  const resetAutocompleteSessionToken = () => {
+    if (!window.google?.maps?.places?.AutocompleteSessionToken) {
+      autocompleteSessionTokenRef.current = null;
+      return;
+    }
+
+    autocompleteSessionTokenRef.current = new window.google.maps.places.AutocompleteSessionToken();
+  };
+
+  const getPlacesService = () => {
+    if (!window.google?.maps?.places?.PlacesService) {
+      return null;
+    }
+
+    if (!placesServiceRef.current) {
+      placesServiceRef.current = new window.google.maps.places.PlacesService(document.createElement('div'));
+    }
+
+    return placesServiceRef.current;
+  };
+
+  const getGeocoder = () => {
+    if (!window.google?.maps?.Geocoder) {
+      return null;
+    }
+
+    if (!geocoderRef.current) {
+      geocoderRef.current = new window.google.maps.Geocoder();
+    }
+
+    return geocoderRef.current;
+  };
+
+  const resolveCoords = async (label, fallback = DEFAULT_COORDS) => {
     if (!label || !String(label).trim()) {
       return fallback;
     }
@@ -80,7 +295,10 @@ const SelectLocation = () => {
       return fallback;
     }
 
-    const geocoder = new window.google.maps.Geocoder();
+    const geocoder = getGeocoder();
+    if (!geocoder) {
+      return fallback;
+    }
 
     return new Promise((resolve) => {
       geocoder.geocode({ address: String(label).trim() }, (results, status) => {
@@ -95,6 +313,98 @@ const SelectLocation = () => {
     });
   };
 
+  const resolvePlaceSelection = async (result) => {
+    if (Array.isArray(result?.coords) && result.coords.length === 2) {
+      return {
+        title: result.title,
+        address: result.address || result.title,
+        coords: result.coords,
+      };
+    }
+
+    const geocoder = getGeocoder();
+    const placesService = getPlacesService();
+
+    if (result?.placeId && placesService) {
+      return new Promise((resolve) => {
+        placesService.getDetails(
+          {
+            placeId: result.placeId,
+            sessionToken: getAutocompleteSessionToken(),
+            fields: ['formatted_address', 'geometry.location', 'name'],
+          },
+          (place, status) => {
+            const location = place?.geometry?.location;
+
+            if (status === 'OK' && location) {
+              resolve({
+                title: result.title || place.name || place.formatted_address,
+                address: place.formatted_address || result.address || result.title || '',
+                coords: [location.lng(), location.lat()],
+              });
+              return;
+            }
+
+            if (geocoder) {
+              geocoder.geocode({ placeId: result.placeId }, (results, geocodeStatus) => {
+                const geocodedPlace = results?.[0];
+                const geocodedLocation = geocodedPlace?.geometry?.location;
+
+                if (geocodeStatus === 'OK' && geocodedLocation) {
+                  resolve({
+                    title: result.title || geocodedPlace.formatted_address,
+                    address: geocodedPlace.formatted_address || result.address || result.title || '',
+                    coords: [geocodedLocation.lng(), geocodedLocation.lat()],
+                  });
+                  return;
+                }
+
+                resolve({
+                  title: result?.title || '',
+                  address: result?.address || result?.title || '',
+                  coords: DEFAULT_COORDS,
+                });
+              });
+              return;
+            }
+
+            resolve({
+              title: result?.title || '',
+              address: result?.address || result?.title || '',
+              coords: DEFAULT_COORDS,
+            });
+          },
+        );
+      });
+    }
+
+    if (!geocoder) {
+      return {
+        title: result?.title || '',
+        address: result?.address || result?.title || '',
+        coords: await resolveCoords(result?.address || result?.title || ''),
+      };
+    }
+
+    const coords = await resolveCoords(result?.address || result?.title || '');
+    return {
+      title: result?.title || '',
+      address: result?.address || result?.title || '',
+      coords,
+    };
+  };
+
+  const validateZoneSelection = (coords) => {
+    if (!Array.isArray(coords) || coords.length !== 2) {
+      return false;
+    }
+
+    const [lng, lat] = coords;
+    const point = { lat: Number(lat), lng: Number(lng) };
+
+    return isPointInAnyZone(point, zonePaths);
+  };
+
   const getQuery = () => {
     if (activeInput === 'pickup') return pickup;
     if (activeInput === 'drop') return drop;
@@ -103,13 +413,86 @@ const SelectLocation = () => {
   };
 
   const query = getQuery();
+  const localSearchResults = useMemo(
+    () =>
+      query.trim().length >= 1
+        ? allResults.filter(
+          (result) =>
+            result.title.toLowerCase().includes(query.toLowerCase())
+            || result.address.toLowerCase().includes(query.toLowerCase()),
+        )
+        : allResults.slice(0, 6),
+    [query],
+  );
 
-  const searchResults = query.trim().length >= 1
-    ? allResults.filter(r =>
-        r.title.toLowerCase().includes(query.toLowerCase()) ||
-        r.address.toLowerCase().includes(query.toLowerCase())
-      )
-    : allResults.slice(0, 6);
+  useEffect(() => {
+    if (!query.trim() || query.trim().length < 3 || !HAS_VALID_GOOGLE_MAPS_KEY || !autocompleteServiceRef.current) {
+      setRemoteResults([]);
+      setIsSearchingLocations(false);
+      return;
+    }
+
+    const normalizedQuery = query.trim().toLowerCase();
+    const cached = searchCacheRef.current.get(normalizedQuery);
+    if (cached) {
+      setRemoteResults(cached);
+      setIsSearchingLocations(false);
+      return;
+    }
+
+    const requestId = latestSearchRef.current + 1;
+    latestSearchRef.current = requestId;
+    setIsSearchingLocations(true);
+
+    const timeoutId = window.setTimeout(() => {
+      const request = {
+        input: query.trim(),
+        componentRestrictions: { country: 'in' },
+        sessionToken: getAutocompleteSessionToken(),
+      };
+
+      if (zoneBounds) {
+        request.bounds = zoneBounds;
+      }
+
+      autocompleteServiceRef.current.getPlacePredictions(request, (predictions = [], status) => {
+        if (latestSearchRef.current !== requestId) {
+          return;
+        }
+
+        const nextResults = status === 'OK'
+          ? predictions.slice(0, 6).map((prediction) => ({
+            title: prediction.structured_formatting?.main_text || prediction.description,
+            address: prediction.description,
+            placeId: prediction.place_id,
+          }))
+          : [];
+
+        searchCacheRef.current.set(normalizedQuery, nextResults);
+        setRemoteResults(nextResults);
+        setIsSearchingLocations(false);
+      });
+    }, 350);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [query, zoneBounds]);
+
+  const searchResults = useMemo(() => {
+    const merged = [...remoteResults, ...localSearchResults];
+    const seen = new Set();
+
+    return merged.filter((result) => {
+      const key = `${String(result.title || '').trim().toLowerCase()}|${String(result.address || '').trim().toLowerCase()}`;
+      if (!key || seen.has(key)) {
+        return false;
+      }
+
+      seen.add(key);
+      return true;
+    });
+  }, [localSearchResults, remoteResults]);
 
   const showMapToast = () => {
     // Reset map center to pickup or current location before opening
@@ -179,6 +562,17 @@ const SelectLocation = () => {
     const resolvedPickupCoords = pickupCoords || await resolveCoords(finalPickup);
     const resolvedDropCoords = optionalDropCoords || dropCoords || await resolveCoords(finalDrop);
 
+    if (!validateZoneSelection(resolvedPickupCoords) || !validateZoneSelection(resolvedDropCoords)) {
+      window.alert('Please choose pickup and drop locations inside the active service zone.');
+      return;
+    }
+
+    saveLocation({
+      address: finalPickup,
+      lat: resolvedPickupCoords[1],
+      lon: resolvedPickupCoords[0],
+    });
+
     navigate(`${routePrefix}/ride/select-vehicle`, {
       state: {
         pickup: finalPickup,
@@ -186,6 +580,7 @@ const SelectLocation = () => {
         stops: stops.filter(s => s.trim().length > 0),
         pickupCoords: resolvedPickupCoords,
         dropCoords: resolvedDropCoords,
+        service_location_id: serviceLocationId,
       },
     });
   };
@@ -193,9 +588,20 @@ const SelectLocation = () => {
   const handleConfirmMapLocation = () => {
     const finalAddress = pickedAddress;
     const selectedCoords = [lastCenterRef.current.lng, lastCenterRef.current.lat];
+
+    if (!validateZoneSelection(selectedCoords)) {
+      window.alert('Please pin a location inside the active service zone.');
+      return;
+    }
+
     if (activeInput === 'pickup') {
       setPickup(finalAddress);
       setPickupCoords(selectedCoords);
+      saveLocation({
+        address: finalAddress,
+        lat: selectedCoords[1],
+        lon: selectedCoords[0],
+      });
       setActiveInput('drop');
     } else if (activeInput === 'drop') {
       setDrop(finalAddress);
@@ -264,19 +670,36 @@ const SelectLocation = () => {
   };
 
   // When a suggestion is tapped
-  const handleSelectResult = async (title, selectedCoords = null) => {
-    const resolvedCoords = selectedCoords || await resolveCoords(title);
+  const handleSelectResult = async (result, selectedCoords = null) => {
+    const normalizedResult = typeof result === 'string'
+      ? { title: result, address: result, coords: selectedCoords }
+      : result;
+    const resolvedSelection = await resolvePlaceSelection(normalizedResult);
+    const finalTitle = resolvedSelection.title || resolvedSelection.address;
+    const resolvedCoords = selectedCoords || resolvedSelection.coords;
+
+    if (!validateZoneSelection(resolvedCoords)) {
+      window.alert('That location is outside your active service zone. Please choose a point inside the zone.');
+      return;
+    }
+
+    resetAutocompleteSessionToken();
 
     if (activeInput === 'pickup') {
-      setPickup(title);
+      setPickup(finalTitle);
       setPickupCoords(resolvedCoords);
+      saveLocation({
+        address: finalTitle,
+        lat: resolvedCoords[1],
+        lon: resolvedCoords[0],
+      });
       setActiveInput('drop');
     } else if (activeInput === 'drop') {
-      setDrop(title);
+      setDrop(finalTitle);
       setDropCoords(resolvedCoords);
-      handleConfirmNavigate(title, resolvedCoords);
+      handleConfirmNavigate(finalTitle, resolvedCoords);
     } else if (typeof activeInput === 'number') {
-      updateStop(activeInput, title);
+      updateStop(activeInput, finalTitle);
       // Move to next stop or drop
       if (activeInput < stops.length - 1) {
         setActiveInput(activeInput + 1);
@@ -630,7 +1053,7 @@ const SelectLocation = () => {
                 key={idx}
                 type="button"
                 whileTap={{ scale: 0.99 }}
-                onClick={() => handleSelectResult(result.title)}
+                onClick={() => handleSelectResult(result)}
                 className="w-full text-left flex items-start gap-3 px-4 py-3 border-b border-white/70 last:border-none hover:bg-white/60 transition-colors"
               >
                 <div className="mt-0.5 w-10 h-10 rounded-2xl bg-white/70 border border-white/80 shadow-sm flex items-center justify-center shrink-0 text-slate-500">
@@ -652,6 +1075,17 @@ const SelectLocation = () => {
               No results for <span className="text-slate-900">"{query}"</span>
             </p>
             <p className="text-[13px] font-medium text-slate-400 mt-1">Try a different search term</p>
+          </div>
+        )}
+        {query.trim().length >= 3 && (
+          <div className="mt-3 px-1">
+            <p className="text-[11px] font-bold text-slate-400">
+              {isSearchingLocations
+                ? 'Searching locations inside your service zone...'
+                : zonePaths.length
+                  ? 'Showing zone-prioritized results after 3+ characters. Selections outside the zone are blocked.'
+                  : 'Showing optimized search results after 3+ characters.'}
+            </p>
           </div>
         )}
       </div>

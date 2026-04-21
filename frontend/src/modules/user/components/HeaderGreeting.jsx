@@ -2,24 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { MapPin, Search, Wallet } from 'lucide-react';
-
-const STORAGE_KEY = 'appzeto:lastLocation';
-const LOCATION_UPDATED_EVENT = 'appzeto:location-updated';
-
-const DEFAULT_LOCATION_LABEL = 'Choose your location';
-
-const getSavedLocationLabel = () => {
-  if (typeof window === 'undefined') {
-    return DEFAULT_LOCATION_LABEL;
-  }
-
-  try {
-    const saved = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
-    return String(saved?.address || '').trim() || DEFAULT_LOCATION_LABEL;
-  } catch {
-    return DEFAULT_LOCATION_LABEL;
-  }
-};
+import { DEFAULT_LOCATION_LABEL, getSavedLocationLabel, LOCATION_UPDATED_EVENT } from '../services/locationStore';
 
 const fallingCoins = [
   { id: 1, left: '24%', delay: 0 },

@@ -132,10 +132,13 @@ const PendingDrivers = () => {
   const fetchPendingDrivers = async () => {
     setIsLoading(true);
     try {
-      const responseData = await adminService.getDrivers(1, 50);
+      // Fetch only drivers who are NOT approved
+      const responseData = await adminService.getDrivers(1, 50, { approve: false });
       const driversList = responseData.data?.results || [];
+      
+      // Still apply a lightweight role filter if needed, but the bulk is handled by the backend
       const pending = driversList
-        .filter((d) => !isDriverApproved(d) && String(d?.onboarding?.role || '').toLowerCase() !== 'owner')
+        .filter((d) => String(d?.onboarding?.role || '').toLowerCase() !== 'owner')
         .map((d) => ({
           id: d._id,
           name: d.name || 'Unknown',
@@ -156,6 +159,7 @@ const PendingDrivers = () => {
       setIsLoading(false);
     }
   };
+
 
   useEffect(() => {
     fetchPendingDrivers();

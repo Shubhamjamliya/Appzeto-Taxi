@@ -1,11 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { motion } from 'framer-motion';
-import { LoaderCircle, MapPin, Navigation } from 'lucide-react';
+import { LoaderCircle, Navigation } from 'lucide-react';
 import { GoogleMap } from '@react-google-maps/api';
 import { HAS_VALID_GOOGLE_MAPS_KEY, useAppGoogleMapsLoader } from '../../admin/utils/googleMaps';
-
-const STORAGE_KEY = 'rydon24:lastLocation';
-const LOCATION_UPDATED_EVENT = 'rydon24:location-updated';
+import { getSavedLocation, saveLocation } from '../services/locationStore';
 const DEFAULT_CENTER = { lat: 17.385, lon: 78.4867 };
 const DEFAULT_ZOOM = 16;
 const MAP_CONTAINER_STYLE = { width: '100%', height: '100%' };
@@ -27,41 +25,17 @@ const LocationMapSection = () => {
     setCoords(next);
     setCenterCoords(next);
     setStatus('ready');
-    try {
-      const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        ...previous,
-        ...next,
-      }));
-    } catch {
-      // ignore
-    }
-    window.dispatchEvent(new Event(LOCATION_UPDATED_EVENT));
+    saveLocation(next);
   };
 
   const persistAddress = (address) => {
-    try {
-      const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
-      window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-        ...previous,
-        address: String(address || '').trim(),
-      }));
-      window.dispatchEvent(new Event(LOCATION_UPDATED_EVENT));
-    } catch {
-      // ignore
-    }
+    saveLocation({ address: String(address || '').trim() });
   };
 
   useEffect(() => {
-    try {
-      const saved = window.localStorage.getItem(STORAGE_KEY);
-      if (!saved) return;
-      const parsed = JSON.parse(saved);
-      if (typeof parsed?.lat === 'number' && typeof parsed?.lon === 'number') {
-        persistCoords({ lat: parsed.lat, lon: parsed.lon });
-      }
-    } catch {
-      // ignore
+    const saved = getSavedLocation();
+    if (typeof saved?.lat === 'number' && typeof saved?.lon === 'number') {
+      persistCoords({ lat: saved.lat, lon: saved.lon });
     }
   }, []);
 
@@ -279,11 +253,7 @@ const LocationMapSection = () => {
                   setCenterCoords(next);
 
                   if (!isDraggingRef.current && status === 'ready') {
-                    const previous = JSON.parse(window.localStorage.getItem(STORAGE_KEY) || '{}');
-                    window.localStorage.setItem(STORAGE_KEY, JSON.stringify({
-                      ...previous,
-                      ...next,
-                    }));
+                    saveLocation(next);
                   }
                 }}
                 options={{
@@ -304,19 +274,19 @@ const LocationMapSection = () => {
               <motion.div
                 initial={false}
                 animate={{
-                  scale: isDragging ? [1, 1.3, 1.25] : 1,
-                  opacity: isDragging ? 0.35 : 0.7,
-                  y: isDragging ? 6 : 0,
+                  scale: isDragging ? [1, 1.22, 1.15] : 1,
+                  opacity: isDragging ? 0.28 : 0.55,
+                  y: isDragging ? 7 : 0,
                 }}
-                className="absolute left-1/2 top-0 h-[3px] w-4 -translate-x-1/2 rounded-[100%] bg-slate-900/30 blur-[1.5px]"
+                className="absolute left-1/2 top-0 h-[3px] w-3.5 -translate-x-1/2 rounded-[100%] bg-slate-900/30 blur-[1.5px]"
               />
 
               {/* Pin Body */}
               <motion.div
                 initial={false}
                 animate={{
-                  y: isDragging ? -28 : -3, // Clean lift when dragging
-                  scale: isDragging ? 1.06 : 1,
+                  y: isDragging ? -31 : -2,
+                  scale: isDragging ? 1.04 : 1,
                 }}
                 transition={{
                   type: 'spring',
@@ -325,14 +295,22 @@ const LocationMapSection = () => {
                 }}
                 className="relative flex flex-col items-center -translate-y-full"
               >
-                {/* Floating Card */}
-                <div className="relative flex h-11 w-11 items-center justify-center rounded-[18px] border border-white/60 bg-white/95 shadow-[0_12px_28px_-4px_rgba(15,23,42,0.22)] backdrop-blur-md">
-                  <div className="flex h-8 w-8 items-center justify-center rounded-[12px] bg-emerald-50/60">
-                    <MapPin size={22} strokeWidth={2.8} className="text-emerald-600" />
-                  </div>
-
-                  {/* Visual Tip */}
-                  <div className="absolute -bottom-1.5 left-1/2 h-3 w-3 -translate-x-1/2 rotate-45 rounded-sm bg-white/95 border-r border-b border-black/5" />
+                <div className="relative h-[42px] w-[28px] drop-shadow-[0_10px_18px_rgba(15,23,42,0.2)]">
+                  <svg
+                    viewBox="0 0 32 48"
+                    className="h-full w-full overflow-visible"
+                    aria-hidden="true"
+                  >
+                    <path
+                      d="M16 2C9.1 2 4 7.21 4 13.88c0 9.54 8.58 18.76 11.13 28.42.18.69.58 1.7.87 2.7.29-1 .69-2.01.87-2.7C19.42 32.64 28 23.42 28 13.88 28 7.21 22.9 2 16 2Z"
+                      fill="white"
+                      stroke="#10b981"
+                      strokeWidth="2.4"
+                      strokeLinejoin="round"
+                    />
+                    <circle cx="16" cy="14" r="6.5" fill="#10b981" />
+                    <circle cx="16" cy="14" r="2.4" fill="white" fillOpacity="0.95" />
+                  </svg>
                 </div>
               </motion.div>
             </div>

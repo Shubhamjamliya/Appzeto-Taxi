@@ -19,6 +19,8 @@ import {
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleMap, Marker } from '@react-google-maps/api';
+import LowBalanceModal from './LowBalanceModal';
+
 
 import MapGrid from '@/assets/premium_grid_map.png';
 import DriverBottomNav from '../../shared/components/DriverBottomNav';
@@ -71,7 +73,7 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
     navigator.geolocation.getCurrentPosition(
         (pos) => resolve([pos.coords.longitude, pos.coords.latitude]),
         () => reject(new Error('Please allow location permission to go online.')),
-        { enableHighAccuracy: true, timeout: 10000, maximumAge: 5000 },
+        { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 },
     );
 });
 
@@ -197,6 +199,8 @@ const DriverHome = () => {
     const appLogo = settings.general?.logo || settings.customization?.logo;
     const [isOnline, setIsOnline] = useState(false);
     const [showRequest, setShowRequest] = useState(false);
+    const [showLowBalanceModal, setShowLowBalanceModal] = useState(false);
+
     const [currentRequest, setCurrentRequest] = useState(null);
     const [completedRides, setCompletedRides] = useState(0);
     const [dutySeconds, setDutySeconds] = useState(0);
@@ -216,7 +220,14 @@ const DriverHome = () => {
         [vehicleIconType, vehicleIconUrl],
     );
 
+    const isBalanceCritical = useMemo(() => {
+        const balance = Number(walletSummary.balance || 0);
+        const limit = Number(walletSummary.cashLimit || 500);
+        return walletSummary.isBlocked || (balance <= -limit);
+    }, [walletSummary]);
+
     const { isLoaded } = useAppGoogleMapsLoader();
+
 
     useEffect(() => {
         const unlock = () => unlockRideRequestAlertSound();
@@ -229,6 +240,14 @@ const DriverHome = () => {
             window.removeEventListener('keydown', unlock);
         };
     }, []);
+
+    useEffect(() => {
+        // Automatically show modal if driver is blocked and tries to open the app
+        if (isBalanceCritical && !isOnline && !isHydratingDriver) {
+            setShowLowBalanceModal(true);
+        }
+    }, [isBalanceCritical, isOnline, isHydratingDriver]);
+
 
     const fetchActiveJob = useCallback(async (type = 'ride') => {
         const normalizedType = String(type || 'ride').toLowerCase();
@@ -305,12 +324,17 @@ const DriverHome = () => {
 
         (async () => {
             try {
-                await hydrateDriverState();
-
-                const [activeDelivery, activeRide] = await Promise.allSettled([
+                const [dRes, activeDelivery, activeRide] = await Promise.allSettled([
+                    hydrateDriverState(),
                     fetchActiveJob('parcel'),
-                    fetchActiveJob('ride'),
+                    fetchActiveJob('ride')
                 ]);
+
+
+
+
+
+
 
                 if (!active) {
                     return;
@@ -377,6 +401,12 @@ const DriverHome = () => {
     }, [map, driverCoords]);
 
     const goOnline = useCallback(async () => {
+        if (isBalanceCritical) {
+            setShowLowBalanceModal(true);
+            setStatusMessage('Please top up your wallet to go online.');
+            return;
+        }
+
         try {
             console.info('[driver-home] goOnline requested');
             const coordinates = await updateDriverLocation({ quiet: true });
@@ -626,6 +656,15 @@ const DriverHome = () => {
                 onAccept={handleAccept} 
                 onDecline={handleDecline}
             />
+
+            <LowBalanceModal 
+                isOpen={showLowBalanceModal}
+                onClose={() => setShowLowBalanceModal(false)}
+                balance={Number(walletSummary.balance || 0)}
+                cashLimit={Number(walletSummary.cashLimit || 500)}
+                isBlocked={isBalanceCritical}
+            />
+
 
             <header className="fixed top-0 left-0 right-0 px-6 pt-6 pb-2.5 flex items-center justify-between z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-md">
                 <div className="flex items-center gap-3 pt-2">

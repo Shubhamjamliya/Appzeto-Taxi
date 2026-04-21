@@ -1039,6 +1039,192 @@ export const createDriverPaymentQr = async (req, res) => {
   });
 };
 
+const resolveRazorpayCredentials = async () => {
+  const envKeyId = String(process.env.RAZORPAY_KEY_ID || "").trim();
+  const envKeySecret = String(process.env.RAZORPAY_KEY_SECRET || "").trim();
+  const envEnabled = String(process.env.RAZORPAY_ENABLED || "").trim();
+
+  if (envEnabled === "1" && envKeyId && envKeySecret) {
+    return { keyId: envKeyId, keySecret: envKeySecret };
+  }
+
+  const settings = await ensureThirdPartySettings();
+  const razorpay = settings?.payment?.razor_pay || {};
+
+  const enabled = String(razorpay.enabled ?? "0") === "1";
+  if (!enabled) {
+    settings.payment = settings.payment || {};
+    settings.payment.razor_pay = {
+      ...razorpay,
+      enabled: "1",
+      environment: razorpay.environment || "test",
+    };
+    settings.markModified("payment");
+    await settings.save();
+  }
+
+  const environment = String(razorpay.environment || "test").toLowerCase();
+  const isLive = environment === "live";
+
+  const keyId = String(
+    isLive ? razorpay.live_api_key : razorpay.test_api_key || "",
+  );
+  const keySecret = String(
+    isLive ? razorpay.live_secret_key : razorpay.test_secret_key || "",
+  );
+
+  if (!keyId || !keySecret) {
+    throw new ApiError(500, "Razorpay credentials are not configured");
+  }
+
+  return { keyId, keySecret };
+};
+
+const fetchRazorpay = async ({ method, path, body, keyId, keySecret }) => {
+  const credentials = Buffer.from(`${keyId}:${keySecret}`).toString("base64");
+  const response = await fetch(`https://api.razorpay.com/v1${path}`, {
+    method,
+    headers: {
+      Authorization: `Basic ${credentials}`,
+      "Content-Type": "application/json",
+    },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+
+  const payload = await response.json().catch(() => null);
+  if (!response.ok) {
+    throw new ApiError(
+      response.status || 502,
+      payload?.error?.description ||
+        payload?.error?.message ||
+        "Razorpay request failed",
+    );
+  }
+
+  return payload;
+};
+
+export const createDriverWalletTopupOrder = async (req, res) => {
+  const settings = await getWalletSettings();
+  const minTopUp = Number(settings.minimum_amount_added_to_wallet || 0);
+  const amount = Number(req.body.amount);
+
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new ApiError(400, "Invalid top-up amount");
+  }
+
+  if (amount < minTopUp) {
+    throw new ApiError(400, `Minimum top-up amount is Rs ${minTopUp}`);
+  }
+
+  const { keyId, keySecret } = await resolveRazorpayCredentials();
+
+  const amountPaise = Math.round(amount * 100);
+  const driverId = String(req.auth?.sub || "");
+  const receipt = `driver_wallet_${driverId}_${Date.now()}`;
+
+  const order = await fetchRazorpay({
+    method: "POST",
+    path: "/orders",
+    body: {
+      amount: amountPaise,
+      currency: "INR",
+      receipt,
+      notes: { driverId },
+    },
+    keyId,
+    keySecret,
+  });
+
+  res.status(201).json({
+    success: true,
+    data: {
+      keyId,
+      orderId: order.id,
+      amount: order.amount,
+      currency: order.currency || "INR",
+    },
+  });
+};
+
+export const verifyDriverWalletTopup = async (req, res) => {
+  const orderId = String(req.body?.razorpay_order_id || "");
+  const paymentId = String(req.body?.razorpay_payment_id || "");
+  const signature = String(req.body?.razorpay_signature || "");
+
+  if (!orderId || !paymentId || !signature) {
+    throw new ApiError(400, "Payment verification fields are required");
+  }
+
+  const { keyId, keySecret } = await resolveRazorpayCredentials();
+
+  const expectedSignature = crypto
+    .createHmac("sha256", keySecret)
+    .update(`${orderId}|${paymentId}`)
+    .digest("hex");
+
+  if (expectedSignature !== signature) {
+    throw new ApiError(400, "Invalid payment signature");
+  }
+
+  const order = await fetchRazorpay({
+    method: "GET",
+    path: `/orders/${encodeURIComponent(orderId)}`,
+    keyId,
+    keySecret,
+  });
+
+  const amountPaise = Number(order?.amount);
+  if (!Number.isFinite(amountPaise) || amountPaise <= 0) {
+    throw new ApiError(400, "Invalid order amount");
+  }
+
+  const amount = Math.round(amountPaise) / 100;
+  const driverId = req.auth?.sub;
+
+  const alreadyCredited = await WalletTransaction.findOne({
+    driverId,
+    "metadata.providerPaymentId": paymentId,
+  })
+    .select("_id")
+    .lean();
+
+  if (alreadyCredited) {
+    const driver = await Driver.findById(driverId);
+    res.json({
+      success: true,
+      data: {
+        wallet: await serializeDriverWallet(driver),
+      },
+    });
+    return;
+  }
+
+  const result = await topUpDriverWallet({
+    driverId,
+    amount,
+    metadata: {
+      source: "razorpay",
+      provider: "razorpay",
+      providerOrderId: orderId,
+      providerPaymentId: paymentId,
+    },
+  });
+
+  const payload = {
+    wallet: result.wallet,
+    transaction: result.transaction,
+  };
+
+  emitToDriver(driverId, "driver:wallet:updated", payload);
+
+  res.json({
+    success: true,
+    data: payload,
+  });
+};
+
+
 export const getDriverPaymentQrStatus = async (req, res) => {
   const rideId = String(req.query.rideId || req.params.rideId || "").trim();
 

@@ -5,21 +5,24 @@ import {
     ChevronRight, 
     MapPin, 
     Zap, 
-    Package 
+    Package,
+    ShieldCheck,
+    Info
 } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { getLucideIcon } from '../../utils/iconMapping';
 import {
     getStoredDriverRegistrationSession,
     getDriverServiceLocations,
     saveDriverRegistrationSession,
     saveDriverVehicle,
+    getDriverVehicleTypes,
 } from '../../services/registrationService';
 
 const VEHICLE_NUMBER_REGEX = /^[A-Z]{2}\d{2}[A-Z]{1,2}\d{4}$/;
 const getCurrentVehicleYear = () => new Date().getFullYear();
 const normalizeVehicleNumber = (value = '') => String(value).replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 10);
 const normalizePostalCode = (value = '') => String(value).replace(/\D/g, '').slice(0, 6);
+
 
 const StepVehicle = () => {
     const navigate = useNavigate();
@@ -30,15 +33,13 @@ const StepVehicle = () => {
     };
     const role = session.role || 'driver';
     const isOwner = role === 'owner';
+
     const [locations, setLocations] = useState([]);
     const [locationsLoading, setLocationsLoading] = useState(true);
     const [locationsError, setLocationsError] = useState('');
 
-    const vehicleTypes = [
-        { id: 'v1', label: 'Bike', icon: 'bike_icon' },
-        { id: 'v2', label: 'Cab', icon: 'taxi_icon' },
-        { id: 'v3', label: 'Auto', icon: 'auto_icon' }
-    ];
+    const [vehicleTypes, setVehicleTypes] = useState([]);
+    const [vehicleTypesLoading, setVehicleTypesLoading] = useState(false);
 
     const [formData, setFormData] = useState({
         registerFor: session.registerFor || 'taxi',
@@ -85,7 +86,25 @@ const StepVehicle = () => {
             }
         };
 
+        const loadVehicleTypes = async () => {
+            try {
+                setVehicleTypesLoading(true);
+                const response = await getDriverVehicleTypes();
+                const results = response?.data?.results || response?.data || [];
+                if (active) {
+                    setVehicleTypes(Array.isArray(results) ? results : []);
+                }
+            } catch (err) {
+                console.error('Failed to load vehicle types:', err);
+            } finally {
+                if (active) {
+                    setVehicleTypesLoading(false);
+                }
+            }
+        };
+
         loadLocations();
+        loadVehicleTypes();
 
         return () => {
             active = false;
@@ -169,238 +188,308 @@ const StepVehicle = () => {
         }
     };
 
+    const registerTypes = [
+        { id: 'taxi', label: 'Taxi Only', icon: <Car size={18} />, color: 'emerald' },
+        { id: 'delivery', label: 'Delivery Only', icon: <Package size={18} />, color: 'amber' },
+        { id: 'both', label: 'Both Services', icon: <Zap size={18} />, color: 'indigo' }
+    ];
+
     return (
-        <div className="min-h-screen bg-white font-sans p-5 pt-8 select-none overflow-x-hidden pb-32">
-            <header className="mb-6">
-                <button onClick={() => navigate(-1)} className="w-9 h-9 bg-slate-50 rounded-lg flex items-center justify-center text-slate-900 active:scale-95 transition-transform">
-                    <ArrowLeft size={18} strokeWidth={2.5} />
-                </button>
-            </header>
+        <div 
+            className="min-h-screen bg-[linear-gradient(180deg,#f6efe4_0%,#fcfaf6_28%,#ffffff_100%)] px-5 pb-32 pt-8 select-none overflow-x-hidden"
+            style={{ fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif" }}
+        >
+            <main className="mx-auto max-w-sm space-y-6">
+                <header className="space-y-5">
+                    <div className="flex items-center justify-between">
+                        <button
+                            onClick={() => navigate(-1)}
+                            className="flex h-10 w-10 items-center justify-center rounded-2xl border border-white/70 bg-white/80 text-slate-900 shadow-[0_10px_30px_rgba(15,23,42,0.08)] backdrop-blur-sm transition-transform active:scale-95"
+                        >
+                            <ArrowLeft size={18} strokeWidth={2.5} />
+                        </button>
+                        <div className="rounded-full border border-[#dcc9ab] bg-[#f7efe2] px-3 py-1 text-[11px] font-semibold tracking-[0.18em] text-[#8a6a3d] uppercase">
+                            Step 3 of 4
+                        </div>
+                    </div>
 
-            <main className="space-y-6 max-w-sm mx-auto">
-                <div className="space-y-1.5">
-                    <h1 className="text-2xl font-black text-slate-900 tracking-tight leading-none uppercase">
-                        {isOwner ? 'Company Info' : 'Vehicle Info'}
-                    </h1>
-                    <p className="text-[11px] font-bold text-slate-400 opacity-80 uppercase tracking-widest leading-relaxed">
-                        {isOwner ? 'Your business details' : 'Complete your registration'}
-                    </p>
-                </div>
-
-                {locationsError && (
-                    <p className="text-[11px] font-bold text-rose-500">{locationsError}</p>
-                )}
+                    <section className="rounded-[28px] border border-white/80 bg-white/88 p-6 shadow-[0_22px_60px_rgba(148,116,70,0.12)] backdrop-blur-sm">
+                        <div className="mb-4 inline-flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f3e4cd] text-[#8a5a22]">
+                            <Car size={18} />
+                        </div>
+                        <div className="space-y-2">
+                            <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[#9a7b50]">
+                                {isOwner ? 'Fleet management' : 'Vehicle registration'}
+                            </p>
+                            <h1 className="text-[30px] font-semibold leading-[1.05] tracking-[-0.04em] text-slate-950">
+                                {isOwner ? 'Company Profile' : 'Vehicle details'}
+                            </h1>
+                            <p className="max-w-[28ch] text-sm leading-6 text-slate-600">
+                                {isOwner ? 'Setup your business profile to start managing your fleet.' : 'Tell us about the vehicle you\'ll be using for your services.'}
+                            </p>
+                        </div>
+                    </section>
+                </header>
 
                 {error && (
-                    <p className="text-[11px] font-bold text-rose-500">{error}</p>
+                    <div className="rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm font-medium text-rose-700 shadow-[0_10px_30px_rgba(244,63,94,0.08)]">
+                        {error}
+                    </div>
                 )}
 
                 <div className="space-y-5">
-                    {/* Register For Selection (Only for drivers) */}
                     {!isOwner && (
-                        <div className="space-y-2.5">
-                             <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Register For</label>
-                             <div className="grid grid-cols-3 gap-2">
-                                 {[
-                                     { id: 'taxi', label: 'Taxi', icon: <Car size={14} /> },
-                                     { id: 'delivery', label: 'Delivery', icon: <Package size={14} /> },
-                                     { id: 'both', label: 'Both', icon: <Zap size={14} /> }
-                                 ].map((item) => (
-                                     <button
-                                         key={item.id}
-                                         onClick={() => setFormData(p => ({ ...p, registerFor: item.id }))}
-                                         className={`flex flex-col items-center justify-center gap-1.5 p-2.5 rounded-xl transition-all ${
-                                             formData.registerFor === item.id 
-                                             ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10' 
-                                             : 'bg-slate-50 text-slate-400'
-                                         }`}
-                                     >
-                                         <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${formData.registerFor === item.id ? 'bg-white/10' : 'bg-white shadow-sm'}`}>
-                                             {item.icon}
+                        <section className="space-y-4 rounded-[30px] border border-slate-200/70 bg-white p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+                            <div className="space-y-1 px-1">
+                                <h2 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Service category</h2>
+                                <p className="text-sm text-slate-500">What would you like to provide?</p>
+                            </div>
+                            <div className="grid grid-cols-1 gap-2.5">
+                                {registerTypes.map((item) => (
+                                    <button
+                                        key={item.id}
+                                        onClick={() => setFormData(p => ({ ...p, registerFor: item.id }))}
+                                        className={`flex items-center gap-4 p-4 rounded-2xl border transition-all ${
+                                            formData.registerFor === item.id 
+                                            ? 'bg-slate-950 border-slate-950 text-white shadow-lg' 
+                                            : 'bg-[#fcfcfb] border-slate-100 text-slate-600 hover:border-slate-300'
+                                        }`}
+                                    >
+                                        <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${formData.registerFor === item.id ? 'bg-white/20' : 'bg-white shadow-sm text-slate-400'}`}>
+                                            {item.icon}
+                                        </div>
+                                        <div className="flex-1 text-left">
+                                            <span className="block text-[14px] font-semibold leading-none">{item.label}</span>
+                                        </div>
+                                        {formData.registerFor === item.id && (
+                                            <div className="w-5 h-5 rounded-full bg-white flex items-center justify-center">
+                                                <div className="w-2.5 h-2.5 rounded-full bg-slate-950" />
+                                            </div>
+                                        )}
+                                    </button>
+                                ))}
+                            </div>
+                        </section>
+                    )}
+
+                    <section className="space-y-4 rounded-[30px] border border-slate-200/70 bg-white p-4 shadow-[0_18px_50px_rgba(15,23,42,0.08)]">
+                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                            <div className="flex items-start gap-3.5">
+                                <div className="mt-0.5 flex h-11 w-11 items-center justify-center rounded-2xl bg-[#f7efe2] text-[#8a5a22]">
+                                    <MapPin size={18} />
+                                </div>
+                                <div className="flex-1 space-y-1.5 overflow-hidden">
+                                    <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600">Operating City</label>
+                                    <select 
+                                        value={formData.locationId}
+                                        onChange={(e) => setFormData(p => ({ ...p, locationId: e.target.value, vehicleTypeId: '' }))}
+                                        disabled={locationsLoading || locations.length === 0}
+                                        className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 appearance-none cursor-pointer disabled:opacity-50"
+                                    >
+                                        <option value="">{locationsLoading ? 'Loading service locations...' : 'Select your city'}</option>
+                                        {locations.map(loc => (
+                                            <option key={loc._id || loc.id} value={loc._id || loc.id}>
+                                                {loc.service_location_name || loc.name}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        {isOwner ? (
+                            <div className="space-y-3.5 animate-in fade-in slide-in-from-top-2 duration-300">
+                                <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                    <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Company Name</label>
+                                    <input 
+                                        value={formData.companyName}
+                                        onChange={(e) => setFormData(p => ({ ...p, companyName: e.target.value }))}
+                                        placeholder="Enter company legal name"
+                                        className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                    />
+                                </div>
+
+                                <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                    <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Company Address</label>
+                                    <input 
+                                        value={formData.companyAddress}
+                                        onChange={(e) => setFormData(p => ({ ...p, companyAddress: e.target.value }))}
+                                        placeholder="Enter street address"
+                                        className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                    />
+                                </div>
+
+                                <div className="grid grid-cols-2 gap-3.5">
+                                    <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                        <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">City</label>
+                                        <input 
+                                            value={formData.city}
+                                            onChange={(e) => setFormData(p => ({ ...p, city: e.target.value }))}
+                                            placeholder="City"
+                                            className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                    <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                        <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Postal Code</label>
+                                        <input 
+                                            value={formData.postalCode}
+                                            onChange={(e) => setFormData(p => ({ ...p, postalCode: normalizePostalCode(e.target.value) }))}
+                                            placeholder="452001"
+                                            inputMode="numeric"
+                                            maxLength={6}
+                                            className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                    <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Tax Number (GST/VAT)</label>
+                                    <input 
+                                        value={formData.taxNumber}
+                                        onChange={(e) => setFormData(p => ({ ...p, taxNumber: e.target.value.toUpperCase() }))}
+                                        placeholder="GST/VAT/TAX ID"
+                                        className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300 uppercase"
+                                    />
+                                </div>
+                            </div>
+                        ) : (
+                            <div className="space-y-5 animate-in fade-in slide-in-from-top-4 duration-500">
+                                {formData.locationId && (
+                                    <div className="space-y-4 pt-1">
+                                         <div className="space-y-1 px-1">
+                                            <h2 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Vehicle Type</h2>
+                                            <p className="text-sm text-slate-500">Select the type of vehicle you drive.</p>
+                                        </div>
+                                         <div className="grid grid-cols-2 gap-3">
+                                             {vehicleTypesLoading ? (
+                                                 Array.from({ length: 4 }).map((_, i) => (
+                                                     <div key={i} className="h-32 bg-slate-50/50 rounded-2xl animate-pulse" />
+                                                 ))
+                                             ) : (
+                                                 vehicleTypes.map((type) => (
+                                                     <div
+                                                         key={type._id || type.id}
+                                                         onClick={() => setFormData(p => ({ ...p, vehicleTypeId: type._id || type.id }))}
+                                                         className={`relative h-32 rounded-3xl border transition-all flex flex-col group overflow-hidden cursor-pointer ${
+                                                             formData.vehicleTypeId === (type._id || type.id)
+                                                             ? 'border-slate-900 bg-slate-900/[0.02] ring-1 ring-slate-900/5' 
+                                                             : 'border-slate-100 bg-[#FCFCFB] hover:border-slate-200'
+                                                         }`}
+                                                     >
+                                                         <div className="flex-1 flex items-center justify-center p-3">
+                                                            {type.image || type.icon || type.map_icon ? (
+                                                                <img 
+                                                                    src={type.image || type.icon || type.map_icon} 
+                                                                    alt={type.name} 
+                                                                    className="max-h-14 w-auto object-contain transition-transform duration-500"
+                                                                />
+                                                            ) : (
+                                                                <div className="w-12 h-12 bg-slate-50 rounded-2xl flex items-center justify-center text-slate-300">
+                                                                    <Car size={24} />
+                                                                </div>
+                                                            )}
+                                                         </div>
+                                                         <div className={`p-2.5 text-center transition-colors ${
+                                                             formData.vehicleTypeId === (type._id || type.id) ? 'bg-slate-900 text-white font-bold' : 'bg-white/50 text-slate-700 font-semibold'
+                                                         }`}>
+                                                             <span className="text-[11px] tracking-tight uppercase">{type.name || type.vehicle_type_name}</span>
+                                                         </div>
+                                                     </div>
+                                                 ))
+                                             )}
                                          </div>
-                                         <span className="text-[9px] font-black uppercase tracking-widest leading-none">{item.label}</span>
-                                     </button>
-                                 ))}
-                             </div>
-                        </div>
-                    )}
+                                    </div>
+                                )}
 
-                    {/* Service Location Selection */}
-                    <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                        <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mb-1 ml-0.5">
-                           <MapPin size={10} /> Service Location
-                        </label>
-                        <select 
-                            value={formData.locationId}
-                            onChange={(e) => setFormData(p => ({ ...p, locationId: e.target.value, vehicleTypeId: '' }))}
-                            disabled={locationsLoading || locations.length === 0}
-                            className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 appearance-none cursor-pointer disabled:opacity-50"
-                        >
-                            <option value="">{locationsLoading ? 'Loading service locations...' : 'Select city'}</option>
-                            {locations.map(loc => (
-                                <option key={loc._id || loc.id} value={loc._id || loc.id}>
-                                    {loc.service_location_name || loc.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
+                                <div className="space-y-4 pt-1">
+                                    <div className="space-y-1 px-1">
+                                        <h2 className="text-base font-semibold tracking-[-0.03em] text-slate-950">Technical Specs</h2>
+                                        <p className="text-sm text-slate-500">Fill in the details from your RC/Permit.</p>
+                                    </div>
 
-                    {isOwner ? (
-                        /* Company Information for Owners */
-                        <div className="space-y-4 pt-2">
-                            <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Company Name</label>
-                                <input 
-                                    value={formData.companyName}
-                                    onChange={(e) => setFormData(p => ({ ...p, companyName: e.target.value }))}
-                                    placeholder="Enter company name"
-                                    className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                />
-                            </div>
+                                    <div className="grid grid-cols-2 gap-3.5">
+                                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white col-span-2">
+                                            <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Brand / Make</label>
+                                            <input 
+                                                value={formData.make}
+                                                onChange={(e) => setFormData(p => ({ ...p, make: e.target.value }))}
+                                                placeholder="e.g. Maruti Suzuki, Hyundai"
+                                                className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                            />
+                                        </div>
 
-                            <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Company Address</label>
-                                <input 
-                                    value={formData.companyAddress}
-                                    onChange={(e) => setFormData(p => ({ ...p, companyAddress: e.target.value }))}
-                                    placeholder="Enter company address"
-                                    className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                />
-                            </div>
+                                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                            <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Model</label>
+                                            <input 
+                                                value={formData.model}
+                                                onChange={(e) => setFormData(p => ({ ...p, model: e.target.value }))}
+                                                placeholder="e.g. Swift, Bolt"
+                                                className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                            />
+                                        </div>
 
-                            <div className="grid grid-cols-2 gap-2.5">
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">City</label>
-                                    <input 
-                                        value={formData.city}
-                                        onChange={(e) => setFormData(p => ({ ...p, city: e.target.value }))}
-                                        placeholder="City"
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
-                                </div>
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Postal Code</label>
-                                    <input 
-                                        value={formData.postalCode}
-                                        onChange={(e) => setFormData(p => ({ ...p, postalCode: normalizePostalCode(e.target.value) }))}
-                                        placeholder="452001"
-                                        inputMode="numeric"
-                                        maxLength={6}
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
+                                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white">
+                                            <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Year</label>
+                                            <input 
+                                                type="tel"
+                                                maxLength={4}
+                                                value={formData.year}
+                                                onChange={(e) => setFormData(p => ({ ...p, year: e.target.value.replace(/\D/g, '') }))}
+                                                placeholder={String(getCurrentVehicleYear())}
+                                                className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                            />
+                                        </div>
+
+                                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white col-span-2">
+                                            <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Plate Number</label>
+                                            <input 
+                                                value={formData.number}
+                                                onChange={(e) => setFormData(p => ({ ...p, number: normalizeVehicleNumber(e.target.value) }))}
+                                                placeholder="MH12AB1234"
+                                                className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300 uppercase tracking-widest"
+                                            />
+                                        </div>
+
+                                        <div className="rounded-[24px] border border-slate-200 bg-[#fcfcfb] p-4 shadow-[0_8px_24px_rgba(15,23,42,0.04)] transition-all focus-within:border-[#c59d66] focus-within:bg-white col-span-2">
+                                            <label className="block text-[12px] font-medium tracking-[0.02em] text-slate-600 mb-1.5">Exterior Color</label>
+                                            <input 
+                                                value={formData.color}
+                                                onChange={(e) => setFormData(p => ({ ...p, color: e.target.value }))}
+                                                placeholder="e.g. White, Silver, Black"
+                                                className="w-full bg-transparent border-none p-0 text-[16px] font-semibold text-slate-950 focus:outline-none focus:ring-0 placeholder:text-slate-300"
+                                            />
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
-
-                            <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Company Tax Number</label>
-                                <input 
-                                    value={formData.taxNumber}
-                                    onChange={(e) => setFormData(p => ({ ...p, taxNumber: e.target.value.toUpperCase() }))}
-                                    placeholder="GST/VAT/TAX ID"
-                                    className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200 uppercase"
-                                />
-                            </div>
-                        </div>
-                    ) : (
-                        /* Vehicle Details for Drivers */
-                        <div className="space-y-4">
-                            {/* Vehicle Type Selection */}
-                            {formData.locationId && (
-                                <div className="space-y-2.5 pt-1">
-                                     <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest pl-1">Vehicle Type</label>
-                                     <div className="grid grid-cols-2 gap-2.5">
-                                         {vehicleTypes.map((type) => (
-                                             <button
-                                                 key={type.id}
-                                                 onClick={() => setFormData(p => ({ ...p, vehicleTypeId: type.id }))}
-                                                 className={`p-3.5 rounded-[1.5rem] transition-all flex items-center gap-2.5 ${
-                                                     formData.vehicleTypeId === type.id 
-                                                     ? 'bg-slate-900 text-white shadow-lg shadow-slate-900/10' 
-                                                     : 'bg-slate-50 text-slate-400'
-                                                 }`}
-                                             >
-                                                 <div className={`w-8 h-8 rounded-xl flex items-center justify-center ${formData.vehicleTypeId === type.id ? 'bg-white/10' : 'bg-white shadow-sm'}`}>
-                                                    {getLucideIcon(type.icon, 16)}
-                                                 </div>
-                                                 <span className="text-[11px] font-black uppercase tracking-tight leading-none">{type.label}</span>
-                                             </button>
-                                         ))}
-                                     </div>
-                                </div>
-                            )}
-
-                            {/* Vehicle Details */}
-                            <div className="grid grid-cols-2 gap-2.5">
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm col-span-2">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Make</label>
-                                    <input 
-                                        value={formData.make}
-                                        onChange={(e) => setFormData(p => ({ ...p, make: e.target.value }))}
-                                        placeholder="Suzuki, Hyundai..."
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
-                                </div>
-
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Model</label>
-                                    <input 
-                                        value={formData.model}
-                                        onChange={(e) => setFormData(p => ({ ...p, model: e.target.value }))}
-                                        placeholder="WagonR, i20..."
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
-                                </div>
-
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Year</label>
-                                    <input 
-                                        type="tel"
-                                        maxLength={4}
-                                        value={formData.year}
-                                        onChange={(e) => setFormData(p => ({ ...p, year: e.target.value.replace(/\D/g, '') }))}
-                                        placeholder={String(getCurrentVehicleYear())}
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
-                                </div>
-
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm col-span-2">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Vehicle Number</label>
-                                    <input 
-                                        value={formData.number}
-                                        onChange={(e) => setFormData(p => ({ ...p, number: normalizeVehicleNumber(e.target.value) }))}
-                                        placeholder="PP09KK1234"
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200 uppercase tracking-widest"
-                                    />
-                                </div>
-
-                                <div className="bg-slate-50 p-3.5 rounded-2xl shadow-sm col-span-2">
-                                    <label className="text-[8px] font-black text-slate-400 uppercase tracking-widest block mb-1">Color</label>
-                                    <input 
-                                        value={formData.color}
-                                        onChange={(e) => setFormData(p => ({ ...p, color: e.target.value }))}
-                                        placeholder="White, Silver, Black..."
-                                        className="w-full bg-transparent border-none p-0 text-[13px] font-black text-slate-900 focus:outline-none focus:ring-0 placeholder:text-slate-200"
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    )}
+                        )}
+                    </section>
                 </div>
 
-                <div className="fixed bottom-0 left-0 right-0 p-5 bg-white border-t border-slate-50">
-                    <button 
-                        onClick={handleContinue}
-                        disabled={loading}
-                        className={`w-full h-14 rounded-2xl flex items-center justify-center gap-2 text-[13px] font-black uppercase tracking-widest shadow-lg transition-all ${
-                            (isOwner ? 
-                                (formData.locationId && formData.companyName && formData.companyAddress && formData.city && formData.postalCode && formData.taxNumber) : 
-                                (formData.locationId && formData.vehicleTypeId && formData.make && formData.model && formData.year && formData.number && formData.color))
-                            ? 'bg-slate-900 text-white shadow-slate-900/10' 
-                            : 'bg-slate-100 text-slate-300 pointer-events-none'
-                        }`}
-                    >
-                        {loading ? 'Saving...' : 'Continue'} <ChevronRight size={16} strokeWidth={3} />
-                    </button>
+                <div className="bg-blue-50/50 p-4 rounded-3xl flex gap-3 mt-4 border border-blue-100">
+                    <Info size={18} className="text-blue-500 shrink-0" />
+                    <p className="text-xs font-medium text-slate-600 leading-relaxed">
+                        Your vehicle information will be visible to passengers for safety and identification.
+                    </p>
+                </div>
+
+                <div className="fixed bottom-0 left-0 right-0 border-t border-slate-200/70 bg-white/88 p-5 backdrop-blur-md">
+                    <div className="mx-auto max-w-sm">
+                        <button 
+                            onClick={handleContinue}
+                            disabled={loading}
+                            className={`flex h-14 w-full items-center justify-center gap-2 rounded-[22px] text-[15px] font-semibold tracking-[0.01em] shadow-[0_18px_40px_rgba(15,23,42,0.12)] transition-all ${
+                                (isOwner ? 
+                                    (formData.locationId && formData.companyName && formData.companyAddress && formData.city && formData.postalCode && formData.taxNumber) : 
+                                    (formData.locationId && formData.vehicleTypeId && formData.make && formData.model && formData.year && formData.number && formData.color))
+                                ? 'bg-slate-950 text-white hover:bg-slate-900' 
+                                : 'pointer-events-none bg-slate-200 text-slate-500 shadow-none'
+                            }`}
+                        >
+                            {loading ? 'Saving Details...' : 'Save & Continue'} 
+                            {!loading && <ChevronRight size={17} strokeWidth={2.8} />}
+                        </button>
+                    </div>
                 </div>
             </main>
         </div>

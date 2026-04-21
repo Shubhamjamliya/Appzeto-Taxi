@@ -83,8 +83,8 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
   const category = data.raw?.parcel?.category || data.raw?.parcel?.weight || (isParcel ? 'Parcel delivery' : isIntercity ? intercityRoute || 'Intercity trip' : 'Passenger ride');
   const payment = normalizePayment(data.payment);
   const timerProgress = Math.max(0, Math.min(100, (timer / requestDurationSeconds) * 100));
-  const accentClass = isParcel ? 'bg-orange-500' : isIntercity ? 'bg-yellow-400' : 'bg-emerald-500';
-  const accentTextClass = isParcel ? 'text-orange-600' : isIntercity ? 'text-yellow-700' : 'text-emerald-600';
+  const accentClass = isParcel ? 'bg-orange-500' : isIntercity ? 'bg-yellow-400' : 'bg-blue-600';
+  const accentTextClass = isParcel ? 'text-orange-600' : isIntercity ? 'text-yellow-700' : 'text-blue-600';
   const pickupAddress = data.raw?.pickupAddress || data.pickup || 'Pickup point';
   const dropAddress = data.raw?.dropAddress || data.drop || 'Drop point';
   const attemptCount = Number(data.attempt || data.raw?.attempt || 1);
@@ -134,7 +134,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
 
               <div
                 className="grid h-[58px] w-[58px] shrink-0 place-items-center rounded-full"
-                style={{ background: `conic-gradient(${isParcel ? '#f97316' : isIntercity ? '#facc15' : '#10b981'} ${timerProgress}%, rgba(255,255,255,0.14) 0)` }}
+                style={{ background: `conic-gradient(${isParcel ? '#f97316' : isIntercity ? '#facc15' : '#2563eb'} ${timerProgress}%, rgba(255,255,255,0.14) 0)` }}
               >
                 <div className="grid h-[48px] w-[48px] place-items-center rounded-full bg-slate-950">
                   <span className="text-[20px] font-black leading-none">{timer}</span>
@@ -239,7 +239,7 @@ const IncomingRideRequest = ({ visible, onAccept, onDecline, requestData, isAcce
                 type="button"
                 onClick={() => onAccept(data)}
                 disabled={isAccepting}
-                className={`flex h-[58px] items-center justify-center rounded-[18px] ${accentClass} px-5 text-[13px] font-black uppercase tracking-[0.16em] text-slate-950 shadow-[0_14px_30px_rgba(16,185,129,0.28)] transition-all active:scale-95 disabled:opacity-70`}
+                className={`flex h-[58px] items-center justify-center rounded-[18px] ${accentClass} px-5 text-[13px] font-black uppercase tracking-[0.16em] ${isParcel || isIntercity ? 'text-slate-950' : 'text-white'} shadow-[0_14px_30px_rgba(37,99,235,0.28)] transition-all active:scale-95 disabled:opacity-70`}
               >
                 {isAccepting ? 'Accepting...' : 'Accept ride'}
               </button>

@@ -71,8 +71,8 @@ const DriverBottomNav = () => {
             to={item.path}
             className={`flex flex-col items-center justify-center gap-1 transition-all duration-300 relative ${
               isActive
-                ? "text-slate-900 translate-y-[-2px]"
-                : "text-slate-400 font-bold"
+                ? "text-black translate-y-[-2px]"
+                : "text-black/60 font-bold opacity-80"
             }`}>
             <div
               className={`transition-all duration-300 ${isActive ? "scale-110 mb-0.5" : ""}`}>

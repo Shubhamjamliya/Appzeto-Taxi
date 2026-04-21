@@ -93,7 +93,7 @@ const RideComplete = () => {
   const rideTime = new Date(state.completedAt || Date.now()).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit', hour12: true });
 
   useEffect(() => {
-    clearCurrentRide();
+    // We keep the ride state for the review screen to allow refreshes
   }, []);
 
   useEffect(() => {
@@ -189,6 +189,7 @@ const RideComplete = () => {
         setComment(payload.feedback.comment || comment);
       }
       setIsSubmitted(true);
+      clearCurrentRide();
       window.setTimeout(() => {
         navigate(routeHome, { replace: true });
       }, 1200);
@@ -420,7 +421,10 @@ const RideComplete = () => {
 
           <button
             type="button"
-            onClick={() => navigate(routeHome, { replace: true })}
+            onClick={() => {
+              clearCurrentRide();
+              navigate(routeHome, { replace: true });
+            }}
             className="mt-3 text-[12px] font-black text-slate-500"
           >
             Skip and go home

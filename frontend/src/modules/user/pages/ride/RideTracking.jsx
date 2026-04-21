@@ -393,7 +393,8 @@ const RideTracking = () => {
 
   const exitTracking = useMemo(
     () => () => {
-      clearCurrentRide();
+      // We don't clear the ride on mount anymore to allow refreshes on the rating page.
+      // clearCurrentRide() is now called after submission or when skipping.
       navigate(routeHome, { replace: true });
     },
     [navigate, routeHome],
@@ -401,22 +402,24 @@ const RideTracking = () => {
 
   const completeTracking = useMemo(
     () => (statusValue = 'completed') => {
-      clearCurrentRide();
+      const completedRideSnapshot = {
+        ...state,
+        rideId,
+        fare,
+        paymentMethod,
+        pickup: pickupLabel,
+        drop: dropLabel,
+        driver,
+        status: statusValue,
+        liveStatus: statusValue,
+        feedback: rideRealtime?.feedback || state.feedback || null,
+        completedAt: rideRealtime?.completedAt || Date.now(),
+      };
+
+      saveCurrentRide(completedRideSnapshot);
       navigate(routeComplete, {
         replace: true,
-        state: {
-          ...state,
-          rideId,
-          fare,
-          paymentMethod,
-          pickup: pickupLabel,
-          drop: dropLabel,
-          driver,
-          status: statusValue,
-          liveStatus: statusValue,
-          feedback: rideRealtime?.feedback || state.feedback || null,
-          completedAt: rideRealtime?.completedAt || Date.now(),
-        },
+        state: completedRideSnapshot,
       });
     },
     [driver, dropLabel, fare, navigate, paymentMethod, pickupLabel, rideId, rideRealtime?.completedAt, rideRealtime?.feedback, routeComplete, state],
@@ -429,7 +432,6 @@ const RideTracking = () => {
   useEffect(() => {
     hasCompletedRedirectRef.current = false;
   }, [rideId]);
-
   useEffect(() => {
     let active = true;
 
@@ -441,25 +443,33 @@ const RideTracking = () => {
     }
 
     const validateActiveRide = async () => {
-      const activePayload = unwrapApiPayload(await api.get(activeRideEndpoint));
-      const activeRideId = String(activePayload?.rideId || '');
-      const activeStatus = String(activePayload?.liveStatus || activePayload?.status || '').toLowerCase();
+      try {
+        const activePayload = unwrapApiPayload(await api.get(activeRideEndpoint));
+        const activeRideId = String(activePayload?.rideId || '');
+        const activeStatus = String(activePayload?.liveStatus || activePayload?.status || '').toLowerCase();
 
-      if (COMPLETED_TRACKING_STATUSES.has(activeStatus)) {
-        if (active) {
-          completeTracking(activeStatus);
+        if (TERMINAL_STATUSES.has(activeStatus)) {
+          if (active) {
+            if (COMPLETED_TRACKING_STATUSES.has(activeStatus)) {
+              completeTracking(activeStatus);
+            } else {
+              exitTracking();
+            }
+          }
+          return false;
         }
+
+        if (!activeRideId || activeRideId !== String(rideId)) {
+          // If the ride is no longer active but wasn't completed/cancelled in this session,
+          // we hydrate the state one more time to check its final status.
+          return false;
+        }
+
+        return true;
+      } catch (err) {
+        console.error('Active ride validation failed:', err);
         return false;
       }
-
-      if (!activeRideId || activeRideId !== String(rideId) || TERMINAL_STATUSES.has(activeStatus)) {
-        if (active) {
-          exitTracking();
-        }
-        return false;
-      }
-
-      return true;
     };
 
     const hydrateRideState = async () => {
@@ -478,21 +488,21 @@ const RideTracking = () => {
             setRideRealtime({
               pickup: {
                 coordinates: payload?.pickupLocation?.coordinates,
-                address: payload?.pickupAddress || state.pickup || 'Pickup',
+                address: payload?.pickupAddress || latestStateRef.current.pickup || 'Pickup',
               },
               drop: {
                 coordinates: payload?.dropLocation?.coordinates,
-                address: payload?.dropAddress || state.drop || 'Drop',
+                address: payload?.dropAddress || latestStateRef.current.drop || 'Drop',
               },
               driverLocation: payload?.lastDriverLocation
                 ? { coordinates: payload.lastDriverLocation.coordinates }
                 : null,
               status: nextStatus,
-              fare: payload?.fare || state.fare || 0,
-              paymentMethod: payload?.paymentMethod || state.paymentMethod || 'Cash',
-              vehicleIconType: payload?.vehicleIconType || state.vehicleIconType || '',
-              vehicleIconUrl: payload?.vehicleIconUrl || state.vehicleIconUrl || '',
-              otp: payload?.otp || state.otp || state.ride_otp || '',
+              fare: payload?.fare || latestStateRef.current.fare || 0,
+              paymentMethod: payload?.paymentMethod || latestStateRef.current.paymentMethod || 'Cash',
+              vehicleIconType: payload?.vehicleIconType || latestStateRef.current.vehicleIconType || '',
+              vehicleIconUrl: payload?.vehicleIconUrl || latestStateRef.current.vehicleIconUrl || '',
+              otp: payload?.otp || latestStateRef.current.otp || latestStateRef.current.ride_otp || '',
               completedAt: payload?.completedAt || null,
               feedback: payload?.feedback || null,
               driver: mergedDriver,
@@ -509,11 +519,11 @@ const RideTracking = () => {
         setRideRealtime({
           pickup: {
             coordinates: payload?.pickupLocation?.coordinates,
-            address: payload?.pickupAddress || state.pickup || 'Pickup',
+            address: payload?.pickupAddress || latestStateRef.current.pickup || 'Pickup',
           },
           drop: {
             coordinates: payload?.dropLocation?.coordinates,
-            address: payload?.dropAddress || state.drop || 'Drop',
+            address: payload?.dropAddress || latestStateRef.current.drop || 'Drop',
           },
           driverLocation: payload?.lastDriverLocation
             ? {
@@ -522,22 +532,22 @@ const RideTracking = () => {
               }
             : null,
           status: payload?.liveStatus || payload?.status || 'accepted',
-          fare: payload?.fare || state.fare || 0,
-          paymentMethod: payload?.paymentMethod || state.paymentMethod || 'Cash',
-          vehicleIconType: payload?.vehicleIconType || state.vehicleIconType || '',
-          vehicleIconUrl: payload?.vehicleIconUrl || state.vehicleIconUrl || '',
-          otp: payload?.otp || state.otp || state.ride_otp || '',
+          fare: payload?.fare || latestStateRef.current.fare || 0,
+          paymentMethod: payload?.paymentMethod || latestStateRef.current.paymentMethod || 'Cash',
+          vehicleIconType: payload?.vehicleIconType || latestStateRef.current.vehicleIconType || '',
+          vehicleIconUrl: payload?.vehicleIconUrl || latestStateRef.current.vehicleIconUrl || '',
+          otp: payload?.otp || latestStateRef.current.otp || latestStateRef.current.ride_otp || '',
           completedAt: payload?.completedAt || null,
           feedback: payload?.feedback || null,
           driver: mergedDriver,
         });
 
         saveCurrentRide({
-          ...state,
+          ...latestStateRef.current,
           rideId,
           driver: mergedDriver,
-          status: payload?.status || state.status || 'accepted',
-          liveStatus: payload?.liveStatus || payload?.status || state.liveStatus || state.status || 'accepted',
+          status: payload?.status || latestStateRef.current.status || 'accepted',
+          liveStatus: payload?.liveStatus || payload?.status || latestStateRef.current.liveStatus || latestStateRef.current.status || 'accepted',
         });
       } catch {
         await validateActiveRide().catch(() => {});

@@ -15,7 +15,12 @@ import {
     Star, 
     ChevronRight,
     MapPin,
-    User
+    User,
+    Menu,
+    Search,
+    Shield,
+    Mail,
+    BarChart2
 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { GoogleMap, Marker } from '@react-google-maps/api';
@@ -64,7 +69,31 @@ const DEFAULT_MAP_CENTER = {
 
 const DEFAULT_MAP_COORDS = [75.8577, 22.7196];
 
-const getCurrentCoords = () => new Promise((resolve, reject) => {
+const getGeoLocationErrorMessage = (error, { purpose = 'generic' } = {}) => {
+    const code = Number(error?.code);
+
+    if (code === 1) {
+        return purpose === 'online'
+            ? 'Please allow location permission to go online.'
+            : 'Live location updates are paused. Please allow location permission.';
+    }
+
+    if (code === 2) {
+        return 'Could not detect your current location.';
+    }
+
+    if (code === 3) {
+        return purpose === 'online'
+            ? 'Timed out while fetching your location. Please try again.'
+            : 'Live location refresh timed out.';
+    }
+
+    return purpose === 'online'
+        ? 'Could not fetch your location to go online.'
+        : 'Could not update live location.';
+};
+
+const getCurrentCoords = ({ purpose = 'generic' } = {}) => new Promise((resolve, reject) => {
     if (!navigator.geolocation) {
         reject(new Error('Location is not available on this device.'));
         return;
@@ -72,7 +101,7 @@ const getCurrentCoords = () => new Promise((resolve, reject) => {
 
     navigator.geolocation.getCurrentPosition(
         (pos) => resolve([pos.coords.longitude, pos.coords.latitude]),
-        () => reject(new Error('Please allow location permission to go online.')),
+        (error) => reject(new Error(getGeoLocationErrorMessage(error, { purpose }))),
         { enableHighAccuracy: true, timeout: 6000, maximumAge: 10000 },
     );
 });
@@ -171,6 +200,38 @@ const withDriverAuthorization = (token) => (
         : {}
 );
 
+const readStoredDriverInfo = () => {
+    try {
+        return JSON.parse(localStorage.getItem('driverInfo') || '{}');
+    } catch {
+        return {};
+    }
+};
+
+const persistStoredDriverInfo = (updates = {}) => {
+    const current = readStoredDriverInfo();
+    const next = {
+        ...current,
+        ...updates,
+    };
+    localStorage.setItem('driverInfo', JSON.stringify(next));
+    return next;
+};
+
+const readStoredDriverCoords = () => {
+    const stored = readStoredDriverInfo();
+    const coordinates = stored?.location?.coordinates || stored?.coordinates;
+
+    if (Array.isArray(coordinates) && coordinates.length === 2) {
+        const [lng, lat] = coordinates;
+        if (Number.isFinite(Number(lng)) && Number.isFinite(Number(lat))) {
+            return [Number(lng), Number(lat)];
+        }
+    }
+
+    return null;
+};
+
 const mapStyles = [
   { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
   { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
@@ -197,6 +258,7 @@ const DriverHome = () => {
     const { settings } = useSettings();
     const appName = settings.general?.app_name || 'App';
     const appLogo = settings.general?.logo || settings.customization?.logo;
+    const storedDriverInfo = useMemo(() => readStoredDriverInfo(), []);
     const [isOnline, setIsOnline] = useState(false);
     const [showRequest, setShowRequest] = useState(false);
     const [showLowBalanceModal, setShowLowBalanceModal] = useState(false);
@@ -205,14 +267,19 @@ const DriverHome = () => {
     const [completedRides, setCompletedRides] = useState(0);
     const [dutySeconds, setDutySeconds] = useState(0);
     const [map, setMap] = useState(null);
-    const [driverCoords, setDriverCoords] = useState(null);
+    const [driverCoords, setDriverCoords] = useState(() => readStoredDriverCoords());
     const [statusMessage, setStatusMessage] = useState('');
     const [acceptingRideId, setAcceptingRideId] = useState('');
     const [isHydratingDriver, setIsHydratingDriver] = useState(true);
-    const [vehicleIconType, setVehicleIconType] = useState('car');
-    const [vehicleIconUrl, setVehicleIconUrl] = useState('');
+    const [isTogglingDuty, setIsTogglingDuty] = useState(false);
+    const [vehicleIconType, setVehicleIconType] = useState(
+        () => storedDriverInfo?.vehicleIconType || storedDriverInfo?.vehicleType || 'car',
+    );
+    const [vehicleIconUrl, setVehicleIconUrl] = useState(
+        () => storedDriverInfo?.vehicleIconUrl || '',
+    );
     const [walletSummary, setWalletSummary] = useState({ balance: 0, cashLimit: 500, isBlocked: false });
-    const driverCoordsRef = useRef(null);
+    const driverCoordsRef = useRef(readStoredDriverCoords());
     const acceptingRideIdRef = useRef('');
     const driverPosition = useMemo(() => toLatLng(driverCoords || DEFAULT_MAP_COORDS), [driverCoords]);
     const mapVehicleIcon = useMemo(
@@ -277,9 +344,15 @@ const DriverHome = () => {
 
     const updateDriverLocation = useCallback(async ({ quiet = false } = {}) => {
         try {
-            const coordinates = await getCurrentCoords();
+            const coordinates = await getCurrentCoords({ purpose: 'online' });
             driverCoordsRef.current = coordinates;
             setDriverCoords(coordinates);
+            persistStoredDriverInfo({
+                location: {
+                    coordinates,
+                },
+                coordinates,
+            });
             map?.panTo(toLatLng(coordinates));
             if (!quiet) {
                 setStatusMessage('Current location updated.');
@@ -309,9 +382,22 @@ const DriverHome = () => {
             setWalletSummary(driver.wallet);
         }
 
+        const storedDriverInfoSnapshot = readStoredDriverInfo();
+        persistStoredDriverInfo({
+            vehicleIconType: driver?.vehicleIconType || storedDriverInfoSnapshot?.vehicleIconType || '',
+            vehicleType: driver?.vehicleType || storedDriverInfoSnapshot?.vehicleType || '',
+            vehicleIconUrl: driver?.vehicleIconUrl || storedDriverInfoSnapshot?.vehicleIconUrl || '',
+        });
+
         if (Array.isArray(savedCoords) && savedCoords.length === 2) {
             driverCoordsRef.current = savedCoords;
             setDriverCoords(savedCoords);
+            persistStoredDriverInfo({
+                location: {
+                    coordinates: savedCoords,
+                },
+                coordinates: savedCoords,
+            });
         }
 
         return driver;
@@ -407,18 +493,34 @@ const DriverHome = () => {
             return;
         }
 
+        setIsTogglingDuty(true);
         try {
             console.info('[driver-home] goOnline requested');
-            const coordinates = await updateDriverLocation({ quiet: true });
-            console.info('[driver-home] current coordinates resolved', coordinates);
+            setStatusMessage('Going online...');
+            
+            // OPTIMIZATION: Use last known coords to speed up the transition
+            // instead of waiting for a fresh GPS lock (which can take 2-6 seconds)
+            let coordinates = driverCoordsRef.current;
+            
+            if (!coordinates) {
+                // If we really don't have any coords yet, we MUST wait for them once
+                coordinates = await updateDriverLocation({ quiet: true });
+            } else {
+                // Refresh location in background for better accuracy without blocking the UI
+                updateDriverLocation({ quiet: true }).catch(() => {});
+            }
+
+            console.info('[driver-home] using coordinates for online status', coordinates);
             const socket = socketService.connect({ role: 'driver' });
 
             if (!socket) {
                 console.warn('[driver-home] socket connect skipped because token was missing');
+                setIsOnline(false);
                 setStatusMessage('Driver session missing. Please login again.');
                 return;
             }
 
+            setIsOnline(true);
             const response = await api.patch('/drivers/online', { location: coordinates });
             const driver = response?.data?.data || response?.data || response;
             console.info('[driver-home] online API response', {
@@ -428,24 +530,38 @@ const DriverHome = () => {
             });
             setIsOnline(Boolean(driver?.isOnline));
             setVehicleIconUrl((current) => driver?.vehicleIconUrl || current);
-            if (Array.isArray(driver?.location?.coordinates) && driver.location.coordinates.length === 2) {
-                driverCoordsRef.current = driver.location.coordinates;
-                setDriverCoords(driver.location.coordinates);
-                socketService.emit('locationUpdate', { coordinates: driver.location.coordinates });
-                console.info('[driver-home] emitted locationUpdate with saved coords', driver.location.coordinates);
-            } else {
-                socketService.emit('locationUpdate', { coordinates });
-                console.info('[driver-home] emitted locationUpdate with fresh coords', coordinates);
-            }
+            
+            // Sync current state with server response
+            const finalCoords = (Array.isArray(driver?.location?.coordinates) && driver.location.coordinates.length === 2)
+                ? driver.location.coordinates
+                : coordinates;
+            
+            driverCoordsRef.current = finalCoords;
+            setDriverCoords(finalCoords);
+            persistStoredDriverInfo({
+                location: {
+                    coordinates: finalCoords,
+                },
+                coordinates: finalCoords,
+            });
+            socketService.emit('locationUpdate', { coordinates: finalCoords });
+            
             setStatusMessage('You are online. Waiting for nearby bookings.');
         } catch (error) {
             console.error('[driver-home] goOnline failed', error);
+            setIsOnline(false);
+            socketService.disconnect();
             setStatusMessage(error.message || 'Could not go online.');
+        } finally {
+            setIsTogglingDuty(false);
         }
     }, [updateDriverLocation]);
 
     const goOffline = useCallback(async () => {
+        setIsTogglingDuty(true);
+        setIsOnline(false);
         try {
+            setStatusMessage('Going offline...');
             const response = await api.patch('/drivers/offline');
             const driver = response?.data?.data || response?.data || response;
             setIsOnline(Boolean(driver?.isOnline));
@@ -455,7 +571,10 @@ const DriverHome = () => {
             setStatusMessage('You are offline.');
             socketService.disconnect();
         } catch (error) {
+            setIsOnline(true);
             setStatusMessage(error.message || 'Could not go offline.');
+        } finally {
+            setIsTogglingDuty(false);
         }
     }, []);
 
@@ -585,15 +704,21 @@ const DriverHome = () => {
             console.info('[driver-home] socket listeners registered');
 
             const locationInterval = setInterval(() => {
-                getCurrentCoords()
+                getCurrentCoords({ purpose: 'background' })
                     .then((coordinates) => {
                         driverCoordsRef.current = coordinates;
                         setDriverCoords(coordinates);
+                        persistStoredDriverInfo({
+                            location: {
+                                coordinates,
+                            },
+                            coordinates,
+                        });
                         socketService.emit('locationUpdate', { coordinates });
                         console.info('[driver-home] periodic locationUpdate emitted', coordinates);
                     })
                     .catch((error) => {
-                        console.error('[driver-home] periodic location update failed', error);
+                        console.warn('[driver-home] periodic location update skipped', error?.message || error);
                         setStatusMessage(error.message || 'Could not update live location.');
                     });
             }, 10000);
@@ -648,7 +773,8 @@ const DriverHome = () => {
     };
 
     return (
-        <div className="min-h-screen bg-[#F8F9FA] font-sans select-none overflow-hidden relative pb-20 text-slate-900">
+        <div className="h-screen w-full bg-[#E5E7EB] font-sans select-none overflow-hidden relative text-slate-900 border-x border-slate-200 shadow-2xl max-w-md mx-auto">
+            {/* Overlay for Ride Request Modal */}
             <IncomingRideRequest 
                 visible={showRequest && Boolean(currentRequest)}
                 requestData={currentRequest}
@@ -665,77 +791,192 @@ const DriverHome = () => {
                 isBlocked={isBalanceCritical}
             />
 
+            {/* --- TOP FLOATING UI --- */}
+            <div className="fixed top-0 left-0 right-0 p-5 pt-12 flex items-start justify-between z-40 pointer-events-none max-w-md mx-auto">
+                {/* Menu Button */}
+                <button 
+                    onClick={() => navigate('/taxi/driver/profile')}
+                    className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-900 active:scale-90 transition-all pointer-events-auto border border-slate-100 relative"
+                >
+                    <Menu size={24} />
+                    <span className="absolute top-1.5 right-1.5 w-3 h-3 bg-rose-500 border-2 border-white rounded-full" />
+                </button>
 
-            <header className="fixed top-0 left-0 right-0 px-6 pt-6 pb-2.5 flex items-center justify-between z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-md">
-                <div className="flex items-center gap-3 pt-2">
-                    {appLogo ? (
-                        <img src={appLogo} alt={appName} className="h-7 drop-shadow-sm" />
-                    ) : (
-                        <span className="text-lg font-black tracking-tight text-slate-900">{appName}</span>
-                    )}
-                    <div className="h-5 w-px bg-slate-200" />
-                    <div className="flex items-center gap-1.5">
-                        <div className={`w-2 h-2 rounded-full shadow-sm ${isHydratingDriver ? 'bg-amber-400 animate-pulse' : isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-300'}`} />
-                        <span className={`text-[11px] font-semibold tracking-wide ${isHydratingDriver ? 'text-amber-500' : isOnline ? 'text-emerald-500' : 'text-slate-400'}`}>
-                            {isHydratingDriver ? 'Syncing' : isOnline ? 'Online' : 'Offline'}
-                        </span>
-                    </div>
+                {/* Earnings Pill */}
+                <div 
+                    onClick={() => navigate('/taxi/driver/wallet')}
+                    className="bg-black text-white px-6 py-2.5 rounded-full shadow-2xl flex items-center gap-2 active:scale-95 transition-all pointer-events-auto cursor-pointer"
+                >
+                    <span className="text-emerald-400 font-bold text-lg">₹</span>
+                    <span className="text-xl font-black tracking-tight">
+                        {Number(walletSummary.balance || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                 </div>
-                <div className="flex items-center gap-2">
-                    <button onClick={() => navigate('/taxi/driver/notifications')} className="w-9 h-9 bg-white rounded-xl shadow-sm border border-slate-50 flex items-center justify-center text-slate-600 relative active:scale-95 transition-all">
-                        <Bell size={16} strokeWidth={2.5} />
-                        <span className="absolute top-2 right-2 w-1.5 h-1.5 bg-rose-500 rounded-full" />
-                    </button>
-                    <div onClick={() => navigate('/taxi/driver/profile')} className="w-9 h-9 rounded-full border border-slate-100 bg-slate-50 flex items-center justify-center shadow-inner cursor-pointer active:scale-95 transition-all overflow-hidden">
-                         <User size={20} className="text-slate-300" />
-                    </div>
-                </div>
-            </header>
 
-            <div className="absolute inset-0 z-0 h-full bg-[#E5E7EB] overflow-hidden">
+                {/* Search Button */}
+                <button 
+                    onClick={() => navigate('/taxi/driver/notifications')}
+                    className="w-12 h-12 bg-white rounded-full shadow-lg flex items-center justify-center text-slate-900 active:scale-90 transition-all pointer-events-auto border border-slate-100"
+                >
+                    <Search size={22} />
+                </button>
+            </div>
+
+            {/* --- MAP BACKGROUND --- */}
+            <div className="absolute inset-0 z-0 w-full h-full">
                 {HAS_VALID_GOOGLE_MAPS_KEY && isLoaded ? (
-                    <GoogleMap mapContainerStyle={containerStyle} center={driverPosition} zoom={15} onLoad={onLoad} onUnmount={onUnmount} options={mapOptions}>
-                        <Marker position={driverPosition} icon={{ url: mapVehicleIcon, scaledSize: new window.google.maps.Size(40, 40), anchor: new window.google.maps.Point(20, 20)}} />
+                    <GoogleMap 
+                        mapContainerStyle={containerStyle} 
+                        center={driverPosition} 
+                        zoom={15} 
+                        onLoad={onLoad} 
+                        onUnmount={onUnmount} 
+                        options={mapOptions}
+                    >
+                        <Marker 
+                            position={driverPosition} 
+                            icon={{ 
+                                url: mapVehicleIcon, 
+                                scaledSize: new window.google.maps.Size(40, 40), 
+                                anchor: new window.google.maps.Point(20, 20)
+                            }} 
+                        />
                     </GoogleMap>
-                ) : <div className="w-full h-full bg-slate-100 animate-pulse flex items-center justify-center text-slate-400 font-medium text-xs">Map unavailable until Google Maps key is configured</div>}
-                <div className="absolute right-5 top-28 flex flex-col gap-2 z-20">
-                    <button onClick={() => updateDriverLocation()} className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Target size={16} /></button>
-                    <button className="w-9 h-9 bg-white shadow-lg rounded-xl flex items-center justify-center text-slate-800 border border-slate-50 active:scale-90 transition-all"><Layers size={16} /></button>
+                ) : (
+                    <div className="w-full h-full bg-slate-200 flex items-center justify-center">
+                        <div className="text-center px-10">
+                            <div className="w-16 h-16 bg-slate-300 rounded-full animate-pulse mx-auto mb-4" />
+                            <p className="text-slate-500 font-medium text-sm">Map unavailable. Configure Google Maps key.</p>
+                        </div>
+                    </div>
+                )}
+            </div>
+
+            {/* --- BOTTOM FLOATING UI --- */}
+            <div className="fixed bottom-20 left-0 right-0 p-6 pb-4 z-40 flex flex-col pointer-events-none max-w-md mx-auto">
+                
+                {/* Status Message Overlay */}
+                <AnimatePresence mode="wait">
+                    {isOnline ? (
+                        <motion.div 
+                            key="online-status"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="self-center mb-6 bg-emerald-500 px-6 py-2 rounded-full shadow-[0_10px_20px_rgba(16,185,129,0.3)] border border-emerald-400/30 flex items-center gap-2"
+                        >
+                            <span className="w-2 h-2 bg-white rounded-full animate-pulse" />
+                            <span className="text-[12px] font-black text-white uppercase tracking-widest">Seeking Rides</span>
+                        </motion.div>
+                    ) : (
+                        <motion.div 
+                            key="offline-status"
+                            initial={{ opacity: 0, y: 20 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 20 }}
+                            className="self-center mb-6 bg-white/90 backdrop-blur-md px-6 py-2 rounded-full shadow-lg border border-slate-200 flex items-center gap-2"
+                        >
+                            <span className="w-2 h-2 bg-slate-400 rounded-full" />
+                            <span className="text-[12px] font-black text-slate-500 uppercase tracking-widest">You are Offline</span>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div className="flex items-end justify-center w-full">
+                    {/* MAIN "GO" BUTTON */}
+                    <motion.div 
+                        layout
+                        className="relative pointer-events-auto"
+                    >
+                        <AnimatePresence>
+                            {isOnline && (
+                                <>
+                                    <motion.div 
+                                        initial={{ opacity: 0, scale: 0.8 }}
+                                        animate={{ opacity: 1, scale: 1 }}
+                                        exit={{ opacity: 0, scale: 0.8 }}
+                                        className="absolute -inset-4 bg-emerald-500/20 blur-3xl rounded-full pointer-events-none"
+                                    />
+                                    {/* ROTATING RADAR RING */}
+                                    <motion.div 
+                                        animate={{ rotate: 360 }}
+                                        transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                                        className="absolute -inset-2 border-2 border-dashed border-white/30 rounded-full z-0 pointer-events-none"
+                                    />
+                                </>
+                            )}
+                        </AnimatePresence>
+                        
+                        <motion.button 
+                            whileTap={{ scale: 0.9 }}
+                            disabled={isHydratingDriver || isTogglingDuty}
+                            onClick={isOnline ? goOffline : goOnline}
+                            className={`
+                                relative w-24 h-24 rounded-full flex items-center justify-center shadow-2xl transition-all duration-500 z-10
+                                ${isOnline 
+                                    ? 'bg-rose-500 hover:bg-rose-600 ring-8 ring-rose-500/10 shadow-rose-200' 
+                                    : 'bg-blue-600 hover:bg-blue-700 ring-8 ring-blue-600/10 shadow-blue-200'}
+                                overflow-hidden
+                                ${(isHydratingDriver || isTogglingDuty) ? 'opacity-90' : ''}
+                            `}
+                        >
+                            <AnimatePresence mode="wait">
+                                {isHydratingDriver ? (
+                                    <motion.div
+                                        key="loader"
+                                        initial={{ opacity: 0 }}
+                                        animate={{ opacity: 1 }}
+                                        exit={{ opacity: 0 }}
+                                    >
+                                        <Zap className="text-white animate-pulse" size={32} />
+                                    </motion.div>
+                                ) : isOnline ? (
+                                    <motion.span 
+                                        key="off-text"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className={`text-white font-black text-2xl tracking-tighter ${isTogglingDuty ? 'animate-pulse' : ''}`}
+                                    >
+                                        OFF
+                                    </motion.span>
+                                ) : (
+                                    <motion.span 
+                                        key="go-text"
+                                        initial={{ opacity: 0, y: 10 }}
+                                        animate={{ opacity: 1, y: 0 }}
+                                        exit={{ opacity: 0, y: -10 }}
+                                        className={`text-white font-black text-2xl tracking-tighter ${isTogglingDuty ? 'animate-pulse' : ''}`}
+                                    >
+                                        GO
+                                    </motion.span>
+                                )}
+                            </AnimatePresence>
+
+                            {/* Ripples when online */}
+                            {isOnline && (
+                                <motion.div 
+                                    animate={{ scale: [1, 2], opacity: [0.5, 0] }}
+                                    transition={{ repeat: Infinity, duration: 2 }}
+                                    className="absolute inset-0 rounded-full border-2 border-white/50"
+                                />
+                            )}
+                        </motion.button>
+                    </motion.div>
                 </div>
             </div>
 
-            <div className="absolute bottom-[5.5rem] left-0 right-0 px-4 z-30">
-                <Motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} className="bg-white rounded-[2rem] p-4 shadow-premium border border-slate-50">
-                    <div className="grid grid-cols-2 gap-3 mb-3">
-                        <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
-                             <div className="flex items-center gap-1 opacity-60"><IndianRupee size={10} className="text-emerald-500" /><span className="text-[10px] font-medium text-slate-500">Wallet</span></div>
-                             <p className={`text-xl font-bold tracking-tight leading-none ${walletSummary.isBlocked ? 'text-rose-600' : 'text-slate-900'}`}>
-                                Rs {Number(walletSummary.balance || 0).toFixed(2)}
-                             </p>
-                        </div>
-                        <div className="bg-slate-50/50 p-3 rounded-2xl border border-slate-100 flex flex-col gap-0.5">
-                             <div className="flex items-center gap-1 opacity-60"><Clock size={10} className="text-blue-500" /><span className="text-[10px] font-medium text-slate-500">Duty Time</span></div>
-                             <p className="text-xl font-bold text-slate-900 tracking-tight leading-none">{dutyHours}h {dutyMins}m</p>
-                        </div>
-                    </div>
-                    <div className="flex items-center justify-between px-2 mb-4">
-                          <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-orange-50 flex items-center justify-center text-orange-500"><Bike size={14} /></div>
-                              <div className="leading-tight"><h5 className="text-[13px] font-bold text-slate-800 leading-none">{completedRides} Trips</h5><p className="text-[10px] font-medium text-slate-400 mt-0.5">Completed Today</p></div>
-                          </div>
-                          <div className="flex items-center gap-2">
-                              <div className="w-7 h-7 rounded-lg bg-emerald-50 flex items-center justify-center text-emerald-500"><Star size={14} /></div>
-                              <div className="leading-tight text-right"><h5 className="text-[13px] font-bold text-slate-800 leading-none">4.95</h5><p className="text-[10px] font-medium text-slate-400 mt-0.5">Avg. Rating</p></div>
-                          </div>
-                    </div>
-                    {statusMessage && (
-                        <p className="px-2 pb-3 text-[11px] font-medium text-slate-400 text-center">{statusMessage}</p>
-                    )}
-                    <Motion.button disabled={isHydratingDriver} whileTap={isHydratingDriver ? undefined : { scale: 0.98 }} onClick={isOnline ? goOffline : goOnline} className={`w-full h-13 rounded-xl flex items-center justify-center gap-3 text-[15px] font-bold transition-all shadow-lg relative ${isOnline ? 'bg-rose-600 text-white shadow-rose-600/10' : 'bg-slate-900 text-white shadow-slate-900/10'} ${isHydratingDriver ? 'opacity-70' : ''}`}>
-                         <Power size={18} strokeWidth={2.5} className={isOnline || isHydratingDriver ? 'animate-pulse' : ''} />{isHydratingDriver ? 'Syncing Status...' : isOnline ? 'End Your Duty' : 'Go Online Now'}
-                    </Motion.button>
-                </Motion.div>
-            </div>
+            {/* Status Based Background Overlay */}
+            <AnimatePresence>
+                {!isOnline && (
+                    <motion.div 
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="absolute inset-x-0 bottom-0 top-0 bg-gradient-to-t from-slate-900/10 via-transparent to-transparent pointer-events-none z-10"
+                    />
+                )}
+            </AnimatePresence>
 
             <DriverBottomNav />
         </div>

@@ -229,7 +229,7 @@ const DriverWallet = () => {
             const orderResponse = await api.post('/drivers/wallet/top-up/razorpay/order', {
                 amount,
             });
-            const orderData = orderResponse.data?.data;
+            const orderData = orderResponse?.data || orderResponse;
 
             if (!orderData?.orderId || !orderData?.keyId) {
                 throw new Error('Could not initiate payment. Please try again.');
@@ -253,7 +253,7 @@ const DriverWallet = () => {
                             razorpay_signature: response.razorpay_signature,
                         });
 
-                        const result = verifyResponse.data?.data;
+                        const result = verifyResponse?.data || verifyResponse;
                         if (result?.wallet) {
                             setWallet(result.wallet);
                         }

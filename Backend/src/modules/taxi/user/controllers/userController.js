@@ -66,7 +66,8 @@ const resolveRazorpayCredentials = async () => {
   const envKeySecret = String(process.env.RAZORPAY_KEY_SECRET || '').trim();
   const envEnabled = String(process.env.RAZORPAY_ENABLED || '').trim();
 
-  if (envEnabled === '1' && envKeyId && envKeySecret) {
+  // Prefer backend .env credentials when present unless they are explicitly disabled.
+  if (envEnabled !== '0' && envKeyId && envKeySecret) {
     return { keyId: envKeyId, keySecret: envKeySecret };
   }
 
@@ -668,7 +669,8 @@ export const createRazorpayWalletTopupOrder = async (req, res) => {
 
   const amountPaise = Math.round(amount * 100);
   const userId = String(req.auth?.sub || '');
-  const receipt = `wallet_${userId}_${Date.now()}`;
+  const compactUserId = userId.replace(/[^a-zA-Z0-9]/g, '').slice(-8) || 'usr';
+  const receipt = `uwal_${compactUserId}_${Date.now().toString(36)}`;
 
   const order = await razorpayRequest({
     method: 'POST',

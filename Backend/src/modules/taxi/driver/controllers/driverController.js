@@ -31,7 +31,10 @@ import { verifyAccessToken } from "../../services/tokenService.js";
 import { clearDriverActiveRideIfStale } from "../../services/rideService.js";
 import { getWalletSettings } from "../../services/appSettingsService.js";
 import { RIDE_STATUS } from "../../constants/index.js";
-import { listDriverNeededDocuments } from "../../admin/services/adminService.js";
+import {
+  ensureThirdPartySettings,
+  listDriverNeededDocuments,
+} from "../../admin/services/adminService.js";
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -1044,7 +1047,8 @@ const resolveRazorpayCredentials = async () => {
   const envKeySecret = String(process.env.RAZORPAY_KEY_SECRET || "").trim();
   const envEnabled = String(process.env.RAZORPAY_ENABLED || "").trim();
 
-  if (envEnabled === "1" && envKeyId && envKeySecret) {
+  // Prefer backend .env credentials when present unless they are explicitly disabled.
+  if (envEnabled !== "0" && envKeyId && envKeySecret) {
     return { keyId: envKeyId, keySecret: envKeySecret };
   }
 
@@ -1075,6 +1079,16 @@ const resolveRazorpayCredentials = async () => {
 
   if (!keyId || !keySecret) {
     throw new ApiError(500, "Razorpay credentials are not configured");
+  }
+
+  if (
+    keyId.toLowerCase().includes("demo") ||
+    keySecret.toLowerCase().includes("demo")
+  ) {
+    throw new ApiError(
+      500,
+      "Razorpay keys are demo placeholders. Configure real keys in Admin > Payment Gateways",
+    );
   }
 
   return { keyId, keySecret };
@@ -1121,7 +1135,8 @@ export const createDriverWalletTopupOrder = async (req, res) => {
 
   const amountPaise = Math.round(amount * 100);
   const driverId = String(req.auth?.sub || "");
-  const receipt = `driver_wallet_${driverId}_${Date.now()}`;
+  const compactDriverId = driverId.replace(/[^a-zA-Z0-9]/g, "").slice(-8) || "drv";
+  const receipt = `dwal_${compactDriverId}_${Date.now().toString(36)}`;
 
   const order = await fetchRazorpay({
     method: "POST",

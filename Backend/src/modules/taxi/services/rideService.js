@@ -523,23 +523,68 @@ export const getActiveRideForIdentity = async ({ role, entityId }) => {
   return null;
 };
 
-export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 }) => {
+export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50, page = 1 }) => {
   if (!['user', 'driver'].includes(role)) {
     throw new ApiError(403, 'Only riders and drivers can access ride history');
   }
 
   const safeLimit = Math.min(Math.max(Number(limit) || 50, 1), 100);
+  const safePage = Math.max(Number(page) || 1, 1);
   const query = role === 'driver' ? { driverId: entityId } : { userId: entityId };
+  const counterpartPath = role === 'driver' ? 'userId' : 'driverId';
+  const counterpartSelect =
+    role === 'driver'
+      ? 'name phone profileImage'
+      : 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating';
 
-  const rides = await Ride.find(query)
+  const ridesQuery = Ride.find(query)
+    .select([
+      '_id',
+      'deliveryId',
+      'serviceType',
+      'status',
+      'liveStatus',
+      'fare',
+      'estimatedDistanceMeters',
+      'estimatedDurationMinutes',
+      'paymentMethod',
+      'otp',
+      'parcel',
+      'intercity',
+      'commissionAmount',
+      'driverEarnings',
+      'vehicleIconType',
+      'vehicleIconUrl',
+      'pickupLocation',
+      'pickupAddress',
+      'dropLocation',
+      'dropAddress',
+      'acceptedAt',
+      'startedAt',
+      'completedAt',
+      'feedback',
+      'createdAt',
+      'updatedAt',
+      'userId',
+      'driverId',
+    ].join(' '))
     .sort({ createdAt: -1 })
+    .skip((safePage - 1) * safeLimit)
     .limit(safeLimit)
-    .populate('deliveryId')
-    .populate('userId', 'name phone')
-    .populate('driverId', 'name phone profileImage vehicleType vehicleIconType vehicleNumber vehicleColor vehicleMake vehicleModel vehicleImage rating')
+    .populate(counterpartPath, counterpartSelect)
     .lean();
 
-  return rides.map((ride) => ({
+  if (role === 'user') {
+    ridesQuery.populate('deliveryId', 'parcel');
+  }
+
+  const [rides, total] = await Promise.all([
+    ridesQuery,
+    Ride.countDocuments(query),
+  ]);
+
+  return {
+    results: rides.map((ride) => ({
     rideId: String(ride._id),
     deliveryId: ride.deliveryId?._id ? String(ride.deliveryId._id) : ride.deliveryId ? String(ride.deliveryId) : null,
     type: ride.serviceType || 'ride',
@@ -556,7 +601,8 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     commissionAmount: ride.commissionAmount,
     driverEarnings: ride.driverEarnings,
     vehicleIconType: ride.vehicleIconType,
-    vehicleIconUrl: ride.vehicleIconUrl || '',
+    // Keep history responses light; giant data URLs can stall the activity screen.
+    vehicleIconUrl: String(ride.vehicleIconUrl || '').startsWith('data:') ? '' : (ride.vehicleIconUrl || ''),
     pickupLocation: ride.pickupLocation,
     pickupAddress: ride.pickupAddress || '',
     dropLocation: ride.dropLocation,
@@ -567,9 +613,18 @@ export const listRideHistoryForIdentity = async ({ role, entityId, limit = 50 })
     feedback: ride.feedback || null,
     createdAt: ride.createdAt,
     updatedAt: ride.updatedAt,
-    user: ride.userId || null,
-    driver: ride.driverId || null,
-  }));
+    user: role === 'driver' ? (ride.userId || null) : null,
+    driver: role === 'user' ? (ride.driverId || null) : null,
+    })),
+    pagination: {
+      page: safePage,
+      limit: safeLimit,
+      total,
+      totalPages: Math.max(1, Math.ceil(total / safeLimit)),
+      hasNextPage: safePage * safeLimit < total,
+      hasPrevPage: safePage > 1,
+    },
+  };
 };
 
 export const acceptRideAssignment = async ({ rideId, driverId }) => {

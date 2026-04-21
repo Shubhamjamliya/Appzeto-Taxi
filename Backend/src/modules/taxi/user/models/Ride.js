@@ -432,4 +432,7 @@ const rideSchema = new mongoose.Schema(
   { timestamps: true },
 );
 
+rideSchema.index({ userId: 1, createdAt: -1 });
+rideSchema.index({ driverId: 1, createdAt: -1 });
+
 export const Ride = mongoose.models.TaxiRide || mongoose.model('TaxiRide', rideSchema);

@@ -121,17 +121,19 @@ export const getMyActiveRide = async (req, res) => {
 };
 
 export const listMyRides = async (req, res) => {
-  const rides = await listRideHistoryForIdentity({
+  const history = await listRideHistoryForIdentity({
     role: req.auth.role,
     entityId: req.auth.sub,
     limit: req.query.limit,
+    page: req.query.page,
   });
 
   res.json({
     success: true,
     data: {
-      results: rides,
-      total: rides.length,
+      results: history.results,
+      total: history.pagination.total,
+      pagination: history.pagination,
     },
   });
 };

@@ -942,91 +942,119 @@ const RideTracking = () => {
       )}
 
       <motion.div
-        animate={{ y: drawerOpen ? 0 : 340 }}
-        className="absolute bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md rounded-t-[28px] shadow-[0_-8px_32px_rgba(15,23,42,0.10)] z-20 border-t border-white/80"
+        animate={{ y: drawerOpen ? 0 : 420 }}
+        className="absolute bottom-0 left-0 right-0 bg-white shadow-[0_-12px_44px_rgba(15,23,42,0.12)] z-20 rounded-t-[28px] border-t border-slate-100/50"
       >
-        <div className="w-10 h-1 bg-slate-200 rounded-full mx-auto mt-3 mb-4 cursor-pointer" onClick={() => setDrawerOpen(!drawerOpen)} />
+        <div className="w-12 h-1.5 bg-slate-200/60 rounded-full mx-auto mt-2.5 mb-3.5 cursor-pointer hover:bg-slate-300 transition-colors" onClick={() => setDrawerOpen(!drawerOpen)} />
 
-        <div className="px-5 pb-8 space-y-4">
-          <div className="flex items-center gap-3.5 pb-4 border-b border-slate-50">
-            <div className="relative shrink-0">
-              <div className="w-14 h-14 rounded-[16px] bg-slate-100 overflow-hidden border border-slate-100">
-                {driverImage ? (
-                  <img
-                    src={driverImage}
-                    className="w-full h-full object-cover"
-                    alt={driver.name || 'Driver'}
-                    onError={() => setDriverImageBroken(true)}
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center bg-slate-900 text-[18px] font-black text-white">
-                    {getInitials(driver.name)}
-                  </div>
-                )}
+        <div className="px-4 pb-6 space-y-3.5">
+          {/* Header Section: Driver & OTP */}
+          <div className="flex items-start justify-between">
+            <div className="flex gap-3 min-w-0">
+              <div className="relative shrink-0">
+                <div className="w-[62px] h-[62px] rounded-[20px] bg-[#1d2333] overflow-hidden shadow-[0_8px_20px_rgba(15,23,42,0.15)]">
+                  {driverImage ? (
+                    <img
+                      src={driverImage}
+                      className="w-full h-full object-cover opacity-90"
+                      alt={driver.name || 'Driver'}
+                      onError={() => setDriverImageBroken(true)}
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[21px] font-black text-white/90">
+                      {getInitials(driver.name)}
+                    </div>
+                  )}
+                </div>
+                {/* Car Badge */}
+                <div className="absolute -top-1 -right-1 w-6 h-6 rounded-lg bg-[#111827] border-2 border-white flex items-center justify-center shadow-md">
+                   <img src={vehicleIcon} alt="Vehicle icon" className="h-3.5 w-3.5 object-contain brightness-0 invert" draggable={false} />
+                </div>
+                {/* Rating Badge */}
+                <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-full border-2 border-white flex items-center gap-0.5 shadow-md">
+                  <Star size={9} className="text-slate-900 fill-slate-900" />
+                  <span className="text-[9px] font-black text-slate-900">{driver.rating || '4.9'}</span>
+                </div>
               </div>
-              <div className="absolute -top-1 -right-1 flex h-7 w-7 items-center justify-center rounded-[9px] border-2 border-white bg-slate-900 shadow-sm">
-                <img src={vehicleIcon} alt={vehicleLabel} className="h-4 w-4 object-contain" draggable={false} />
-              </div>
-              <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1.5 py-0.5 rounded-[8px] border-2 border-white flex items-center gap-0.5 shadow-sm">
-                <Star size={9} className="text-slate-900 fill-slate-900" />
-                <span className="text-[9px] font-bold text-slate-900">{driver.rating || '4.9'}</span>
-              </div>
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="text-[18px] font-black text-slate-900 leading-tight">{driver.name || 'Captain'}</h3>
-              <p className="text-[12px] font-black text-orange-500 mt-0.5">
-                {driverSubtitle}
-              </p>
-              <p className="text-[11px] font-bold text-slate-400 mt-0.5">{driver.plate || driver.vehicleNumber || 'Assigned'} &middot; {driver.vehicle || driver.vehicleType || 'Taxi'}</p>
-            </div>
-            <div className="shrink-0 bg-orange-50 border border-orange-100 rounded-[14px] px-3 py-2 text-right shadow-sm">
-              <p className="text-[8px] font-black text-orange-400 uppercase tracking-wider">OTP</p>
-              <p className="text-[17px] font-black text-slate-900 tracking-[0.16em] leading-tight">{otp}</p>
-            </div>
-          </div>
 
-          <div className="flex items-center gap-3 rounded-[16px] border border-slate-100 bg-slate-50/80 px-3 py-2.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-            {hasVehiclePhoto ? (
-              <div className="h-12 w-16 shrink-0 overflow-hidden rounded-[10px] border border-slate-100 bg-white">
-                <img
-                  src={vehicleImage}
-                  alt={vehicleLabel}
-                  className="h-full w-full object-contain bg-white"
-                  draggable={false}
-                  onError={() => setVehicleImageBroken(true)}
-                />
+              <div className="min-w-0 pt-0.5">
+                <h3 className="truncate text-[17px] font-black text-slate-900 leading-tight tracking-tight">
+                  {driver.name || 'James Bond'}
+                </h3>
+                <p className="text-[13px] font-black text-[#f97316] mt-1 tracking-tight">
+                  {tripStatus === 'started' ? 'Trip started' : driverSubtitle}
+                </p>
+                <p className="truncate text-[11px] font-bold text-slate-400 mt-0.5 uppercase tracking-[0.14em]">
+                  {driver.plate || 'MH12AB1234'} &middot; {vehicleLabel}
+                </p>
               </div>
-            ) : (
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[12px] border border-slate-100 bg-white">
-                <img src={vehicleIcon} alt={vehicleLabel} className="h-6 w-6 object-contain" draggable={false} />
+            </div>
+
+            {/* OTP CARD - High Fidelity */}
+            {otp && (
+              <div className="bg-[#fff9ef] border border-[#fef3c7] rounded-[20px] px-3 py-3 flex flex-col items-center justify-center min-w-[80px] shadow-sm">
+                <span className="text-[9px] font-black text-orange-500 uppercase tracking-[0.18em] mb-1 leading-none">OTP</span>
+                <span className="text-[18px] font-black text-slate-900 tracking-tighter leading-none">{otp}</span>
               </div>
             )}
-            <div className="min-w-0">
-              <p className="text-[10px] font-black uppercase tracking-[0.16em] text-slate-400">Vehicle</p>
-              <p className="truncate text-[13px] font-black text-slate-900">{vehicleLabel}</p>
-              <p className="truncate text-[11px] font-bold text-slate-500">{vehicleDetails || 'Assigned vehicle'}</p>
+          </div>
+
+          {/* Detailed Vehicle Status Card - High Fidelity */}
+          <div className="flex items-center gap-3 rounded-[22px] bg-slate-50/40 border border-slate-50/80 px-3 py-3 shadow-[0_2px_12px_rgba(15,23,42,0.02)]">
+            <div className="w-12 h-12 shrink-0 flex items-center justify-center rounded-[16px] bg-white shadow-sm border border-slate-100/50 overflow-hidden p-2">
+               {hasVehiclePhoto ? (
+                  <img
+                    src={vehicleImage}
+                    alt={vehicleLabel}
+                    className="w-full h-full object-contain"
+                    onError={() => setVehicleImageBroken(true)}
+                  />
+                ) : (
+                  <img src={vehicleIcon} alt={vehicleLabel} className="h-6 w-6 object-contain opacity-60" />
+                )}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-[9px] font-black uppercase tracking-[0.18em] text-slate-400 mb-0.5">Vehicle</p>
+              <p className="text-[15px] font-black text-slate-900 leading-tight truncate">{vehicleLabel}</p>
+              <p className="text-[12px] font-bold text-slate-500 mt-0.5 truncate">{vehicleDetails || 'Blue'}</p>
             </div>
           </div>
 
-          <div className="flex gap-2">
-            <ActionBtn icon={Phone} label="Call" onClick={handleCallDriver} />
-            <ActionBtn icon={MessageCircle} label="Chat" onClick={openRideChat} />
-            <ActionBtn icon={Share2} label="Share" onClick={handleShare} />
-            <ActionBtn icon={AlertTriangle} label="Help" onClick={() => navigate('/support')} />
+          {/* High-Fidelity Action Grid */}
+          <div className="grid grid-cols-4 gap-2.5">
+            {[
+              { id: 'call', icon: Phone, label: 'CALL', action: handleCallDriver },
+              { id: 'chat', icon: MessageCircle, label: 'CHAT', action: openRideChat },
+              { id: 'share', icon: Share2, label: 'SHARE', action: handleShare },
+              { id: 'help', icon: AlertTriangle, label: 'HELP', action: () => navigate('/support') }
+            ].map((btn) => (
+              <motion.button
+                key={btn.id}
+                whileTap={{ scale: 0.94 }}
+                onClick={btn.action}
+                className="flex flex-col items-center gap-1.5 py-3 rounded-[18px] bg-white border border-slate-100/60 shadow-[0_2px_8px_rgba(15,23,42,0.03)] hover:bg-slate-50 transition-all duration-200"
+              >
+                <div className="p-0.5">
+                  <btn.icon size={18} className="text-slate-800" strokeWidth={2} />
+                </div>
+                <span className="text-[9px] font-black text-slate-500 uppercase tracking-[0.1em] leading-none">{btn.label}</span>
+              </motion.button>
+            ))}
           </div>
 
-          <div className="flex items-center justify-between rounded-[18px] border border-white/80 bg-slate-50/80 px-4 py-3.5 shadow-[0_2px_8px_rgba(15,23,42,0.04)]">
-            <div>
-              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.2em]">Total Fare</p>
-              <div className="flex items-center gap-2 mt-0.5">
-                <span className="text-[20px] font-bold text-slate-900 tracking-tighter leading-none">Rs {fare}.00</span>
-                <span className="text-[9px] font-black bg-slate-200 text-slate-600 px-2 py-0.5 rounded-full uppercase tracking-wide">{paymentMethod}</span>
+          {/* Footer: Fare & Cancellation Section */}
+          <div className="flex items-end justify-between pt-2 border-t border-slate-50">
+            <div className="space-y-0.5">
+              <p className="text-[9px] font-black text-slate-400 uppercase tracking-[0.18em] leading-none mb-1">Total Fare</p>
+              <div className="flex items-center gap-2">
+                <span className="text-[19px] font-black text-slate-950 tracking-tight leading-none">Rs {fare}.00</span>
+                <span className="text-[9px] font-black bg-slate-100 text-slate-600 px-2.5 py-1 rounded-lg uppercase tracking-wider border border-slate-200/50 shadow-sm">{paymentMethod}</span>
               </div>
             </div>
             <motion.button
               whileTap={{ scale: 0.96 }}
               onClick={() => setShowCancelConfirm(true)}
-              className="bg-white border border-red-100 text-red-400 font-bold text-[11px] uppercase tracking-widest px-4 py-2.5 rounded-[12px] shadow-sm"
+              className="bg-white border-2 border-slate-50 text-red-500 font-black text-[11px] uppercase tracking-[0.16em] px-5 py-3 rounded-[18px] shadow-[0_8px_20px_rgba(239,68,68,0.08)] active:shadow-none hover:bg-red-50/10 transition-all"
             >
               Cancel
             </motion.button>
@@ -1079,4 +1107,3 @@ const RideTracking = () => {
 };
 
 export default RideTracking;
-

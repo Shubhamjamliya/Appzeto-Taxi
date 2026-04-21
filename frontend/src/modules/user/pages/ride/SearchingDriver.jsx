@@ -151,42 +151,6 @@ const normalizeDriver = (driver = {}) => ({
   eta: driver.eta || 2,
 });
 
-const ActionBtn = ({ icon: Icon, label, onClick }) => (
-  <motion.button whileTap={{ scale: 0.94 }} onClick={onClick}
-    className="flex-1 flex flex-col items-center gap-1 py-2 rounded-[12px] border border-slate-100 bg-slate-50/80 transition-all">
-    <Icon size={15} className="text-slate-700" strokeWidth={2} />
-    <span className="text-[9px] font-bold text-slate-500 uppercase tracking-wider">{label}</span>
-  </motion.button>
-);
-
-const DriverCard = ({ driver, banner, bannerGradient, children }) => (
-  <div className="rounded-[20px] border border-white/80 bg-white/95 shadow-[0_16px_48px_rgba(15,23,42,0.14)] overflow-hidden">
-    <div className={`px-4 py-2.5 flex items-center gap-2.5 ${bannerGradient}`}>
-      {banner}
-    </div>
-    <div className="px-4 pt-3 pb-4 space-y-3">
-      <div className="flex items-center gap-3">
-        <div className="relative shrink-0">
-          <div className="w-11 h-11 rounded-[13px] bg-slate-100 overflow-hidden border border-slate-100">
-            <img src={`https://ui-avatars.com/api/?name=${driver.name.replace(' ','+')}&background=f1f5f9&color=0f172a`}
-              className="w-full h-full object-cover" alt="Driver" />
-          </div>
-          <div className="absolute -bottom-1 -right-1 bg-yellow-400 px-1 py-0.5 rounded-[6px] border-2 border-white flex items-center gap-0.5 shadow-sm">
-            <Star size={8} className="text-slate-900 fill-slate-900" />
-            <span className="text-[8px] font-bold text-slate-900">{driver.rating}</span>
-          </div>
-        </div>
-        <div className="flex-1 min-w-0">
-          <h3 className="text-[15px] font-bold text-slate-900 leading-tight tracking-tight">{driver.name}</h3>
-          <p className="text-[11px] font-semibold text-orange-500 mt-0.5">Arriving in {driver.eta} mins</p>
-          <p className="text-[10px] font-bold text-slate-400 mt-0.5">{driver.plate} · {driver.vehicle}</p>
-        </div>
-      </div>
-      {children}
-    </div>
-  </div>
-);
-
 const SearchingDriver = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -350,7 +314,7 @@ const SearchingDriver = () => {
       driverRef.current = nextDriver;
       setDriver(nextDriver);
       setStage(STAGES.ACCEPTED);
-      setSearchStatus('Captain accepted your ride. No driver is assigned until they accept.');
+      setSearchStatus('Captain accepted your ride.');
       activeRideIdRef.current = String(rideId || activeRideIdRef.current || '');
       trackingStartedRef.current = true;
       saveCurrentRide({
@@ -388,7 +352,7 @@ const SearchingDriver = () => {
             paymentMethod: routeState.paymentMethod || 'Cash',
           },
         });
-      }, 1800);
+      }, 2200);
     };
 
     const onRideAccepted = ({ driver: acceptedDriver, rideId }) => {
@@ -411,7 +375,7 @@ const SearchingDriver = () => {
       }
 
       const activeResponse = await api.get('/rides/active/me');
-      const activeRide = activeResponse?.data || activeResponse;
+      const activeRide = activeResponse?.data?.data || activeResponse?.data || activeResponse;
 
       if (!activeRide?.rideId) {
         return null;
@@ -509,7 +473,7 @@ const SearchingDriver = () => {
         }
 
         const payload = response?.data || response;
-        const ride = payload?.ride || payload;
+        const ride = payload?.data?.ride || payload?.ride || payload;
         const rideId = ride?._id || ride?.id || payload?.realtime?.rideId;
         const normalizedRideId = String(rideId || '');
         activeRideIdRef.current = normalizedRideId;
@@ -558,7 +522,6 @@ const SearchingDriver = () => {
         console.error('[searching-driver] Ride creation error:', error);
         if (!disposed) {
           setSearchStatus(error?.message || 'Could not create ride request. Redirecting...');
-          // Optional: Add a delay and navigate back if it's a critical failure
           setTimeout(() => {
              if (!disposed) navigate(routePrefix || '/', { replace: true });
           }, 3000);
@@ -602,7 +565,6 @@ const SearchingDriver = () => {
             zoom={15}
             options={MAP_OPTIONS}
           >
-            {/* Enhanced Minimalist Pickup Marker (Uber Style) */}
             <Marker 
               position={pickupPos}
               zIndex={100}
@@ -617,7 +579,6 @@ const SearchingDriver = () => {
               }}
             />
 
-            {/* Drop Marker */}
             {dropPos && (
               <Marker 
                 position={dropPos}
@@ -633,7 +594,6 @@ const SearchingDriver = () => {
               />
             )}
 
-            {/* Radar Animation centered strictly on Pickup */}
             {isSearching && (
               <>
                 {availableVehicleMarkers.map((marker) => (
@@ -647,14 +607,12 @@ const SearchingDriver = () => {
                   position={pickupPos}
                   mapPaneName={OverlayView.OVERLAY_MOUSE_TARGET}
                 >
-                  {/* Wrap in a container to ensure perfect centering over the marker pin head */}
                   <div className="flex items-center justify-center -translate-y-[22px]">
                      <motion.div 
                       initial={{ opacity: 0 }} 
                       animate={{ opacity: 1 }} 
                       className="relative flex items-center justify-center pointer-events-none"
                     >
-                      {/* Concentric Ripples */}
                       {[1, 2, 3, 4].map((i) => (
                         <motion.div
                           key={i}
@@ -672,7 +630,6 @@ const SearchingDriver = () => {
                         />
                       ))}
 
-                      {/* Scanning Line overlaying on ripples */}
                       <motion.div
                         animate={{ rotate: 360 }}
                         transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
@@ -687,7 +644,6 @@ const SearchingDriver = () => {
               </>
             )}
 
-            {/* Simplified Route Line */}
             {dropPos && (
               <Polyline 
                 path={[pickupPos, dropPos]}
@@ -705,24 +661,29 @@ const SearchingDriver = () => {
             )}
           </GoogleMap>
         ) : (
-          <div className="w-full h-full bg-slate-50 flex flex-col items-center justify-center p-8 text-center">
-            <div className="w-16 h-16 bg-slate-100 rounded-2xl flex items-center justify-center mb-4">
-              <AlertTriangle className="text-amber-500" size={32} />
-            </div>
-            <h3 className="text-slate-900 font-bold text-lg mb-2">Map Loading Issue</h3>
-            <p className="text-slate-500 text-sm max-w-xs">{!HAS_VALID_GOOGLE_MAPS_KEY ? 'Google Maps API key is missing. Please check your configuration.' : 'Connecting to mapping services...'}</p>
-          </div>
+          <div className="w-full h-full bg-slate-50 flex flex-col items-center justify-center p-8 text-center" />
         )}
       </div>
 
-
-      {/* Route pill */}
       <div className="absolute top-8 left-4 right-16 z-20 bg-white/90 backdrop-blur-md rounded-2xl px-5 py-3 shadow-[0_8px_32px_rgba(15,23,42,0.12)] border border-white/80">
         <p className="text-[9px] font-bold text-slate-400 uppercase tracking-[0.1em] leading-none mb-1">Current Route</p>
         <p className="text-[13px] font-extrabold text-slate-900 leading-tight truncate">{routeState.pickup || 'Pickup'} → {routeState.drop || 'Drop'}</p>
       </div>
 
-      {isSearching && (
+      <AnimatePresence>
+        {isAccepted && rideOtp && (
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0, x: -20 }}
+            animate={{ scale: 1, opacity: 1, x: 0 }}
+            className="absolute top-[88px] left-4 z-20 bg-white shadow-[0_4px_16px_rgba(15,23,42,0.12)] rounded-[12px] p-3 min-w-[70px] border border-slate-50"
+          >
+            <p className="text-[18px] font-extrabold text-[#1d4ed8] leading-tight text-center tracking-wider">{rideOtp}</p>
+            <p className="text-[10px] font-bold text-slate-400 mt-0.5 text-center whitespace-nowrap">Start OTP</p>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {(isSearching || isAccepted) && (
         <motion.button whileTap={{ scale: 0.9 }} onClick={() => setShowCancelConfirm(true)}
           className="absolute top-8 right-4 z-20 w-10 h-10 bg-white/90 backdrop-blur-md rounded-[12px] shadow-[0_4px_14px_rgba(15,23,42,0.10)] border border-white/80 flex items-center justify-center">
           <X size={16} className="text-slate-900" strokeWidth={2.5} />
@@ -738,7 +699,6 @@ const SearchingDriver = () => {
             <motion.div key="searching" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}
               className="rounded-[32px] border border-white/80 bg-white/95 backdrop-blur-xl shadow-[0_20px_50px_rgba(0,0,0,0.12)] px-6 pt-3 pb-6 space-y-5">
               
-              {/* Intentional Bottom Sheet Handle */}
               <div className="w-10 h-1.5 bg-slate-100 rounded-full mx-auto mb-2" />
 
               <div className="text-center space-y-1.5">
@@ -746,7 +706,6 @@ const SearchingDriver = () => {
                 <p className="text-[13px] font-semibold text-slate-400 max-w-[260px] mx-auto leading-normal">{searchStatus}</p>
               </div>
 
-              {/* Animated Progress Dots */}
               <div className="flex justify-center gap-2.5 py-1">
                 {[0, 1, 2, 3].map(i => (
                   <motion.div key={i} animate={{ 
@@ -758,7 +717,6 @@ const SearchingDriver = () => {
                 ))}
               </div>
 
-              {/* Stats Row */}
               <div className="flex items-center justify-between px-5 py-4 rounded-[24px] bg-slate-50/80 border border-slate-100">
                 <div className="flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-emerald-50 flex items-center justify-center">
@@ -783,87 +741,104 @@ const SearchingDriver = () => {
             </motion.div>
           )}
 
-          {/* Assigned */}
-          {false && (
-            <motion.div key="assigned" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
-              <DriverCard driver={driver}
-                bannerGradient="bg-gradient-to-r from-emerald-500/90 to-emerald-600/90"
-                banner={<>
-                  <CheckCircle2 size={18} className="text-white shrink-0" strokeWidth={2.5} />
-                  <div className="flex-1">
-                    <p className="text-white font-bold text-[14px] leading-tight">Captain Found!</p>
-                    <p className="text-emerald-100 text-[11px] font-medium opacity-90">Waiting for captain to accept</p>
+          {/* Accepted - Ride Confirmed Premium Card */}
+          {isAccepted && (
+            <motion.div
+              key="accepted"
+              initial={{ y: 60, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 30, opacity: 0 }}
+              className="px-0"
+            >
+              <div className="overflow-hidden rounded-[32px] bg-white shadow-[0_24px_64px_-12px_rgba(15,23,42,0.18)] border border-slate-100">
+                {/* Status Bar */}
+                <div className="flex items-center justify-center gap-2.5 bg-emerald-50/50 py-4 border-b border-emerald-100/50">
+                  <div className="flex h-5 w-5 items-center justify-center rounded-full bg-emerald-500 shadow-[0_0_12px_rgba(16,185,129,0.3)]">
+                    <CheckCircle2 size={12} className="text-white" strokeWidth={3} />
                   </div>
-                  <div className="flex gap-1.5">
-                    {[0,1,2].map(d => (
-                      <motion.div key={d} animate={{ opacity:[0.3,1,0.3] }} transition={{ repeat:Infinity, duration:1.2, delay:d*0.25 }}
-                        className="w-1.5 h-1.5 rounded-full bg-white/70 shadow-sm" />
-                    ))}
-                  </div>
-                </>}>
-                <div className="flex gap-3">
-                  <ActionBtn icon={Phone} label="Call" onClick={() => window.open(`tel:${driver.phone}`)} />
-                  <ActionBtn icon={MessageCircle} label="Chat" onClick={() => navigate('/ride/chat', { state: { driver } })} />
-                  <ActionBtn icon={Shield} label="Safety" onClick={() => navigate('/support')} />
+                  <span className="text-[14px] font-black tracking-tight text-emerald-700 uppercase tracking-wider">Captain confirmed</span>
                 </div>
-                <div className="flex items-center gap-3 rounded-[18px] border border-dashed border-slate-200 bg-slate-50/60 px-4 py-3">
-                  <div className="w-9 h-9 rounded-[12px] bg-slate-200/60 flex items-center justify-center text-lg shadow-inner">🔒</div>
-                  <div>
-                    <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest leading-none mb-1">OTP</p>
-                    <p className="text-[12px] font-semibold text-slate-500">Shown after captain accepts</p>
+
+                <div className="p-6">
+                  <div className="flex items-start justify-between">
+                    <div className="space-y-1">
+                      {/* Driver Name and Rating */}
+                      <div className="flex items-center gap-2 mb-1">
+                        <span className="text-[14px] font-black text-slate-400 uppercase tracking-widest">{driver.name || "Vishal K."}</span>
+                        <div className="flex items-center gap-1 bg-yellow-400/10 px-1.5 py-0.5 rounded-full border border-yellow-400/20">
+                          <Star size={10} className="fill-yellow-500 text-yellow-500" />
+                          <span className="text-[11px] font-black text-yellow-700">{driver.rating || "4.7"}</span>
+                        </div>
+                      </div>
+                      
+                      {/* Driver Name / Display */}
+                      <h2 className="text-[28px] font-black tracking-tighter text-slate-900 leading-none mb-4 uppercase">
+                        {driver.plate || "MP13ZL3184"}
+                      </h2>
+
+                      {/* Vehicle Details Pill */}
+                      <div className="inline-flex items-center px-3 py-1 rounded-full bg-slate-100 border border-slate-200/50">
+                        <p className="text-[12px] font-black text-slate-600">
+                          {[driver.vehicleColor, driver.vehicleModel, "Taxi"].filter(Boolean).join(' ') || "White Dzire Taxi"}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Premium Overlaid Avatars */}
+                    <div className="relative h-20 w-24 shrink-0">
+                      <div className="absolute right-0 top-0 h-20 w-20 overflow-hidden rounded-[24px] bg-[#1d2333] border-4 border-white shadow-xl flex items-center justify-center">
+                         <img 
+                          src={availableVehicleIcon || CarIcon} 
+                          className="h-12 w-12 object-contain brightness-0 invert opacity-90" 
+                          alt="Vehicle" 
+                        />
+                      </div>
+                      <div className="absolute -left-2 bottom-0 h-16 w-16 overflow-hidden rounded-full border-[4px] border-white shadow-2xl bg-slate-200">
+                         <img 
+                          src={`https://ui-avatars.com/api/?name=${(driver.name || "VK").replace(' ','+')}&background=cbd5e1&color=0f172a`}
+                          className="h-full w-full object-cover" 
+                          alt="Driver" 
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* High Density Actions */}
+                  <div className="mt-7 grid grid-cols-2 gap-4">
+                    <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => window.open(`tel:${driver.phone}`)}
+                      className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-50 py-4.5 border border-slate-200/60 hover:bg-slate-100 transition-colors"
+                    >
+                      <Phone size={18} className="text-slate-900" strokeWidth={2.5} />
+                      <span className="text-[13px] font-black text-slate-900 uppercase tracking-widest leading-none">Call</span>
+                    </motion.button>
+                     <motion.button
+                      whileTap={{ scale: 0.96 }}
+                      onClick={() => navigate(`${routePrefix}/ride/chat`, { state: { driver } })}
+                      className="flex items-center justify-center gap-3 rounded-[22px] bg-slate-950 py-4.5 shadow-[0_12px_24px_rgba(15,23,42,0.15)] active:shadow-none"
+                    >
+                      <MessageCircle size={18} className="text-white" strokeWidth={2.5} />
+                      <span className="text-[13px] font-black text-white uppercase tracking-widest leading-none">Chat</span>
+                    </motion.button>
                   </div>
                 </div>
-                <motion.button whileTap={{ scale: 0.97 }} onClick={() => setShowCancelConfirm(true)}
-                  className="w-full py-4 rounded-[20px] bg-slate-950 text-[13px] font-bold text-white uppercase tracking-widest shadow-lg shadow-slate-950/20">
-                  Cancel This Ride
-                </motion.button>
-              </DriverCard>
+              </div>
+
+              {/* Status Indicator */}
+              <div className="mt-5 flex items-center justify-center gap-2.5">
+                <div className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </div>
+                <span className="text-[12px] font-black text-slate-400 uppercase tracking-[0.2em] leading-none">Captain is arriving</span>
+              </div>
             </motion.div>
           )}
 
-          {/* Accepted */}
-          {isAccepted && (
-            <motion.div key="accepted" initial={{ y: 40, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 20, opacity: 0 }}>
-              <DriverCard driver={driver}
-                bannerGradient="bg-gradient-to-r from-orange-500 to-orange-400"
-                banner={<>
-                  <Navigation size={16} className="text-white shrink-0" strokeWidth={2.5} />
-                  <div>
-                    <p className="text-white font-bold text-[13px] leading-tight">Ride Accepted!</p>
-                    <p className="text-orange-100 text-[10px] font-bold">Your captain is on the way</p>
-                  </div>
-                </>}>
-                <div className="flex gap-2">
-                  <ActionBtn icon={Phone} label="Call" onClick={() => window.open(`tel:${driver.phone}`)} />
-                  <ActionBtn icon={MessageCircle} label="Chat" onClick={() => navigate('/ride/chat', { state: { driver } })} />
-                  <ActionBtn icon={Shield} label="Safety" onClick={() => navigate('/support')} />
-                </div>
-                <motion.div initial={{ scale: 0.92, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
-                  className="rounded-[14px] border border-orange-100 bg-orange-50/60 px-3 py-2.5 flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[9px] font-bold text-orange-500 uppercase tracking-wider">Share OTP with Captain</p>
-                    <p className="text-[10px] font-bold text-slate-400 mt-0.5">To start your ride</p>
-                  </div>
-                  <div className="flex gap-1">
-                    {(rideOtp || "----").split('').map((d, i) => (
-                      <motion.div key={i} initial={{ y: -8, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: i * 0.07 }}
-                        className="w-8 h-9 bg-white rounded-[8px] border-2 border-orange-200 flex items-center justify-center shadow-sm">
-                        <span className="text-[17px] font-bold text-slate-900">{d}</span>
-                      </motion.div>
-                    ))}
-                  </div>
-                </motion.div>
-                <div className="flex items-center justify-center gap-2">
-                  <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full animate-pulse" />
-                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Ride in Progress</span>
-                </div>
-              </DriverCard>
-            </motion.div>
-          )}
         </AnimatePresence>
       </div>
 
-      {/* Cancel modal */}
       <AnimatePresence>
         {showCancelConfirm && (
           <div className="z-[100] relative">

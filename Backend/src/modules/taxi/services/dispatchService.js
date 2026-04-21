@@ -346,11 +346,14 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
       closeDriverRequestWindow(rideId, dispatchState.driverIds);
     }
 
-    const { zone, drivers } = await matchDrivers(ride.pickupLocation.coordinates, {
+    const { zone, drivers, searchRadiusMeters } = await matchDrivers(ride.pickupLocation.coordinates, {
       maxDistance: radius,
       vehicleTypeId: ride.vehicleTypeId,
       vehicleTypeIds: dispatchVehicleTypeIds,
     });
+    const effectiveRadius = Number.isFinite(searchRadiusMeters) && searchRadiusMeters > 0
+      ? searchRadiusMeters
+      : radius;
 
     const rejectedDriverIds = new Set(dispatchState.rejectedDriverIds);
     const notifiedDriverIds = new Set(dispatchState.notifiedDriverIds);
@@ -399,7 +402,7 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
         paymentMethod: ride.paymentMethod,
         parcel: ride.parcel || null,
         intercity: ride.intercity || null,
-        radius,
+        radius: effectiveRadius,
         attempt: attemptIndex + 1,
         maxAttempts: dispatchConfig.maxAttempts,
         acceptRejectDurationSeconds: dispatchConfig.retryWindowSeconds,
@@ -412,7 +415,7 @@ const dispatchAttempt = async (rideId, attemptIndex = 0) => {
     emitToRoom(getUserRoom(ride.userId), 'rideSearchUpdate', {
       rideId: String(ride._id),
       status: ride.status,
-      radius,
+      radius: effectiveRadius,
       dispatchType: dispatchConfig.dispatchType,
       attempt: attemptIndex + 1,
       maxAttempts: dispatchConfig.maxAttempts,

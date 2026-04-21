@@ -6,7 +6,6 @@ import {
     ShieldAlert,
     Check,
     Banknote,
-    Wallet,
     QrCode,
     Scan,
     ChevronRight,
@@ -1397,11 +1396,10 @@ const ActiveTrip = () => {
                                 </p>
                             </div>
                             {driverPaymentStatus === 'pending' && (
-                                <div className="grid grid-cols-3 gap-3 mb-6">
+                                <div className="grid grid-cols-2 gap-3 mb-6">
                                     {[
                                         { id: 'cash', label: 'Cash', icon: Banknote },
-                                        { id: 'online', label: 'Online', icon: Scan },
-                                        { id: 'wallet', label: 'Wallet', icon: Wallet }
+                                        { id: 'online', label: 'Online', icon: Scan }
                                     ].map((mode) => (
                                         <button
                                             key={mode.id}

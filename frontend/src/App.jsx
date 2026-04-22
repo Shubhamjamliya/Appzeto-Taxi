@@ -37,6 +37,7 @@ const Wallet = lazy(() => import('./modules/user/pages/Wallet'));
 // Coming Soon placeholder (for /tours and any unbuilt routes)
 const ComingSoon = lazy(() => import('./modules/shared/pages/ComingSoon'));
 const LegalPage = lazy(() => import('./modules/shared/pages/LegalPage'));
+const LandingPage = lazy(() => import('./modules/shared/pages/LandingPage'));
 
 // Phase 1 — Parcel flow completions
 const ParcelSearchingDriver = lazy(() => import('./modules/user/pages/parcel/ParcelSearchingDriver'));
@@ -307,6 +308,7 @@ const AdminSectionPlaceholder = () => {
 // A wrapper to handle conditional layouts (Mobile for User/Driver, Full for Admin)
 const MainLayout = ({ children }) => {
   const location = useLocation();
+  const isLandingPath = location.pathname === '/';
   const isAdminPath =
     location.pathname.startsWith('/admin') ||
     location.pathname.startsWith('/user-import') ||
@@ -315,6 +317,14 @@ const MainLayout = ({ children }) => {
 
   if (isAdminPath) {
     return <div className="redigo-admin-root h-screen bg-gray-50 overflow-hidden">{children}</div>;
+  }
+
+  if (isLandingPath) {
+    return (
+      <div className="redigo-landing-root min-h-screen bg-white">
+        <main className="min-h-screen">{children}</main>
+      </div>
+    );
   }
 
   return (
@@ -400,366 +410,798 @@ function App() {
         <ScrollToTop />
         <UserAccountInvalidationListener />
         <MainLayout>
-        <Suspense fallback={
-          <div className="flex items-center justify-center min-h-screen bg-white">
-            <span className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></span>
-          </div>
-        }>
-          <Toaster position="top-right" />
-          <Routes>
+          <Suspense
+            fallback={
+              <div className="flex items-center justify-center min-h-screen bg-white">
+                <span className="w-8 h-8 border-4 border-primary/30 border-t-primary rounded-full animate-spin"></span>
+              </div>
+            }>
+            <Toaster position="top-right" />
+            <Routes>
+              {/* User Module Routes */}
+              <Route path="/onboarding" element={<Onboarding />} />
+              <Route path="/login" element={<Login />} />
+              <Route path="/terms" element={<LegalPage />} />
+              <Route path="/privacy" element={<LegalPage />} />
+              <Route path="/verify-otp" element={<VerifyOTP />} />
+              <Route path="/signup" element={<Signup />} />
+              <Route path="/user" element={<UserHome />} />
+              <Route path="/" element={<LandingPage />} />
 
-            {/* User Module Routes */}
-            <Route path="/onboarding" element={<Onboarding />} />
-            <Route path="/login" element={<Login />} />
-            <Route path="/terms" element={<LegalPage />} />
-            <Route path="/privacy" element={<LegalPage />} />
-            <Route path="/verify-otp" element={<VerifyOTP />} />
-            <Route path="/signup" element={<Signup />} />
-            <Route path="/" element={<UserHome />} />
-            
-            <Route path="/ride/select-location" element={<SelectLocation />} />
-            <Route path="/ride/select-vehicle" element={<SelectVehicle />} />
-            <Route path="/ride/searching" element={<SearchingDriver />} />
-            <Route path="/ride/tracking" element={<RideTracking />} />
-            <Route path="/ride/complete" element={<RideComplete />} />
-            <Route path="/ride/chat" element={<Chat />} />
-            <Route path="/support" element={<Support />} />
-            <Route path="/ride/detail/:id" element={<RideDetail />} />
+              <Route
+                path="/ride/select-location"
+                element={<SelectLocation />}
+              />
+              <Route path="/ride/select-vehicle" element={<SelectVehicle />} />
+              <Route path="/ride/searching" element={<SearchingDriver />} />
+              <Route path="/ride/tracking" element={<RideTracking />} />
+              <Route path="/ride/complete" element={<RideComplete />} />
+              <Route path="/ride/chat" element={<Chat />} />
+              <Route path="/support" element={<Support />} />
+              <Route path="/ride/detail/:id" element={<RideDetail />} />
 
-            <Route path="/parcel/type" element={<ParcelType />} />
-            <Route path="/parcel/details" element={<ParcelDetails />} />
-            <Route path="/parcel/contacts" element={<SenderReceiverDetails />} />
-            <Route path="/parcel/searching" element={<ParcelSearchingDriver />} />
-            <Route path="/parcel/tracking" element={<ParcelTracking />} />
-            <Route path="/parcel/detail/:id" element={<RideDetail />} />
+              <Route path="/parcel/type" element={<ParcelType />} />
+              <Route path="/parcel/details" element={<ParcelDetails />} />
+              <Route
+                path="/parcel/contacts"
+                element={<SenderReceiverDetails />}
+              />
+              <Route
+                path="/parcel/searching"
+                element={<ParcelSearchingDriver />}
+              />
+              <Route path="/parcel/tracking" element={<ParcelTracking />} />
+              <Route path="/parcel/detail/:id" element={<RideDetail />} />
 
-            {/* New Service Routes — Real pages replacing ComingSoon */}
-            <Route path="/rental" element={<BikeRentalHome />} />
-            <Route path="/rental/vehicle" element={<RentalVehicleDetail />} />
-            <Route path="/rental/schedule" element={<RentalSchedule />} />
-            <Route path="/rental/kyc" element={<RentalKYC />} />
-            <Route path="/rental/deposit" element={<RentalDeposit />} />
-            <Route path="/rental/confirmed" element={<RentalConfirmed />} />
-            <Route path="/intercity" element={<IntercityHome />} />
-            <Route path="/intercity/vehicle" element={<IntercityVehicle />} />
-            <Route path="/intercity/details" element={<IntercityDetails />} />
-            <Route path="/intercity/confirm" element={<IntercityConfirm />} />
-            <Route path="/cab-sharing" element={<CabSharing />} />
-            <Route path="/cab" element={<CabHome />} />
-            <Route path="/cab/shared" element={<SharedTaxi />} />
-            <Route path="/cab/shared/seats" element={<SharedTaxiSeats />} />
-            <Route path="/cab/shared/confirm" element={<SharedTaxiConfirm />} />
-            <Route path="/cab/airport" element={<AirportCab />} />
-            <Route path="/cab/airport-confirm" element={<AirportCabConfirm />} />
-            <Route path="/cab/spiritual" element={<SpiritualTrip />} />
-            <Route path="/cab/spiritual-vehicle" element={<SpiritualTripVehicle />} />
-            <Route path="/cab/spiritual-confirm" element={<SpiritualTripConfirm />} />
-            <Route path="/bus" element={<BusHome />} />
-            <Route path="/bus/list" element={<BusList />} />
-            <Route path="/bus/seats" element={<BusSeats />} />
-            <Route path="/bus/details" element={<BusDetails />} />
-            <Route path="/bus/confirm" element={<BusConfirm />} />
-            <Route path="/tours" element={<ComingSoon />} />
+              {/* New Service Routes — Real pages replacing ComingSoon */}
+              <Route path="/rental" element={<BikeRentalHome />} />
+              <Route path="/rental/vehicle" element={<RentalVehicleDetail />} />
+              <Route path="/rental/schedule" element={<RentalSchedule />} />
+              <Route path="/rental/kyc" element={<RentalKYC />} />
+              <Route path="/rental/deposit" element={<RentalDeposit />} />
+              <Route path="/rental/confirmed" element={<RentalConfirmed />} />
+              <Route path="/intercity" element={<IntercityHome />} />
+              <Route path="/intercity/vehicle" element={<IntercityVehicle />} />
+              <Route path="/intercity/details" element={<IntercityDetails />} />
+              <Route path="/intercity/confirm" element={<IntercityConfirm />} />
+              <Route path="/cab-sharing" element={<CabSharing />} />
+              <Route path="/cab" element={<CabHome />} />
+              <Route path="/cab/shared" element={<SharedTaxi />} />
+              <Route path="/cab/shared/seats" element={<SharedTaxiSeats />} />
+              <Route
+                path="/cab/shared/confirm"
+                element={<SharedTaxiConfirm />}
+              />
+              <Route path="/cab/airport" element={<AirportCab />} />
+              <Route
+                path="/cab/airport-confirm"
+                element={<AirportCabConfirm />}
+              />
+              <Route path="/cab/spiritual" element={<SpiritualTrip />} />
+              <Route
+                path="/cab/spiritual-vehicle"
+                element={<SpiritualTripVehicle />}
+              />
+              <Route
+                path="/cab/spiritual-confirm"
+                element={<SpiritualTripConfirm />}
+              />
+              <Route path="/bus" element={<BusHome />} />
+              <Route path="/bus/list" element={<BusList />} />
+              <Route path="/bus/seats" element={<BusSeats />} />
+              <Route path="/bus/details" element={<BusDetails />} />
+              <Route path="/bus/confirm" element={<BusConfirm />} />
+              <Route path="/tours" element={<ComingSoon />} />
 
-            <Route path="/activity" element={<Activity />} />
-            <Route path="/profile" element={<Profile />} />
-            <Route path="/wallet" element={<Wallet />} />
-            <Route path="/notifications" element={<UserNotifications />} />
-            <Route path="/promo" element={<PromoCodes />} />
-            <Route path="/referral" element={<UserReferral />} />
+              <Route path="/activity" element={<Activity />} />
+              <Route path="/profile" element={<Profile />} />
+              <Route path="/wallet" element={<Wallet />} />
+              <Route path="/notifications" element={<UserNotifications />} />
+              <Route path="/promo" element={<PromoCodes />} />
+              <Route path="/referral" element={<UserReferral />} />
 
-            <Route path="/profile/settings" element={<ProfileSettings />} />
-            <Route path="/profile/payments" element={<PaymentSettings />} />
-            <Route path="/profile/addresses" element={<AddressSettings />} />
-            <Route path="/profile/notifications" element={<UserNotifications />} />
-            <Route path="/profile/delete-account" element={<DeleteAccount />} />
-            <Route path="/safety/sos" element={<SOSContacts />} />
-            <Route path="/support/tickets" element={<SupportTickets />} />
-            <Route path="/support/ticket/:id" element={<SupportTicketDetail />} />
+              <Route path="/profile/settings" element={<ProfileSettings />} />
+              <Route path="/profile/payments" element={<PaymentSettings />} />
+              <Route path="/profile/addresses" element={<AddressSettings />} />
+              <Route
+                path="/profile/notifications"
+                element={<UserNotifications />}
+              />
+              <Route
+                path="/profile/delete-account"
+                element={<DeleteAccount />}
+              />
+              <Route path="/safety/sos" element={<SOSContacts />} />
+              <Route path="/support/tickets" element={<SupportTickets />} />
+              <Route
+                path="/support/ticket/:id"
+                element={<SupportTicketDetail />}
+              />
 
-            {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
-            <Route path="/taxi/user/onboarding" element={<Onboarding />} />
-            <Route path="/taxi/user/login" element={<Login />} />
-            <Route path="/taxi/user/terms" element={<LegalPage />} />
-            <Route path="/taxi/user/privacy" element={<LegalPage />} />
-            <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
-            <Route path="/taxi/user/signup" element={<Signup />} />
-            <Route path="/taxi/user" element={<UserHome />} />
+              {/* User Module Routes (Taxi-prefixed aliases to match Driver style) */}
+              <Route path="/taxi/user/onboarding" element={<Onboarding />} />
+              <Route path="/taxi/user/login" element={<Login />} />
+              <Route path="/taxi/user/terms" element={<LegalPage />} />
+              <Route path="/taxi/user/privacy" element={<LegalPage />} />
+              <Route path="/taxi/user/verify-otp" element={<VerifyOTP />} />
+              <Route path="/taxi/user/signup" element={<Signup />} />
+              <Route path="/taxi/user" element={<UserHome />} />
 
-            <Route path="/taxi/user/ride/select-location" element={<SelectLocation />} />
-            <Route path="/taxi/user/ride/select-vehicle" element={<SelectVehicle />} />
-            <Route path="/taxi/user/ride/searching" element={<SearchingDriver />} />
-            <Route path="/taxi/user/ride/tracking" element={<RideTracking />} />
-            <Route path="/taxi/user/ride/complete" element={<RideComplete />} />
-            <Route path="/taxi/user/ride/chat" element={<Chat />} />
-            <Route path="/taxi/user/support" element={<Support />} />
-            <Route path="/taxi/user/ride/detail/:id" element={<RideDetail />} />
+              <Route
+                path="/taxi/user/ride/select-location"
+                element={<SelectLocation />}
+              />
+              <Route
+                path="/taxi/user/ride/select-vehicle"
+                element={<SelectVehicle />}
+              />
+              <Route
+                path="/taxi/user/ride/searching"
+                element={<SearchingDriver />}
+              />
+              <Route
+                path="/taxi/user/ride/tracking"
+                element={<RideTracking />}
+              />
+              <Route
+                path="/taxi/user/ride/complete"
+                element={<RideComplete />}
+              />
+              <Route path="/taxi/user/ride/chat" element={<Chat />} />
+              <Route path="/taxi/user/support" element={<Support />} />
+              <Route
+                path="/taxi/user/ride/detail/:id"
+                element={<RideDetail />}
+              />
 
-            <Route path="/taxi/user/parcel/type" element={<ParcelType />} />
-            <Route path="/taxi/user/parcel/details" element={<ParcelDetails />} />
-            <Route path="/taxi/user/parcel/contacts" element={<SenderReceiverDetails />} />
-            <Route path="/taxi/user/parcel/searching" element={<ParcelSearchingDriver />} />
-            <Route path="/taxi/user/parcel/tracking" element={<ParcelTracking />} />
-            <Route path="/taxi/user/parcel/detail/:id" element={<RideDetail />} />
+              <Route path="/taxi/user/parcel/type" element={<ParcelType />} />
+              <Route
+                path="/taxi/user/parcel/details"
+                element={<ParcelDetails />}
+              />
+              <Route
+                path="/taxi/user/parcel/contacts"
+                element={<SenderReceiverDetails />}
+              />
+              <Route
+                path="/taxi/user/parcel/searching"
+                element={<ParcelSearchingDriver />}
+              />
+              <Route
+                path="/taxi/user/parcel/tracking"
+                element={<ParcelTracking />}
+              />
+              <Route
+                path="/taxi/user/parcel/detail/:id"
+                element={<RideDetail />}
+              />
 
-            <Route path="/taxi/user/rental" element={<BikeRentalHome />} />
-            <Route path="/taxi/user/rental/vehicle" element={<RentalVehicleDetail />} />
-            <Route path="/taxi/user/rental/schedule" element={<RentalSchedule />} />
-            <Route path="/taxi/user/rental/kyc" element={<RentalKYC />} />
-            <Route path="/taxi/user/rental/deposit" element={<RentalDeposit />} />
-            <Route path="/taxi/user/rental/confirmed" element={<RentalConfirmed />} />
-            <Route path="/taxi/user/intercity" element={<IntercityHome />} />
-            <Route path="/taxi/user/intercity/vehicle" element={<IntercityVehicle />} />
-            <Route path="/taxi/user/intercity/details" element={<IntercityDetails />} />
-            <Route path="/taxi/user/intercity/confirm" element={<IntercityConfirm />} />
-            <Route path="/taxi/user/cab-sharing" element={<CabSharing />} />
-            <Route path="/taxi/user/cab" element={<CabHome />} />
-            <Route path="/taxi/user/cab/shared" element={<SharedTaxi />} />
-            <Route path="/taxi/user/cab/shared/seats" element={<SharedTaxiSeats />} />
-            <Route path="/taxi/user/cab/shared/confirm" element={<SharedTaxiConfirm />} />
-            <Route path="/taxi/user/cab/airport" element={<AirportCab />} />
-            <Route path="/taxi/user/cab/airport-confirm" element={<AirportCabConfirm />} />
-            <Route path="/taxi/user/cab/spiritual" element={<SpiritualTrip />} />
-            <Route path="/taxi/user/cab/spiritual-vehicle" element={<SpiritualTripVehicle />} />
-            <Route path="/taxi/user/cab/spiritual-confirm" element={<SpiritualTripConfirm />} />
-            <Route path="/taxi/user/bus" element={<BusHome />} />
-            <Route path="/taxi/user/bus/list" element={<BusList />} />
-            <Route path="/taxi/user/bus/seats" element={<BusSeats />} />
-            <Route path="/taxi/user/bus/details" element={<BusDetails />} />
-            <Route path="/taxi/user/bus/confirm" element={<BusConfirm />} />
-            <Route path="/taxi/user/tours" element={<ComingSoon />} />
+              <Route path="/taxi/user/rental" element={<BikeRentalHome />} />
+              <Route
+                path="/taxi/user/rental/vehicle"
+                element={<RentalVehicleDetail />}
+              />
+              <Route
+                path="/taxi/user/rental/schedule"
+                element={<RentalSchedule />}
+              />
+              <Route path="/taxi/user/rental/kyc" element={<RentalKYC />} />
+              <Route
+                path="/taxi/user/rental/deposit"
+                element={<RentalDeposit />}
+              />
+              <Route
+                path="/taxi/user/rental/confirmed"
+                element={<RentalConfirmed />}
+              />
+              <Route path="/taxi/user/intercity" element={<IntercityHome />} />
+              <Route
+                path="/taxi/user/intercity/vehicle"
+                element={<IntercityVehicle />}
+              />
+              <Route
+                path="/taxi/user/intercity/details"
+                element={<IntercityDetails />}
+              />
+              <Route
+                path="/taxi/user/intercity/confirm"
+                element={<IntercityConfirm />}
+              />
+              <Route path="/taxi/user/cab-sharing" element={<CabSharing />} />
+              <Route path="/taxi/user/cab" element={<CabHome />} />
+              <Route path="/taxi/user/cab/shared" element={<SharedTaxi />} />
+              <Route
+                path="/taxi/user/cab/shared/seats"
+                element={<SharedTaxiSeats />}
+              />
+              <Route
+                path="/taxi/user/cab/shared/confirm"
+                element={<SharedTaxiConfirm />}
+              />
+              <Route path="/taxi/user/cab/airport" element={<AirportCab />} />
+              <Route
+                path="/taxi/user/cab/airport-confirm"
+                element={<AirportCabConfirm />}
+              />
+              <Route
+                path="/taxi/user/cab/spiritual"
+                element={<SpiritualTrip />}
+              />
+              <Route
+                path="/taxi/user/cab/spiritual-vehicle"
+                element={<SpiritualTripVehicle />}
+              />
+              <Route
+                path="/taxi/user/cab/spiritual-confirm"
+                element={<SpiritualTripConfirm />}
+              />
+              <Route path="/taxi/user/bus" element={<BusHome />} />
+              <Route path="/taxi/user/bus/list" element={<BusList />} />
+              <Route path="/taxi/user/bus/seats" element={<BusSeats />} />
+              <Route path="/taxi/user/bus/details" element={<BusDetails />} />
+              <Route path="/taxi/user/bus/confirm" element={<BusConfirm />} />
+              <Route path="/taxi/user/tours" element={<ComingSoon />} />
 
-            <Route path="/taxi/user/activity" element={<Activity />} />
-            <Route path="/taxi/user/profile" element={<Profile />} />
-            <Route path="/taxi/user/wallet" element={<Wallet />} />
-            <Route path="/taxi/user/notifications" element={<UserNotifications />} />
-            <Route path="/taxi/user/promo" element={<PromoCodes />} />
-            <Route path="/taxi/user/referral" element={<UserReferral />} />
+              <Route path="/taxi/user/activity" element={<Activity />} />
+              <Route path="/taxi/user/profile" element={<Profile />} />
+              <Route path="/taxi/user/wallet" element={<Wallet />} />
+              <Route
+                path="/taxi/user/notifications"
+                element={<UserNotifications />}
+              />
+              <Route path="/taxi/user/promo" element={<PromoCodes />} />
+              <Route path="/taxi/user/referral" element={<UserReferral />} />
 
-            <Route path="/taxi/user/profile/settings" element={<ProfileSettings />} />
-            <Route path="/taxi/user/profile/payments" element={<PaymentSettings />} />
-            <Route path="/taxi/user/profile/addresses" element={<AddressSettings />} />
-            <Route path="/taxi/user/profile/notifications" element={<UserNotifications />} />
-            <Route path="/taxi/user/profile/delete-account" element={<DeleteAccount />} />
-            <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
-            <Route path="/taxi/user/support/tickets" element={<SupportTickets />} />
-            <Route path="/taxi/user/support/ticket/:id" element={<SupportTicketDetail />} />
-            
-            {/* Driver Module Routes - Centralized under DriverLayout for Theme & Styling */}
-            <Route path="/taxi/driver" element={<DriverLayout />}>
-              <Route index element={<Navigate to="/taxi/driver/home" replace />} />
-              <Route path="lang-select" element={<LanguageSelect />} />
-              <Route path="welcome" element={<DriverWelcome />} />
-              <Route path="login" element={<PhoneRegistration />} />
-              <Route path="reg-phone" element={<PhoneRegistration />} />
-              <Route path="otp-verify" element={<OTPVerification />} />
-              <Route path="step-personal" element={<StepPersonal />} />
-              <Route path="step-referral" element={<StepReferral />} />
-              <Route path="step-vehicle" element={<StepVehicle />} />
-              <Route path="step-documents" element={<StepDocuments />} />
-              <Route path="registration-status" element={<RegistrationStatus />} />
-              <Route path="status" element={<ApplicationStatus />} />
+              <Route
+                path="/taxi/user/profile/settings"
+                element={<ProfileSettings />}
+              />
+              <Route
+                path="/taxi/user/profile/payments"
+                element={<PaymentSettings />}
+              />
+              <Route
+                path="/taxi/user/profile/addresses"
+                element={<AddressSettings />}
+              />
+              <Route
+                path="/taxi/user/profile/notifications"
+                element={<UserNotifications />}
+              />
+              <Route
+                path="/taxi/user/profile/delete-account"
+                element={<DeleteAccount />}
+              />
+              <Route path="/taxi/user/safety/sos" element={<SOSContacts />} />
+              <Route
+                path="/taxi/user/support/tickets"
+                element={<SupportTickets />}
+              />
+              <Route
+                path="/taxi/user/support/ticket/:id"
+                element={<SupportTicketDetail />}
+              />
 
-              <Route path="home" element={<DriverHome />} />
-              <Route path="dashboard" element={<DriverHome />} />
-              <Route path="active-trip" element={<ActiveTrip />} />
-              <Route path="chat" element={<Chat />} />
-              <Route path="wallet" element={<DriverWallet />} />
-              <Route path="profile" element={<DriverProfile />} />
-              <Route path="history" element={<RideRequests />} />
-              <Route path="incentives" element={<DriverIncentives />} />
+              {/* Driver Module Routes - Centralized under DriverLayout for Theme & Styling */}
+              <Route path="/taxi/driver" element={<DriverLayout />}>
+                <Route
+                  index
+                  element={<Navigate to="/taxi/driver/home" replace />}
+                />
+                <Route path="lang-select" element={<LanguageSelect />} />
+                <Route path="welcome" element={<DriverWelcome />} />
+                <Route path="login" element={<PhoneRegistration />} />
+                <Route path="reg-phone" element={<PhoneRegistration />} />
+                <Route path="otp-verify" element={<OTPVerification />} />
+                <Route path="step-personal" element={<StepPersonal />} />
+                <Route path="step-referral" element={<StepReferral />} />
+                <Route path="step-vehicle" element={<StepVehicle />} />
+                <Route path="step-documents" element={<StepDocuments />} />
+                <Route
+                  path="registration-status"
+                  element={<RegistrationStatus />}
+                />
+                <Route path="status" element={<ApplicationStatus />} />
 
-              <Route path="edit-profile" element={<EditProfile />} />
-              <Route path="documents" element={<DriverDocuments />} />
-              <Route path="notifications" element={<Notifications />} />
-              <Route path="payout-methods" element={<PayoutMethods />} />
-              <Route path="referral" element={<Referral />} />
-              <Route path="delete-account" element={<DriverDeleteAccount />} />
-              <Route path="security" element={<SecuritySOS />} />
-              <Route path="support" element={<DriverSupport />} />
-              <Route path="help-support" element={<DriverHelpSupportOptions />} />
-              <Route path="support/chat" element={<DriverSupportChat />} />
-              <Route path="support/tickets" element={<SupportTickets />} />
-              <Route path="support/ticket/:id" element={<SupportTicketDetail />} />
-              <Route path="vehicle-fleet" element={<VehicleFleet />} />
-              <Route path="add-vehicle" element={<AddVehicle />} />
-              <Route path="manage-drivers" element={<ManageDrivers />} />
-              <Route path="add-driver" element={<AddDriver />} />
-            </Route>
+                <Route path="home" element={<DriverHome />} />
+                <Route path="dashboard" element={<DriverHome />} />
+                <Route path="active-trip" element={<ActiveTrip />} />
+                <Route path="chat" element={<Chat />} />
+                <Route path="wallet" element={<DriverWallet />} />
+                <Route path="profile" element={<DriverProfile />} />
+                <Route path="history" element={<RideRequests />} />
+                <Route path="incentives" element={<DriverIncentives />} />
 
-            {/* Admin Module Routes */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route path="/user-import/create" element={<AdminLayout />}>
-              <Route index element={<AdminUserImportCreate />} />
-            </Route>
-            <Route path="/driver-import/create" element={<AdminLayout />}>
-              <Route index element={<AdminDriverImportCreate />} />
-            </Route>
-            <Route path="/owner/create" element={<AdminLayout />}>
-              <Route index element={<AdminOwnerCreate />} />
-            </Route>
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<Navigate to="/admin/dashboard" />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="earnings" element={<AdminEarnings />} />
-              <Route path="chat" element={<AdminChat />} />
-              <Route path="trips" element={<AdminTrips />} />
-              <Route path="deliveries" element={<AdminDeliveries />} />
-              <Route path="ongoing" element={<AdminOngoing />} />
-              <Route path="wallet/payment" element={<AdminWalletPayment />} />
-              <Route path="users" element={<AdminUserList />} />
-              <Route path="users/create" element={<AdminUserCreate />} />
-              <Route path="users/:id" element={<AdminUserDetails />} />
-              <Route path="users/delete-requests" element={<AdminDeleteRequestUsers />} />
-              <Route path="users/bulk-upload" element={<AdminUserBulkUpload />} />
-              <Route path="user-import/create" element={<AdminUserImportCreate />} />
-              
-              <Route path="drivers" element={<AdminDriverList />} />
-              <Route path="drivers/create" element={<AdminDriverCreate />} />
-              <Route path="drivers/edit/:id" element={<AdminDriverEdit />} />
-              <Route path="drivers/:id" element={<AdminDriverDetails />} />
-              <Route path="drivers/pending" element={<AdminPendingDrivers />} />
-              <Route path="drivers/subscription" element={<AdminDriverSubscriptions />} />
-              <Route path="drivers/subscription/create" element={<AdminDriverSubscriptionCreate />} />
-              <Route path="drivers/ratings" element={<AdminDriverRatings />} />
-              <Route path="drivers/ratings/:id" element={<AdminDriverRatingDetail />} />
-              <Route path="drivers/wallet" element={<AdminDriverWallet />} />
-              <Route path="drivers/wallet/negative" element={<AdminNegativeBalanceDrivers />} />
-              <Route path="drivers/wallet/withdrawals" element={<AdminWithdrawalRequestDrivers />} />
-              <Route path="drivers/wallet/withdrawals/:id" element={<AdminWithdrawalRequestDetail />} />
-              <Route path="drivers/delete-requests" element={<AdminDriverDeleteRequests />} />
-              <Route path="drivers/documents" element={<AdminGlobalDocuments />} />
-              <Route path="drivers/documents/create" element={<AdminDriverDocumentForm />} />
-              <Route path="drivers/documents/edit/:id" element={<AdminDriverDocumentForm />} />
-              <Route path="drivers/bulk-upload" element={<AdminDriverBulkUpload />} />
-              <Route path="driver-import/create" element={<AdminDriverImportCreate />} />
-              <Route path="drivers/payment-methods" element={<AdminPaymentMethods />} />
-               <Route path="drivers/audit/:id" element={<AdminDriverAudit />} />
-              <Route path="referrals/dashboard" element={<AdminReferralDashboard />} />
-              <Route path="referrals/user-settings" element={<AdminUserReferralSettings />} />
-              <Route path="referrals/driver-settings" element={<AdminDriverReferralSettings />} />
-              <Route path="referrals/translation" element={<AdminReferralTranslation />} />
-               {/* Promotions Management */}
-               <Route path="promotions/promo-codes" element={<AdminPromoCodes />} />
-               <Route path="promotions/promo-codes/create" element={<AdminPromoCodes />} />
-               <Route path="promotions/send-notification" element={<AdminSendNotification />} />
-               <Route path="promotions/send-notification/create" element={<AdminSendNotification />} />
-               <Route path="promotions/banner-image" element={<AdminBannerImage />} />
-               <Route path="promotions/banner-image/create" element={<AdminBannerImage />} />
-              
-              {/* Admin Management */}
-              <Route path="management/admins" element={<AdminAdmins />} />
-              <Route path="management/admins/create" element={<AdminAdminCreate />} />
-
-              {/* Owner Management */}
-              <Route path="owners/dashboard" element={<AdminOwnerDashboard />} />
-              <Route path="owners/pending" element={<AdminPendingOwners />} />
-              <Route path="owners" element={<AdminManageOwners />} />
-              <Route path="owners/:id/password" element={<AdminOwnerPasswordUpdate />} />
-              <Route path="owners/:id" element={<AdminOwnerDetails />} />
-              <Route path="owners/wallet/withdrawals" element={<AdminWithdrawalRequestOwners />} />
-              <Route path="owners/wallet/withdrawals/:id" element={<AdminWithdrawalRequestOwnerDetail />} />
-              <Route path="fleet/drivers" element={<AdminFleetDrivers />} />
-              <Route path="fleet/drivers/create" element={<AdminFleetDriverCreate />} />
-              <Route path="fleet/blocked" element={<AdminBlockedFleetDrivers />} />
-              <Route path="fleet/documents" element={<AdminFleetNeededDocuments />} />
-              <Route path="fleet/documents/create" element={<AdminFleetNeededDocumentsCreate />} />
-              <Route path="fleet/manage" element={<AdminManageFleet />} />
-              <Route path="fleet/manage/create" element={<AdminManageFleetCreate />} />
-              <Route path="owners/documents" element={<AdminOwnerNeededDocuments />} />
-              <Route path="owners/documents/create" element={<AdminOwnerNeededDocumentsCreate />} />
-              <Route path="owners/deleted" element={<AdminDeletedOwners />} />
-              <Route path="owners/bookings" element={<AdminOwnerBookings />} />
-              <Route path="referrals/config" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Referral Configuration - Under Setup</div>} />
-              <Route path="referrals/active" element={<div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">Active Referrals Logs - Under Setup</div>} />
-              <Route path="geo/heatmap" element={<AdminHeatMap />} />
-              <Route path="geo/gods-eye" element={<AdminGodsEye />} />
-              <Route path="geo/peak-zone" element={<AdminGeoFencing />} />
-              <Route path="geo/*" element={<AdminGeoFencing />} />
-              <Route path="finance" element={<AdminFinance />} />
-              {/* Price Management */}
-              <Route path="pricing">
-                <Route index element={<Navigate to="service-location" />} />
-                <Route path="service-location" element={<AdminServiceLocation />} />
-                <Route path="service-location/add" element={<AdminServiceLocation mode="create" />} />
-                <Route path="service-location/edit/:id" element={<AdminServiceLocation mode="edit" />} />
-                <Route path="app-modules" element={<AdminAppModules />} />
-                <Route path="app-modules/create" element={<AdminAppModules mode="create" />} />
-                <Route path="app-modules/edit/:id" element={<AdminAppModules mode="edit" />} />
-                <Route path="zone" element={<AdminZoneManagement />} />
-                <Route path="zone/create" element={<AdminZoneManagement mode="create" />} />
-                <Route path="zone/edit/:id" element={<AdminZoneManagement mode="edit" />} />
-                <Route path="airport" element={<AdminAirportManagement />} />
-                <Route path="airport/create" element={<AdminAirportManagement mode="create" />} />
-                <Route path="airport/edit/:id" element={<AdminAirportManagement mode="edit" />} />
-                <Route path="vehicle-type" element={<AdminVehicleType />} />
-                <Route path="vehicle-type/create" element={<AdminVehicleType mode="create" />} />
-                <Route path="vehicle-type/edit/:id" element={<AdminVehicleType mode="edit" />} />
-                <Route path="rental-packages" element={<AdminRentalPackageTypes />} />
-                <Route path="rental-packages/create" element={<AdminRentalPackageTypes mode="create" />} />
-                <Route path="rental-packages/edit/:id" element={<AdminRentalPackageTypes mode="edit" />} />
-                <Route path="set-price" element={<AdminSetPrices />} />
-                <Route path="set-price/create" element={<AdminSetPrices mode="create" />} />
-                <Route path="set-price/edit/:id" element={<AdminSetPrices mode="edit" />} />
-                <Route path="set-price/packages/:id" element={<AdminSetPackagePrices />} />
-                <Route path="set-price/packages/create/:id" element={<AdminCreatePackagePrice mode="create" />} />
-                <Route path="set-price/packages/edit/:packageId" element={<AdminCreatePackagePrice mode="edit" />} />
-                <Route path="set-price/incentive/:id" element={<AdminDriverIncentive />} />
-                <Route path="set-price/surge/:id" element={<AdminSurgePricing />} />
-                <Route path="goods-types" element={<AdminGoodsTypes />} />
-                <Route path="goods-types/create" element={<AdminGoodsTypes mode="create" />} />
-                <Route path="goods-types/edit/:id" element={<AdminGoodsTypes mode="edit" />} />
+                <Route path="edit-profile" element={<EditProfile />} />
+                <Route path="documents" element={<DriverDocuments />} />
+                <Route path="notifications" element={<Notifications />} />
+                <Route path="payout-methods" element={<PayoutMethods />} />
+                <Route path="referral" element={<Referral />} />
+                <Route
+                  path="delete-account"
+                  element={<DriverDeleteAccount />}
+                />
+                <Route path="security" element={<SecuritySOS />} />
+                <Route path="support" element={<DriverSupport />} />
+                <Route
+                  path="help-support"
+                  element={<DriverHelpSupportOptions />}
+                />
+                <Route path="support/chat" element={<DriverSupportChat />} />
+                <Route path="support/tickets" element={<SupportTickets />} />
+                <Route
+                  path="support/ticket/:id"
+                  element={<SupportTicketDetail />}
+                />
+                <Route path="vehicle-fleet" element={<VehicleFleet />} />
+                <Route path="add-vehicle" element={<AddVehicle />} />
+                <Route path="manage-drivers" element={<ManageDrivers />} />
+                <Route path="add-driver" element={<AddDriver />} />
               </Route>
-              <Route path="safety" element={<AdminSafetyCenter />} />
-              <Route path="cms" element={<AdminCMSBuilder />} />
-              <Route path="settings/cms/header-footer" element={<AdminHeaderFooter />} />
-              <Route path="support/ticket-title" element={<AdminSupportTicketTitle />} />
-              <Route path="support/tickets" element={<AdminSupportTickets />} />
-              <Route path="*" element={<AdminSectionPlaceholder />} />
-              
-              {/* Report Module Routes */}
-              <Route path="reports/user" element={<AdminUserReport />} />
-              <Route path="reports/driver" element={<AdminDriverReport />} />
-              <Route path="reports/driver-duty" element={<AdminDriverDutyReport />} />
-              <Route path="reports/owner" element={<AdminOwnerReport />} />
-              <Route path="reports/finance" element={<AdminFinanceReport />} />
-              <Route path="reports/fleet-finance" element={<AdminFleetFinanceReport />} />
 
-              {/* Masters Management */}
-              <Route path="masters/languages" element={<AdminLanguages />} />
-              <Route path="masters/countries" element={<AdminCountryManagement />} />
-              <Route path="masters/preferences" element={<AdminPreferences />} />
-              <Route path="masters/roles" element={<Navigate to="/admin/management/admins" replace />} />
+              {/* Admin Module Routes */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route path="/user-import/create" element={<AdminLayout />}>
+                <Route index element={<AdminUserImportCreate />} />
+              </Route>
+              <Route path="/driver-import/create" element={<AdminLayout />}>
+                <Route index element={<AdminDriverImportCreate />} />
+              </Route>
+              <Route path="/owner/create" element={<AdminLayout />}>
+                <Route index element={<AdminOwnerCreate />} />
+              </Route>
+              <Route path="/admin" element={<AdminLayout />}>
+                <Route index element={<Navigate to="/admin/dashboard" />} />
+                <Route path="dashboard" element={<AdminDashboard />} />
+                <Route path="earnings" element={<AdminEarnings />} />
+                <Route path="chat" element={<AdminChat />} />
+                <Route path="trips" element={<AdminTrips />} />
+                <Route path="deliveries" element={<AdminDeliveries />} />
+                <Route path="ongoing" element={<AdminOngoing />} />
+                <Route path="wallet/payment" element={<AdminWalletPayment />} />
+                <Route path="users" element={<AdminUserList />} />
+                <Route path="users/create" element={<AdminUserCreate />} />
+                <Route path="users/:id" element={<AdminUserDetails />} />
+                <Route
+                  path="users/delete-requests"
+                  element={<AdminDeleteRequestUsers />}
+                />
+                <Route
+                  path="users/bulk-upload"
+                  element={<AdminUserBulkUpload />}
+                />
+                <Route
+                  path="user-import/create"
+                  element={<AdminUserImportCreate />}
+                />
 
-              <Route path="settings/business/general" element={<AdminGeneralSettings />} />
-              <Route path="settings/business/customization" element={<AdminCustomizationSettings />} />
-              <Route path="settings/business/transport-ride" element={<AdminTransportRideSettings />} />
-              <Route path="settings/business/bid-ride" element={<AdminBidRideSettings />} />
-              
-              <Route path="settings/app/wallet" element={<AdminWalletSettings />} />
-              <Route path="settings/app/tip" element={<AdminTipSettings />} />
-              <Route path="settings/app/country" element={<AdminCountryManagement />} />
-              <Route path="settings/app/onboard" element={<AdminOnboardingScreens />} />
-              
-              <Route path="settings/business/*" element={<AdminGeneralSettings />} />
-              <Route path="settings/app/*" element={<AdminGeneralSettings />} />
+                <Route path="drivers" element={<AdminDriverList />} />
+                <Route path="drivers/create" element={<AdminDriverCreate />} />
+                <Route path="drivers/edit/:id" element={<AdminDriverEdit />} />
+                <Route path="drivers/:id" element={<AdminDriverDetails />} />
+                <Route
+                  path="drivers/pending"
+                  element={<AdminPendingDrivers />}
+                />
+                <Route
+                  path="drivers/subscription"
+                  element={<AdminDriverSubscriptions />}
+                />
+                <Route
+                  path="drivers/subscription/create"
+                  element={<AdminDriverSubscriptionCreate />}
+                />
+                <Route
+                  path="drivers/ratings"
+                  element={<AdminDriverRatings />}
+                />
+                <Route
+                  path="drivers/ratings/:id"
+                  element={<AdminDriverRatingDetail />}
+                />
+                <Route path="drivers/wallet" element={<AdminDriverWallet />} />
+                <Route
+                  path="drivers/wallet/negative"
+                  element={<AdminNegativeBalanceDrivers />}
+                />
+                <Route
+                  path="drivers/wallet/withdrawals"
+                  element={<AdminWithdrawalRequestDrivers />}
+                />
+                <Route
+                  path="drivers/wallet/withdrawals/:id"
+                  element={<AdminWithdrawalRequestDetail />}
+                />
+                <Route
+                  path="drivers/delete-requests"
+                  element={<AdminDriverDeleteRequests />}
+                />
+                <Route
+                  path="drivers/documents"
+                  element={<AdminGlobalDocuments />}
+                />
+                <Route
+                  path="drivers/documents/create"
+                  element={<AdminDriverDocumentForm />}
+                />
+                <Route
+                  path="drivers/documents/edit/:id"
+                  element={<AdminDriverDocumentForm />}
+                />
+                <Route
+                  path="drivers/bulk-upload"
+                  element={<AdminDriverBulkUpload />}
+                />
+                <Route
+                  path="driver-import/create"
+                  element={<AdminDriverImportCreate />}
+                />
+                <Route
+                  path="drivers/payment-methods"
+                  element={<AdminPaymentMethods />}
+                />
+                <Route
+                  path="drivers/audit/:id"
+                  element={<AdminDriverAudit />}
+                />
+                <Route
+                  path="referrals/dashboard"
+                  element={<AdminReferralDashboard />}
+                />
+                <Route
+                  path="referrals/user-settings"
+                  element={<AdminUserReferralSettings />}
+                />
+                <Route
+                  path="referrals/driver-settings"
+                  element={<AdminDriverReferralSettings />}
+                />
+                <Route
+                  path="referrals/translation"
+                  element={<AdminReferralTranslation />}
+                />
+                {/* Promotions Management */}
+                <Route
+                  path="promotions/promo-codes"
+                  element={<AdminPromoCodes />}
+                />
+                <Route
+                  path="promotions/promo-codes/create"
+                  element={<AdminPromoCodes />}
+                />
+                <Route
+                  path="promotions/send-notification"
+                  element={<AdminSendNotification />}
+                />
+                <Route
+                  path="promotions/send-notification/create"
+                  element={<AdminSendNotification />}
+                />
+                <Route
+                  path="promotions/banner-image"
+                  element={<AdminBannerImage />}
+                />
+                <Route
+                  path="promotions/banner-image/create"
+                  element={<AdminBannerImage />}
+                />
 
-              <Route path="settings/third-party/payment" element={<AdminPaymentGateways />} />
-              <Route path="settings/third-party/sms" element={<AdminSMSGateways />} />
-              <Route path="settings/third-party/firebase" element={<AdminFirebaseSettings />} />
-              <Route path="settings/third-party/map-apis" element={<AdminMapSettings />} />
-              <Route path="settings/third-party/mail" element={<AdminMailSettings />} />
-              <Route path="settings/third-party/notification-channel" element={<AdminNotificationChannels />} />
-              <Route path="settings/addons/dispatcher" element={<AdminDispatcherAddons />} />
-              <Route path="settings/addons/*" element={<AdminReportPlaceholder title="Addons Management" />} />
-              <Route path="settings/cms/*" element={<AdminReportPlaceholder title="CMS Management" />} />
-            </Route>
-            
-            <Route path="*" element={<Navigate to="/" />} />
-          </Routes>
-        </Suspense>
-      </MainLayout>
-    </SettingsProvider>
+                {/* Admin Management */}
+                <Route path="management/admins" element={<AdminAdmins />} />
+                <Route
+                  path="management/admins/create"
+                  element={<AdminAdminCreate />}
+                />
+
+                {/* Owner Management */}
+                <Route
+                  path="owners/dashboard"
+                  element={<AdminOwnerDashboard />}
+                />
+                <Route path="owners/pending" element={<AdminPendingOwners />} />
+                <Route path="owners" element={<AdminManageOwners />} />
+                <Route
+                  path="owners/:id/password"
+                  element={<AdminOwnerPasswordUpdate />}
+                />
+                <Route path="owners/:id" element={<AdminOwnerDetails />} />
+                <Route
+                  path="owners/wallet/withdrawals"
+                  element={<AdminWithdrawalRequestOwners />}
+                />
+                <Route
+                  path="owners/wallet/withdrawals/:id"
+                  element={<AdminWithdrawalRequestOwnerDetail />}
+                />
+                <Route path="fleet/drivers" element={<AdminFleetDrivers />} />
+                <Route
+                  path="fleet/drivers/create"
+                  element={<AdminFleetDriverCreate />}
+                />
+                <Route
+                  path="fleet/blocked"
+                  element={<AdminBlockedFleetDrivers />}
+                />
+                <Route
+                  path="fleet/documents"
+                  element={<AdminFleetNeededDocuments />}
+                />
+                <Route
+                  path="fleet/documents/create"
+                  element={<AdminFleetNeededDocumentsCreate />}
+                />
+                <Route path="fleet/manage" element={<AdminManageFleet />} />
+                <Route
+                  path="fleet/manage/create"
+                  element={<AdminManageFleetCreate />}
+                />
+                <Route
+                  path="owners/documents"
+                  element={<AdminOwnerNeededDocuments />}
+                />
+                <Route
+                  path="owners/documents/create"
+                  element={<AdminOwnerNeededDocumentsCreate />}
+                />
+                <Route path="owners/deleted" element={<AdminDeletedOwners />} />
+                <Route
+                  path="owners/bookings"
+                  element={<AdminOwnerBookings />}
+                />
+                <Route
+                  path="referrals/config"
+                  element={
+                    <div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">
+                      Referral Configuration - Under Setup
+                    </div>
+                  }
+                />
+                <Route
+                  path="referrals/active"
+                  element={
+                    <div className="flex items-center justify-center min-h-[500px] text-gray-400 font-bold uppercase tracking-widest">
+                      Active Referrals Logs - Under Setup
+                    </div>
+                  }
+                />
+                <Route path="geo/heatmap" element={<AdminHeatMap />} />
+                <Route path="geo/gods-eye" element={<AdminGodsEye />} />
+                <Route path="geo/peak-zone" element={<AdminGeoFencing />} />
+                <Route path="geo/*" element={<AdminGeoFencing />} />
+                <Route path="finance" element={<AdminFinance />} />
+                {/* Price Management */}
+                <Route path="pricing">
+                  <Route index element={<Navigate to="service-location" />} />
+                  <Route
+                    path="service-location"
+                    element={<AdminServiceLocation />}
+                  />
+                  <Route
+                    path="service-location/add"
+                    element={<AdminServiceLocation mode="create" />}
+                  />
+                  <Route
+                    path="service-location/edit/:id"
+                    element={<AdminServiceLocation mode="edit" />}
+                  />
+                  <Route path="app-modules" element={<AdminAppModules />} />
+                  <Route
+                    path="app-modules/create"
+                    element={<AdminAppModules mode="create" />}
+                  />
+                  <Route
+                    path="app-modules/edit/:id"
+                    element={<AdminAppModules mode="edit" />}
+                  />
+                  <Route path="zone" element={<AdminZoneManagement />} />
+                  <Route
+                    path="zone/create"
+                    element={<AdminZoneManagement mode="create" />}
+                  />
+                  <Route
+                    path="zone/edit/:id"
+                    element={<AdminZoneManagement mode="edit" />}
+                  />
+                  <Route path="airport" element={<AdminAirportManagement />} />
+                  <Route
+                    path="airport/create"
+                    element={<AdminAirportManagement mode="create" />}
+                  />
+                  <Route
+                    path="airport/edit/:id"
+                    element={<AdminAirportManagement mode="edit" />}
+                  />
+                  <Route path="vehicle-type" element={<AdminVehicleType />} />
+                  <Route
+                    path="vehicle-type/create"
+                    element={<AdminVehicleType mode="create" />}
+                  />
+                  <Route
+                    path="vehicle-type/edit/:id"
+                    element={<AdminVehicleType mode="edit" />}
+                  />
+                  <Route
+                    path="rental-packages"
+                    element={<AdminRentalPackageTypes />}
+                  />
+                  <Route
+                    path="rental-packages/create"
+                    element={<AdminRentalPackageTypes mode="create" />}
+                  />
+                  <Route
+                    path="rental-packages/edit/:id"
+                    element={<AdminRentalPackageTypes mode="edit" />}
+                  />
+                  <Route path="set-price" element={<AdminSetPrices />} />
+                  <Route
+                    path="set-price/create"
+                    element={<AdminSetPrices mode="create" />}
+                  />
+                  <Route
+                    path="set-price/edit/:id"
+                    element={<AdminSetPrices mode="edit" />}
+                  />
+                  <Route
+                    path="set-price/packages/:id"
+                    element={<AdminSetPackagePrices />}
+                  />
+                  <Route
+                    path="set-price/packages/create/:id"
+                    element={<AdminCreatePackagePrice mode="create" />}
+                  />
+                  <Route
+                    path="set-price/packages/edit/:packageId"
+                    element={<AdminCreatePackagePrice mode="edit" />}
+                  />
+                  <Route
+                    path="set-price/incentive/:id"
+                    element={<AdminDriverIncentive />}
+                  />
+                  <Route
+                    path="set-price/surge/:id"
+                    element={<AdminSurgePricing />}
+                  />
+                  <Route path="goods-types" element={<AdminGoodsTypes />} />
+                  <Route
+                    path="goods-types/create"
+                    element={<AdminGoodsTypes mode="create" />}
+                  />
+                  <Route
+                    path="goods-types/edit/:id"
+                    element={<AdminGoodsTypes mode="edit" />}
+                  />
+                </Route>
+                <Route path="safety" element={<AdminSafetyCenter />} />
+                <Route path="cms" element={<AdminCMSBuilder />} />
+                <Route
+                  path="settings/cms/header-footer"
+                  element={<AdminHeaderFooter />}
+                />
+                <Route
+                  path="support/ticket-title"
+                  element={<AdminSupportTicketTitle />}
+                />
+                <Route
+                  path="support/tickets"
+                  element={<AdminSupportTickets />}
+                />
+                <Route path="*" element={<AdminSectionPlaceholder />} />
+
+                {/* Report Module Routes */}
+                <Route path="reports/user" element={<AdminUserReport />} />
+                <Route path="reports/driver" element={<AdminDriverReport />} />
+                <Route
+                  path="reports/driver-duty"
+                  element={<AdminDriverDutyReport />}
+                />
+                <Route path="reports/owner" element={<AdminOwnerReport />} />
+                <Route
+                  path="reports/finance"
+                  element={<AdminFinanceReport />}
+                />
+                <Route
+                  path="reports/fleet-finance"
+                  element={<AdminFleetFinanceReport />}
+                />
+
+                {/* Masters Management */}
+                <Route path="masters/languages" element={<AdminLanguages />} />
+                <Route
+                  path="masters/countries"
+                  element={<AdminCountryManagement />}
+                />
+                <Route
+                  path="masters/preferences"
+                  element={<AdminPreferences />}
+                />
+                <Route
+                  path="masters/roles"
+                  element={<Navigate to="/admin/management/admins" replace />}
+                />
+
+                <Route
+                  path="settings/business/general"
+                  element={<AdminGeneralSettings />}
+                />
+                <Route
+                  path="settings/business/customization"
+                  element={<AdminCustomizationSettings />}
+                />
+                <Route
+                  path="settings/business/transport-ride"
+                  element={<AdminTransportRideSettings />}
+                />
+                <Route
+                  path="settings/business/bid-ride"
+                  element={<AdminBidRideSettings />}
+                />
+
+                <Route
+                  path="settings/app/wallet"
+                  element={<AdminWalletSettings />}
+                />
+                <Route path="settings/app/tip" element={<AdminTipSettings />} />
+                <Route
+                  path="settings/app/country"
+                  element={<AdminCountryManagement />}
+                />
+                <Route
+                  path="settings/app/onboard"
+                  element={<AdminOnboardingScreens />}
+                />
+
+                <Route
+                  path="settings/business/*"
+                  element={<AdminGeneralSettings />}
+                />
+                <Route
+                  path="settings/app/*"
+                  element={<AdminGeneralSettings />}
+                />
+
+                <Route
+                  path="settings/third-party/payment"
+                  element={<AdminPaymentGateways />}
+                />
+                <Route
+                  path="settings/third-party/sms"
+                  element={<AdminSMSGateways />}
+                />
+                <Route
+                  path="settings/third-party/firebase"
+                  element={<AdminFirebaseSettings />}
+                />
+                <Route
+                  path="settings/third-party/map-apis"
+                  element={<AdminMapSettings />}
+                />
+                <Route
+                  path="settings/third-party/mail"
+                  element={<AdminMailSettings />}
+                />
+                <Route
+                  path="settings/third-party/notification-channel"
+                  element={<AdminNotificationChannels />}
+                />
+                <Route
+                  path="settings/addons/dispatcher"
+                  element={<AdminDispatcherAddons />}
+                />
+                <Route
+                  path="settings/addons/*"
+                  element={<AdminReportPlaceholder title="Addons Management" />}
+                />
+                <Route
+                  path="settings/cms/*"
+                  element={<AdminReportPlaceholder title="CMS Management" />}
+                />
+              </Route>
+
+              <Route path="*" element={<Navigate to="/" />} />
+            </Routes>
+          </Suspense>
+        </MainLayout>
+      </SettingsProvider>
     </Router>
   );
 }

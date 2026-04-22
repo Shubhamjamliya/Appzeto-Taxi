@@ -285,7 +285,7 @@ const AdminLayout = () => {
             label: 'Promotions Management',
             subItems: [
               { label: 'Promo Code', path: '/admin/promotions/promo-codes' },
-              { label: 'Send Notification', path: '/admin/promotions/send-notification' },
+              { label: 'Push Notifications', path: '/admin/promotions/send-notification' },
               { label: 'Banner Image', path: '/admin/promotions/banner-image' },
             ],
           },

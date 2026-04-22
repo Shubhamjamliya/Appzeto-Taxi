@@ -16,6 +16,7 @@ import {
   getDriverDocumentTemplates,
   getDriverEmergencyContacts,
   getDriverNotifications,
+  saveDriverFcmToken,
   getOwnerFleetDrivers,
   getMyWallet,
   getOnboardingSession,
@@ -96,6 +97,11 @@ driverRouter.get(
   "/notifications",
   authenticate(["driver"]),
   asyncHandler(getDriverNotifications),
+);
+driverRouter.post(
+  "/fcm-token",
+  authenticate(["driver"]),
+  asyncHandler(saveDriverFcmToken),
 );
 driverRouter.get(
   "/wallet",

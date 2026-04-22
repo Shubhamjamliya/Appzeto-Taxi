@@ -24,6 +24,16 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
+    fcmTokenWeb: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    fcmTokenMobile: {
+      type: String,
+      default: '',
+      trim: true,
+    },
     owner_id: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'TaxiOwner',

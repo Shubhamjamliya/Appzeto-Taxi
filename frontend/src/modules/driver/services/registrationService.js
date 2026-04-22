@@ -136,6 +136,8 @@ export const clearAllDriverNotifications = () =>
   api.delete("/drivers/notifications", withDriverAuth());
 export const getDriverEmergencyContacts = () =>
   api.get("/drivers/emergency-contacts", withDriverAuth());
+export const saveDriverFcmToken = (token, platform) =>
+  api.post("/drivers/fcm-token", { token, platform }, withDriverAuth());
 export const addDriverEmergencyContact = (payload) =>
   api.post("/drivers/emergency-contacts", payload, withDriverAuth());
 export const deleteDriverEmergencyContact = (contactId) =>

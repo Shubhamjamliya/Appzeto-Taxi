@@ -35,6 +35,7 @@ import {
   ensureThirdPartySettings,
   listDriverNeededDocuments,
 } from "../../admin/services/adminService.js";
+import { assignPushTokenToEntity } from "../../services/pushTokenService.js";
 import {
   completeDriverOnboarding,
   getDriverOnboardingSession,
@@ -624,6 +625,37 @@ export const getDriverNotifications = async (req, res) => {
     success: true,
     data: {
       results: notifications.map(serializeDriverNotification),
+    },
+  });
+};
+
+export const saveDriverFcmToken = async (req, res) => {
+  const driver = await Driver.findById(req.auth?.sub);
+
+  if (!driver) {
+    throw new ApiError(404, "Driver not found");
+  }
+
+  if (
+    driver.approve === false ||
+    String(driver.status || "").toLowerCase() === "pending"
+  ) {
+    throw new ApiError(403, "Driver account is pending approval");
+  }
+
+  const saved = assignPushTokenToEntity(driver, {
+    token: req.body?.token,
+    platform: req.body?.platform,
+  });
+
+  await driver.save();
+
+  res.json({
+    success: true,
+    data: {
+      message: "FCM token saved successfully",
+      platform: saved.platform,
+      field: saved.fieldName,
     },
   });
 };

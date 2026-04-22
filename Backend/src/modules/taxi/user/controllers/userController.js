@@ -13,6 +13,7 @@ import {
   startUserOtp,
   verifyUserOtp,
 } from '../services/userOtpService.js';
+import { assignPushTokenToEntity } from '../../services/pushTokenService.js';
 
 const VALID_GENDERS = new Set(['male', 'female', 'other', 'prefer-not-to-say', '']);
 
@@ -343,6 +344,32 @@ export const verifyUserPhoneForOtpLogin = async (req, res) => {
     data: {
       exists: true,
       ...createUserSession(user),
+    },
+  });
+};
+
+export const saveUserFcmToken = async (req, res) => {
+  const user = await User.findById(req.auth?.sub);
+
+  if (!user) {
+    throw new ApiError(404, 'User not found');
+  }
+
+  ensureUserCanLogin(user);
+
+  const saved = assignPushTokenToEntity(user, {
+    token: req.body?.token,
+    platform: req.body?.platform,
+  });
+
+  await user.save();
+
+  res.json({
+    success: true,
+    data: {
+      message: 'FCM token saved successfully',
+      platform: saved.platform,
+      field: saved.fieldName,
     },
   });
 };

@@ -36,10 +36,10 @@ const HeaderBlock = ({ isCreateRoute, onBack }) => (
     <div className="flex items-center gap-1.5 text-xs text-gray-400 mb-2">
       <span>Promotions</span>
       <ChevronRight size={12} />
-      <span className="text-gray-700">{isCreateRoute ? 'Create Notification' : 'Send Notification'}</span>
+      <span className="text-gray-700">{isCreateRoute ? 'Create Push Notification' : 'Push Notifications'}</span>
     </div>
     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-      <h1 className="text-xl font-semibold text-gray-900">{isCreateRoute ? 'Create Notification' : 'Send Notification'}</h1>
+      <h1 className="text-xl font-semibold text-gray-900">{isCreateRoute ? 'Create Push Notification' : 'Push Notifications'}</h1>
       {isCreateRoute ? (
         <button
           type="button"
@@ -225,6 +225,10 @@ const SendNotification = () => {
       }
 
       if (data.success) {
+        const deliveryReason = data.data?.delivery?.reason;
+        if (deliveryReason) {
+          alert(deliveryReason);
+        }
         setFormData(createInitialFormData());
         setImagePreview(null);
         await fetchData();
@@ -297,7 +301,7 @@ const SendNotification = () => {
                     onClick={() => navigate(CREATE_PATH)}
                     className="inline-flex items-center justify-center gap-2 px-4 py-2 text-sm text-white bg-indigo-600 border border-indigo-600 rounded-lg hover:bg-indigo-700 transition-colors"
                   >
-                    <Plus size={16} /> Create Notification
+                    <Plus size={16} /> Create Push Notification
                   </button>
                 </div>
               </div>
@@ -502,7 +506,7 @@ const SendNotification = () => {
               <div className="bg-white rounded-xl border border-gray-200 p-6">
                 <h3 className="text-sm font-semibold text-gray-900 mb-2">How It Works</h3>
                 <p className="text-xs leading-5 text-gray-500">
-                  Service location, send-to audience, push title, message, aur optional notification banner sab create route par available hain.
+                  Service location, send-to audience, push title, message, aur optional notification banner ke saath admin se direct push fire hota hai.
                 </p>
               </div>
             </div>

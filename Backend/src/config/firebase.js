@@ -4,6 +4,7 @@ import admin from 'firebase-admin';
 import { env } from './env.js';
 
 let firebaseDatabase = null;
+let firebaseMessaging = null;
 let firebaseInitAttempted = false;
 
 const parseServiceAccountJson = (rawJson) => {
@@ -36,6 +37,27 @@ const readServiceAccount = () => {
   return parseServiceAccountJson(fs.readFileSync(credentialPath, 'utf8'));
 };
 
+const getFirebaseApp = () => {
+  if (admin.apps.length > 0) {
+    return admin.apps[0];
+  }
+
+  const serviceAccount = readServiceAccount();
+  if (!serviceAccount && !env.firebase.databaseURL) {
+    return null;
+  }
+
+  try {
+    return admin.initializeApp({
+      ...(serviceAccount ? { credential: admin.credential.cert(serviceAccount) } : {}),
+      ...(env.firebase.databaseURL ? { databaseURL: env.firebase.databaseURL } : {}),
+    });
+  } catch (error) {
+    console.error('Firebase admin initialization failed:', error.message);
+    return null;
+  }
+};
+
 export const getFirebaseDatabase = () => {
   if (firebaseDatabase || firebaseInitAttempted) {
     return firebaseDatabase;
@@ -47,20 +69,35 @@ export const getFirebaseDatabase = () => {
     return null;
   }
 
+  const app = getFirebaseApp();
+  if (!app) {
+    return null;
+  }
+
   try {
-    const serviceAccount = readServiceAccount();
-
-    if (!admin.apps.length) {
-      admin.initializeApp({
-        ...(serviceAccount ? { credential: admin.credential.cert(serviceAccount) } : {}),
-        databaseURL: env.firebase.databaseURL,
-      });
-    }
-
-    firebaseDatabase = admin.database();
+    firebaseDatabase = admin.database(app);
     return firebaseDatabase;
   } catch (error) {
-    console.error('Firebase admin initialization failed:', error.message);
+    console.error('Firebase database initialization failed:', error.message);
+    return null;
+  }
+};
+
+export const getFirebaseMessaging = () => {
+  if (firebaseMessaging) {
+    return firebaseMessaging;
+  }
+
+  const app = getFirebaseApp();
+  if (!app) {
+    return null;
+  }
+
+  try {
+    firebaseMessaging = admin.messaging(app);
+    return firebaseMessaging;
+  } catch (error) {
+    console.error('Firebase messaging initialization failed:', error.message);
     return null;
   }
 };

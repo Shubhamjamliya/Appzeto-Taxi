@@ -7,6 +7,7 @@ import { Banner } from '../models/Banner.js';
 import { Notification } from '../models/Notification.js';
 import { PromoCode } from '../models/PromoCode.js';
 import { uploadDataUrlToCloudinary } from '../../../../../utils/cloudinaryUpload.js';
+import { sendPushNotificationToAudience } from '../../../services/pushNotificationService.js';
 
 const nextId = () => new mongoose.Types.ObjectId().toString();
 
@@ -483,7 +484,23 @@ export const listNotifications = async ({ page = 1, limit = 50, send_to, service
 export const createNotification = async (payload) => {
   const normalizedPayload = await normalizeNotificationPayload(payload);
   const notification = await Notification.create(normalizedPayload);
-  return serializeNotification(notification.toObject());
+  const serializedNotification = serializeNotification(notification.toObject());
+  const delivery = await sendPushNotificationToAudience({
+    notificationId: notification._id,
+    serviceLocationId: notification.service_location_id,
+    sendTo: notification.send_to,
+    title: notification.push_title,
+    body: notification.message,
+    image: notification.image,
+  });
+
+  return {
+    notification: serializedNotification,
+    delivery,
+    message: delivery.attempted
+      ? 'Notification saved and push delivery attempted'
+      : 'Notification saved but push delivery is not configured',
+  };
 };
 
 export const deleteNotification = async (id) => {

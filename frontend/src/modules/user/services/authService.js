@@ -90,4 +90,5 @@ export const userAuthService = {
   getNotifications: () => api.get('/users/notifications', withUserAuth()),
   deleteNotification: (id) => api.delete(`/users/notifications/${id}`, withUserAuth()),
   clearAllNotifications: () => api.delete('/users/notifications', withUserAuth()),
+  saveFcmToken: (token, platform) => api.post('/users/fcm-token', { token, platform }, withUserAuth()),
 };

@@ -11,6 +11,7 @@ import {
   loginUser,
   registerUser,
   requestAccountDeletion,
+  saveUserFcmToken,
   signupUser,
   startUserOtpRequest,
   topupUserWallet,
@@ -35,6 +36,7 @@ userRouter.post('/profile-image', asyncHandler(uploadUserProfileImage));
 userRouter.post('/auth/send-otp', asyncHandler(startUserOtpRequest));
 userRouter.post('/auth/verify-otp', asyncHandler(verifyUserOtpRequest));
 userRouter.post('/otp-login', asyncHandler(verifyUserPhoneForOtpLogin));
+userRouter.post('/fcm-token', authenticateOrResolveUser(['user']), asyncHandler(saveUserFcmToken));
 userRouter.get('/me', authenticateOrResolveUser(['user']), asyncHandler(getCurrentUser));
 userRouter.patch('/me', authenticateOrResolveUser(['user']), asyncHandler(updateCurrentUser));
 userRouter.post('/me/delete-request', authenticateOrResolveUser(['user']), asyncHandler(requestAccountDeletion));

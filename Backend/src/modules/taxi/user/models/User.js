@@ -99,11 +99,17 @@ const userSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    fcmTokens: {
-      type: [String],
-      default: [],
+    fcmTokenWeb: {
+      type: String,
+      default: '',
+      trim: true,
     },
     fcmTokenMobile: {
+      type: String,
+      default: '',
+      trim: true,
+    },
+    fcmTokens: {
       type: [String],
       default: [],
     },

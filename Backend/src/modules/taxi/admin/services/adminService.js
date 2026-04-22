@@ -6,8 +6,10 @@ import { User } from '../../user/models/User.js';
 import { UserWallet } from '../../user/models/UserWallet.js';
 import { WalletTransaction } from '../../driver/models/WalletTransaction.js';
 import { AdminBusinessSetting } from '../models/AdminBusinessSetting.js';
+import { AdminAppSetting } from '../models/AdminAppSetting.js';
 // AppModule import removed
 import { createDefaultBusinessSettings } from '../data/defaultBusinessSettings.js';
+import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
 import { Airport } from '../models/Airport.js';
 import { DriverNeededDocument } from '../models/DriverNeededDocument.js';
 import { GoodsType } from '../models/GoodsType.js';
@@ -5401,9 +5403,6 @@ export const deleteOwner = async (id) => {
     return settings;
   };
 
-  import { AdminAppSetting } from '../models/AdminAppSetting.js';
-  import { createDefaultAppSettings } from '../data/defaultAppSettings.js';
-
   /**
    * Ensures a default administrative application settings document exists.
    */
@@ -5420,57 +5419,109 @@ export const deleteOwner = async (id) => {
     return;
   };
 
-  export const getGeneralSettings = async (category) => {
-    const bizSettings = await ensureBusinessSettings();
-    const appSettings = await ensureAppSettings();
+  const businessSettingsCategoryMap = {
+    customize: 'customization',
+    'transport-ride': 'transport_ride',
+    'bid-ride': 'bid_ride',
+    general: 'general',
+  };
 
-    const businessMapper = {
-      customize: 'customization',
-      'transport-ride': 'transport_ride',
-      'bid-ride': 'bid_ride',
-      general: 'general',
-    };
+  const appSettingsCategoryMap = {
+    wallet: 'wallet_setting',
+    tip: 'tip_setting',
+  };
 
-    const appMapper = {
-      wallet: 'wallet_setting',
-      tip: 'tip_setting',
-    };
+  const generalBusinessSettingsProjection = {
+    _id: 0,
+    general: {
+      app_name: '$general.app_name',
+      contact_phone_1: '$general.contact_phone_1',
+      contact_phone_2: '$general.contact_phone_2',
+      contact_booking_number: '$general.contact_booking_number',
+      footer_1: '$general.footer_1',
+      footer_2: '$general.footer_2',
+      default_lat: '$general.default_lat',
+      default_lng: '$general.default_lng',
+      brand_logo: '$general.brand_logo',
+    },
+  };
 
-    if (appMapper[category]) {
-      return { settings: appSettings[appMapper[category]] || {} };
+  const getGeneralBusinessSettingsSection = async () => {
+    let results = await AdminBusinessSetting.aggregate([
+      { $match: { scope: 'default' } },
+      { $project: generalBusinessSettingsProjection },
+      { $limit: 1 },
+    ]);
+
+    if (results.length === 0) {
+      const created = await AdminBusinessSetting.create(createDefaultBusinessSettings());
+      return created.general || {};
     }
 
-    const key = businessMapper[category] || category;
-    return { settings: bizSettings[key] || {} };
+    return results[0]?.general || {};
+  };
+
+  const getProjectedSettingsSection = async (Model, defaultFactory, key) => {
+    if (!Model.schema.path(key)) {
+      return {};
+    }
+
+    let settings = await Model.findOne(
+      { scope: 'default' },
+      { [key]: 1, _id: 0 },
+    ).lean();
+
+    if (!settings) {
+      const created = await Model.create(defaultFactory());
+      return created[key] || {};
+    }
+
+    return settings[key] || {};
+  };
+
+  export const getGeneralSettings = async (category) => {
+    const appKey = appSettingsCategoryMap[category];
+    if (appKey) {
+      return {
+        settings: await getProjectedSettingsSection(
+          AdminAppSetting,
+          createDefaultAppSettings,
+          appKey,
+        ),
+      };
+    }
+
+    const businessKey = businessSettingsCategoryMap[category] || category;
+    if (businessKey === 'general') {
+      return {
+        settings: await getGeneralBusinessSettingsSection(),
+      };
+    }
+
+    return {
+      settings: await getProjectedSettingsSection(
+        AdminBusinessSetting,
+        createDefaultBusinessSettings,
+        businessKey,
+      ),
+    };
   };
 
   export const updateGeneralSettings = async (category, payload) => {
     const bizSettings = await ensureBusinessSettings();
     const appSettings = await ensureAppSettings();
 
-    const businessMapper = {
-      customize: 'customization',
-      'transport-ride': 'transport_ride',
-      'bid-ride': 'bid_ride',
-      general: 'general',
-    };
-
-    const appMapper = {
-      wallet: 'wallet_setting',
-      tip: 'tip_setting',
-    };
-
     const newValues = payload.settings || payload;
 
-    if (appMapper[category]) {
-      const key = appMapper[category];
+    if (appSettingsCategoryMap[category]) {
+      const key = appSettingsCategoryMap[category];
       appSettings[key] = { ...(appSettings[key] || {}), ...newValues };
       appSettings.markModified(key);
       await appSettings.save();
       return { settings: appSettings[key] };
     }
 
-    const bizKey = businessMapper[category] || category;
+    const bizKey = businessSettingsCategoryMap[category] || category;
     if (!bizSettings.schema.path(bizKey)) {
       return { settings: {} };
     }

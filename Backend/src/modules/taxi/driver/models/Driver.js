@@ -19,11 +19,6 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    profileImage: {
-      type: String,
-      default: '',
-      trim: true,
-    },
     fcmTokenWeb: {
       type: String,
       default: '',
@@ -128,11 +123,6 @@ const driverSchema = new mongoose.Schema(
       default: '',
       trim: true,
     },
-    vehicleImage: {
-      type: String,
-      default: '',
-      trim: true,
-    },
     city: {
       type: String,
       default: '',
@@ -157,16 +147,6 @@ const driverSchema = new mongoose.Schema(
       default: 0,
       min: 0,
       max: 5,
-    },
-    ratingCount: {
-      type: Number,
-      default: 0,
-      min: 0,
-    },
-    totalRatingScore: {
-      type: Number,
-      default: 0,
-      min: 0,
     },
     ratingCount: {
       type: Number,
@@ -289,6 +269,7 @@ const driverSchema = new mongoose.Schema(
 
 driverSchema.index({ 'deletionRequest.status': 1, deletedAt: 1 });
 driverSchema.index({ deletedAt: 1, createdAt: -1 });
+driverSchema.index({ approve: 1, deletedAt: 1, createdAt: -1 });
 driverSchema.index({ status: 1, deletedAt: 1 });
 driverSchema.index({ phone: 1, deletedAt: 1 });
 

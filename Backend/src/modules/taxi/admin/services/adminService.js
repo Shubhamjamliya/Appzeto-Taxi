@@ -695,6 +695,58 @@ const serializeDriver = (driver) => ({
   updatedAt: driver.updatedAt,
 });
 
+const DRIVER_LIST_SELECT = [
+  '_id',
+  'name',
+  'phone',
+  'email',
+  'owner_id',
+  'service_location_id',
+  'city',
+  'registerFor',
+  'vehicleType',
+  'vehicleNumber',
+  'vehicleColor',
+  'rating',
+  'ratingCount',
+  'approve',
+  'status',
+  'createdAt',
+  'updatedAt',
+].join(' ');
+
+const serializeDriverListItem = (driver) => ({
+  _id: driver._id,
+  id: driver._id,
+  name: driver.name || '',
+  phone: driver.phone || '',
+  mobile: driver.phone || '',
+  email: driver.email || '',
+  owner_id: driver.owner_id || null,
+  service_location_id: driver.service_location_id || null,
+  city: driver.city || '',
+  service_location_name:
+    driver.service_location_id?.service_location_name ||
+    driver.service_location_id?.name ||
+    driver.city ||
+    '',
+  transport_type: driver.registerFor || driver.vehicleType || '',
+  register_for: driver.registerFor || '',
+  vehicle_type: driver.vehicleType || '',
+  vehicle_number: driver.vehicleNumber || '',
+  vehicle_color: driver.vehicleColor || '',
+  rating:
+    Number(driver.ratingCount || 0) > 0
+      ? Number(driver.rating || 0)
+      : 0,
+  rating_count: Number(driver.ratingCount || 0),
+  approve: Boolean(driver.approve),
+  status: driver.status || (driver.approve ? 'approved' : 'pending'),
+  active: driver.approve !== false && String(driver.status || '').toLowerCase() !== 'inactive',
+  createdAt: driver.createdAt,
+  updatedAt: driver.updatedAt,
+});
+
 const serializeUser = (user) => ({
   _id: user._id,
   id: user._id,
@@ -706,6 +758,41 @@ const serializeUser = (user) => ({
   phone: user.phone || user.mobile || '',
   wallet_balance: Number(user.wallet_balance || 0),
   active: user.active !== false && !user.deletedAt,
+  deletedAt: user.deletedAt || null,
+  deletion_reason: user.deletion_reason || '',
+  deletionRequest: user.deletionRequest || { status: 'none' },
+  createdAt: user.createdAt,
+  updatedAt: user.updatedAt,
+});
+
+const USER_LIST_SELECT = [
+  '_id',
+  'name',
+  'email',
+  'gender',
+  'phone',
+  'mobile',
+  'wallet_balance',
+  'active',
+  'deletedAt',
+  'deletion_reason',
+  'deletionRequest',
+  'createdAt',
+  'updatedAt',
+].join(' ');
+
+const serializeUserListItem = (user) => ({
+  _id: user._id,
+  id: user._id,
+  name: user.name || '',
+  email: user.email || '',
+  gender: user.gender || '',
+  mobile: user.phone || user.mobile || '',
+  phone: user.phone || user.mobile || '',
+  wallet_balance: Number(user.wallet_balance || 0),
+  active:
+    (user.active ?? user.isActive) !== false &&
+    !user.deletedAt,
   deletedAt: user.deletedAt || null,
   deletion_reason: user.deletion_reason || '',
   deletionRequest: user.deletionRequest || { status: 'none' },
@@ -1270,6 +1357,7 @@ export const listUsers = async ({ page = 1, limit = 50, search = '' }) => {
 
   const [users, total] = await Promise.all([
     User.find(query)
+      .select(USER_LIST_SELECT)
       .sort({ createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
@@ -1278,7 +1366,7 @@ export const listUsers = async ({ page = 1, limit = 50, search = '' }) => {
   ]);
 
   return {
-    results: users.map(serializeUser),
+    results: users.map(serializeUserListItem),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -1878,19 +1966,60 @@ export const listDrivers = async ({ page = 1, limit = 50, status, search, approv
     ];
   }
 
-  const [drivers, total] = await Promise.all([
-    Driver.find(query)
-      .populate('owner_id', 'company_name owner_name name email mobile')
-      .populate('service_location_id', 'service_location_name name country')
-      .sort({ createdAt: -1 })
-      .skip(start)
-      .limit(safeLimit)
-      .lean(),
-    Driver.countDocuments(query),
+  const total = await Driver.countDocuments(query);
+
+  const drivers = await Driver.find(query)
+    .select(DRIVER_LIST_SELECT)
+    .sort({ createdAt: -1 })
+    .skip(start)
+    .limit(safeLimit)
+    .lean();
+
+  const ownerIds = [
+    ...new Set(
+      drivers
+        .map((driver) => String(driver.owner_id || ''))
+        .filter(Boolean),
+    ),
+  ];
+  const serviceLocationIds = [
+    ...new Set(
+      drivers
+        .map((driver) => String(driver.service_location_id || ''))
+        .filter(Boolean),
+    ),
+  ];
+
+  const [owners, serviceLocations] = await Promise.all([
+    ownerIds.length
+      ? Owner.find({ _id: { $in: ownerIds } })
+          .select('_id company_name owner_name name email mobile')
+          .lean()
+      : [],
+    serviceLocationIds.length
+      ? ServiceLocation.find({ _id: { $in: serviceLocationIds } })
+          .select('_id service_location_name name country')
+          .lean()
+      : [],
   ]);
 
+  const ownerMap = new Map(
+    owners.map((owner) => [String(owner._id), owner]),
+  );
+  const serviceLocationMap = new Map(
+    serviceLocations.map((location) => [String(location._id), location]),
+  );
+
+  const hydratedDrivers = drivers.map((driver) => ({
+    ...driver,
+    owner_id: driver.owner_id ? ownerMap.get(String(driver.owner_id)) || driver.owner_id : null,
+    service_location_id: driver.service_location_id
+      ? serviceLocationMap.get(String(driver.service_location_id)) || driver.service_location_id
+      : null,
+  }));
+
   return {
-    results: drivers.map(serializeDriver),
+    results: hydratedDrivers.map(serializeDriverListItem),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -2295,6 +2424,7 @@ export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
 
   const [drivers, total] = await Promise.all([
     Driver.find({ deletedAt: { $ne: null } })
+      .select(DRIVER_LIST_SELECT)
       .sort({ deletedAt: -1, createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
@@ -2303,7 +2433,7 @@ export const listDeletedDrivers = async ({ page = 1, limit = 50 }) => {
   ]);
 
   return {
-    results: drivers.map(serializeDriver),
+    results: drivers.map(serializeDriverListItem),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,
@@ -2330,6 +2460,7 @@ export const listDriverDeletionRequests = async ({ page = 1, limit = 50, status 
 
   const [drivers, total] = await Promise.all([
     Driver.find(query)
+      .select(DRIVER_LIST_SELECT)
       .sort({ 'deletionRequest.requestedAt': -1, createdAt: -1 })
       .skip(start)
       .limit(safeLimit)
@@ -2338,7 +2469,7 @@ export const listDriverDeletionRequests = async ({ page = 1, limit = 50, status 
   ]);
 
   return {
-    results: drivers.map(serializeDriver),
+    results: drivers.map(serializeDriverListItem),
     paginator: {
       current_page: safePage,
       per_page: safeLimit,

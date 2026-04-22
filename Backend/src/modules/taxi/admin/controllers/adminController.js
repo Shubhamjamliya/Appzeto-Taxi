@@ -1,6 +1,9 @@
 import { asyncHandler } from "../../../../utils/asyncHandler.js";
 import * as adminService from "../services/adminService.js";
 import ExcelJS from 'exceljs';
+import { Driver } from '../../driver/models/Driver.js';
+import { Owner } from '../models/Owner.js';
+import { ServiceLocation } from '../models/ServiceLocation.js';
 
 const ok = (res, data, extra = {}) =>
   res.json({ success: true, data, ...extra });
@@ -119,9 +122,121 @@ export const adjustUserWallet = asyncHandler(async (req, res) =>
   ok(res, await adminService.adjustUserWallet(req.params.id, req.body)),
 );
 
-export const getDrivers = asyncHandler(async (req, res) =>
-  ok(res, await adminService.listDrivers(req.query)),
-);
+export const getDrivers = asyncHandler(async (req, res) => {
+  const safePage = Number(req.query.page) || 1;
+  const safeLimit = Number(req.query.limit) || 50;
+  const start = (safePage - 1) * safeLimit;
+  const query = { deletedAt: null };
+
+  if (req.query.status) {
+    query.status = req.query.status;
+  }
+
+  if (req.query.approve !== undefined) {
+    query.approve =
+      req.query.approve === 'true' ||
+      req.query.approve === true ||
+      req.query.approve === 1;
+  }
+
+  if (req.query.search) {
+    const regex = new RegExp(
+      String(req.query.search).replace(/[.*+?^${}()|[\]\\]/g, '\\$&'),
+      'i',
+    );
+    query.$or = [
+      { name: regex },
+      { phone: regex },
+      { email: regex },
+      { vehicleNumber: regex },
+    ];
+  }
+
+  const total = await Driver.countDocuments(query);
+  const drivers = await Driver.find(query)
+    .select(
+      '_id name phone email owner_id service_location_id city registerFor vehicleType vehicleNumber vehicleColor rating ratingCount approve status createdAt updatedAt',
+    )
+    .sort({ createdAt: -1 })
+    .skip(start)
+    .limit(safeLimit)
+    .lean();
+
+  const ownerIds = [
+    ...new Set(drivers.map((driver) => String(driver.owner_id || '')).filter(Boolean)),
+  ];
+  const serviceLocationIds = [
+    ...new Set(
+      drivers.map((driver) => String(driver.service_location_id || '')).filter(Boolean),
+    ),
+  ];
+
+  const [owners, serviceLocations] = await Promise.all([
+    ownerIds.length
+      ? Owner.find({ _id: { $in: ownerIds } })
+          .select('_id company_name owner_name name email mobile')
+          .lean()
+      : [],
+    serviceLocationIds.length
+      ? ServiceLocation.find({ _id: { $in: serviceLocationIds } })
+          .select('_id service_location_name name country')
+          .lean()
+      : [],
+  ]);
+
+  const ownerMap = new Map(owners.map((owner) => [String(owner._id), owner]));
+  const serviceLocationMap = new Map(
+    serviceLocations.map((location) => [String(location._id), location]),
+  );
+
+  const results = drivers.map((driver) => {
+    const owner = driver.owner_id ? ownerMap.get(String(driver.owner_id)) || null : null;
+    const serviceLocation = driver.service_location_id
+      ? serviceLocationMap.get(String(driver.service_location_id)) || null
+      : null;
+
+    return {
+      _id: driver._id,
+      id: driver._id,
+      name: driver.name || '',
+      phone: driver.phone || '',
+      mobile: driver.phone || '',
+      email: driver.email || '',
+      owner_id: owner,
+      service_location_id: serviceLocation,
+      city: driver.city || '',
+      service_location_name:
+        serviceLocation?.service_location_name ||
+        serviceLocation?.name ||
+        driver.city ||
+        '',
+      transport_type: driver.registerFor || driver.vehicleType || '',
+      register_for: driver.registerFor || '',
+      vehicle_type: driver.vehicleType || '',
+      vehicle_number: driver.vehicleNumber || '',
+      vehicle_color: driver.vehicleColor || '',
+      rating: Number(driver.ratingCount || 0) > 0 ? Number(driver.rating || 0) : 0,
+      rating_count: Number(driver.ratingCount || 0),
+      approve: Boolean(driver.approve),
+      status: driver.status || (driver.approve ? 'approved' : 'pending'),
+      active:
+        driver.approve !== false &&
+        String(driver.status || '').toLowerCase() !== 'inactive',
+      createdAt: driver.createdAt,
+      updatedAt: driver.updatedAt,
+    };
+  });
+
+  ok(res, {
+    results,
+    paginator: {
+      current_page: safePage,
+      per_page: safeLimit,
+      total,
+      last_page: Math.max(1, Math.ceil(total / safeLimit)),
+    },
+  });
+});
 
 export const getDriverRatings = asyncHandler(async (req, res) =>
   ok(res, await adminService.listDriverRatings(req.query)),

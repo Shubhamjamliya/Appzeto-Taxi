@@ -3,6 +3,7 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { Driver } from '../models/Driver.js';
 import { DriverLoginSession } from '../models/DriverLoginSession.js';
 import { signAccessToken } from './authService.js';
+import { sendOtpSms } from '../../services/smsService.js';
 
 const LOGIN_OTP_TTL_MS = 10 * 60 * 1000;
 
@@ -81,13 +82,18 @@ export const startDriverLoginOtp = async ({ phone }) => {
       verifiedAt: null,
       expiresAt: new Date(now + LOGIN_OTP_TTL_MS),
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
   );
 
-  const debugOtp = process.env.NODE_ENV === 'production' ? null : otp;
+  const smsDispatch = await sendOtpSms({
+    phone: normalizedPhone,
+    otp,
+    purpose: 'driver login OTP',
+  });
+  const debugOtp = smsDispatch.mode === 'debug' && process.env.NODE_ENV !== 'production' ? otp : null;
 
   return {
-    message: 'OTP generated successfully',
+    message: smsDispatch.mode === 'live' ? 'OTP sent successfully' : 'OTP generated successfully',
     session: publicSessionPayload(session, debugOtp),
   };
 };

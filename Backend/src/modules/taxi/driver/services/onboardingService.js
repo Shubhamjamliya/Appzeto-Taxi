@@ -9,6 +9,7 @@ import { Vehicle } from '../../admin/models/Vehicle.js';
 import { listDriverDocumentUploadFields } from '../../admin/services/adminService.js';
 import { hashPassword, signAccessToken } from './authService.js';
 import { findZoneByPickup } from './locationService.js';
+import { sendOtpSms } from '../../services/smsService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const SESSION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
@@ -223,13 +224,18 @@ export const startDriverOnboarding = async ({ phone, role = 'driver' }) => {
       otpVerifiedAt: null,
       expiresAt: new Date(now + SESSION_TTL_MS),
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
   );
 
-  const debugOtp = process.env.NODE_ENV === 'production' ? null : otp;
+  const smsDispatch = await sendOtpSms({
+    phone: normalizedPhone,
+    otp,
+    purpose: 'driver onboarding OTP',
+  });
+  const debugOtp = smsDispatch.mode === 'debug' && process.env.NODE_ENV !== 'production' ? otp : null;
 
   return {
-    message: 'OTP generated successfully',
+    message: smsDispatch.mode === 'live' ? 'OTP sent successfully' : 'OTP generated successfully',
     session: publicSessionPayload(session, debugOtp),
   };
 };

@@ -3,6 +3,7 @@ import { ApiError } from '../../../../utils/ApiError.js';
 import { UserAuthSession } from '../models/UserAuthSession.js';
 import { User } from '../models/User.js';
 import { signAccessToken } from './authService.js';
+import { sendOtpSms } from '../../services/smsService.js';
 
 const OTP_TTL_MS = 10 * 60 * 1000;
 const VERIFIED_SESSION_TTL_MS = 10 * 60 * 1000;
@@ -86,13 +87,18 @@ export const startUserOtp = async ({ phone }) => {
       otpVerifiedAt: null,
       expiresAt: new Date(now + OTP_TTL_MS),
     },
-    { new: true, upsert: true, setDefaultsOnInsert: true },
+    { returnDocument: 'after', upsert: true, setDefaultsOnInsert: true },
   );
 
-  const debugOtp = process.env.NODE_ENV === 'production' ? null : otp;
+  const smsDispatch = await sendOtpSms({
+    phone: normalizedPhone,
+    otp,
+    purpose: 'user OTP',
+  });
+  const debugOtp = smsDispatch.mode === 'debug' && process.env.NODE_ENV !== 'production' ? otp : null;
 
   return {
-    message: 'OTP generated successfully',
+    message: smsDispatch.mode === 'live' ? 'OTP sent successfully' : 'OTP generated successfully',
     exists: Boolean(user),
     session: publicOtpSession(session, debugOtp),
   };

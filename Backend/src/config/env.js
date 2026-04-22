@@ -4,13 +4,30 @@ import dotenv from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
+const primaryEnvPath = path.resolve(__dirname, '../../.env');
+const fallbackEnvPath = path.resolve(process.cwd(), '.env');
 
-dotenv.config({
-  path: path.resolve(__dirname, '../../.env'),
-});
+const primaryEnvLoad = dotenv.config({ path: primaryEnvPath });
+if (primaryEnvLoad.error && primaryEnvPath !== fallbackEnvPath) {
+  dotenv.config({ path: fallbackEnvPath });
+}
 
 const resolvedJwtSecret = process.env.JWT_SECRET || process.env.JWT_ACCESS_SECRET;
 const resolvedJwtExpiresIn = process.env.JWT_EXPIRES_IN || process.env.JWT_ACCESS_EXPIRES || '7d';
+const readEnv = (...keys) => {
+  for (const key of keys) {
+    const value = process.env[key];
+
+    if (typeof value === 'string') {
+      const trimmedValue = value.trim();
+      if (trimmedValue) {
+        return trimmedValue;
+      }
+    }
+  }
+
+  return '';
+};
 
 const requiredEnvVars = ['MONGODB_URI'];
 
@@ -42,6 +59,21 @@ export const env = {
     databaseURL: process.env.FIREBASE_DATABASE_URL || '',
     serviceAccountPath: process.env.FIREBASE_SERVICE_ACCOUNT_PATH || '',
     serviceAccountJson: process.env.FIREBASE_SERVICE_ACCOUNT_JSON || '',
+  },
+  sms: {
+    useDefaultOtp: process.env.USE_DEFAULT_OTP || 'false',
+    otpExpiryMinutes:
+      Number.isFinite(Number(process.env.OTP_EXPIRY_MINUTES)) && Number(process.env.OTP_EXPIRY_MINUTES) > 0
+        ? Number(process.env.OTP_EXPIRY_MINUTES)
+        : 10,
+    indiaHub: {
+      username: readEnv('SMS_INDIA_HUB_USERNAME'),
+      password: readEnv('SMS_INDIA_HUB_PASSWORD'),
+      apiKey: readEnv('SMS_INDIA_HUB_API_KEY'),
+      apiKeyOverride: readEnv('SMS_INDIA_HUB_API_KEY_OVERRIDE'),
+      senderId: readEnv('SMS_INDIA_HUB_SENDER_ID'),
+      dltTemplateId: readEnv('SMS_INDIA_HUB_DLT_TEMPLATE_ID'),
+    },
   },
   driverWallet: {
     defaultCashLimit: Number.isFinite(Number(process.env.DRIVER_WALLET_DEFAULT_CASH_LIMIT))

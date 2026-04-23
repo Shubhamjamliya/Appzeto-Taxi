@@ -1,13 +1,24 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 const AuthLayout = ({ children, title, subtitle }) => {
+  const [appName, setAppName] = useState('App');
+
+  useEffect(() => {
+    const title = document.title;
+    if (title && title !== 'App') {
+      setAppName(title);
+    } else {
+      setAppName('Appzeto');
+    }
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#F9F9F9] flex flex-col lg:flex-row font-sans selection:bg-orange-100 selection:text-orange-900 overflow-hidden">
+    <div className="min-h-screen bg-[#FFFFFF] flex flex-col lg:flex-row font-sans selection:bg-gray-200 selection:text-black overflow-hidden">
       {/* Left side (Desktop Only) */}
-      <div className="hidden lg:flex lg:w-1/2 bg-gradient-to-br from-[#E85D04] via-[#F48C06] to-[#FFB700] relative items-center justify-center p-12">
+      <div className="hidden lg:flex lg:w-1/2 bg-[#F6F6F6] relative items-center justify-center p-12">
         <div className="absolute top-10 left-10">
-          <img src="/Rydon24.png" alt="Rydon24" className="h-16 object-contain drop-shadow-xl" />
+          <span className="text-2xl font-black tracking-tighter text-black">{appName}</span>
         </div>
         
         <div className="relative z-10 text-center max-w-md">
@@ -16,46 +27,46 @@ const AuthLayout = ({ children, title, subtitle }) => {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.8 }}
           >
-            <h2 className="text-5xl font-black text-white leading-tight mb-4 drop-shadow-md">
-              Fast. Affordable. <br/>Local Rides.
+            <h2 className="text-5xl font-black text-black leading-tight mb-4">
+              Move the way <br/>you want.
             </h2>
-            <p className="text-white/80 text-xl font-medium mb-8">
-              Reliable transport for your daily commute in Indore.
+            <p className="text-gray-600 text-xl font-medium mb-8">
+              Fast, reliable and safe rides with {appName}.
             </p>
           </motion.div>
           
-          <img 
-            src="/1_Log In Anytime. Earn Anytime.jpg" 
-            alt="Rydon24 Promo" 
-            className="w-full max-w-sm mx-auto shadow-2xl rounded-3xl mt-6 transform -rotate-2 hover:rotate-0 transition-transform duration-500"
-          />
+          <div className="w-full max-w-sm mx-auto bg-white shadow-[0_20px_50px_rgba(0,0,0,0.08)] rounded-[32px] overflow-hidden p-2">
+             <div className="bg-[#f0f0f0] rounded-[28px] aspect-square flex items-center justify-center">
+                <span className="text-4xl font-black opacity-10">{appName}</span>
+             </div>
+          </div>
         </div>
         
-        {/* Abstract shapes */}
-        <div className="absolute bottom-0 right-0 w-64 h-64 bg-white/10 rounded-tl-full blur-3xl"></div>
-        <div className="absolute top-0 right-0 w-96 h-96 bg-black/5 rounded-full -mr-48 -mt-48 blur-3xl"></div>
+        {/* Abstract subtle shapes */}
+        <div className="absolute bottom-0 right-0 w-64 h-64 bg-gray-200/50 rounded-tl-full blur-3xl"></div>
+        <div className="absolute top-0 right-0 w-96 h-96 bg-gray-200/30 rounded-full -mr-48 -mt-48 blur-3xl"></div>
       </div>
 
       {/* Right side (Mobile-first login card) */}
       <div className="flex-1 flex items-center justify-center p-6 md:p-12 relative">
         {/* Mobile Header (Visible only on small screens) */}
         <div className="lg:hidden absolute top-8 left-0 right-0 flex flex-col items-center">
-            <img src="/Rydon24.png" alt="Rydon24" className="h-12 object-contain drop-shadow-sm" />
-            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Smart Mobility & Local Logistics — Rydon24</p>
+            <span className="text-2xl font-black tracking-tighter text-black">{appName}</span>
+            <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider mt-1">Smarter Urban Mobility — {appName}</p>
         </div>
 
         <motion.div 
           initial={{ opacity: 0, scale: 0.95 }}
           animate={{ opacity: 1, scale: 1 }}
-          className="w-full max-w-md bg-white rounded-[32px] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.06)] border border-gray-50 mt-10 lg:mt-0"
+          className="w-full max-w-md bg-white rounded-[32px] p-8 md:p-10 shadow-[0_20px_50px_rgba(0,0,0,0.04)] border border-gray-100 mt-10 lg:mt-0"
         >
           {title && (
             <div className="mb-8 text-center lg:text-left">
-              <h1 className="text-2xl md:text-3xl font-black text-gray-900 leading-tight">
+              <h1 className="text-2xl md:text-3xl font-bold text-gray-900 leading-tight">
                 {title}
               </h1>
               {subtitle && (
-                <p className="text-gray-400 text-sm md:text-base font-semibold mt-2">
+                <p className="text-gray-500 text-sm md:text-base font-medium mt-2">
                   {subtitle}
                 </p>
               )}
@@ -66,7 +77,7 @@ const AuthLayout = ({ children, title, subtitle }) => {
         
         {/* Helper footer link */}
         <div className="absolute bottom-8 text-center w-full max-w-md">
-            <a href="#" className="text-gray-400 text-sm font-bold hover:text-primary transition-colors">Need help?</a>
+            <a href="#" className="text-gray-400 text-sm font-bold hover:text-black transition-colors">Need help?</a>
         </div>
       </div>
     </div>

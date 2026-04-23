@@ -20,9 +20,17 @@ const VerifyOTP = () => {
   const [error, setError] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [success, setSuccess] = useState(false);
+  const [appName, setAppName] = useState('App');
   const inputs = useRef([]);
 
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const title = document.title;
+    if (title && title !== 'App') {
+      setAppName(title);
+    }
+  }, []);
 
   useEffect(() => {
     let interval = null;
@@ -165,8 +173,8 @@ const VerifyOTP = () => {
               onPaste={handlePaste}
               animate={error ? { x: [0, -10, 10, -10, 10, 0] } : {}}
               transition={{ duration: 0.4 }}
-              className={`w-full h-12 md:h-14 bg-[#F6F7F9] rounded-xl text-center text-xl md:text-2xl font-black transition-all border-2 outline-none focus:bg-white
-                ${error ? 'border-red-500 text-red-500 ring-2 ring-red-100' : 'border-transparent focus:border-primary focus:ring-2 focus:ring-orange-100 text-gray-900'}
+              className={`w-full h-12 md:h-14 bg-[#F6F6F6] rounded-2xl text-center text-xl md:text-2xl font-bold transition-all border-2 outline-none focus:bg-white
+                ${error ? 'border-red-500 text-red-500 ring-2 ring-red-50' : 'border-transparent focus:border-black/10 focus:ring-4 focus:ring-black/5 text-gray-900'}
               `}
             />
           ))}
@@ -174,13 +182,13 @@ const VerifyOTP = () => {
 
         <div className="text-center">
           {timer > 0 ? (
-            <p className="text-gray-400 text-sm font-bold uppercase tracking-wider">
-              Resend OTP in <span className="text-primary">{timer}s</span>
+            <p className="text-gray-400 text-xs font-bold uppercase tracking-widest">
+              Resend OTP in <span className="text-black">{timer}s</span>
             </p>
           ) : (
             <button
               onClick={handleResend}
-              className="text-primary text-sm font-black hover:text-orange-700 underline underline-offset-4 decoration-2 tracking-widest uppercase transition-all"
+              className="text-black text-xs font-bold hover:opacity-70 underline underline-offset-4 decoration-2 tracking-widest uppercase transition-all"
             >
               Resend OTP
             </button>
@@ -204,12 +212,12 @@ const VerifyOTP = () => {
           whileTap={{ scale: 0.98 }}
           onClick={handleVerify}
           disabled={!isFilled || loading || success}
-          className={`w-full py-4 rounded-full text-lg font-black shadow-lg transition-all flex items-center justify-center gap-3 ${
+          className={`w-full py-4 rounded-xl text-lg font-bold shadow-xl transition-all flex items-center justify-center gap-3 ${
             isFilled && !loading && !success
-              ? 'bg-gradient-to-r from-[#E85D04] to-[#F48C06] text-white'
+              ? 'bg-black text-white shadow-black/10'
               : success
-                ? 'bg-green-500 text-white shadow-green-100'
-                : 'bg-gray-200 text-gray-400 cursor-not-allowed shadow-none'
+                ? 'bg-green-600 text-white shadow-green-100'
+                : 'bg-gray-100 text-gray-400 cursor-not-allowed shadow-none'
           }`}
         >
           {loading ? (

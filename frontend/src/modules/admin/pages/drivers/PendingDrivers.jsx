@@ -34,6 +34,8 @@ const PendingDrivers = () => {
   const [activeMenu, setActiveMenu] = useState(null);
   const [menuPosition, setMenuPosition] = useState(null);
   const [passwordModal, setPasswordModal] = useState({ isOpen: false, driverId: null, password: '', isSubmitting: false });
+  const [page, setPage] = useState(1);
+  const [paginator, setPaginator] = useState(null);
 
   const openActionMenu = (driverId, anchorEl) => {
     const rect = anchorEl.getBoundingClientRect();
@@ -129,16 +131,18 @@ const PendingDrivers = () => {
     );
   };
 
-  const fetchPendingDrivers = async () => {
+  const fetchPendingDrivers = async ({ nextPage = page, nextLimit = itemsPerPage, nextSearch = searchTerm } = {}) => {
     setIsLoading(true);
+    setError('');
     try {
-      // Fetch only drivers who are NOT approved
-      const responseData = await adminService.getDrivers(1, 50, { approve: false });
+      const responseData = await adminService.getDrivers(nextPage, nextLimit, {
+        approve: false,
+        search: String(nextSearch || '').trim(),
+      });
       const driversList = responseData.data?.results || [];
       
-      // Still apply a lightweight role filter if needed, but the bulk is handled by the backend
       const pending = driversList
-        .filter((d) => String(d?.onboarding?.role || '').toLowerCase() !== 'owner')
+        .filter((d) => String(d?.onboarding_role || '').toLowerCase() !== 'owner')
         .map((d) => ({
           id: d._id,
           name: d.name || 'Unknown',
@@ -153,6 +157,7 @@ const PendingDrivers = () => {
         }));
 
       setPendingDrivers(pending);
+      setPaginator(responseData.data?.paginator || null);
     } catch (err) {
       setError(err?.message || 'Failed to fetch pending drivers');
     } finally {
@@ -162,8 +167,21 @@ const PendingDrivers = () => {
 
 
   useEffect(() => {
-    fetchPendingDrivers();
-  }, []);
+    fetchPendingDrivers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+    setPage(1);
+  }, [itemsPerPage]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      fetchPendingDrivers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchPendingDrivers({ nextPage: page, nextLimit: itemsPerPage, nextSearch: searchTerm });
+  }, [page]);
 
   useEffect(() => {
     if (!activeMenu) return undefined;
@@ -196,14 +214,15 @@ const PendingDrivers = () => {
     });
   };
 
-  const filteredDrivers = pendingDrivers.filter((driver) =>
-    (driver.name && driver.name.toLowerCase().includes(searchTerm.toLowerCase())) ||
-    (driver.phone && driver.phone.includes(searchTerm)) ||
-    (driver.serviceLocation && driver.serviceLocation.toLowerCase().includes(searchTerm.toLowerCase()))
-  );
-
   const inputClass = "w-full border border-gray-200 rounded-lg px-4 py-2.5 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors";
   const labelClass = "block text-xs font-semibold text-gray-500 mb-1.5";
+  const totalPages = Math.max(1, Number(paginator?.last_page || 1));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const totalEntries = Number(paginator?.total || 0);
+  const perPage = Number(paginator?.per_page || itemsPerPage);
+  const startIndex = (safePage - 1) * perPage;
+  const showingFrom = totalEntries === 0 ? 0 : startIndex + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(startIndex + pendingDrivers.length, totalEntries);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8 font-sans text-gray-900">
@@ -284,12 +303,12 @@ const PendingDrivers = () => {
                 <tr>
                   <td colSpan="10" className="px-6 py-12 text-center text-gray-400">Loading pending drivers...</td>
                 </tr>
-              ) : filteredDrivers.length === 0 ? (
+              ) : pendingDrivers.length === 0 ? (
                 <tr>
                   <td colSpan="10" className="px-6 py-12 text-center text-gray-400">No pending drivers found.</td>
                 </tr>
               ) : (
-                filteredDrivers.map((driver) => (
+                pendingDrivers.map((driver) => (
                   <tr key={driver.id} className="hover:bg-gray-50/60 transition-colors">
                     <td className="px-6 py-4 text-gray-900">{driver.name}</td>
                     <td className="px-4 py-4">{driver.serviceLocation}</td>
@@ -346,11 +365,23 @@ const PendingDrivers = () => {
         </div>
 
         <div className="p-4 flex items-center justify-between text-xs text-gray-500 border-t border-gray-100 bg-gray-50/50">
-          <span>Showing 1 to {filteredDrivers.length} of {filteredDrivers.length} entries</span>
+          <span>Showing {showingFrom} to {showingTo} of {totalEntries} entries</span>
           <div className="flex items-center gap-2">
-            <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900">Prev</button>
-            <button className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold">1</button>
-            <button className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900">Next</button>
+            <button
+              className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 disabled:opacity-60"
+              disabled={safePage <= 1}
+              onClick={() => setPage((current) => Math.max(1, current - 1))}
+            >
+              Prev
+            </button>
+            <button className="px-3 py-1.5 rounded-md bg-indigo-600 text-white text-xs font-semibold">{safePage}</button>
+            <button
+              className="px-3 py-1.5 text-xs font-semibold text-gray-500 hover:text-gray-900 disabled:opacity-60"
+              disabled={safePage >= totalPages}
+              onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+            >
+              Next
+            </button>
           </div>
         </div>
       </div>

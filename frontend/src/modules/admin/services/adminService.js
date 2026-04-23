@@ -9,7 +9,13 @@ export const adminService = {
   /**
    * User Management
    */
-  getUsers: (page = 1, limit = 50) => api.get(`/admin/users?page=${page}&limit=${limit}`),
+  getUsers: (page = 1, limit = 50, search = '') => {
+    const params = new URLSearchParams({ page, limit });
+    if (String(search || '').trim()) {
+      params.set('search', String(search).trim());
+    }
+    return api.get(`/admin/users?${params.toString()}`);
+  },
   
   bulkImportUsers: (payload) => api.post('/admin/users/bulk-import', payload),
 

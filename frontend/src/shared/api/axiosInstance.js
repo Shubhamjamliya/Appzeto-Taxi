@@ -13,12 +13,16 @@ const DEDUPED_GET_TTL_MS = 2500;
 const dedupedGetRequests = new Map();
 const recentDedupedGetResponses = new Map();
 
-const isDedupedMeGet = (url = '') => {
+const isDedupedGet = (url = '') => {
   const requestPath = String(url || '').split('?')[0];
+
   return /^\/users\/me$/.test(requestPath) ||
     /^\/drivers\/me$/.test(requestPath) ||
     /^\/rides\/active\/me$/.test(requestPath) ||
-    /^\/deliveries\/active\/me$/.test(requestPath);
+    /^\/deliveries\/active\/me$/.test(requestPath) ||
+    /^\/admin\/general-settings\/[^/]+$/.test(requestPath) ||
+    /^\/admin\/(countries|service-locations|notification-channels)$/.test(requestPath) ||
+    /^\/(countries|common\/ride_modules)$/.test(requestPath);
 };
 
 const getDedupedRequestKey = (url = '', config = {}) => {
@@ -227,7 +231,7 @@ api.interceptors.response.use(
 const rawGet = api.get.bind(api);
 
 api.get = (url, config = {}) => {
-  if (!isDedupedMeGet(url)) {
+  if (!isDedupedGet(url)) {
     return rawGet(url, config);
   }
 

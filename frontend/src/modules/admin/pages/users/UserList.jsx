@@ -36,11 +36,15 @@ const UserList = () => {
   const [users, setUsers] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingUser, setEditingUser] = useState(null);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [page, setPage] = useState(1);
+  const [paginator, setPaginator] = useState(null);
 
-  const fetchUsers = async () => {
+  const fetchUsers = async ({ nextPage = page, nextLimit = itemsPerPage, nextSearch = searchTerm } = {}) => {
     try {
       setIsLoading(true);
-      const resData = await adminService.getUsers(1, 50);
+      setError(null);
+      const resData = await adminService.getUsers(nextPage, nextLimit, String(nextSearch || '').trim());
       if (resData.success) {
         const mapped = (resData.data?.results || []).map(u => ({
           id: u._id,
@@ -51,6 +55,7 @@ const UserList = () => {
           status: u.active ? 'Active' : 'Suspended',
         }));
         setUsers(mapped);
+        setPaginator(resData.data?.paginator || null);
       } else {
         setError(resData.message || 'Failed to fetch users');
       }
@@ -61,20 +66,28 @@ const UserList = () => {
     }
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    fetchUsers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+    setPage(1);
+  }, [itemsPerPage]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      fetchUsers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchUsers({ nextPage: page, nextLimit: itemsPerPage, nextSearch: searchTerm });
+  }, [page]);
 
   useEffect(() => {
     const closeMenu = () => setActiveMenu(null);
     window.addEventListener('click', closeMenu);
     return () => window.removeEventListener('click', closeMenu);
   }, []);
-
-  const filteredUsers = users.filter(user => {
-    const matchesSearch = user.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-                          user.email.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                          user.phone.includes(searchTerm);
-    return matchesSearch;
-  });
 
   const handleToggleStatus = async (userId, currentStatus) => {
     try {
@@ -144,6 +157,14 @@ const UserList = () => {
     setActiveMenu(userId);
   };
 
+  const totalPages = Math.max(1, Number(paginator?.last_page || 1));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const totalEntries = Number(paginator?.total || 0);
+  const perPage = Number(paginator?.per_page || itemsPerPage);
+  const startIndex = (safePage - 1) * perPage;
+  const showingFrom = totalEntries === 0 ? 0 : startIndex + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(startIndex + users.length, totalEntries);
+
   if (isLoading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[400px] gap-3">
@@ -179,7 +200,7 @@ const UserList = () => {
       </div>
 
       {/* Search */}
-      <div className="mb-6">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
         <div className="relative w-full max-w-sm">
           <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input 
@@ -189,6 +210,19 @@ const UserList = () => {
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 text-sm border border-gray-200 rounded-lg bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none"
           />
+        </div>
+        <div className="flex items-center gap-2 text-sm text-gray-500">
+          <span>Show</span>
+          <select
+            value={itemsPerPage}
+            onChange={(e) => setItemsPerPage(Number(e.target.value) || 10)}
+            className="border border-gray-200 rounded-lg px-3 py-2 text-sm text-gray-800 bg-white focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 outline-none transition-colors"
+          >
+            {[10, 25, 50].map((value) => (
+              <option key={value} value={value}>{value}</option>
+            ))}
+          </select>
+          <span>entries</span>
         </div>
       </div>
 
@@ -213,7 +247,7 @@ const UserList = () => {
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-50">
-              {filteredUsers.map((user) => (
+              {users.map((user) => (
                 <tr key={user.id} className="hover:bg-gray-50/50 transition-colors">
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-3">
@@ -252,6 +286,30 @@ const UserList = () => {
             </tbody>
           </table>
         </div>
+        {!isLoading && (
+          <div className="border-t border-gray-100 px-4 py-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between text-xs text-gray-500">
+            <span>Showing {showingFrom} to {showingTo} of {totalEntries} entries</span>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+                disabled={safePage <= 1}
+                className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-500 disabled:opacity-60"
+              >
+                Prev
+              </button>
+              <span className="px-3 py-1.5 rounded bg-indigo-600 text-white text-xs font-medium">{safePage}</span>
+              <button
+                type="button"
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+                disabled={safePage >= totalPages}
+                className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-500 disabled:opacity-60"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       {activeMenu &&

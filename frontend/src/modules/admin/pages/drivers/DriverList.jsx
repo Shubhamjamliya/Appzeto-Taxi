@@ -35,40 +35,59 @@ const DriverList = () => {
   const [drivers, setDrivers] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState('');
+  const [page, setPage] = useState(1);
+  const [paginator, setPaginator] = useState(null);
+
+  const fetchDrivers = async ({ nextPage = page, nextLimit = itemsPerPage, nextSearch = searchTerm } = {}) => {
+    setIsLoading(true);
+    setError('');
+    try {
+      const responseData = await adminService.getDrivers(nextPage, nextLimit, {
+        approve: true,
+        search: String(nextSearch || '').trim(),
+      });
+      const driversList = responseData.data?.results || [];
+      if (responseData.success) {
+        const approved = driversList.map((d) => ({
+          id: d._id,
+          name: d.name || 'Unknown',
+          serviceLocation: d.service_location_name || d.city || d.service_location?.name || 'India',
+          phone: d.phone || d.mobile || 'N/A',
+          transportType: d.transport_type || d.register_for || d.vehicle_type || 'All - Bike',
+          rating: Number(d.rating_count || d.ratingCount || 0) > 0
+            ? Number(d.rating || d.average_rating || d.avg_rating || 0)
+            : 0,
+          registeredAt: d.createdAt || null,
+          status: d.approve ? 'Approved' : (d.status || 'Approved'),
+        }));
+        setDrivers(approved);
+        setPaginator(responseData.data?.paginator || null);
+      } else {
+        setError(responseData.message || 'Failed to fetch drivers');
+      }
+    } catch (err) {
+      setError(err.message || 'Network error occurred.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const fetchDrivers = async () => {
-      setIsLoading(true);
-      try {
-        const responseData = await adminService.getDrivers(1, 50);
-        const driversList = responseData.data?.results || [];
-        if (responseData.success) {
-          const approved = driversList.filter(d => {
-            return d.approve === true || d.status?.toLowerCase() === 'active' || d.status?.toLowerCase() === 'approved';
-          }).map(d => ({
-            id: d._id,
-            name: d.name || 'Unknown',
-            serviceLocation: d.service_location_name || d.city || d.service_location?.name || 'India',
-            phone: d.phone || d.mobile || 'N/A',
-            transportType: d.transport_type || d.register_for || d.vehicle_type || 'All - Bike',
-            rating: Number(d.rating_count || d.ratingCount || 0) > 0
-              ? Number(d.rating || d.average_rating || d.avg_rating || 0)
-              : 0,
-            registeredAt: d.createdAt || null,
-            status: d.approve ? 'Approved' : (d.status || 'Approved')
-          }));
-          setDrivers(approved);
-        } else {
-          setError(responseData.message || 'Failed to fetch drivers');
-        }
-      } catch (err) {
-        setError(err.message || 'Network error occurred.');
-      } finally {
-        setIsLoading(false);
-      }
-    };
-    fetchDrivers();
-  }, []);
+    fetchDrivers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+    setPage(1);
+  }, [itemsPerPage]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      fetchDrivers({ nextPage: 1, nextLimit: itemsPerPage, nextSearch: searchTerm });
+      setPage(1);
+    }, 250);
+    return () => window.clearTimeout(timeoutId);
+  }, [searchTerm]);
+
+  useEffect(() => {
+    fetchDrivers({ nextPage: page, nextLimit: itemsPerPage, nextSearch: searchTerm });
+  }, [page]);
 
   const closeMenu = () => {
     setActiveMenu(null);
@@ -163,11 +182,6 @@ const DriverList = () => {
     }
   };
 
-  const filteredDrivers = drivers.filter(d => 
-    d.name.toLowerCase().includes(searchTerm.toLowerCase()) || 
-    d.phone.includes(searchTerm)
-  );
-
   const formatDate = (value) => {
     if (!value) return 'N/A';
     const date = new Date(value);
@@ -179,6 +193,14 @@ const DriverList = () => {
       minute: '2-digit',
     });
   };
+
+  const totalPages = Math.max(1, Number(paginator?.last_page || 1));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+  const totalEntries = Number(paginator?.total || 0);
+  const perPage = Number(paginator?.per_page || itemsPerPage);
+  const startIndex = (safePage - 1) * perPage;
+  const showingFrom = totalEntries === 0 ? 0 : startIndex + 1;
+  const showingTo = totalEntries === 0 ? 0 : Math.min(startIndex + drivers.length, totalEntries);
 
   return (
     <div className="min-h-screen bg-gray-50 p-6 lg:p-8">
@@ -274,12 +296,12 @@ const DriverList = () => {
                     </div>
                   </td>
                 </tr>
-              ) : filteredDrivers.length === 0 ? (
+              ) : drivers.length === 0 ? (
                 <tr>
                   <td colSpan="9" className="px-6 py-16 text-center text-sm text-gray-400">No drivers found.</td>
                 </tr>
               ) : (
-                filteredDrivers.map((driver) => (
+                drivers.map((driver) => (
                   <tr key={driver.id} className="hover:bg-gray-50/50 transition-colors">
                     <td className="px-6 py-4 text-sm font-medium text-gray-900">{driver.name}</td>
                     <td className="px-4 py-4 text-sm text-gray-500">{driver.serviceLocation}</td>
@@ -324,13 +346,25 @@ const DriverList = () => {
         </div>
 
         {/* Footer */}
-        {!isLoading && filteredDrivers.length > 0 && (
+        {!isLoading && drivers.length > 0 && (
           <div className="px-6 py-3 border-t border-gray-100 flex items-center justify-between text-xs text-gray-400">
-            <span>Showing 1 to {filteredDrivers.length} of {filteredDrivers.length} entries</span>
+            <span>Showing {showingFrom} to {showingTo} of {totalEntries} entries</span>
             <div className="flex items-center gap-1">
-              <button className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400" disabled>Prev</button>
-              <button className="w-7 h-7 rounded bg-indigo-600 text-white text-xs font-medium">1</button>
-              <button className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400" disabled>Next</button>
+              <button
+                className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400 disabled:opacity-60"
+                disabled={safePage <= 1}
+                onClick={() => setPage((current) => Math.max(1, current - 1))}
+              >
+                Prev
+              </button>
+              <button className="w-7 h-7 rounded bg-indigo-600 text-white text-xs font-medium">{safePage}</button>
+              <button
+                className="px-3 py-1.5 border border-gray-200 rounded text-xs text-gray-400 disabled:opacity-60"
+                disabled={safePage >= totalPages}
+                onClick={() => setPage((current) => Math.min(totalPages, current + 1))}
+              >
+                Next
+              </button>
             </div>
           </div>
         )}

@@ -542,7 +542,7 @@
 
 @media (max-width: 768px) {
   .landing-footer {
-    padding: 3rem 1.5rem 2rem;
+    display: none;
   }
   .landing-footer-grid {
     grid-template-columns: 1fr;

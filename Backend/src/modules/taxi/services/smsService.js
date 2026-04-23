@@ -52,6 +52,12 @@ const maskSecret = (value) => {
 const getSmsIndiaHubConfig = () => {
   const user = readValue(env.sms?.indiaHub?.username, process.env.SMS_INDIA_HUB_USERNAME);
   const password = readValue(env.sms?.indiaHub?.password, process.env.SMS_INDIA_HUB_PASSWORD);
+  const apiKey = readValue(
+    env.sms?.indiaHub?.apiKeyOverride,
+    env.sms?.indiaHub?.apiKey,
+    process.env.SMS_INDIA_HUB_API_KEY_OVERRIDE,
+    process.env.SMS_INDIA_HUB_API_KEY,
+  );
   const senderId = readValue(env.sms?.indiaHub?.senderId, process.env.SMS_INDIA_HUB_SENDER_ID);
   const templateId = readValue(
     env.sms?.indiaHub?.dltTemplateId,
@@ -62,6 +68,7 @@ const getSmsIndiaHubConfig = () => {
   return {
     user,
     password,
+    apiKey,
     senderId,
     templateId,
   };
@@ -76,6 +83,8 @@ const logSmsConfigDebug = (config) => {
     user: config.user || '',
     passwordPresent: Boolean(config.password),
     passwordMasked: maskSecret(config.password),
+    apiKeyPresent: Boolean(config.apiKey),
+    apiKeyMasked: maskSecret(config.apiKey),
     senderId: config.senderId || '',
     templateId: config.templateId || '',
   });
@@ -123,17 +132,24 @@ const isAuthParsingError = (response, responseText) => {
   return !response.ok || errorCode === '1' || errorCode === '2' || errorMessage.includes('login details cannot be blank');
 };
 
-const buildSmsPayload = ({ phone, otp, appName }) => {
+const buildSmsPayload = ({ phone, otp, appName, authMode = 'apiKey' }) => {
   const config = getSmsIndiaHubConfig();
 
   logSmsConfigDebug(config);
 
-  if (!config.user) {
-    throw new ApiError(500, 'SMS India Hub user is not configured');
-  }
+  const useApiKey = authMode === 'apiKey';
+  if (useApiKey) {
+    if (!config.apiKey) {
+      throw new ApiError(500, 'SMS India Hub API key is not configured');
+    }
+  } else {
+    if (!config.user) {
+      throw new ApiError(500, 'SMS India Hub user is not configured');
+    }
 
-  if (!config.password) {
-    throw new ApiError(500, 'SMS India Hub password is not configured');
+    if (!config.password) {
+      throw new ApiError(500, 'SMS India Hub password is not configured');
+    }
   }
 
   if (!config.senderId) {
@@ -146,8 +162,6 @@ const buildSmsPayload = ({ phone, otp, appName }) => {
   }
 
   const payload = new URLSearchParams({
-    user: config.user,
-    password: config.password,
     senderid: config.senderId,
     channel: 'Trans',
     DCS: '0',
@@ -156,6 +170,13 @@ const buildSmsPayload = ({ phone, otp, appName }) => {
     text: renderOtpMessage({ appName, otp }),
     TemplateId: config.templateId,
   });
+
+  if (useApiKey) {
+    payload.set('APIKey', config.apiKey);
+  } else {
+    payload.set('user', config.user);
+    payload.set('password', config.password);
+  }
 
   logSmsPayloadDebug(payload);
 
@@ -170,71 +191,95 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
     };
   }
 
-  const payload = buildSmsPayload({
-    phone,
-    otp,
-    appName: BRAND_NAME,
-  });
-  const requestBody = payload.toString();
-  const queryRequestUrl = `${SMS_INDIA_HUB_ENDPOINT}?${requestBody}`;
+  const config = getSmsIndiaHubConfig();
+  const authModes = config.apiKey ? ['apiKey', 'credentials'] : ['credentials'];
+  let finalResponse = null;
+  let finalResponseText = '';
+  let delivered = false;
 
-  const primaryResponse = await fetch(SMS_INDIA_HUB_ENDPOINT, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-      Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
-    },
-    body: requestBody,
-  });
-  const primaryResponseText = (await primaryResponse.text()).trim();
-  let finalResponse = primaryResponse;
-  let finalResponseText = primaryResponseText;
+  for (const authMode of authModes) {
+    const payload = buildSmsPayload({
+      phone,
+      otp,
+      appName: BRAND_NAME,
+      authMode,
+    });
+    const requestBody = payload.toString();
+    const queryRequestUrl = `${SMS_INDIA_HUB_ENDPOINT}?${requestBody}`;
 
-  if (process.env.NODE_ENV !== 'production') {
-    console.log('[smsService] SMS India Hub response (form body) =', primaryResponseText);
-  }
-
-  if (isAuthParsingError(primaryResponse, primaryResponseText)) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log('[smsService] retrying with POST query-string fallback =', queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`));
-    }
-
-    const fallbackResponse = await fetch(queryRequestUrl, {
+    const primaryResponse = await fetch(SMS_INDIA_HUB_ENDPOINT, {
       method: 'POST',
       headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
         Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
       },
+      body: requestBody,
     });
-    const fallbackResponseText = (await fallbackResponse.text()).trim();
-
-    finalResponse = fallbackResponse;
-    finalResponseText = fallbackResponseText;
+    const primaryResponseText = (await primaryResponse.text()).trim();
+    finalResponse = primaryResponse;
+    finalResponseText = primaryResponseText;
 
     if (process.env.NODE_ENV !== 'production') {
-      console.log('[smsService] SMS India Hub response (query fallback) =', fallbackResponseText);
+      console.log(`[smsService] SMS India Hub response (${authMode}, form body) =`, primaryResponseText);
     }
 
-    if (isAuthParsingError(fallbackResponse, fallbackResponseText)) {
+    if (isSuccessfulProviderResponse(primaryResponse, primaryResponseText)) {
+      delivered = true;
+      break;
+    }
+
+    if (isAuthParsingError(primaryResponse, primaryResponseText)) {
       if (process.env.NODE_ENV !== 'production') {
-        console.log(
-          '[smsService] retrying with GET query-string fallback =',
-          queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`),
-        );
+        console.log('[smsService] retrying with POST query-string fallback =', queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`));
       }
 
-      const getFallbackResponse = await fetch(queryRequestUrl, {
-        method: 'GET',
+      const fallbackResponse = await fetch(queryRequestUrl, {
+        method: 'POST',
         headers: {
           Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
         },
       });
-      const getFallbackResponseText = (await getFallbackResponse.text()).trim();
+      const fallbackResponseText = (await fallbackResponse.text()).trim();
 
-      finalResponse = getFallbackResponse;
-      finalResponseText = getFallbackResponseText;
+      finalResponse = fallbackResponse;
+      finalResponseText = fallbackResponseText;
 
       if (process.env.NODE_ENV !== 'production') {
-        console.log('[smsService] SMS India Hub response (GET fallback) =', getFallbackResponseText);
+        console.log(`[smsService] SMS India Hub response (${authMode}, query fallback) =`, fallbackResponseText);
+      }
+
+      if (isSuccessfulProviderResponse(fallbackResponse, fallbackResponseText)) {
+        delivered = true;
+        break;
+      }
+
+      if (isAuthParsingError(fallbackResponse, fallbackResponseText)) {
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(
+            '[smsService] retrying with GET query-string fallback =',
+            queryRequestUrl.replace(/password=[^&]+/, `password=${maskSecret(payload.get('password'))}`),
+          );
+        }
+
+        const getFallbackResponse = await fetch(queryRequestUrl, {
+          method: 'GET',
+          headers: {
+            Accept: 'application/json, text/plain;q=0.9, */*;q=0.8',
+          },
+        });
+        const getFallbackResponseText = (await getFallbackResponse.text()).trim();
+
+        finalResponse = getFallbackResponse;
+        finalResponseText = getFallbackResponseText;
+
+        if (process.env.NODE_ENV !== 'production') {
+          console.log(`[smsService] SMS India Hub response (${authMode}, GET fallback) =`, getFallbackResponseText);
+        }
+
+        if (isSuccessfulProviderResponse(getFallbackResponse, getFallbackResponseText)) {
+          delivered = true;
+          break;
+        }
       }
     }
   }
@@ -244,7 +289,7 @@ export const sendOtpSms = async ({ phone, otp, purpose = 'otp' }) => {
   }
 
   const parsedFinalResponse = parseProviderResponse(finalResponseText);
-  const looksFailed = !isSuccessfulProviderResponse(finalResponse, finalResponseText);
+  const looksFailed = !delivered || !isSuccessfulProviderResponse(finalResponse, finalResponseText);
 
   if (looksFailed) {
     throw new ApiError(

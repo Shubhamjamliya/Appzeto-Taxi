@@ -256,10 +256,15 @@ export const signupUser = async (req, res) => {
   const countryCode = toCleanString(req.body.countryCode) || '+91';
   const gender = normalizeGender(req.body.gender);
   const profileImage = toCleanString(req.body.profileImage);
+  const password = String(req.body.password || '');
 
   validateName(name);
   validatePhone(phone);
   validateEmail(email);
+
+  if (!password || password.length < 5) {
+    throw new ApiError(400, 'password must be at least 5 characters');
+  }
 
   const signupSession = await requireVerifiedUserSignupSession(phone);
 
@@ -276,6 +281,7 @@ export const signupUser = async (req, res) => {
     countryCode,
     gender,
     profileImage,
+    password: await hashPassword(password),
     isVerified: true,
   });
   await consumeUserSignupSession(signupSession);
